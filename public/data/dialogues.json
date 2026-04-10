@@ -1,0 +1,40 @@
+{
+  "dialogues": {
+    "elder_sage": {
+      "start": {
+        "text": "Greetings, young adventurer. The village needs your help.",
+        "options": [
+          { "text": "What happened?", "next": "quest_intro" },
+          { "text": "I'm busy.", "next": "close" }
+        ]
+      },
+      "quest_intro": {
+        "text": "The rats in the basement have grown aggressive.",
+        "options": [
+          { "text": "I will handle it.", "next": "accept_quest", "action": "start_quest:rat_plague" },
+          { "text": "Sounds dangerous.", "next": "close" }
+        ]
+      },
+      "accept_quest": {
+        "text": "Thank you! Kill 5 Rats and return to me.",
+        "options": [
+           { "text": "I'm on it.", "next": "close" }
+        ]
+      },
+      "quest_complete_rats": {
+        "text": "You have done a great service to our village! Here is your reward.",
+        "options": [
+            { "text": "Thank you, Elder.", "next": "close" }
+        ]
+      }
+    },
+    "village_guard": {
+      "start": {
+        "text": "Keep your weapon sheathed inside the walls.",
+         "options": [
+          { "text": "Understood.", "next": "close" }
+        ]
+      }
+    }
+  }
+}

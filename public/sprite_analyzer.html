@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sprite Analyzer V2</title>
+    <style>
+        body { background: #1a1a1a; color: #eee; font-family: sans-serif; margin: 20px; }
+        .canvas-container { 
+            position: relative; 
+            margin-top: 20px;
+            background: repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 50% / 20px 20px;
+            display: inline-block;
+        }
+        canvas { 
+            display: block;
+            image-rendering: pixelated; 
+        }
+        .controls { 
+            background: #2a2a2a; 
+            padding: 15px; 
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #444;
+        }
+        h1 { margin: 0 0 10px 0; color: #ffd700; }
+        .frame-info { font-weight: bold; color: #4ade80; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h1>Orc Sprite Sheet Map</h1>
+        <p>Analyzing: <code>assets/enemies/orc.png</code></p>
+        <p>Grid Settings: <span class="frame-info">328 x 326.8</span> (4 Columns, 10 Rows)</p>
+        <p>Current Logic: Row 8 & 9 (Frames 32-39) are the Death Animation.</p>
+    </div>
+    <div class="canvas-container">
+        <canvas id="canvas"></canvas>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        img.src = 'assets/enemies/orc.png';
+        
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            const fw = 328;
+            const fh = 326.8;
+            
+            // Draw Grid Lines
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
+            ctx.lineWidth = 1;
+            
+            for (let x = 0; x <= img.width; x += fw) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, img.height);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y <= img.height; y += fh) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(img.width, y);
+                ctx.stroke();
+            }
+            
+            // Highlight Rows
+            ctx.setLineDash([]);
+            let frameNum = 0;
+            for (let row = 0; row < 10; row++) {
+                const y = row * fh;
+                
+                // Label Rows
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+                ctx.fillRect(0, y, img.width, fh);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.fillText(`Row ${row}`, 10, y + 25);
+
+                for (let col = 0; col < 4; col++) {
+                    const x = col * fw;
+                    // Draw Frame Numbers
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.fillText(frameNum, x + 10, y + fh - 10);
+                    
+                    // Specific highlight for Death sequence
+                    if (frameNum >= 32 && frameNum <= 39) {
+                        ctx.strokeStyle = 'yellow';
+                        ctx.lineWidth = 3;
+                        ctx.strokeRect(x + 2, y + 2, fw - 4, fh - 4);
+                    }
+                    
+                    frameNum++;
+                }
+            }
+        };
+    </script>
+</body>
+</html>

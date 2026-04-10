@@ -1,0 +1,32 @@
+import Phaser from "phaser";
+
+export class WoodenFloorGraphic {
+  static readonly TEXTURE_KEY = "wooden-floor-texture";
+  private static readonly BASE_SIZE = { width: 128, height: 128 };
+  private static readonly COLLISION_SIZE = { width: 32, height: 32 }; // Match MountainGraphic
+  private static readonly TEXTURE_PATH = "assets/tiles/floor/wooden-floor.png";
+
+  static preload(scene: Phaser.Scene): void {
+    if (!scene.textures.exists(this.TEXTURE_KEY)) {
+      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
+    }
+  }
+
+  static create(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    pool?: Phaser.GameObjects.Sprite[]
+  ): Phaser.GameObjects.Sprite {
+    const width = this.BASE_SIZE.width;
+    const height = this.BASE_SIZE.height;
+
+    // Create visual sprite
+    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
+    sprite.setDisplaySize(width, height);
+    sprite.setOrigin(0.3, 0.5);
+    sprite.setDepth(0);
+
+    return sprite;
+  }
+}

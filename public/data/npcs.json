@@ -1,0 +1,22 @@
+{
+  "newmap": [
+    {
+      "id": "elder_sage",
+      "name": "Elder Sage",
+      "x": 600,
+      "y": 600,
+      "level": "0",
+      "sprite": "npc_elder",
+      "interactionRadius": 64
+    },
+    {
+      "id": "village_guard",
+      "name": "Guard",
+      "x": 800,
+      "y": 550,
+      "level": "0",
+      "sprite": "npc_guard",
+      "interactionRadius": 48
+    }
+  ]
+}

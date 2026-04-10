@@ -1,0 +1,31 @@
+[
+  {
+    "id": "rat_plague",
+    "title": "Rat Plague",
+    "type": "side",
+    "minLevel": 1,
+    "description": "The Elder Sage has asked you to clear the rats from the basement.",
+    "stages": [
+      {
+        "id": 0,
+        "description": "Kill 5 Rats.",
+        "conditions": [
+          { "type": "kill", "target": "rat", "count": 5 }
+        ],
+        "rewards": [
+          { "type": "xp", "value": 100 },
+          { "type": "gold", "value": 50 },
+          { "type": "item", "value": "axe_two_handed" }
+        ],
+        "onCompleteDialogue": "quest_complete_rats"
+      },
+      {
+          "id": 1,
+          "description": "Return to the Elder Sage.",
+          "conditions": [
+              { "type": "talk", "target": "elder_sage", "count": 1 }
+          ]
+      }
+    ]
+  }
+]

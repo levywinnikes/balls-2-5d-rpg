@@ -1,0 +1,22 @@
+export const IRON_SHIELD_JOKES = [
+  "joke_is_1", "joke_is_2", "joke_is_3", "joke_is_4", "joke_is_5",
+  "joke_is_6", "joke_is_7", "joke_is_8", "joke_is_9", "joke_is_10",
+  "joke_is_11", "joke_is_12", "joke_is_13", "joke_is_14", "joke_is_15",
+  "joke_is_16", "joke_is_17", "joke_is_18", "joke_is_19", "joke_is_20",
+  "joke_is_21", "joke_is_22", "joke_is_23", "joke_is_24", "joke_is_25",
+  "joke_is_26", "joke_is_27", "joke_is_28", "joke_is_29", "joke_is_30",
+  "joke_is_31", "joke_is_32", "joke_is_33", "joke_is_34", "joke_is_35",
+  "joke_is_36", "joke_is_37", "joke_is_38", "joke_is_39", "joke_is_40",
+  "joke_is_41", "joke_is_42", "joke_is_43", "joke_is_44", "joke_is_45",
+  "joke_is_46", "joke_is_47", "joke_is_48", "joke_is_49", "joke_is_50",
+  "joke_is_51", "joke_is_52", "joke_is_53", "joke_is_54", "joke_is_55",
+  "joke_is_56", "joke_is_57", "joke_is_58", "joke_is_59", "joke_is_60",
+  "joke_is_61", "joke_is_62", "joke_is_63", "joke_is_64", "joke_is_65",
+  "joke_is_66", "joke_is_67", "joke_is_68", "joke_is_69", "joke_is_70",
+  "joke_is_71", "joke_is_72", "joke_is_73", "joke_is_74", "joke_is_75",
+  "joke_is_76", "joke_is_77", "joke_is_78", "joke_is_79", "joke_is_80",
+  "joke_is_81", "joke_is_82", "joke_is_83", "joke_is_84", "joke_is_85",
+  "joke_is_86", "joke_is_87", "joke_is_88", "joke_is_89", "joke_is_90",
+  "joke_is_91", "joke_is_92", "joke_is_93", "joke_is_94", "joke_is_95",
+  "joke_is_96", "joke_is_97", "joke_is_98", "joke_is_99", "joke_is_100"
+];

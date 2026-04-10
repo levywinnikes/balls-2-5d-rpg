@@ -1,0 +1,51 @@
+:root {
+  /* --- DARK GLASS VARIANT --- */
+  --bg-glass: rgba(15, 15, 20, 0.92);
+  --bg-glass-hover: rgba(25, 25, 35, 0.95);
+  
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-highlight: rgba(255, 255, 255, 0.15);
+
+  /* Accents */
+  --accent-gold: #fbbf24;
+  --accent-gold-dim: rgba(251, 191, 36, 0.2);
+  --accent-glow: 0 0 15px rgba(251, 191, 36, 0.15);
+  
+  /* Text */
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Rarity Colors */
+  --rarity-common: #9ca3af;
+  --rarity-uncommon: #4ade80;
+  --rarity-rare: #60a5fa;
+  --rarity-epic: #a78bfa;
+  --rarity-legendary: #fbbf24;
+
+  /* Utility */
+  --shadow-depth: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --glass-blur: blur(8px);
+}
+
+.font-rpg {
+  font-family: 'Inter', system-ui, sans-serif; /* Fallback for now */
+  /* If project has a specific font, add it here */
+}
+
+/* Scrollbar Styling */
+.rpg-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.rpg-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+.rpg-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+.rpg-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

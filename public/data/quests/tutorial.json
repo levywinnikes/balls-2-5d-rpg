@@ -1,0 +1,29 @@
+[
+  {
+    "id": "awakening",
+    "title": "The Awakening",
+    "type": "main",
+    "minLevel": 1,
+    "description": "You have realized that you are the chosen one. Prove your strength.",
+    "stages": [
+      {
+        "id": 0,
+        "description": "Kill 3 Rats in the basement.",
+        "conditions": [
+          { "type": "kill", "target": "rat", "count": 3 }
+        ],
+        "rewards": [
+          { "type": "xp", "value": 100 },
+          { "type": "gold", "value": 50 }
+        ]
+      },
+      {
+        "id": 1,
+        "description": "Talk to the Village Elder.",
+        "conditions": [
+          { "type": "talk", "target": "elder_npc", "count": 1 }
+        ]
+      }
+    ]
+  }
+]

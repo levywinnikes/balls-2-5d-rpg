@@ -1,0 +1,18 @@
+// Fix for lines 310 and 315
+// Line 310: Change equipInventoryItem to equipItem
+PlayerState.getInstance().equipItem(target.uid);
+
+// Lines 313-317: Map EquipmentSlot to slot string
+const slotMap: Record<EquipmentSlot, string> = {
+    [EquipmentSlot.MAIN_HAND]: 'weapon',
+    [EquipmentSlot.OFF_HAND]: 'shield',
+    [EquipmentSlot.HEAD]: 'helmet',
+    [EquipmentSlot.BODY]: 'armor',
+    [EquipmentSlot.LEGS]: 'legs',
+    [EquipmentSlot.BOOTS]: 'boots',
+    [EquipmentSlot.RING]: 'ring',
+};
+const slot = slotMap[selectedSlot as EquipmentSlot];
+if (slot) {
+    PlayerState.getInstance().unequipItem(slot as any);
+}
