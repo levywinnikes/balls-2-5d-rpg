@@ -31,6 +31,7 @@ import { FrozenTreeGraphic } from "./FrozenTreeGraphic";
 import { CloudGraphic } from "./CloudGraphic";
 import { BasaltGraphic } from "./BasaltGraphic";
 import { BedGraphic } from "./house/BedGraphic";
+import { PavementGraphic } from "./floor/PavementGraphic";
 import { ProceduralTransition, TransitionDirection } from "./ProceduralTransition";
 
 // Central registry for all game tiles
@@ -248,12 +249,28 @@ export class TileRegistry {
         blocksRanged: false,
         baseDepth: 1,
       },
+      // MANDATORY: Ensure 'color' is defined for Minimap/WorldMap support.
+      {
+        id: "pavement",
+        graphic: PavementGraphic,
+        color: "#808080",
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
       {
         id: "stair_down",
         graphic: StairDownGraphic,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 1,
+      },
+      {
+        id: "hole",
+        graphic: StairDownGraphic, // Placeholder or create HoleGraphic
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
       },
       {
         id: "wooden_chest",

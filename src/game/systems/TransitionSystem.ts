@@ -64,7 +64,8 @@ export class TransitionSystem {
 
       if (
         tileDef.transition === "dwn" ||
-        tileDef.transition === "down"
+        tileDef.transition === "down" ||
+        tileDef.id === "hole"
       ) {
         nextLevelInt = currentLevelInt - 1;
         

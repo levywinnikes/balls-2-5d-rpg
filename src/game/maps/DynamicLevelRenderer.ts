@@ -19,7 +19,9 @@ export class DynamicLevelRenderer {
   private lastPlayerX: number = -999;
   private lastPlayerY: number = -999;
   private lastRenderLevel: string = "";
-  private updateThreshold: number = 8; // Only update map every 8 pixels (1/4 tile)
+  private updateThreshold: number = 16;   // Only update map every 16 pixels
+  private lastUpdateTime: number = 0;      // New: Time-based throttle
+  private updateThrottleMs: number = 1000; // New: 1 second limit
 
   constructor(scene: Phaser.Scene, tileSize: number, currentLevel: string) {
     this.scene = scene;
@@ -237,12 +239,18 @@ export class DynamicLevelRenderer {
     }
     const currentLevel = this.scene.registry.get("currentLevel");
     
-    // THROTTLING CHECK: Skip expensive nested loops if player hasn't moved enough
+    // THROTTLING CHECK: 1 second limit OR level change OR distance
+    const timeSinceLastUpdate = Date.now() - this.lastUpdateTime;
     const distMoved = Phaser.Math.Distance.Between(playerX, playerY, this.lastPlayerX, this.lastPlayerY);
-    if (distMoved < this.updateThreshold && currentLevel === this.lastRenderLevel) {
+    
+    const levelChanged = (currentLevel !== this.lastRenderLevel);
+    const shouldUpdate = levelChanged || (timeSinceLastUpdate > this.updateThrottleMs && distMoved > this.updateThreshold);
+
+    if (!shouldUpdate) {
         return;
     }
 
+    this.lastUpdateTime = Date.now();
     this.lastPlayerX = playerX;
     this.lastPlayerY = playerY;
     this.lastRenderLevel = currentLevel;

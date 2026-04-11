@@ -624,31 +624,21 @@ export default class Enemy {
         console.log(`[Enemy] Death Detected for ${this.enemyType}. Calling playEnemyDeath.`);
         AudioManager.getInstance().playEnemyDeath(this.enemyType);
         
-        // Handle Death animation if exists
+        this.sprite.setVelocity(0,0);
+        if (this.sprite.body) {
+            this.sprite.body.enable = false; // Disable physics
+        }
 
         const deathAnim = `${this.enemyType}-die`;
         if (this.sprite.scene.anims.exists(deathAnim)) {
-            this.sprite.setVelocity(0,0);
-            if (this.sprite.body) {
-                this.sprite.body.enable = false; // Disable physics
-            }
             this.sprite.play(deathAnim);
             this.sprite.once('animationcomplete', () => {
-                 this.sprite.scene.tweens.add({
-                    targets: this.sprite,
-                    alpha: 0,
-                    duration: 1000,
-                    ease: 'Power1',
-                    onComplete: () => {
-                        this.destroyEnemy();
-                    }
-                 });
+                this.fadeAndDestroy();
             });
-            return true; // Return true as "damaged/died"
         } else {
-            this.destroyEnemy();
-            return true;
+            this.fadeAndDestroy();
         }
+        return true;
       }
     } catch (error) {
       console.error("Error in enemy takeDamage:", error);
@@ -656,6 +646,24 @@ export default class Enemy {
     }
     return false;
   }
+
+  private fadeAndDestroy(): void {
+      if (!this.sprite || !this.sprite.scene) {
+          this.destroyEnemy();
+          return;
+      }
+
+      this.sprite.scene.tweens.add({
+          targets: this.sprite,
+          alpha: 0,
+          duration: 1000,
+          ease: 'Power1',
+          onComplete: () => {
+              this.destroyEnemy();
+          }
+      });
+  }
+
 
   public destroyEnemy(): void {
     // ... existing ...

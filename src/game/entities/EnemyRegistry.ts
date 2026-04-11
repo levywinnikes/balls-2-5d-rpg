@@ -153,7 +153,7 @@ export class EnemyRegistry {
     {
       id: "orc",
       graphic: OrcGraphic,
-      scale: 0.61,
+      scale: 4.5,
       health: 45,
       damage: 12,
       speed: 400,
@@ -212,7 +212,7 @@ export class EnemyRegistry {
     {
       id: "dragon",
       graphic: DragonGraphic,
-      scale: 0.8,
+      scale: 6.5,
       health: 400,
       damage: 100,
       speed: 300,

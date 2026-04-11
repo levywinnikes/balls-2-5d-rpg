@@ -1,6 +1,7 @@
 ## 1. Procedural Engine Standards
 - **Grid Standard**: All geometry and placement must be multiples of 32 (32px Grid).
-- **Spawn Integrity**: Every generated map MUST include exactly one `ply` symbol (or entity of type `player`) placed on a valid, non-collidable tile (`grass`, `path`) on Level 0.
+- **Infinite Depth Support**: The engine now officially supports an 8-level verticality (Z:+3 to Z:-4).
+- **Spawn Integrity**: Every generated map MUST include exactly one `ply` symbol placed on a valid, non-collidable tile on Level 0.
 
 ## 2. Perspective & Height (The 2.5D Rule)
 
@@ -11,6 +12,11 @@ To simulate depth and height in our coordinate-fixed engine, the **Perspective O
     - Example: A wall that is physically at $(10, 10)$ on ground level will be at $(10, 9)$ on Level 1, and $(10, 8)$ on Level 2.
 - **Constant Footprint**: The width ($W$) and height ($H$) of the house floor MUST remain identical across all levels to ensure structural alignment.
 - **Roof Persistence**: The roof MUST be placed on the level above the topmost floor ($Z_{max} + 1$), matching its dimensions but shifted by an additional -1 in the $Y$ axis relative to that floor.
+
+## 4. Mandatory Metadata & Colors
+- **Map Presence**: EVERY tile definition (in JSON or Registry) MUST include a `color` attribute (Hex string, e.g., `#ffffff`).
+- **Minimap Visibility**: Failure to provide a color will result in black "void" spots on the World Map, which is considered a CRITICAL BUG.
+- **Color Consistency**: The color should represent the average visual tone of the tile (e.g., Grass: `#4ade80`, Pavement: `#808080`).
 
 ## 3. Stair Pairing & Navigation
 
@@ -35,10 +41,13 @@ To prevent the game from feeling like a continuous battlefield, population must 
 
 | Level | Density | Notes |
 | :--- | :--- | :--- |
-| **Z:0 (Surface)** | **< 0.5%** | Enemies should be rare. Focus on peaceful travel between POIs. |
-| **Z:0 (Camps)** | **5-10%** | Localized high-density "Enemy Camps" are allowed. |
-| **Z:-1 (Caves)** | **2-3%** | Increased danger as the player descends. |
-| **Z:-2/-3 (Depths)**| **5%+** | Hostile environments with high spawn rates. |
+| **Z:+3/+2 (Sky)** | **0%** | Empty of enemies. Reserved for future flying entities. |
+| **Z:1 (Highlands)**| **0.1%**| Extremely rare. Mostly peaceful high-ground. |
+| **Z:0 (Surface)** | **< 0.5%** | Enemies should be rare. Focus on peaceful travel. |
+| **Z:0 (Town)** | **0%** | **SAFE ZONE**. No enemies allowed within town limits. |
+| **Z:-1 (Caves)** | **2-3%** | Standard enemies (Rats, Skeletons, Goblins). |
+| **Z:-2/-3 (Depths)**| **4%** | Dense populations. |
+| **Z:-4 (Abyss)** | **6%** | High danger (Orcs, Dragons). |
 
 ## 6. Hydrography & Coastline Standards
 
@@ -70,7 +79,23 @@ To eliminate square "staircase" edges, the generator must apply a smoothing pass
   - `nw/ne/sw/se`: Triangular splits cutting exactly from corner to corner (32px diagonal).
 - **Handshake Standard**: By using fixed 50% proportions, all tiles are guaranteed to align at the 32px vertices or 16px midpoints, ensuring mathematical stability across the procedural grid.
 
-## 9. Rendering & Performance
+## 10. Urban Standards (The Town Rule)
+Geographical and structural rules for the Town:
+- **Concrete Foundation**: The entire town square (100-175 range) MUST be layed upon a `pavement` (`pav`) tile, overwriting natural features like water or trees.
+- **Sanctuary (Safe Zone)**: No hostile entity spawning is allowed within the town limits on Level 0.
+- **Architectural Floors**: Buildings above-ground ($Z \ge 0$) must ALWAYS use `floor` as their base material for landing zones to prevent "grass interiors".
+
+## 11. Subterranean Standards (The Cave Rule)
+- **Organic Shapes**: Subterranean walls must be generated using Cellular Automata to create natural, sinuous shapes.
+- **Stair Chains**: Every cave level MUST have at least 5-10 stair pairs (`sdn`/`sup`) connecting to the level below.
+- **Landing Safety**: `ensureSafeTransition` must be called for EVERY stair to clear a 3x3 footprint at the destination.
+- **The Magma Core**: Level -4 is the only level allowed to contain `lava` and `basalt` tiles. Levels -1 to -3 must remain organic stone.
+
+## 12. Rendering & Performance
 - **Tile Culling**: The `DynamicLevelRenderer` only renders tiles within the viewport plus a 2-tile buffer.
-- **Minimap Support**: All tiles MUST have a `color` attribute in their registry definition for accurate map display.
-- **Culling Invisibility**: Upper tiles ($Z+1$) should be hidden when the player is inside a building ($Z=0$ and floor type detected) to prevent roof obscuration.
+- **Minimap Support**: All tiles MUST have a `color` attribute in their registry definition for accurate map display. **No exceptions.**
+- **Culling Invisibility**: Upper tiles ($Z+1$) should be hidden when the player is inside a building to prevent roof obscuration.
+
+## 13. AI Mandatory Comments
+When creating or registering a tile, the following comment must be placed:
+`// MANDATORY: Ensure 'color' is defined for Minimap/WorldMap support.`
