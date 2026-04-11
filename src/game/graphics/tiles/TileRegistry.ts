@@ -33,6 +33,8 @@ import { BasaltGraphic } from "./BasaltGraphic";
 import { BedGraphic } from "./house/BedGraphic";
 import { PavementGraphic } from "./floor/PavementGraphic";
 import { ProceduralTransition, TransitionDirection } from "./ProceduralTransition";
+import { DungeonFloorGraphic } from "./DungeonFloorGraphic";
+import { DungeonWallGraphic } from "./DungeonWallGraphic";
 
 // Central registry for all game tiles
 const COLORS = {
@@ -59,6 +61,13 @@ type TileGraphic = {
         upperPart: Phaser.GameObjects.Sprite;
       };
 };
+/**
+ * ⚠️ MANDATORY TILE CONTRACT ⚠️
+ * When creating or modifying floor/walkable tiles, you MUST:
+ * 1. Define 'stepSound': Mapping to AudioManager keys (grass, sand, dirty, water, mountain, floor).
+ * 2. Define 'speedModifier': Float value (1.0 = full speed, 0.5 = half speed).
+ * 3. Define 'color': Hex string for Minimap/WorldMap support.
+ */
 export type TileDefinition = {
   id: string;
   graphic: TileGraphic;
@@ -69,6 +78,8 @@ export type TileDefinition = {
   bodySize?: { width: number; height: number };
   bodyOffset?: { x: number; y: number };
   color?: string;
+  stepSound?: string;      // Key for AudioManager footstep
+  speedModifier?: number;  // Velocity multiplier (default 1.0)
 };
 
 export class TileRegistry {
@@ -146,6 +157,8 @@ export class TileRegistry {
         id: "sand",
         graphic: SandGraphic,
         color: "#fde047",
+        stepSound: "sand",
+        speedModifier: 0.7,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -154,6 +167,8 @@ export class TileRegistry {
         id: "grass",
         graphic: GrassGraphic,
         color: "#4ade80",
+        stepSound: "grass",
+        speedModifier: 0.8,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -169,6 +184,8 @@ export class TileRegistry {
         id: "grass-path",
         graphic: GrassGraphicPath,
         color: "#a3e635",
+        stepSound: "dirty",
+        speedModifier: 0.9,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -177,6 +194,8 @@ export class TileRegistry {
         id: "water",
         graphic: WaterGraphic,
         color: "#3b82f6",
+        stepSound: "water",
+        speedModifier: 0.4,
         isCollidable: true,
         blocksRanged: false,
         baseDepth: 0,
@@ -195,6 +214,8 @@ export class TileRegistry {
         id: "floor",
         graphic: WoodenFloorGraphic,
         color: "#78350f",
+        stepSound: "floor",
+        speedModifier: 1.0,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -222,6 +243,8 @@ export class TileRegistry {
         id: "mountain",
         graphic: MountainGraphic,
         color: "#475569",
+        stepSound: "mountain",
+        speedModifier: 0.6,
         isCollidable: true,
         blocksRanged: true,
         baseDepth: 2,
@@ -231,6 +254,8 @@ export class TileRegistry {
         id: "dirty",
         graphic: DirtyGraphic,
         color: "#451a03",
+        stepSound: "dirty",
+        speedModifier: 0.9,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -238,6 +263,8 @@ export class TileRegistry {
       {
         id: "dirty_floor",
         graphic: DirtyFloorGraphic,
+        stepSound: "dirty",
+        speedModifier: 0.9,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -245,6 +272,7 @@ export class TileRegistry {
       {
         id: "stair_up",
         graphic: StairUpGraphic,
+        color: "#daa520",
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 1,
@@ -254,6 +282,8 @@ export class TileRegistry {
         id: "pavement",
         graphic: PavementGraphic,
         color: "#808080",
+        stepSound: "floor",
+        speedModifier: 1.0,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -261,6 +291,7 @@ export class TileRegistry {
       {
         id: "stair_down",
         graphic: StairDownGraphic,
+        color: "#daa520",
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 1,
@@ -268,6 +299,7 @@ export class TileRegistry {
       {
         id: "hole",
         graphic: StairDownGraphic, // Placeholder or create HoleGraphic
+        color: "#171717",
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -281,6 +313,7 @@ export class TileRegistry {
           { width: 32, height: 32 },
           { width: 32, height: 32 }
         ),
+        color: "#8b4513",
         isCollidable: true,
         blocksRanged: false,
         baseDepth: 1, 
@@ -288,6 +321,9 @@ export class TileRegistry {
       {
         id: "snow",
         graphic: SnowGraphic,
+        color: "#ffffff",
+        stepSound: "sand", // Deep crunchy snow
+        speedModifier: 0.7,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -295,6 +331,7 @@ export class TileRegistry {
       {
         id: "lava",
         graphic: LavaGraphic,
+        color: "#ff4500",
         isCollidable: true,
         blocksRanged: false,
         baseDepth: 0,
@@ -312,6 +349,7 @@ export class TileRegistry {
       {
         id: "ice",
         graphic: IceGraphic,
+        color: "#e0f2fe",
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -328,6 +366,7 @@ export class TileRegistry {
       {
         id: "cloud",
         graphic: CloudGraphic,
+        color: "#ffffff",
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -335,6 +374,9 @@ export class TileRegistry {
       {
         id: "basalt",
         graphic: BasaltGraphic,
+        color: "#262626",
+        stepSound: "mountain",
+        speedModifier: 1.0,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -360,6 +402,25 @@ export class TileRegistry {
         blocksRanged: false,
         baseDepth: 1,
         color: "#4682b4",
+      },
+      {
+        id: "dungeon-floor",
+        graphic: DungeonFloorGraphic,
+        color: "#334155",
+        stepSound: "mountain", // Stone sound
+        speedModifier: 1.0,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "dungeon-wall",
+        graphic: DungeonWallGraphic,
+        color: "#1e293b",
+        isCollidable: true,
+        blocksRanged: true,
+        baseDepth: 2,
+        bodySize: { width: 32, height: 32 },
       },
     ]);
 

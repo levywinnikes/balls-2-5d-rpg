@@ -186,19 +186,15 @@ export class MapLoader {
       
       const symbol = levelData.map[y][x];
       // Check direct tile definition
-      if (mapData.tiles[symbol]) {
-          if (mapData.tiles[symbol].category) return mapData.tiles[symbol].category;
-          // Check 'under' recursively? usually just one layer
-          if (mapData.tiles[symbol].under) {
-              const underSymbol = mapData.tiles[symbol].under;
-               // Wait, 'under' in JSON is symbol or ID?
-               // Looking at interface: tiles record uses symbol as key?
-               // Actually in newmap.json, keys are "grs", "tre".
-               // 'under' value is "grass" (which is a KEY in tiles).
-               // So yes, we can look up mapData.tiles[underSymbol]
-               if (mapData.tiles[underSymbol] && mapData.tiles[underSymbol].category) {
-                   return mapData.tiles[underSymbol].category;
-               }
+      const tileDef = mapData.tiles[symbol];
+      if (tileDef) {
+          if (tileDef.category) return tileDef.category;
+          if (tileDef.id) return tileDef.id; // Fallback to ID
+          
+          // Check 'under' layer
+          if (tileDef.under && mapData.tiles[tileDef.under]) {
+              const under = mapData.tiles[tileDef.under];
+              return under.category || under.id || null;
           }
       }
       return null;

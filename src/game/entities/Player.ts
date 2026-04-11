@@ -66,32 +66,35 @@ export default class Player {
         return;
     }
     
-    // --- TERRAIN PENALTY LOGIC ---
+    // --- TERRAIN LOGIC (Data-Driven v3.0) ---
     let speedMultiplier = 1.0;
-    const scene = this.sprite.scene as GameScene; // Ensure GameScene cast
+    const scene = this.sprite.scene as GameScene;
     if (scene.mapLoader) {
         const level = this.state.getCurrentLevel();
         const gridX = Math.floor(this.sprite.x / this.tileSize);
         const gridY = Math.floor(this.sprite.y / this.tileSize);
-        const category = scene.mapLoader.getTerrainCategory(gridX, gridY, level);
         
-        // Save for audio usage
-        this.currentTerrain = category || "floor";
-
-        if (category === "grass") speedMultiplier = 0.8;
-        else if (category === "dirty") speedMultiplier = 0.9;
-        else if (category === "sand") speedMultiplier = 0.7;
-        else if (category === "mountain") speedMultiplier = 0.6;
-        else if (category === "water") speedMultiplier = 0.4;
+        // Get Tile ID from MapLoader (returns ID or Category)
+        const tileId = scene.mapLoader.getTerrainCategory(gridX, gridY, level);
         
-        // Boots Mitigation
+        if (tileId) {
+            const { TileRegistry } = require("../graphics/tiles/TileRegistry");
+            const tileDef = TileRegistry.getTileDefinition(tileId);
+            
+            if (tileDef) {
+                this.currentTerrain = tileDef.stepSound || "floor";
+                speedMultiplier = tileDef.speedModifier ?? 1.0;
+            } else {
+                this.currentTerrain = "floor";
+            }
+        } else {
+            this.currentTerrain = "floor";
+        }
+        
+        // Boots Mitigation (Terrain Resistance)
         if (speedMultiplier < 1.0) {
             const boots = this.state.getEquippedBoots();
             if (boots && boots.terrainResistance) {
-                // penalty = 1 - multiplier (e.g. 0.2)
-                // reduction = penalty * resistance (e.g. 0.2 * 0.5 = 0.1)
-                // newPenalty = penalty - reduction (0.2 - 0.1 = 0.1)
-                // newMultiplier = 1 - newPenalty (0.9)
                 const penalty = 1.0 - speedMultiplier;
                 const reduction = penalty * boots.terrainResistance;
                 speedMultiplier = 1.0 - (penalty - reduction);

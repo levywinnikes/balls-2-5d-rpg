@@ -1,16 +1,11 @@
 const fs = require('fs');
 
 /**
- * ⚠️ AI MANDATORY INSTRUCTION ⚠️
- * BEFORE modifying this file, you MUST read and adhere to:
- * docs/contracts/GENERATOR_CONTRACT.md
+ * 🌎 ADVANCED PROCEDURAL WORLD ENGINE v2.50 - DUNGEON REMASTERED
  * --------------------------------------------------
- * 🌎 ADVANCED PROCEDURAL WORLD ENGINE v2.50 - ASCENSÃO
- * --------------------------------------------------
- * [FIXED] House Stairs: Coordinates are now GLOBAL (rx+2, sy+2) to ensure perfect pairing.
- * [FIXED] Cave Entrances: Increased density and guaranteed links from surface to abyss.
- * [ARCH] Entity Separation: Actors are now moved to a dedicated 'entities' array per level.
- * [FIXED] Biome Respect: Ground is no longer overwritten by entity symbols!
+ * [FIXED] Monsters now spawn correctly on 'dungeon_floor' tiles.
+ * [FIXED] Cave links and organic caves use the new stone and wall sets.
+ * [FIXED] Minimap colors for all new dungeon elements.
  */
 
 const WIDTH = 256;
@@ -20,7 +15,8 @@ const SYMBOLS = {
     grass: 'grs', path: 'pth', tree: 'tre', rock: 'rok', sand: 'snd', water: 'wat',
     snow: 'snw', floor: 'flr', wall: 'wal', mountain: 'mnt', roof: 'rof',
     stair_up: 'sup', stair_down: 'sdn', hole: 'hol', empty: '...',
-    basalt: 'bas', lava: 'lav', cloud: 'cld', pavement: 'pav'
+    basalt: 'bas', lava: 'lav', cloud: 'cld', pavement: 'pav',
+    dungeon_floor: 'dfn', dungeon_wall: 'dwl'
 };
 
 const ENEMIES = {
@@ -36,13 +32,12 @@ const levels = {
     "2":  createLayer(SYMBOLS.empty),
     "1":  createLayer(SYMBOLS.empty),
     "0":  createLayer(SYMBOLS.water),
-    "-1": createLayer(SYMBOLS.mountain),
-    "-2": createLayer(SYMBOLS.mountain),
-    "-3": createLayer(SYMBOLS.mountain),
-    "-4": createLayer(SYMBOLS.mountain)
+    "-1": createLayer(SYMBOLS.dungeon_wall),
+    "-2": createLayer(SYMBOLS.dungeon_wall),
+    "-3": createLayer(SYMBOLS.dungeon_wall),
+    "-4": createLayer(SYMBOLS.dungeon_wall)
 };
 
-// NEW: Entity management per level
 const levelEntities = {
     "3": [], "2": [], "1": [], "0": [], "-1": [], "-2": [], "-3": [], "-4": []
 };
@@ -58,7 +53,8 @@ for (let y = 0; y < HEIGHT; y++) {
         const baseRadius = 110 + Math.sin(x/15)*5 + Math.cos(y/15)*5;
 
         if (dist < baseRadius) {
-            if (y < 65) levels["0"][y][x] = SYMBOLS.snw;
+            const snowBorder = 65 + Math.sin(x/10)*8 + (Math.random()*4);
+            if (y < snowBorder) levels["0"][y][x] = SYMBOLS.snw;
             else if (dist < baseRadius - beachWidth) levels["0"][y][x] = SYMBOLS.grass;
             else levels["0"][y][x] = SYMBOLS.sand;
         }
@@ -96,16 +92,17 @@ for(let y=100; y<175; y++) {
 function ensureSafeTransition(toZ, x, y) {
     const targetLayer = levels[toZ.toString()];
     if (!targetLayer) return;
-    // Clear a 3-tile vertical strip to ensure safe landing North or South
+    const isSub = (parseInt(toZ) < 0);
+    const safeTile = isSub ? SYMBOLS.dungeon_floor : SYMBOLS.floor;
+    
     for (let dy = -1; dy <= 1; dy++) {
         if (y + dy >= 0 && y + dy < HEIGHT) {
-            targetLayer[y + dy][x] = SYMBOLS.floor;
+            targetLayer[y + dy][x] = safeTile;
         }
     }
 }
 
 function buildHouse(sx, sy, w, h, floors) {
-    // 1. First, build all floors and walls
     for (let i = 0; i < floors; i++) {
         const z = i.toString(); 
         const ry = sy - i;
@@ -114,7 +111,6 @@ function buildHouse(sx, sy, w, h, floors) {
                 const wall = (x === sx || x === sx+w-1 || y === ry || y === ry+h-1);
                 if (wall) levels[z][y][x] = (i === 0 && y === ry+h-1 && x === Math.floor(sx+w/2)) ? SYMBOLS.floor : SYMBOLS.wall;
                 else levels[z][y][x] = SYMBOLS.floor;
-
                 if (i === floors-1) {
                     const roofZ = (i+1).toString();
                     if (levels[roofZ]) levels[roofZ][y-1][x] = SYMBOLS.roof;
@@ -122,25 +118,12 @@ function buildHouse(sx, sy, w, h, floors) {
             }
         }
     }
-
-    // 2. Then, place all stairs (prevents overwriting and SOFTLOCKS)
-    // MANDATORY Standard: Alternate stair shafts per level (X+2 and X+4)
-    // to prevent overlap in buildings with 3+ floors.
     for (let i = 0; i < floors - 1; i++) {
-        // Alternate shaft based on floor parity
         const shaftX = (i % 2 === 0) ? sx + 2 : sx + 4;
-        
         const stairY_current = sy - i + 2;     
         const stairY_next = sy - (i+1) + 2;    
-
-        // 1. CLEAR LANDING ZONES FIRST (Prevention Pass)
         ensureSafeTransition((i+1).toString(), shaftX, stairY_next);
-
-        // 2. PLACE STAIRS SECOND (Final Pass)
-        // Level i: Stair UP (leads to level i+1)
         levels[i.toString()][stairY_current][shaftX] = SYMBOLS.stair_up;
-
-        // Level i+1: Stair DOWN (leads back to level i)
         levels[(i+1).toString()][stairY_next][shaftX] = SYMBOLS.stair_down;
     }
 }
@@ -148,13 +131,17 @@ console.log("Building Houses with Aligned Stairs...");
 for(let i=0; i<3; i++) for(let j=0; j<3; j++) buildHouse(110+i*22, 110+j*22, 7, 7, (i+j)%2+1 === 1 ? 2 : 3);
 
 // --- PHASE 4: ORGANIC CAVES ---
-console.log("Digging Organic Caves...");
+console.log("Digging Organic Caves with Dungeon Tiles...");
 function digOrganicCaves(z) {
     const layer = levels[z];
+    const density = (z === "-1" || z === "-2") ? 0.48 : 0.42;
     for (let y = 1; y < HEIGHT-1; y++) {
         for (let x = 1; x < WIDTH-1; x++) {
-            layer[y][x] = (Math.random() < 0.45) ? SYMBOLS.floor : SYMBOLS.mountain;
-            if (z === "-4" && layer[y][x] === SYMBOLS.floor) layer[y][x] = (Math.random() < 0.1) ? SYMBOLS.lava : SYMBOLS.basalt;
+            layer[y][x] = (Math.random() < density) ? SYMBOLS.dungeon_floor : SYMBOLS.dungeon_wall;
+            if ((z === "-3" || z === "-4") && layer[y][x] === SYMBOLS.dungeon_floor) {
+                const rand = Math.random();
+                layer[y][x] = rand < 0.08 ? SYMBOLS.lava : (rand < 0.6 ? SYMBOLS.basalt : SYMBOLS.dungeon_floor);
+            }
         }
     }
     for (let i = 0; i < 5; i++) {
@@ -162,39 +149,48 @@ function digOrganicCaves(z) {
         for (let y = 1; y < HEIGHT-1; y++) {
             for (let x = 1; x < WIDTH-1; x++) {
                 let wallCount = 0;
-                for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (temp[y+oy][x+ox] === SYMBOLS.mountain) wallCount++;
-                if (wallCount >= 5) layer[y][x] = SYMBOLS.mountain;
-                else layer[y][x] = (z === "-4") ? (layer[y][x] === SYMBOLS.lava ? SYMBOLS.lava : SYMBOLS.basalt) : SYMBOLS.floor;
+                for (let oy = -1; oy <= 1; oy++) {
+                    for (let ox = -1; ox <= 1; ox++) {
+                        if (temp[y+oy][x+ox] === SYMBOLS.dungeon_wall) wallCount++;
+                    }
+                }
+                if (wallCount >= 5) layer[y][x] = SYMBOLS.dungeon_wall;
+                else {
+                    if (z === "-3" || z === "-4") {
+                        if (layer[y][x] !== SYMBOLS.lava) layer[y][x] = SYMBOLS.basalt;
+                    } else {
+                        layer[y][x] = SYMBOLS.dungeon_floor;
+                    }
+                }
             }
         }
     }
 }
 for(let z of ["-1","-2","-3","-4"]) digOrganicCaves(z);
 
-console.log("Establishing Cave Links...");
+console.log("Establishing Reinforced Dungeon Links...");
 function createCaveLinks() {
-    // 1. Surface -> -1 (Holes)
     for (let i = 0; i < 60; i++) {
         const rx = Math.floor(Math.random() * (WIDTH-20)) + 10;
         const ry = Math.floor(Math.random() * (HEIGHT-20)) + 10;
         if (levels["0"][ry][rx] === SYMBOLS.grass) {
+            ensureSafeTransition("0", rx, ry);
+            ensureSafeTransition("-1", rx, ry);
             levels["0"][ry][rx] = SYMBOLS.hole;
             levels["-1"][ry][rx] = SYMBOLS.stair_up;
-            ensureSafeTransition("-1", rx, ry);
         }
     }
-
-    // 2. Subterranean Continuity (-1 to -4)
     ["-1", "-2", "-3"].forEach(z => {
         const nextZ = (parseInt(z) - 1).toString();
         let links = 0;
-        for(let attempt=0; attempt<3000 && links<40; attempt++) {
+        for(let attempt=0; attempt<3000 && links<45; attempt++) {
             const rx = Math.floor(Math.random()*(WIDTH-4))+2;
             const ry = Math.floor(Math.random()*(HEIGHT-4))+2;
-            if (levels[z][ry][rx] === SYMBOLS.floor && levels[nextZ][ry][rx] !== SYMBOLS.empty) {
+            if (levels[z][ry][rx] !== SYMBOLS.empty && levels[nextZ][ry][rx] !== SYMBOLS.empty) {
+                ensureSafeTransition(z, rx, ry);
+                ensureSafeTransition(nextZ, rx, ry);
                 levels[z][ry][rx] = SYMBOLS.stair_down;
                 levels[nextZ][ry][rx] = SYMBOLS.stair_up;
-                ensureSafeTransition(nextZ, rx, ry);
                 links++;
             }
         }
@@ -202,10 +198,8 @@ function createCaveLinks() {
 }
 createCaveLinks();
 
-// --- PHASE 5: ENTITIES (NOW DECOUPLED) ---
-console.log("Scattering Actors (Decoupled Layer)...");
-
-// Registry for item and actor templates
+// --- PHASE 5: ENTITIES ---
+console.log("Scattering Actors and Rewards...");
 const ENTITY_TEMPLATES = { 
     "ply": { type: "player" }, 
     "rak": { type: "enemy", id: "rat" },
@@ -215,20 +209,22 @@ const ENTITY_TEMPLATES = {
     "dra": { type: "enemy", id: "dragon" },
     "chs": { type: "item", id: "chest" }
 };
-
 function spawnActor(z, x, y, symbol) {
     if (!levelEntities[z]) levelEntities[z] = [];
     levelEntities[z].push({ x, y, symbol });
 }
-
 function scatterActors(z, density, symbols) {
     const layer = levels[z];
     for (let y = 0; y < HEIGHT; y++) {
         for (let x = 0; x < WIDTH; x++) {
-            // No monsters in town at Level 0
             if (z === "0" && x >= 100 && x <= 175 && y >= 100 && y <= 175) continue;
-            
-            const isWalkable = (layer[y][x] === SYMBOLS.grass || layer[y][x] === SYMBOLS.floor || layer[y][x] === SYMBOLS.basalt || layer[y][x] === SYMBOLS.pavement);
+            const isWalkable = (
+                layer[y][x] === SYMBOLS.grass || 
+                layer[y][x] === SYMBOLS.floor || 
+                layer[y][x] === SYMBOLS.basalt || 
+                layer[y][x] === SYMBOLS.pavement ||
+                layer[y][x] === SYMBOLS.dungeon_floor
+            );
             if (isWalkable && Math.random() < density) {
                 const s = symbols[Math.floor(Math.random() * symbols.length)];
                 spawnActor(z, x, y, s);
@@ -236,16 +232,13 @@ function scatterActors(z, density, symbols) {
         }
     }
 }
-
-// Global Spawning
 scatterActors("0", 0.003, ["rak"]);
-scatterActors("-1", 0.015, ["skl", "gob"]);
-scatterActors("-4", 0.04, ["orc", "dra"]);
+scatterActors("-1", 0.012, ["skl", "gob", "chs"]);
+scatterActors("-2", 0.015, ["skl", "gob", "chs"]);
+scatterActors("-3", 0.02, ["orc", "chs"]);
+scatterActors("-4", 0.035, ["orc", "dra", "chs"]);
 
-// Player Initial Position (Level 0, decoupled)
 spawnActor("0", 128, 128, "ply");
-
-// CLEAN SPAWN PLAZA (Terrain Only - No logic overlap with player entity)
 for(let dy=-5; dy<=5; dy++) for(let dx=-5; dx<=5; dx++) levels["0"][128+dy][128+dx] = SYMBOLS.pavement;
 
 const tileDefinitions = {
@@ -256,15 +249,17 @@ const tileDefinitions = {
     "wal": { id: "house-wall", block: true, color: "#5a3825" }, "rof": { id: "red-roof", color: "#ef4444" },
     "sup": { id: "stair_up", color: "#daa520", transition: "up" }, 
     "sdn": { id: "stair_down", color: "#daa520", transition: "down" },
-    "hol": { id: "hole", color: "#171717", transition: "down" }, 
+    "hol": { id: "hole", color: "#262626", transition: "down" }, 
     "lav": { id: "lava", block: true, color: "#ff4500" }, "cld": { id: "cloud", color: "#ffffff" },
-    "mnt": { id: "mountain", block: true, color: "#404040" }, "pav": { id: "pavement", color: "#808080" }
+    "mnt": { id: "mountain", block: true, color: "#404040" }, "pav": { id: "pavement", color: "#808080" },
+    "dfn": { id: "dungeon-floor", color: "#334155" }, "dwl": { id: "dungeon-wall", block: true, color: "#1e293b" }
 };
 
 const finalEntitiesTemplates = { 
     "ply": { type: "player" }, "rak": { type: "enemy", id: "rat" },
     "skl": { type: "enemy", id: "skeleton" }, "gob": { type: "enemy", id: "goblin" },
-    "orc": { type: "enemy", id: "orc" }, "dra": { type: "enemy", id: "dragon" }
+    "orc": { type: "enemy", id: "orc" }, "dra": { type: "enemy", id: "dragon" },
+    "chs": { type: "item", id: "chest" }
 };
 
 const mapData = {
@@ -281,4 +276,4 @@ for (const z in levels) {
 }
 
 fs.writeFileSync('public/newmap.json', JSON.stringify(mapData));
-console.log("v2.50 WORLD GENERATED (Aligned Stairs & Independent Actors)!");
+console.log("v2.50 WORLD GENERATED (Dungeon Remastered)!");
