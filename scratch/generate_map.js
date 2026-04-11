@@ -243,11 +243,11 @@ createCaveLinks();
 console.log("Scattering Entities & Cleaning Plaza...");
 const entities = { 
     "ply": { type: "player", under: "grs" },
-    "rak": { type: "enemy", id: "rat", under: "pav" },
+    "rak": { type: "enemy", id: "rat", under: "grs" },
     "skl": { type: "enemy", id: "skeleton", under: "flr" },
     "gob": { type: "enemy", id: "goblin", under: "flr" },
-    "orc": { type: "enemy", id: "orc", under: "flr" },
-    "dra": { type: "enemy", id: "dragon", under: "flr" }
+    "orc": { type: "enemy", id: "orc", under: "bas" },
+    "dra": { type: "enemy", id: "dragon", under: "bas" }
 };
 
 function scatterEnemies(z, density, types) {

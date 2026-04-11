@@ -16,7 +16,8 @@ To simulate depth and height in our coordinate-fixed engine, the **Perspective O
 ## 4. Mandatory Metadata & Colors
 - **Map Presence**: EVERY tile definition (in JSON or Registry) MUST include a `color` attribute (Hex string, e.g., `#ffffff`).
 - **Minimap Visibility**: Failure to provide a color will result in black "void" spots on the World Map, which is considered a CRITICAL BUG.
-- **Color Consistency**: The color should represent the average visual tone of the tile (e.g., Grass: `#4ade80`, Pavement: `#808080`).
+- **Color Consistency**: The color should represent the average visual tone of the tile.
+- **Entity Biome Alignment**: The `under` attribute of an entity MUST match the dominant biome of its spawn location (e.g., Rats on Surface = `grs`, Skeletons in Caves = `flr`).
 
 ## 3. Stair Pairing & Navigation
 
