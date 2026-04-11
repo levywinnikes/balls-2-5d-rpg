@@ -1,36 +1,23 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "../BaseTileGraphic";
 
-export class RedRoofLeftGraphic {
-  static readonly TEXTURE_KEY = "red-roof-left-texture";
-  private static readonly BASE_SIZE = { width: 128, height: 128 };
-  private static readonly COLLISION_SIZE = { width: 32, height: 32 }; // Match MountainGraphic
-  private static readonly TEXTURE_PATH = "assets/tiles/roof/redroofleft.png";
+export class RedRoofGraphicLeft extends BaseTileGraphic {
+  static readonly TEXTURE_KEY = "Red-Roof-texture-left";
+  public readonly TEXTURE_KEY = RedRoofGraphicLeft.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
-    }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    pool?: Phaser.GameObjects.Sprite[]
-  ): Phaser.GameObjects.Sprite {
-    const width = this.BASE_SIZE.width;
-    const height = this.BASE_SIZE.height;
-
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      //  return this.createDebugWall(scene, x, y, width, height);
-    }
-
-    // Create visual sprite
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setDisplaySize(width, height);
-
-    sprite.setDepth(0);
-
-    return sprite;
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    // Lateral esquerda do telhado
+    graphics.fillStyle(0xb22020, 1);
+    graphics.fillRect(0, 0, 32, 32);
+    // Borda esquerda escura
+    graphics.fillStyle(0x6b0f0f, 1);
+    graphics.fillRect(0, 0, 6, 32);
+    // Sombra superior
+    graphics.fillStyle(0x8b1010, 1);
+    graphics.fillRect(0, 0, 32, 8);
+    // Linhas de telha
+    graphics.lineStyle(1, 0x7a0f0f, 1);
+    graphics.strokeLineShape(new Phaser.Geom.Line(6, 16, 32, 16));
+    graphics.strokeLineShape(new Phaser.Geom.Line(20, 0, 20, 16));
   }
 }

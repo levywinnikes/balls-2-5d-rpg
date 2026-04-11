@@ -2,10 +2,11 @@ import Phaser from "phaser";
 import { BaseEnemyGraphic } from "./BaseEnemyGraphic";
 
 export class GoblinGraphic extends BaseEnemyGraphic {
-  public readonly TEXTURE_KEY = "goblin-texture";
+  public static readonly TEXTURE_KEY = "goblin-texture";
+  public readonly TEXTURE_KEY = GoblinGraphic.TEXTURE_KEY;
 
   static preload(scene: Phaser.Scene): void {
-    super.preload(scene, new this().TEXTURE_KEY);
+    super.preload(scene);
   }
 
   static create(

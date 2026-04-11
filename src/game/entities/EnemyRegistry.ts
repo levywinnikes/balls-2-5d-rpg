@@ -6,6 +6,8 @@ import { GoblinGraphic } from "../graphics/enemies/GoblinGraphic";
 import { OrcGraphic } from "../graphics/enemies/OrcGraphic";
 import { DemonGraphic } from "../graphics/enemies/DemonGraphic";
 import { DragonGraphic } from "../graphics/enemies/DragonGraphic";
+import { GodGraphic } from "../graphics/enemies/GodGraphic";
+import { RedWizardGraphic } from "../graphics/enemies/RedWizardGraphic";
 
 // Interface para itens de loot
 export interface LootItem {
@@ -60,7 +62,7 @@ export class EnemyRegistry {
       id: "rat",
       graphic: RatGraphic,
       scale: 0.9, // Reduced by 40% from 1.5
-      hitboxSize: 48, // Smaller hitbox for small rat
+      hitboxSize: 24, // Smaller hitbox for small rat
       health: 15,
       damage: 5,
       speed: 200,
@@ -69,9 +71,9 @@ export class EnemyRegistry {
       aggroRange: 4, 
       chaseRange: 8,
       returnToSpawn: true,
-      pursuitRange: 5 * 128,
-      stopDistance: 160,
-      attackRange: 184,
+      pursuitRange: 5 * 32,
+      stopDistance: 24,
+      attackRange: 32,
       cooldown: 1000,
       respawnTime: 5000,
       defenseExp: 100,
@@ -99,9 +101,10 @@ export class EnemyRegistry {
       aggroRange: 5,
       chaseRange: 10,
       returnToSpawn: true,
-      pursuitRange: 7 * 128,
-      stopDistance: 160,
-      attackRange: 184,
+      pursuitRange: 7 * 32,
+      stopDistance: 32,
+      attackRange: 32,
+      hitboxSize: 32,
       cooldown: 1000,
       respawnTime: 5000,
       defenseExp: 100,
@@ -130,9 +133,10 @@ export class EnemyRegistry {
       aggroRange: 5,
       chaseRange: 12,
       returnToSpawn: true,
-      pursuitRange: 5 * 128,
-      stopDistance: 160,
-      attackRange: 184,
+      pursuitRange: 5 * 32,
+      stopDistance: 32,
+      attackRange: 32,
+      hitboxSize: 32,
       cooldown: 1000,
       respawnTime: 5000,
       defenseExp: 100,
@@ -158,9 +162,10 @@ export class EnemyRegistry {
       aggroRange: 5,
       chaseRange: 10,
       returnToSpawn: true,
-      pursuitRange: 7 * 128,
-      stopDistance: 160,
-      attackRange: 184,
+      pursuitRange: 7 * 32,
+      stopDistance: 32,
+      attackRange: 48, // Slightly longer reach for orc?
+      hitboxSize: 48, // Bulkier orc
       cooldown: 1000,
       respawnTime: 5000,
       defenseExp: 100,
@@ -187,7 +192,7 @@ export class EnemyRegistry {
       aggroRange: 8,
       chaseRange: 20,
       returnToSpawn: true,
-      pursuitRange: 7 * 128,
+      pursuitRange: 7 * 32,
       stopDistance: 200,
       attackRange: 240,
       cooldown: 1000,
@@ -216,7 +221,7 @@ export class EnemyRegistry {
       aggroRange: 7,
       chaseRange: 15,
       returnToSpawn: true,
-      pursuitRange: 10 * 128,
+      pursuitRange: 10 * 32,
       stopDistance: 200, // Ranged attack?
       attackRange: 300, // Spits fire from distance
       cooldown: 1500,
@@ -237,6 +242,64 @@ export class EnemyRegistry {
       bloodColor: 0xff4400, // Magma / Fire
       resistances: { fire: 0.8 }, // 80% Inherent Resistance
       defenseResistances: { fire: 0.95 } // 95% mitigated on block (very efficient)
+    },
+    {
+      id: "god",
+      graphic: GodGraphic,
+      scale: 1.0, 
+      health: 10000,
+      damage: 1000,
+      speed: 1000,
+      exp: 100000,
+      rangeVision: 20,
+      aggroRange: 20,
+      chaseRange: 50,
+      returnToSpawn: true,
+      pursuitRange: 5000,
+      stopDistance: 200,
+      attackRange: 400,
+      cooldown: 500,
+      respawnTime: 60000,
+      defenseExp: 1000,
+      stability: 1000,
+      defense: 100,
+      stabilityDamage: 1000,
+      armor: 50,
+      loot: [
+        { itemId: "dragon_axe", chance: 1.0, starChance: 100 },
+        { itemId: "dragon_shield", chance: 1.0, starChance: 100 },
+      ],
+      magicAttacks: ["divine_wrath"],
+      bloodColor: 0xffffff,
+    },
+    {
+      id: "red_wizard",
+      graphic: RedWizardGraphic,
+      scale: 1.0,
+      health: 500,
+      damage: 80,
+      speed: 400,
+      exp: 5000,
+      rangeVision: 10,
+      aggroRange: 8,
+      chaseRange: 20,
+      returnToSpawn: true,
+      pursuitRange: 2000,
+      stopDistance: 300,
+      attackRange: 450,
+      cooldown: 2000,
+      respawnTime: 15000,
+      defenseExp: 500,
+      stability: 100,
+      defense: 20,
+      stabilityDamage: 50,
+      armor: 5,
+      loot: [
+        { itemId: "magic_rune", chance: 0.5, minQuantity: 5, maxQuantity: 10 },
+        { itemId: "leather_armor", chance: 0.1 },
+      ],
+      magicAttacks: ["fireball", "curse"],
+      bloodColor: 0x550000,
     },
   ];
 
@@ -283,9 +346,9 @@ export class EnemyRegistry {
     sprite.setScale(scale);
 
     // FIX: Calculate body size to ensure consistent World Hitbox.
-    // Target World Hitbox is ~96px (75% of tile size), or custom.
+    // Target World Hitbox is ~32px (1 tile size), or custom.
     // LocalBodySize = Target / Scale.
-    const targetWorldSize = stats.hitboxSize ?? 96;
+    const targetWorldSize = stats.hitboxSize ?? 32;
     const localSize = targetWorldSize / scale;
 
     // Use unscaled texture dimensions to center the body
@@ -312,8 +375,8 @@ export class EnemyRegistry {
       exp: stats.exp,
       respawnTime: stats.respawnTime,
       loot: stats.loot,
-      aggroRange: stats.aggroRange * 128, // Convert tiles to pixels
-      chaseRange: stats.chaseRange * 128, // Convert tiles to pixels
+      aggroRange: stats.aggroRange * 32, // Convert tiles to pixels
+      chaseRange: stats.chaseRange * 32, // Convert tiles to pixels
       returnToSpawn: stats.returnToSpawn,
       armor: stats.armor,
       magicAttacks: stats.magicAttacks || []

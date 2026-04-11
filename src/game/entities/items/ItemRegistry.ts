@@ -10,7 +10,7 @@ export class ItemRegistry {
       name: "item_magic_rune",
       description: "desc_magic_rune",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "magic_rune", "magic_rune.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "magic_rune"),
         create: (scene) => ItemGraphic.create(scene, "magic_rune"),
       },
       damage: 0,

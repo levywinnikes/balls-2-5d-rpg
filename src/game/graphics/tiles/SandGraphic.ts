@@ -2,7 +2,7 @@ import Phaser from "phaser";
 
 export class SandGraphic {
   static readonly TEXTURE_KEY = "sand-texture";
-  private static readonly SIZE = { width: 128, height: 128 };
+  private static readonly SIZE = { width: 32, height: 32 };
 
   static preload(scene: Phaser.Scene): void {
     if (!scene.textures.exists(this.TEXTURE_KEY)) {
@@ -34,7 +34,7 @@ export class SandGraphic {
     graphics.fillRect(0, 0, w, h);
 
     // Leve variação de cor para evitar visual plano (ruído)
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 30; i++) {
       const x = Phaser.Math.Between(0, w);
       const y = Phaser.Math.Between(0, h);
       const alpha = Phaser.Math.FloatBetween(0.05, 0.15);
@@ -49,10 +49,10 @@ export class SandGraphic {
 
     // Pequenas ondulações/linhas suaves para simular vento/areia movendo
     graphics.lineStyle(1, 0xe5d392, 0.2);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 2; i++) {
       const startY = Phaser.Math.Between(2, h - 6);
       graphics.beginPath();
-      for (let x = 0; x <= w; x += 4) {
+      for (let x = 0; x <= w; x += 8) {
         const y = startY + Math.sin((x + i * 20) * 0.5) * 2;
         if (x === 0) {
           graphics.moveTo(x, y);
@@ -65,7 +65,7 @@ export class SandGraphic {
 
     // Pontinhos pequenos representando grãos de areia um pouco mais escuros
     graphics.fillStyle(0xd2b56a, 0.7);
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 10; i++) {
       const x = Phaser.Math.Between(0, w);
       const y = Phaser.Math.Between(0, h);
       graphics.fillCircle(x, y, 0.6);
@@ -87,7 +87,7 @@ export class SandGraphic {
     // Conchinhas (bem estilizadas, simples círculos com um risco)
     graphics.fillStyle(0xfff5e1, 0.8);
     graphics.lineStyle(1, 0xe0d6b0, 0.6);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 1; i++) {
       const x = Phaser.Math.Between(4, w - 6);
       const y = Phaser.Math.Between(4, h - 6);
       graphics.fillCircle(x, y, 2);

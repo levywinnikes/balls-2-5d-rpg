@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { usePlayerState } from "../../hooks/usePlayerState";
 import { useUI } from "../../context/UIContext";
+import { TERRAIN_COLORS } from "../../constants/TerrainColors";
 import {
   ChevronUp,
   ChevronDown,
@@ -35,26 +36,59 @@ export const SidebarMinimap: React.FC = () => {
   }, [playerLevel]);
 
   useEffect(() => {
-    fetch("newmap.json")
-      .then((res) => res.json())
-      .then((data) => setMapData(data));
+    const mapUrl = `${window.location.origin}/newmap.json`;
+    fetch(mapUrl)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load map");
+        return res.json();
+      })
+      .then((data) => setMapData(data))
+      .catch(err => console.error("Minimap load error:", err));
   }, []);
 
   const colorCache = useRef<Record<string, string>>({});
-  const getTileColor = (tileId: string, tilesDef: any): string => {
-    if (colorCache.current[tileId]) return colorCache.current[tileId];
-    const tileDef = tilesDef[tileId];
-    if (!tileDef || tileId === "...") return "#000000";
+  
+  const getTileColor = (symbol: string, mapData: any): string => {
+    if (colorCache.current[symbol]) return colorCache.current[symbol];
+
+    const definitions = { ...mapData.tiles, ...mapData.entities };
+    const tileDef = definitions[symbol];
+
+    if (!tileDef || symbol === "...") return "transparent";
+
+    // 1. Try TerrainColors by ID or Pattern
+    if (TERRAIN_COLORS[tileDef.id]) {
+        const c = TERRAIN_COLORS[tileDef.id];
+        colorCache.current[symbol] = c;
+        return c;
+    }
+
+    // Pattern matching for transitions (e.g., grs_wat_n -> grass)
+    if (tileDef.id && tileDef.id.startsWith("grs_")) return TERRAIN_COLORS.grass;
+    if (tileDef.id && tileDef.id.startsWith("snd_")) return TERRAIN_COLORS.sand;
+    if (tileDef.id && tileDef.id.startsWith("snw_")) return TERRAIN_COLORS.snow;
+
+    // 2. Try explicit color in tile mapping
     if (tileDef.color) {
-      colorCache.current[tileId] = tileDef.color;
+      colorCache.current[symbol] = tileDef.color;
       return tileDef.color;
     }
+
+    // 3. Try fallback to category
+    if (tileDef.category && TERRAIN_COLORS[tileDef.category]) {
+        const c = TERRAIN_COLORS[tileDef.category];
+        colorCache.current[symbol] = c;
+        return c;
+    }
+
+    // 4. Try recursively looking under
     if (tileDef.under) {
-      const c = getTileColor(tileDef.under, tilesDef);
-      colorCache.current[tileId] = c;
+      const c = getTileColor(tileDef.under, mapData);
+      colorCache.current[symbol] = c;
       return c;
     }
-    return "#222";
+
+    return TERRAIN_COLORS.default || "#222";
   };
 
   const handleLevelUp = () =>
@@ -74,7 +108,6 @@ export const SidebarMinimap: React.FC = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const definitions = { ...mapData.tiles, ...mapData.entities };
     let animationFrameId: number;
 
     const render = () => {
@@ -111,11 +144,15 @@ export const SidebarMinimap: React.FC = () => {
         for (let x = startX; x <= endX; x++) {
           if (y < 0 || y >= mapGrid.length || x < 0 || x >= mapGrid[0].length)
             continue;
+          
+          // KEEP FOG OF WAR: Skip rendering if not explored
           if (explored && !explored[y][x]) continue;
 
-          const color = getTileColor(mapGrid[y][x], definitions);
+          const symbol = mapGrid[y][x];
+          if (symbol === "...") continue;
 
-          // Desenho relativo ao player para manter o radar centralizado
+          const color = getTileColor(symbol, mapData);
+
           const drawX = centerX + (x - pGridX) * currentTileSize;
           const drawY = centerY + (y - pGridY) * currentTileSize;
 
@@ -160,8 +197,8 @@ export const SidebarMinimap: React.FC = () => {
 
   if (!mapData)
     return (
-      <div className="h-full flex items-center justify-center text-gray-500 text-xs">
-        Loading...
+      <div className="h-full flex items-center justify-center text-gray-500 text-xs text-center px-4">
+        Loading Map...
       </div>
     );
 

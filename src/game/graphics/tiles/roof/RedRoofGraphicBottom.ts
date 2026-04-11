@@ -1,36 +1,24 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "../BaseTileGraphic";
 
-export class RedRoofBottomGraphic {
-  static readonly TEXTURE_KEY = "red-roof-bottom-texture";
-  private static readonly BASE_SIZE = { width: 128, height: 128 };
-  private static readonly COLLISION_SIZE = { width: 32, height: 32 }; // Match MountainGraphic
-  private static readonly TEXTURE_PATH = "assets/tiles/roof/redroofbottom.png";
+export class RedRoofGraphicBottom extends BaseTileGraphic {
+  static readonly TEXTURE_KEY = "Red-Roof-texture-bottom";
+  public readonly TEXTURE_KEY = RedRoofGraphicBottom.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
-    }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    pool?: Phaser.GameObjects.Sprite[]
-  ): Phaser.GameObjects.Sprite {
-    const width = this.BASE_SIZE.width;
-    const height = this.BASE_SIZE.height;
-
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      //  return this.createDebugWall(scene, x, y, width, height);
-    }
-
-    // Create visual sprite
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setDisplaySize(width, height);
-
-    sprite.setDepth(0);
-
-    return sprite;
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    // Parte inferior do telhado — beiral
+    graphics.fillStyle(0xb22020, 1);
+    graphics.fillRect(0, 0, 32, 24);
+    // Beiral com sombra
+    graphics.fillStyle(0x6b0f0f, 1);
+    graphics.fillRect(0, 24, 32, 8);
+    // Destaque do topo
+    graphics.fillStyle(0xd44040, 1);
+    graphics.fillRect(0, 0, 32, 5);
+    // Linhas de telha
+    graphics.lineStyle(1, 0x7a0f0f, 1);
+    graphics.strokeLineShape(new Phaser.Geom.Line(0, 12, 32, 12));
+    graphics.strokeLineShape(new Phaser.Geom.Line(8, 12, 8, 24));
+    graphics.strokeLineShape(new Phaser.Geom.Line(24, 12, 24, 24));
   }
 }

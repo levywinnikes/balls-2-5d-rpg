@@ -69,6 +69,10 @@ export default class BattleSystem {
 
   // No método handleEnemyAttack da BattleSystem
   private handleEnemyAttack(enemy: Enemy, player: Player): void {
+    const attackRange = enemy.attackRange;
+    const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.sprite.x, player.sprite.y);
+    console.log(`[COMBAT:LOG] Enemy ${enemy.id} (${enemy.enemyType}) attacking player. Dist: ${distance.toFixed(1)}px, Range: ${attackRange}px`);
+
     const attackDamage = enemy.getDamage();
     const playerDefense = player.getTotalDefense();
     

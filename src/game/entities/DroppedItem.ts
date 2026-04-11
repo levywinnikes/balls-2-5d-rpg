@@ -88,12 +88,12 @@ export class DroppedItem extends Phaser.Physics.Arcade.Sprite {
     }
 
     // Forçar tamanho visual fixo independente da resolução da imagem original
-    this.setDisplaySize(96, 96); // ~75% do tile de 128px
+    this.setDisplaySize(24, 24); // ~75% do tile de 32px
 
     if (this.body) {
       // Ajustar corpo físico para corresponder melhor ao tamanho visual
-      this.body.setSize(80, 80);
-      this.body.setOffset(24, 24); // Centralizar no sprite (128/2 - 80/2 = 24)
+      this.body.setSize(20, 20);
+      this.body.setOffset(2, 2); // Centralizar no sprite de 24px
     }
 
     // Configurar interatividade para arraste
@@ -523,7 +523,7 @@ export class DroppedItem extends Phaser.Physics.Arcade.Sprite {
     // --- Determine Target Level ---
     // If we are throwing to a tile that is Solid Floor on an UPPER level, let's detect it.
     let targetLevel = currentLevel;
-    const currentLevelInt = parseInt(currentLevel);
+    // currentLevelInt removed as unused
 
     // Check levels from highest down to current
     // Check levels from highest down to current
@@ -589,7 +589,7 @@ export class DroppedItem extends Phaser.Physics.Arcade.Sprite {
     const useX = targetX !== undefined ? targetX : this.x;
     const useY = targetY !== undefined ? targetY : this.y;
 
-    const tileSize = scene.mapLoader ? scene.mapLoader.getTileSize() : 128;
+    const tileSize = scene.mapLoader ? scene.mapLoader.getTileSize() : 32;
     const gridX = Math.floor(useX / tileSize);
     const gridY = Math.floor(useY / tileSize);
 
@@ -636,7 +636,7 @@ export class DroppedItem extends Phaser.Physics.Arcade.Sprite {
       if (this.weaponId === newId) return;
       this.weaponId = newId;
 
-      const weaponDef = WeaponRegistry.getWeaponDefinition(newId);
+      // Removed unused weaponDef
       if (newId === "light_torch") {
            // Establish Animation if needed
            if (!this.scene.anims.exists("light_torch_anim")) {

@@ -246,7 +246,7 @@ export const translations = {
     combat_gained_xp: "You gained {xp} experience.",
     combat_level_up: "You advanced from Level {old} to Level {new}.",
     combat_skill_up: "You advanced to {skill} level {level}.",
-    welcome_msg: "Welcome to The Grandfather Sword!",
+    welcome_msg: "Welcome to Balls 2.5D RPG!",
     msg_willpower_tier_up: "You advanced to Willpower Tier {tier}.",
     msg_willpower_lost: "You lost your Willpower streak due to death.",
 
@@ -834,7 +834,7 @@ export const translations = {
     combat_gained_xp: "Você ganhou {xp} de experiência.",
     combat_level_up: "Você avançou do Nível {old} para o Nível {new}.",
     combat_skill_up: "Você avançou para o nível {level} de {skill}.",
-    welcome_msg: "Bem-vindo a The Grandfather Sword!",
+    welcome_msg: "Bem-vindo ao Balls 2.5D RPG!",
     msg_willpower_tier_up: "Você avançou para o Nível de Força de Vontade {tier}.",
     msg_willpower_lost: "Você perdeu sua Força de Vontade ao morrer.",
 

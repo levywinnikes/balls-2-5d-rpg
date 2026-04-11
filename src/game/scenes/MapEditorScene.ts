@@ -42,7 +42,7 @@ export class MapEditorScene extends Phaser.Scene {
 
     // Initialize Renderer
     this.entitiesGroup = this.add.group();
-    this.levelRenderer = new DynamicLevelRenderer(this, 128, this.currentLevel); // Updated
+    this.levelRenderer = new DynamicLevelRenderer(this, 32, this.currentLevel); // Updated
     
     // Camera Controls - Start at Player Start or Center
     let startX = 0;
@@ -56,8 +56,8 @@ export class MapEditorScene extends Phaser.Scene {
     } else {
         // Fallback: Try to find center of map content
         // Or just default to safe 50,50 * tileSize
-        startX = 50 * 128;
-        startY = 50 * 128;
+        startX = 50 * 32;
+        startY = 50 * 32;
     }
 
     this.cameras.main.centerOn(startX, startY);
@@ -77,7 +77,7 @@ export class MapEditorScene extends Phaser.Scene {
     // Grid Marker
     this.marker = this.add.graphics();
     this.marker.lineStyle(2, 0xffffff, 1);
-    this.marker.strokeRect(0, 0, 128, 128);
+    this.marker.strokeRect(0, 0, 32, 32);
     this.marker.setDepth(100000);
 
     // Input Events
@@ -116,11 +116,11 @@ export class MapEditorScene extends Phaser.Scene {
 
   private updateMarker(pointer: Phaser.Input.Pointer) {
       const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-      const gridX = Math.floor(worldPoint.x / 128);
-      const gridY = Math.floor(worldPoint.y / 128);
+      const gridX = Math.floor(worldPoint.x / 32);
+      const gridY = Math.floor(worldPoint.y / 32);
       
-      this.marker.x = gridX * 128;
-      this.marker.y = gridY * 128;
+      this.marker.x = gridX * 32;
+      this.marker.y = gridY * 32;
   }
 
   private paintTile(pointer: Phaser.Input.Pointer) {
@@ -281,7 +281,7 @@ export class MapEditorScene extends Phaser.Scene {
               const enemyDef = EnemyRegistry.getEnemyDefinition(entityId);
               if (enemyDef) {
                   try {
-                       const { sprite } = EnemyRegistry.createEnemy(this, entityId, x * 128 + 64, y * 128 + 64);
+                       const { sprite } = EnemyRegistry.createEnemy(this, entityId, x * 32 + 16, y * 32 + 16);
                        sprite.setAlpha(0.8);
                        if (sprite.body) sprite.body.enable = false;
                        this.entitiesGroup.add(sprite);

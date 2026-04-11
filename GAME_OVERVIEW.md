@@ -1,7 +1,7 @@
-# The Grandfather Sword - Game Overview & Architecture
+# Balls 2.5D RPG — Game Overview & Architecture
 
 ## 1. Project Overview
-**The Grandfather Sword** is an isometric, open-world MMORPG-style single-player game inspired by *Tibia*. It features a retro aesthetic with modern technologies, combining **Electron** for the desktop runtime, **React** for the UI, and **Phaser** for the game engine.
+**Balls 2.5D RPG (Alpha 1)** is an isometric, open-world RPG-style single-player game inspired by *Tibia*. It features a **casual and upbeat adventure aesthetic** with 100% procedural visuals (no PNG assets), combining **Electron** for the desktop runtime, **React** for the UI, and **Phaser** for the game engine.
 
 ### Tech Stack
 - **Runtime:** Electron (Desktop Application)

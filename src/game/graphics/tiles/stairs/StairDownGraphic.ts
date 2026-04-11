@@ -1,24 +1,18 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "../BaseTileGraphic";
 
-export class StairDownGraphic {
-  static readonly TEXTURE_KEY = "stair-down-texture";
-  private static readonly TEXTURE_PATH = "assets/tiles/stairs/wooden-stairs-down.png";
+export class StairDownGraphic extends BaseTileGraphic {
+  public static readonly TEXTURE_KEY = "stair-down-texture";
+  public readonly TEXTURE_KEY = StairDownGraphic.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    // Escada de madeira descendo (tons escuros / buraco)
+    graphics.fillStyle(0x3d1f05, 1);
+    graphics.fillRect(2, 2, 28, 28);
+    
+    graphics.lineStyle(2, 0x000000, 1);
+    for (let i = 0; i < 5; i++) {
+        graphics.strokeLineShape(new Phaser.Geom.Line(2, 6 + i * 5, 30, 6 + i * 5));
     }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    pool?: Phaser.GameObjects.Sprite[]
-  ): Phaser.GameObjects.Sprite {
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setDisplaySize(128, 128); // Force standard tile size (Adjust here if needed)
-    sprite.setOrigin(0.5, 0.75); 
-    return sprite;
   }
 }

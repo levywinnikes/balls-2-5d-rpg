@@ -115,28 +115,33 @@ export const MainMenuUI: React.FC<MainMenuUIProps> = ({ onStart }) => {
 
   return (
     <div 
-        className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center bg-cover bg-center"
-        style={{ backgroundImage: "url('assets/ui/title_bg_alpha3_hd.png')" }}
+        className="absolute inset-0 z-[100] procedural-bg flex flex-col items-center justify-center font-sans"
         onClick={handleInteraction}
     >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
+      {/* Procedural Background Orbs */}
+      <div className="bg-orb bg-orb-1" />
+      <div className="bg-orb bg-orb-2" />
+      <div className="bg-orb bg-orb-3" />
+      
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px]" />
       
       <div className="relative z-10 flex flex-col items-center animate-fade-in">
         <div className="flex flex-col items-center mb-8">
-            <div className="flex items-center gap-4">
-                 <img 
-                    src="assets/items/iron_shield.png" 
-                    alt="Shield" 
-                    className="w-24 h-24 animate-[spin_8s_linear_infinite] drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]" 
-                    style={{ imageRendering: 'pixelated' }} 
-                />
-                 <h1 className="text-6xl font-bold text-[#fbbf24] drop-shadow-[0_4px_4px_rgba(0,0,0,1)] tracking-widest font-serif text-center">
-                    THE GRANDFATHER'S SWORD
+            <div className="flex flex-col items-center gap-6">
+                 {/* Procedural Logo: A Glowing 3D-like Ball */}
+                 <div className="w-32 h-32 rounded-full bg-gradient-to-br from-[#fbbf24] to-[#d97706] shadow-[0_0_50px_rgba(251,191,36,0.5)] flex items-center justify-center relative overflow-hidden group">
+                    <div className="absolute inset-2 rounded-full border border-white/20" />
+                    <div className="absolute top-4 left-6 w-8 h-4 bg-white/40 blur-md rounded-full rotate-[-45deg]" />
+                    <Sword className="text-black/80 drop-shadow-md group-hover:scale-110 transition-transform" size={48} />
+                 </div>
+
+                 <h1 className="text-6xl font-black text-[#fbbf24] title-glow uppercase text-center max-w-2xl leading-tight">
+                    BALLS <span className="text-white">2.5D</span> RPG
                 </h1>
             </div>
            
-            <div className="text-xl font-bold text-[#ffaa00] mt-4 bg-black/60 px-6 py-2 rounded-full border border-[#ffaa00]/30 shadow-lg backdrop-blur-md">
-                ALPHA 3
+            <div className="text-lg font-black tracking-[0.3em] text-[#ffaa00] mt-6 bg-white/5 px-8 py-1 rounded-full border border-[#ffaa00]/20 shadow-xl backdrop-blur-xl">
+                ALPHA 1
             </div>
         </div>
 

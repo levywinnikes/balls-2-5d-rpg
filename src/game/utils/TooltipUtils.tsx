@@ -61,17 +61,7 @@ export function formatItemTooltip(
             }
         };
 
-        // Determine dominant tier for the Header
-        let headerTier = "bronze";
-        if (itemData.attributes && itemData.attributes.length > 0) {
-            const hasGold = itemData.attributes.some((a: any) => a.tier === 'gold');
-            const hasSilver = itemData.attributes.some((a: any) => a.tier === 'silver');
-            
-            if (hasGold) headerTier = "gold";
-            else if (hasSilver) headerTier = "silver";
-        }
-        
-        // const headerColorClass = getTierColor(headerTier);
+        // Unused headerTier removed
 
         return (
             <div className="mt-2 pt-2 border-t border-gray-600">
@@ -432,7 +422,7 @@ export function formatItemTooltip(
             {def.range && def.range > 0 && (
                 <>
                     <span className="text-gray-400">Alcance:</span>
-                    <span className="text-right text-gray-300">{(def.range / 128).toFixed(1)}m</span>
+                    <span className="text-right text-gray-300">{(def.range / 32).toFixed(1)}m</span>
                 </>
             )}
 

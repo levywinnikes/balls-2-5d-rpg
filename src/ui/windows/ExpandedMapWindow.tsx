@@ -3,6 +3,7 @@ import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { usePlayerState } from "../../hooks/usePlayerState";
 import { useUI } from "../../context/UIContext";
 import { ChevronUp, ChevronDown, Plus, Minus, Crosshair } from "lucide-react";
+import { TERRAIN_COLORS } from "../../constants/TerrainColors";
 
 export const ExpandedMapContent: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,23 +38,34 @@ export const ExpandedMapContent: React.FC = () => {
         setMapData(data);
         setViewLevel(playerState.getCurrentLevel());
       });
-  }, []);
+  }, [playerState]);
 
   const colorCache = useRef<Record<string, string>>({});
   const getTileColor = useCallback((tileId: string, defs: any): string => {
     if (colorCache.current[tileId]) return colorCache.current[tileId];
     const def = defs[tileId];
     if (!def) return "#000";
+
+    // 1. Check if color is explicitly in the JSON
     if (def.color) {
       colorCache.current[tileId] = def.color;
       return def.color;
     }
+
+    // 2. Check if the tile ID has a defined color in our centralized registry
+    if (TERRAIN_COLORS[def.id]) {
+      colorCache.current[tileId] = TERRAIN_COLORS[def.id];
+      return TERRAIN_COLORS[def.id];
+    }
+
+    // 3. Fallback to 'under' tile color recursively
     if (def.under) {
       const c = getTileColor(def.under, defs);
       colorCache.current[tileId] = c;
       return c;
     }
-    return "#222";
+
+    return TERRAIN_COLORS.default;
   }, []);
 
   const handleLevelUp = () =>
@@ -62,72 +74,107 @@ export const ExpandedMapContent: React.FC = () => {
   const handleLevelDown = () =>
     mapData?.levels[(parseInt(viewLevel) - 1).toString()] &&
     setViewLevel((parseInt(viewLevel) - 1).toString());
-  const handleCenter = () => {
-    setViewLevel(playerState.getCurrentLevel());
-  };
 
+  const handleCenter = useCallback(() => {
+    if (!containerRef.current || !mapData) return;
+    const pPos = playerState.getPosition();
+    if (pPos.level !== viewLevel) {
+      setViewLevel(pPos.level);
+    }
+    
+    // Calculate scroll target
+    const PIXEL_SIZE = 4 * zoom;
+    const tileSize = mapData.tileSize || 32;
+    const drawX = (pPos.x / tileSize) * PIXEL_SIZE;
+    const drawY = (pPos.y / tileSize) * PIXEL_SIZE;
+    
+    const container = containerRef.current;
+    container.scrollTo({
+      left: drawX - container.clientWidth / 2,
+      top: drawY - container.clientHeight / 2,
+      behavior: "smooth"
+    });
+  }, [mapData, viewLevel, zoom, playerState]);
+
+  // --- BUFFERED RENDERING ---
+  const bufferRef = useRef<HTMLCanvasElement | null>(null);
+
+  // 1. Render static map background to buffer
   useEffect(() => {
-    if (!mapData || !canvasRef.current) return;
+    if (!mapData || !mapData.levels[viewLevel]) return;
 
+    const levelData = mapData.levels[viewLevel];
+    const mapGrid = levelData.map;
+    const rows = mapGrid.length;
+    const cols = mapGrid[0].length;
+    const PIXEL_SIZE = 4 * zoom;
+    const definitions = { ...mapData.tiles, ...mapData.entities };
+
+    // Create or resize buffer
+    if (!bufferRef.current) {
+      bufferRef.current = document.createElement("canvas");
+    }
+    const buffer = bufferRef.current;
+    buffer.width = cols * PIXEL_SIZE;
+    buffer.height = rows * PIXEL_SIZE;
+
+    const bCtx = buffer.getContext("2d");
+    if (!bCtx) return;
+
+    // Fast render to buffer
+    bCtx.fillStyle = "#111"; // Fallback background
+    bCtx.fillRect(0, 0, buffer.width, buffer.height);
+
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const tile = mapGrid[y][x];
+        if (tile === "...") continue;
+        const color = getTileColor(tile, definitions);
+        bCtx.fillStyle = color;
+        bCtx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+      }
+    }
+  }, [mapData, viewLevel, zoom, getTileColor]);
+
+  // 2. Render Loop (Only draws buffer + dynamic player)
+  useEffect(() => {
+    if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const BASE_PIXEL_SIZE = 4;
-    const definitions = { ...mapData.tiles, ...mapData.entities };
     let animationId: number;
 
     const render = () => {
-      const levelData = mapData.levels[viewLevel];
-      // const explored = playerState.getExploredArea(viewLevel); // Removed unused
-      const PIXEL_SIZE = BASE_PIXEL_SIZE * zoom;
+      // Set canvas size to match buffer
+      if (bufferRef.current) {
+        if (canvas.width !== bufferRef.current.width) canvas.width = bufferRef.current.width;
+        if (canvas.height !== bufferRef.current.height) canvas.height = bufferRef.current.height;
 
-      if (!levelData) {
+        // Draw cached background
+        ctx.drawImage(bufferRef.current, 0, 0);
+      } else {
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        return;
-      }
-
-      const mapGrid = levelData.map;
-      const rows = mapGrid.length;
-      const cols = mapGrid[0].length;
-
-      if (
-        canvas.width !== cols * PIXEL_SIZE ||
-        canvas.height !== rows * PIXEL_SIZE
-      ) {
-        canvas.width = cols * PIXEL_SIZE;
-        canvas.height = rows * PIXEL_SIZE;
-      }
-
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-          // if (explored && !explored[y][x]) continue; // Disable Fog of War (Global Reveal)
-          const color = getTileColor(mapGrid[y][x], definitions);
-          ctx.fillStyle = color;
-          ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
-        }
       }
 
       const pPos = playerState.getPosition();
+      const PIXEL_SIZE = 4 * zoom;
 
-      // Desenha Player se estivermos no mesmo nível
+      // Draw Player if on this level
       if (pPos.level === viewLevel) {
-        const tileSize = mapData.tileSize || 32;
-        const pGridX = pPos.x / tileSize;
-        const pGridY = pPos.y / tileSize;
+        const tileSize = mapData?.tileSize || 32;
+        const drawX = (pPos.x / tileSize) * PIXEL_SIZE;
+        const drawY = (pPos.y / tileSize) * PIXEL_SIZE;
 
-        const drawX = pGridX * PIXEL_SIZE;
-        const drawY = pGridY * PIXEL_SIZE;
-
+        // Crosshair style for better visibility
         ctx.fillStyle = "#FFF";
-        ctx.fillRect(drawX - 2 * zoom, drawY - 4 * zoom, 4 * zoom, 12 * zoom);
-        ctx.fillRect(drawX - 6 * zoom, drawY - 2 * zoom, 12 * zoom, 4 * zoom);
-        ctx.fillStyle = "#F00";
-        ctx.fillRect(drawX - zoom, drawY - zoom, 2 * zoom, 2 * zoom);
+        ctx.fillRect(drawX - 1 * zoom, drawY - 6 * zoom, 2 * zoom, 12 * zoom);
+        ctx.fillRect(drawX - 6 * zoom, drawY - 1 * zoom, 12 * zoom, 2 * zoom);
+        
+        ctx.strokeStyle = "#F00";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(drawX - 3 * zoom, drawY - 3 * zoom, 6 * zoom, 6 * zoom);
       }
 
       animationId = requestAnimationFrame(render);
@@ -135,7 +182,7 @@ export const ExpandedMapContent: React.FC = () => {
 
     render();
     return () => cancelAnimationFrame(animationId);
-  }, [mapData, viewLevel, zoom, playerState, getTileColor]);
+  }, [viewLevel, zoom, playerState, mapData?.tileSize]);
 
   const btnStyle = {
     padding: `${s(4)}px ${s(8)}px`,

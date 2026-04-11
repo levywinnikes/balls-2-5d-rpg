@@ -39,7 +39,7 @@ export default class Enemy {
   public id: string = "";
   public level: string = "0";
   public respawnTime: number = 5000;
-  private tileSize: number = 128;
+  private tileSize: number = 32;
   private defense: number = 0;
   public loot: LootItem[] = [];
   public magicAttacks: string[] = [];
@@ -363,15 +363,15 @@ export default class Enemy {
   private filterPath(
     path: { x: number; y: number }[]
   ): { x: number; y: number }[] {
-    const tileSize = 128;
+    const tileSize = 32;
     const minDistance = tileSize * 1.5;
     if (path.length <= 2) return path;
     const filtered = [path[0]];
     let lastPoint = path[0];
     for (let i = 1; i < path.length - 1; i++) {
         const distance = Phaser.Math.Distance.Between(
-            lastPoint.x * tileSize, lastPoint.y * tileSize,
-            path[i].x * tileSize, path[i].y * tileSize
+            lastPoint.x * 32, lastPoint.y * 32,
+            path[i].x * 32, path[i].y * 32
         );
         if (distance >= minDistance) {
             filtered.push(path[i]);
@@ -397,10 +397,10 @@ export default class Enemy {
     // Prevent spam
     if (this.isCalculatingPath) return;
 
-    const startX = Math.floor(this.sprite.x / 128);
-    const startY = Math.floor(this.sprite.y / 128);
-    const endX = Math.floor(targetX / 128);
-    const endY = Math.floor(targetY / 128);
+    const startX = Math.floor(this.sprite.x / 32);
+    const startY = Math.floor(this.sprite.y / 32);
+    const endX = Math.floor(targetX / 32);
+    const endY = Math.floor(targetY / 32);
 
     if (startX === endX && startY === endY) return;
 
@@ -467,7 +467,7 @@ export default class Enemy {
       return;
     }
 
-    const tileSize = 128;
+    const tileSize = 32;
     const nextPoint = this.currentPath[this.currentPathIndex];
     const targetX = nextPoint.x * tileSize + tileSize / 2;
     const targetY = nextPoint.y * tileSize + tileSize / 2;

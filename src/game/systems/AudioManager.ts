@@ -74,67 +74,135 @@ export class AudioManager {
     private chimeLoop: Tone.Loop | null = null;
     private currentChordIndex: number = 0;
 
-    // Chords: Major and Lydian colors (Peaceful, Uplifting)
+    // Chords: Bright, upbeat major progressions (C-G-Am-F loop)
     private readonly chords = [
-        ["C3", "E3", "G3", "B3"],     // C Maj7
-        ["F3", "A3", "C4", "E4"],     // F Maj7
-        ["A2", "C3", "E3", "G3"],     // A Min7 (Safe sadness)
-        ["G3", "B3", "D4", "F#4"],    // G Maj7(#11) - Lydian touch
-        ["D3", "F3", "A3", "C4"],     // D Min7
-        ["E3", "G3", "B3", "D4"],     // E Min7
+        ["C3", "E3", "G3"],   // C Major
+        ["G2", "B2", "D3"],   // G Major
+        ["A2", "C3", "E3"],   // A Minor (adds color)
+        ["F2", "A2", "C3"],   // F Major
     ];
-    
-    // Pentatonic Scale for Chimes (Safe, no dissonance)
-    private readonly chimeScale = ["C5", "D5", "E5", "G5", "A5", "B5", "C6", "E6"];
+
+    // Pentatonic C Major melody scale (fun, no dissonance) - SHIFTED DOWN
+    private readonly chimeScale = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
+
+    private startGenerativeMusic() {
+        if (!this.initialized) return;
+
+        // Fast, bouncy BPM
+        Tone.Transport.bpm.value = 95;
+
+        // --- BASS KICK Pattern (every beat) ---
+        this.musicLoop = new Tone.Loop((time) => {
+            const chord = this.chords[this.currentChordIndex % this.chords.length];
+
+            // Light staccato chord stab on beat 1 & 3
+            this.cloudPad.triggerAttackRelease(chord, "8n", time, 0.5);
+            this.cloudPad.triggerAttackRelease(chord, "8n", time + Tone.Time("2n").toSeconds(), 0.35);
+
+            // Advance chord every 2 measures
+            if (this.currentChordIndex % 2 === 1) {
+                this.currentChordIndex = (this.currentChordIndex + 1) % this.chords.length;
+            } else {
+                this.currentChordIndex++;
+            }
+        }, "1m").start(0);
+
+        // --- MELODY (Plucky xylophone-style chimes) ---
+        let melodyStep = 0;
+        const melodyPattern = [0, 2, 4, 2, 5, 4, 7, 5, 4, 2, 0, 4, 2, 0, 4, 7];
+        this.chimeLoop = new Tone.Loop((time) => {
+            const idx = melodyPattern[melodyStep % melodyPattern.length];
+            const note = this.chimeScale[idx % this.chimeScale.length];
+
+            // Random slight pan for liveliness
+            this.chimePanner.pan.value = (Math.random() * 0.4) - 0.2;
+
+            // RANDOMNESS: Skip note 30% of the time for rhythmic air
+            if (Math.random() < 0.3) {
+                melodyStep++;
+                return;
+            }
+
+            // Play note (bright, short)
+            this.windChimes.triggerAttackRelease(note, "16n", time, 0.4 + Math.random() * 0.2);
+            melodyStep++;
+        }, "8n").start("4n"); // Offset so melody comes in slightly after bass
+
+        // Subtle pink noise atmosphere (very quiet - just air)
+        this.atmosphere.start();
+        this.atmosphereVol.volume.rampTo(-35, 2);
+
+        Tone.Transport.start();
+    }
+
+    private stopGenerativeMusic() {
+        this.atmosphereVol.volume.rampTo(-60, 1);
+        setTimeout(() => this.atmosphere.stop(), 1200);
+
+        if (this.musicLoop) {
+            this.musicLoop.cancel();
+            this.musicLoop.dispose();
+            this.musicLoop = null;
+        }
+        if (this.chimeLoop) {
+            this.chimeLoop.cancel();
+            this.chimeLoop.dispose();
+            this.chimeLoop = null;
+        }
+
+        this.cloudPad.releaseAll();
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+    }
 
     private constructor() {
         // 1. Master Chain
         this.masterLimiter = new Tone.Limiter(-1).toDestination();
         
-        // ASMR "Smiley Curve" EQ (Boost Lows/Highs, Cut Mids) for intimacy
+        // Bright EQ for casual/upbeat feel
         const masterEQ = new Tone.EQ3({
-            low: 3,
-            mid: -5,
-            high: 4,
-            lowFrequency: 100,
-            highFrequency: 8000
+            low: 1,
+            mid: 2,
+            high: 5,
+            lowFrequency: 120,
+            highFrequency: 6000
         }).connect(this.masterLimiter);
 
         this.masterReverb = new Tone.Reverb({
-            decay: 10,       
-            preDelay: 0.2,
-            wet: 0.4
+            decay: 2.5,      // Short, punchy reverb
+            preDelay: 0.05,
+            wet: 0.2
         }).connect(masterEQ);
 
         // 2. Buses
-        this.musicBus = new Tone.Gain(1.5).connect(this.masterReverb); // Boosted Music Level
+        this.musicBus = new Tone.Gain(1.2).connect(this.masterReverb);
         this.sfxBus = new Tone.Gain(1).connect(this.masterReverb);
 
-        // 3. Music Setup (ASMR - Polished "Intimate" Mode)
+        // 3. Music Setup (Casual/Adventure)
         
-        // A) Cloud Pad - Binaural movement
+        // A) Chord Pad — Bright square wave, punchy envelope
         const padPanner = new Tone.AutoPanner({
-            frequency: 0.1, // Slow pan left/right
-            depth: 0.6,
+            frequency: 0.3,
+            depth: 0.3,
             type: "sine"
         }).connect(this.musicBus).start();
 
         this.cloudPad = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: "sine" },
+            oscillator: { type: "square" }, // Brighter timbre
             envelope: {
-                attack: 0.5,
-                decay: 2,
-                sustain: 0.5,
-                release: 2
+                attack: 0.02,  // Fast attack — punchy
+                decay: 0.3,
+                sustain: 0.4,
+                release: 0.5
             },
-            volume: -10 // Boosted from -18
+            volume: -14
         });
         
         this.cloudFilter = new Tone.AutoFilter({
-            frequency: 0.05, 
-            baseFrequency: 400, 
+            frequency: 0.3,
+            baseFrequency: 800,
             octaves: 1,
-            depth: 0.3,
+            depth: 0.2,
             type: "sine"
         }).connect(padPanner).start();
 
@@ -150,14 +218,14 @@ export class AudioManager {
         this.chimePanner = new Tone.Panner(0).connect(this.chimeDelay);
 
         this.windChimes = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: "triangle" }, 
+            oscillator: { type: "triangle" }, // Bright but not harsh
             envelope: {
-                attack: 0.01,
-                decay: 0.3, 
+                attack: 0.005, // Instant attack — percussive
+                decay: 0.15,   // Short decay — marimba/xylophone feel
                 sustain: 0,
-                release: 1
+                release: 0.3
             },
-            volume: -12 // Boosted from -20
+            volume: -8 // Louder melody
         }).connect(this.chimePanner);
 
         // C) Atmosphere (Air) - High frequency focus for "tingles"
@@ -295,7 +363,7 @@ export class AudioManager {
         if (sOff === "true") this.setSfxEnabled(false);
 
         this.initialized = true;
-        console.log("Audio System Initialized (ASMR Mode)");
+        console.log("Audio System Initialized (Casual/Upbeat Mode — BPM 120)");
     }
 
     public setMusicVolume(val: number) {
@@ -336,74 +404,6 @@ export class AudioManager {
     public startTitleMusic() { this.startGenerativeMusic(); }
     public stopTitleMusic() { this.stopGenerativeMusic(); }
 
-    // --- GENERATIVE ENGINE ---
-
-    private startGenerativeMusic() {
-        if (!this.initialized) return;
-        
-        // 1. Start Atmosphere
-        this.atmosphere.start();
-        this.atmosphereVol.volume.rampTo(-20, 5); // Slow fade in
-
-        // 2. Start Loops
-        Tone.Transport.bpm.value = 40; // Very slow, breathing tempo
-
-        // PADS LOOP (Every measure)
-        this.musicLoop = new Tone.Loop((time) => {
-            // Pick next chord
-            const chord = this.chords[this.currentChordIndex];
-            
-            // Play Pad (Long release overlaps chords)
-            this.cloudPad.triggerAttackRelease(chord, "1m", time, 0.3);
-
-            // Move to next chord (random walk or sequential)
-            if (Math.random() > 0.5) {
-                // Next
-                this.currentChordIndex = (this.currentChordIndex + 1) % this.chords.length;
-            } else if (Math.random() > 0.7) {
-                // Skip (Random modulation)
-                this.currentChordIndex = Math.floor(Math.random() * this.chords.length);
-            }
-
-        }, "1m").start(0);
-
-        // CHIMES LOOP (Random intervals - Sparse)
-        this.chimeLoop = new Tone.Loop((time) => {
-             // 35% chance to play a chime cluster (Sparse)
-             if (Math.random() > 0.65) {
-                 const note = this.chimeScale[Math.floor(Math.random() * this.chimeScale.length)];
-                 
-                 // Random Pan
-                 this.chimePanner.pan.rampTo(Math.random() * 2 - 1, 1);
-
-                 // Play
-                 this.windChimes.triggerAttackRelease([note], "8n", time, Math.random() * 0.2 + 0.05); // Very soft velocity
-             }
-        }, "2n").start(0); // Check half as often (slower pace)
-
-        Tone.Transport.start();
-    }
-
-    private stopGenerativeMusic() {
-        this.atmosphereVol.volume.rampTo(-60, 2); // Fade out
-        setTimeout(() => this.atmosphere.stop(), 2000);
-
-        if (this.musicLoop) {
-            this.musicLoop.cancel();
-            this.musicLoop.dispose();
-            this.musicLoop = null;
-        }
-        if (this.chimeLoop) {
-            this.chimeLoop.cancel();
-            this.chimeLoop.dispose();
-            this.chimeLoop = null;
-        }
-        // Release pads so they don't hang
-        this.cloudPad.releaseAll();
-        
-        Tone.Transport.stop();
-        Tone.Transport.cancel(); // Clear scheduled events
-    }
 
 
     // --- FOOTSTEPS ---

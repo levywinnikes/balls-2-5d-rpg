@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { usePlayerState } from "../../hooks/usePlayerState";
+import { TERRAIN_COLORS } from "../../constants/TerrainColors";
 
 // Configurações visuais
 const TILE_SIZE_MINIMAP = 4; // Tamanho do pixel no radar
@@ -20,7 +21,8 @@ export const SidebarMinimap: React.FC = () => {
   // 1. Carregar o JSON da pasta PUBLIC ao iniciar
   useEffect(() => {
     // IMPORTANTE: O nome do arquivo aqui deve ser EXATAMENTE como está na pasta public
-    fetch("/newmap.json")
+    const mapUrl = `${window.location.origin}/newmap.json`;
+    fetch(mapUrl)
       .then((res) => {
         if (!res.ok) throw new Error("Falha ao carregar mapa");
         return res.json();
@@ -34,29 +36,36 @@ export const SidebarMinimap: React.FC = () => {
 
   // Função para descobrir a cor do tile (Recursiva para 'under')
   const getTileColor = (tileId: string, tilesDef: any): string => {
-    // Se já calculamos, retorna do cache
     if (colorCache.current[tileId]) return colorCache.current[tileId];
 
     const tileDef = tilesDef[tileId];
-    // Se não existe definição ou é vazio, retorna preto
     if (!tileDef || tileId === "...") return "#000000";
 
-    // 1. Se tem cor definida, usa ela
+    // 1. Check JSON for overrides
     if (tileDef.color) {
       colorCache.current[tileId] = tileDef.color;
       return tileDef.color;
     }
 
-    // 2. Se não tem cor, mas tem 'under', busca a cor do de baixo
+    // 2. Fallback to Centralized Registry
+    if (TERRAIN_COLORS[tileDef.id]) {
+        colorCache.current[tileId] = TERRAIN_COLORS[tileDef.id];
+        return TERRAIN_COLORS[tileDef.id];
+    }
+
+    // Pattern matching for transitions (e.g., grs_wat_n -> grass)
+    if (tileDef.id && tileDef.id.startsWith("grs_")) return TERRAIN_COLORS.grass;
+    if (tileDef.id && tileDef.id.startsWith("snd_")) return TERRAIN_COLORS.sand;
+    if (tileDef.id && tileDef.id.startsWith("snw_")) return TERRAIN_COLORS.snow;
+
+    // 3. Fallback to 'under'
     if (tileDef.under) {
       const color = getTileColor(tileDef.under, tilesDef);
-      // Salva a cor final para este ID para não recursar de novo
       colorCache.current[tileId] = color;
       return color;
     }
 
-    // Fallback
-    return "#222222";
+    return TERRAIN_COLORS.default;
   };
 
   // Loop de Desenho

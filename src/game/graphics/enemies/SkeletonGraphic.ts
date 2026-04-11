@@ -2,10 +2,11 @@ import Phaser from "phaser";
 import { BaseEnemyGraphic } from "./BaseEnemyGraphic";
 
 export class SkeletonGraphic extends BaseEnemyGraphic {
-  public readonly TEXTURE_KEY = "skeleton-texture";
+  public static readonly TEXTURE_KEY = "skeleton-texture";
+  public readonly TEXTURE_KEY = SkeletonGraphic.TEXTURE_KEY;
 
   static preload(scene: Phaser.Scene): void {
-    super.preload(scene, new this().TEXTURE_KEY);
+    super.preload(scene);
   }
 
   static create(

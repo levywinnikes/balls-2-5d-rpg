@@ -12,20 +12,32 @@ import { StairDownGraphic } from "./stairs/StairDownGraphic";
 import { SandGraphic } from "./SandGraphic";
 import { WoodenFloorGraphic } from "./floor/WoodenFloorGraphic";
 import { RedRoofGraphic } from "./roof/RedRoofGraphic";
-import { RedRoofRightGraphic } from "./roof/RedRoofGraphicRight";
-import { RedRoofLeftGraphic } from "./roof/RedRoofGraphicLeft";
-import { RedRoofTopGraphic } from "./roof/RedRoofGraphicTop";
-import { RedRoofBottomGraphic } from "./roof/RedRoofGraphicBottom";
+import { RedRoofGraphicRight } from "./roof/RedRoofGraphicRight";
+import { RedRoofGraphicLeft } from "./roof/RedRoofGraphicLeft";
+import { RedRoofGraphicTop } from "./roof/RedRoofGraphicTop";
+import { RedRoofGraphicBottom } from "./roof/RedRoofGraphicBottom";
 import { GenericWallGraphic } from "./WallGraphic";
 
-// Import Wall Categories
-import { SideWalls } from "./SideWalls";
-import { FrontWalls } from "./FrontWalls";
-import { CornerWalls } from "./CornerWalls";
-import { DetailWalls } from "./DetailWalls";
+// All wall tiles are now unified in WallTiles.ts (no directional distinction in 32x32 grid)
+import { SideWalls, FrontWalls, CornerWalls, DetailWalls } from "./WallTiles";
 
 import { GrassGraphicTop } from "./GrassGraphicTop";
 import { GrassGraphicPath } from "./GrassPath";
+import { SnowGraphic } from "./SnowGraphic";
+import { LavaGraphic } from "./LavaGraphic";
+import { CactusGraphic } from "./CactusGraphic";
+import { IceGraphic } from "./IceGraphic";
+import { FrozenTreeGraphic } from "./FrozenTreeGraphic";
+import { CloudGraphic } from "./CloudGraphic";
+import { BasaltGraphic } from "./BasaltGraphic";
+import { BedGraphic } from "./house/BedGraphic";
+import { TerrainTransitionGraphic, TransitionDirection } from "./TerrainTransitionGraphic";
+
+const COLORS = {
+    grass: 0x4ade80,
+    water: 0x00bfff,
+    sand: 0xf4e1a1
+};
 
 type TileGraphic = {
   preload: (scene: Phaser.Scene) => void;
@@ -54,7 +66,7 @@ export type TileDefinition = {
   origin?: { x: number; y: number };
   bodySize?: { width: number; height: number };
   bodyOffset?: { x: number; y: number };
-  texturePath?: string;
+  color?: string;
 };
 
 export class TileRegistry {
@@ -67,52 +79,44 @@ export class TileRegistry {
     this.registerTiles([
       {
         id: "red-roof-bottom",
-        graphic: RedRoofBottomGraphic,
+        graphic: RedRoofGraphicBottom,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
-        origin: { x: 0.3, y: 0.5 },
-        texturePath: "assets/tiles/roof/redroofbottom.png"
+        origin: { x: 0.5, y: 0.5 },
       },
-
       {
         id: "red-roof-top",
-        graphic: RedRoofTopGraphic,
+        graphic: RedRoofGraphicTop,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
-        origin: { x: 0.3, y: 0.5 },
-        texturePath: "assets/tiles/roof/redrooftop.png" 
+        origin: { x: 0.5, y: 0.5 },
       },
-
       {
         id: "red-roof-left",
-        graphic: RedRoofLeftGraphic,
+        graphic: RedRoofGraphicLeft,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
-        origin: { x: 0.3, y: 0.5 },
-        texturePath: "assets/tiles/roof/redroofleft.png"
+        origin: { x: 0.5, y: 0.5 },
       },
-
       {
         id: "red-roof-right",
-        graphic: RedRoofRightGraphic,
+        graphic: RedRoofGraphicRight,
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
-        origin: { x: 0.3, y: 0.5 },
-        texturePath: "assets/tiles/roof/redroofright.png"
+        origin: { x: 0.5, y: 0.5 },
       },
-
       {
         id: "red-roof",
         graphic: RedRoofGraphic,
+        color: "#ef4444",
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
-        origin: { x: 0.3, y: 0.5 },
-        texturePath: "assets/tiles/roof/redroofbottom.png" // Fallback
+        origin: { x: 0.5, y: 0.5 },
       },
 
       // --- Categorized Wall Sets ---
@@ -125,36 +129,32 @@ export class TileRegistry {
         id: "cute-wall",
         graphic: new GenericWallGraphic(
           "cute-wall",
-          "assets/tiles/wall/cute-wall.png",
           true,
           2,
-          { width: 128, height: 192 },
-          { width: 128, height: 128 },
-          { x: 0, y: 64 }, // Offset physics box down to align with floor
-          { x: 0.5, y: 0.75 }
+          { width: 32, height: 32 },
+          { width: 32, height: 32 }
         ),
         isCollidable: true,
         blocksRanged: true,
         baseDepth: 2,
-        origin: { x: 0.5, y: 0.75 }, 
+        origin: { x: 0.5, y: 0.5 }, 
       },
 
       {
         id: "sand",
         graphic: SandGraphic,
+        color: "#fde047",
         isCollidable: false,
         blocksRanged: false,
-
         baseDepth: 0,
-        texturePath: "assets/tiles/floor/sand.png"
       },
       {
         id: "grass",
         graphic: GrassGraphic,
+        color: "#4ade80",
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
-        texturePath: "assets/tiles/grass/cute-grass.png"
       },
       {
         id: "grass-top",
@@ -162,11 +162,11 @@ export class TileRegistry {
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
-        texturePath: "assets/tiles/grass/cute-grass-top.png"
       },
       {
         id: "grass-path",
         graphic: GrassGraphicPath,
+        color: "#a3e635",
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
@@ -174,85 +174,77 @@ export class TileRegistry {
       {
         id: "water",
         graphic: WaterGraphic,
+        color: "#3b82f6",
         isCollidable: true,
         blocksRanged: false,
         baseDepth: 0,
-        bodySize: { width: 128, height: 128 },
-        // texturePath: "assets/tiles/water/water.png" // Missing
+        bodySize: { width: 32, height: 32 },
       },
       {
         id: "wall",
         graphic: ConcreteWallGraphic,
+        color: "#94a3b8",
         isCollidable: true,
         blocksRanged: true,
         baseDepth: 2,
-        bodySize: { width: 128, height: 128 },
-        // texturePath: "assets/tiles/wall/concrete_wall.png" // Missing
+        bodySize: { width: 32, height: 32 },
       },
       {
         id: "floor",
         graphic: WoodenFloorGraphic,
+        color: "#78350f",
         isCollidable: false,
         blocksRanged: false,
         baseDepth: 0,
-        texturePath: "assets/tiles/floor/wooden-floor.png"
       },
       {
         id: "tree",
         graphic: TreeGraphic,
+        color: "#166534",
         isCollidable: true,
         baseDepth: 2,
         blocksRanged: true,
-
-        // Tree is 32x32 scaled 4x = 128x128.
-        // Trunk is approx 16px wide at bottom center.
-        // Let's set a small base collision.
         bodySize: { width: 32, height: 32 },
-        bodyOffset: { x: 48, y: 80 }, // Centered bottom
+        bodyOffset: { x: 0, y: 0 },
       },
       {
         id: "rock",
         graphic: RockGraphic,
         isCollidable: true,
-        blocksRanged: false, // Low object
-
+        blocksRanged: false,
         baseDepth: 1,
-        // Rock is small centered object.
-        bodySize: { width: 64, height: 64 },
-        bodyOffset: { x: 32, y: 32 },
+        bodySize: { width: 32, height: 32 },
+        bodyOffset: { x: 0, y: 0 },
       },
       {
         id: "mountain",
         graphic: MountainGraphic,
+        color: "#475569",
         isCollidable: true,
         blocksRanged: true,
-
         baseDepth: 2,
+        bodySize: { width: 32, height: 32 },
       },
       {
         id: "dirty",
         graphic: DirtyGraphic,
+        color: "#451a03",
         isCollidable: false,
         blocksRanged: false,
-
         baseDepth: 0,
-        texturePath: "assets/tiles/floor/dirty.png"
       },
       {
         id: "dirty_floor",
         graphic: DirtyFloorGraphic,
         isCollidable: false,
         blocksRanged: false,
-
         baseDepth: 0,
-        texturePath: "assets/tiles/floor/dirty_floor.png"
       },
       {
         id: "stair_up",
         graphic: StairUpGraphic,
         isCollidable: false,
         blocksRanged: false,
-
         baseDepth: 1,
       },
       {
@@ -260,24 +252,134 @@ export class TileRegistry {
         graphic: StairDownGraphic,
         isCollidable: false,
         blocksRanged: false,
-
         baseDepth: 1,
       },
       {
         id: "wooden_chest",
         graphic: new GenericWallGraphic(
           "wooden_chest",
-          "assets/tiles/chests/wooden-chest.png",
-          false, // Is Transparent? No.
-          1,     // Base Depth
-          { width: 64, height: 64 }, // TargetSize: 64 * 2 = 128px Final
-          { width: 128, height: 128 } // CollisionSize
+          true,
+          1,
+          { width: 32, height: 32 },
+          { width: 32, height: 32 }
         ),
         isCollidable: true,
-        blocksRanged: false, // Low object
+        blocksRanged: false,
         baseDepth: 1, 
       },
+      {
+        id: "snow",
+        graphic: SnowGraphic,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "lava",
+        graphic: LavaGraphic,
+        isCollidable: true,
+        blocksRanged: false,
+        baseDepth: 0,
+        bodySize: { width: 32, height: 32 },
+      },
+      {
+        id: "cactus",
+        graphic: CactusGraphic,
+        isCollidable: true,
+        blocksRanged: true,
+        baseDepth: 1,
+        bodySize: { width: 24, height: 24 },
+        bodyOffset: { x: 4, y: 4 },
+      },
+      {
+        id: "ice",
+        graphic: IceGraphic,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "frozen-tree",
+        graphic: FrozenTreeGraphic,
+        isCollidable: true,
+        blocksRanged: true,
+        baseDepth: 2,
+        bodySize: { width: 32, height: 32 },
+        bodyOffset: { x: 0, y: 0 },
+      },
+      {
+        id: "cloud",
+        graphic: CloudGraphic,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "basalt",
+        graphic: BasaltGraphic,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "bed_head",
+        graphic: {
+          preload: (scene: Phaser.Scene) => BedGraphic.preload(scene),
+          create: (scene: Phaser.Scene, x: number, y: number) => BedGraphic.create(scene, x, y, "head")
+        },
+        isCollidable: true,
+        blocksRanged: false,
+        baseDepth: 1,
+        color: "#f5f5dc",
+      },
+      {
+        id: "bed_foot",
+        graphic: {
+          preload: (scene: Phaser.Scene) => BedGraphic.preload(scene),
+          create: (scene: Phaser.Scene, x: number, y: number) => BedGraphic.create(scene, x, y, "body")
+        },
+        isCollidable: true,
+        blocksRanged: false,
+        baseDepth: 1,
+        color: "#4682b4",
+      },
     ]);
+
+    // --- Dynamic Registration for Terrain Transitions ---
+    const directions: TransitionDirection[] = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
+    
+    // 1. Grass / Water Hybrids
+    directions.forEach(dir => {
+        this.registerTile({
+            id: `grs_wat_${dir}`,
+            graphic: new TerrainTransitionGraphic(COLORS.grass, COLORS.water, dir, `grs_wat_${dir}`),
+            isCollidable: false,
+            blocksRanged: false,
+            baseDepth: 0
+        });
+    });
+
+    // 2. Grass / Sand Hybrids
+    directions.forEach(dir => {
+        this.registerTile({
+            id: `grs_snd_${dir}`,
+            graphic: new TerrainTransitionGraphic(COLORS.grass, COLORS.sand, dir, `grs_snd_${dir}`),
+            isCollidable: false,
+            blocksRanged: false,
+            baseDepth: 0
+        });
+    });
+
+    // 3. Path / Water Hybrids
+    directions.forEach(dir => {
+        this.registerTile({
+            id: `pth_wat_${dir}`,
+            graphic: new TerrainTransitionGraphic(COLORS.grass, COLORS.water, dir, `pth_wat_${dir}`),
+            isCollidable: false,
+            blocksRanged: false,
+            baseDepth: 0
+        });
+    });
 
     this.initialized = true;
   }

@@ -21,7 +21,6 @@ export class MountainGraphic {
     }
 
     const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setScale(4);
     return sprite;
   }
 

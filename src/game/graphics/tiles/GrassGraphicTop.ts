@@ -1,35 +1,27 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "./BaseTileGraphic";
 
-export class GrassGraphicTop {
+export class GrassGraphicTop extends BaseTileGraphic {
   static readonly TEXTURE_KEY = "grass-texture-top";
-  private static readonly BASE_SIZE = { width: 128, height: 128 };
-  private static readonly COLLISION_SIZE = { width: 128, height: 128 }; // Match MountainGraphic
-  private static readonly TEXTURE_PATH = "assets/tiles/grass/cute-grass-top.png";
+  public readonly TEXTURE_KEY = GrassGraphicTop.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    // Base da grama — terra escura
+    graphics.fillStyle(0x4a7c2f, 1);
+    graphics.fillRect(0, 0, 32, 32);
+    // Tufos de grama
+    graphics.fillStyle(0x5ea033, 1);
+    for (let gx = 2; gx < 32; gx += 6) {
+      graphics.fillRect(gx, 8, 3, 14);
+      graphics.fillRect(gx + 1, 4, 2, 5);
     }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number
-  ): Phaser.GameObjects.Sprite {
-    const width = this.BASE_SIZE.width;
-    const height = this.BASE_SIZE.height;
-
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      //  return this.createDebugWall(scene, x, y, width, height);
+    // Sombra leve no fundo
+    graphics.fillStyle(0x3a6020, 0.5);
+    graphics.fillRect(0, 28, 32, 4);
+    // Detalhes claros no topo
+    graphics.fillStyle(0x7ecf45, 1);
+    for (let gx = 4; gx < 30; gx += 8) {
+      graphics.fillRect(gx, 6, 2, 8);
     }
-
-    // Create visual sprite
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setDisplaySize(width, height);
-    sprite.setOrigin(0.3, 0.5);
-    sprite.setDepth(0);
-
-    return sprite;
   }
 }

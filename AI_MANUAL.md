@@ -1,10 +1,11 @@
-# AI Project Manual - The Grandfather Sword
+# AI Project Manual - Balls 2.5D RPG (Alpha 1)
 
 > [!IMPORTANT]
-> **Instructions for AI**: Always consult this specific file before starting any task to understand the project architecture, data structures, and common workflows. If you make structural changes or add new systems, **YOU MUST UPDATE THIS FILE** to keep it current.
+> **MANDATORY PROTOCOL**: Before any development work, you MUST consult the **[Project Master Contract](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/PROJECT_CONTRACT.md)**. 
+> This document and its referenced sub-contracts in `docs/contracts/` represent the absolute truth for this repository. Update them whenever you change core systems.
 
 ## 1. Project Overview
-**Name:** The Grandfather Sword
+**Name:** Balls 2.5D RPG (Alpha 1)
 **Type:** Isometric/Top-down MMORPG-style Single Player Game (Tibia-inspired).
 **Stack:**
 - **Runtime:** Electron (Desktop App)
@@ -98,7 +99,7 @@ interface ContainerDefinition {
   weight: number;
   maxSlots: number;  // Capacity limit (e.g. 10)
   movable: boolean;  // Can be dragged?
-  graphic: { ... };  // HD Sprite (128x128)
+  graphic: { ... };  // Procedural Sprite (32x32)
 }
 ```
 **Note:** `WeaponRegistry` acts as a **Facade**. If an ID is not found in `weapons`, it queries `ContainerRegistry`. This maintains backward compatibility.
@@ -125,11 +126,12 @@ interface ContainerDefinition {
 ### 5.3 Map & Z-Levels
 -   **Files:** `newmap.json` contains `levels: { "0": {...}, "1": {...} }`.
 -   **Coordinate System:** 
-    *   **Tile Size:** 128x128 (HD).
-    *   **World Pos:** `GridX * 128 + 64` (Center).
--   **Under Property Rules:**
-    *   `under` on a Tile/Entity refers to the **ID** of the tile below it (e.g. `under: "floor"`).
-    *   **Exception**: `under: "..."` means "See-through to level below". Do not use map keys here.
+    *   **Tile Size:** 32x32 pixels.
+    *   **World Pos:** `GridX * 32 + 16` (Center).
+- **Under Property Rules**:
+    *   `under` on a Tile/Entity refers to the **Symbol or ID** of the tile below it (e.g. `under: "flr"` or `under: "floor"`).
+    *   **Absolute Transparency**: `...` in the map grid is a reserved symbol. It is NOT a tile key. It tells the engine to skip the current level and render the one below.
+    *   **Partial Transparency**: Using `under: "..."` in a tile/entity definition draws the object and then recursively triggers the search for the tile in the floor beneath it.
 
 ### 5.4 Interaction & Distance Rules
 - **Interaction Radius:** ~100px (Standard).
@@ -147,88 +149,43 @@ interface ContainerDefinition {
     * **Blocking**: Walls, mountains, and trees block projectiles.
     * **Non-Blocking**: Low objects like `wooden_chest`, `rock`, and `water` allow projectiles to pass over them, even if they are collidable (`isCollidable: true`).
 
-## 6. Asset Generation Guidelines (Sprites)
+## 6. Procedural Graphics Guidelines (32x32)
 
 > [!TIP]
-> **Actor Sprite Sheets**: All Characters (Player/Enemies) must follow this EXACT 4x10 grid layout to work with the animation code.
+> **Minimalist Shape System**: All game visuals are generated at runtime using `Phaser.Graphics`. No external PNGs are allowed for gameplay entities.
 
-**Grid Format:** 4 Columns x 10 Rows.
-**Grid Format:** 4 Columns x 10 Rows.
-**Sheet Size:** 951x2364px (High Res).
-**Frame Size:** Approx 237x236px.
+**Standard Grid:** 32x32 pixels.
 
-### Row Definition:
-| Row | Action | Direction |
-| :-- | :----- | :-------- |
-| 1   | Walk   | Down      |
-| 2   | Walk   | Left      |
-| 3   | Walk   | Right     |
-| 4   | Walk   | Up        |
-| 5   | Attack | Down      |
-| 6   | Attack | Left      |
-| 7   | Attack | Right     |
-| 8   | Attack | Up        |
-| 9   | Death  | (Anim 1)  |
-| 10  | Death  | (Anim 2)  |
+### Graphic Engine Protocols:
+- **Tiles**: Inherit from `BaseTileGraphic`. Implement `drawTile(graphics)`.
+- **Enemies**: Inherit from `BaseEnemyGraphic`. Implement `drawEnemy(graphics)`.
+- **Items**: Use `ItemGraphic.create(scene, textureKey)`.
+- **Animations**: Standardized in `BaseEnemyGraphic`. Use frame 0 for static procedural shapes.
 
-### AI Image Generation Prompt Template:
-> [!TIP]
-> **Use Reference**: For consistent grid alignment, **ALWAYS** pass the existing file `public/assets/enemies/rat.png` as a reference image in your generation tool (argument `ImagePaths`). This helps the model understand the exact 4x10 layout.
-
-> [!WARNING]
-> **Perspective Rule**: Do NOT use "Isometric" (Diamond shape). Use **"Oblique Projection" / "Cabinet Projection"** (Tibia Style).
-> - Top-Down View.
-> - Front faces look flat towards the camera.
-> - Top faces are visible.
-> - **NO** rotation of 45 degrees for the base.
-
-Use this prompt when generating new sprites:
-```text
-High Quality Sprite Sheet. Animated Cartoon Style.
-Grid: 4 columns x 10 rows.
-Content: [CHARACTER DESCRIPTION, e.g., A Human Hero Peasant].
-Style: Clean, vibrant, high-definition cartoon style. Not pixel art. 
-Perspective: Top-Down Oblique Projection (Tibia Style). NOT Isometric.
-Dimensions: Total Sheet 951x2364px. Each frame approx 237x236px.
-IMPORTANT: Character must stand UPRIGHT.
-Row 1: Walk Down (Front View)
-Row 2: Walk Left (Side View)
-Row 3: Walk Right (Side View)
-Row 4: Walk Up (Back View)
-Row 5: Attack/Punch Down (Front View)
-Row 6: Attack/Punch Left (Side View)
-Row 7: Attack/Punch Right (Side View)
-Row 8: Attack/Punch Up (Back View)
-Row 9: Death Animation Part 1 (Collapsing)
-Row 10: Death Animation Part 2 (Laying dead)
-Constraint: Exact 4x10 Grid. Clean White Background.
-```
+### Drawing Rules:
+- Use `graphics.fillStyle(color, alpha)`.
+- Use `graphics.fillRect(x, y, w, h)` or `graphics.fillCircle(x, y, radius)`.
+- Stay within the 32x32 coordinate space (0-31).
+- **Prohibited**: Never use `setScale(4)` or draw outside the 32x32 boundary unless it is a multi-tile entity.
 
 ## 7. Common Development Tasks
 
-### 7.1 How to Build the Executable (Win/Mac/Linux)
-To generate the distributable `.exe` (Windows) or binary:
-1.  Run the command:
-    ```bash
-    npm run dist
-    ```
-2.  The output will be in the `dist/` folder (created automatically).
-3.  **Note:** Requires `electron-builder` (already installed).
-
-### How to Add a New Item
-1.  Add PNG to `public/assets/items/`.
-2.  Register in `WeaponRegistry.ts`:
-3.  Add translation key.
-4.  **For Containers:** 
-    *   Add PNG to `assets/tiles/` (HD 128x128 Oblique).
-    *   Register in `ContainerRegistry.ts` (NOT WeaponRegistry).
-    *   Define `maxSlots`, `movable`, and `weight`.
+### 7.1 How to Add a New Item
+1.  Register in `WeaponRegistry.ts` (or `ItemRegistry.ts`).
+2.  Define a unique `textureKey` (e.g., `item-fire-sword`).
+3.  The `ItemGraphic` system will automatically generate a colored circle if not manually defined.
 
 ### How to Add a New Enemy
-1.  Generate Sprite Sheet using the **Asset Generation Guidelines** above.
-2.  Create `MyEnemyGraphic.ts` in `src/game/graphics/enemies/` (Copy `RatGraphic.ts` as it implements the animation rows).
-3.  Register in `EnemyRegistry.ts` with stats and loot.
-4.  Preload it in `EnemyRegistry.preloadAll`.
+1.  Create `MyEnemyGraphic.ts` in `src/game/graphics/enemies/`.
+2.  Inherit from `BaseEnemyGraphic`.
+3.  Implement `protected drawEnemy(graphics: Phaser.GameObjects.Graphics): void`.
+4.  Register in `EnemyRegistry.ts` with stats and loot.
+
+### How to Add a New Tile
+1.  Create `MyTileGraphic.ts` in `src/game/graphics/tiles/`.
+2.  Inherit from `BaseTileGraphic`.
+3.  Implement `protected drawTile(graphics: Phaser.GameObjects.Graphics): void`.
+4.  Register in `TileRegistry.ts`.
 
 ## 8. AI "Gotchas" & Rules
 1.  **React Updates**: Changing `PlayerState` properties directy does NOT re-render React. You MUST `emit` an event.

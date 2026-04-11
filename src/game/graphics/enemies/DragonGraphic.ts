@@ -2,19 +2,12 @@ import Phaser from "phaser";
 import { BaseEnemyGraphic } from "./BaseEnemyGraphic";
 
 export class DragonGraphic extends BaseEnemyGraphic {
-  public readonly TEXTURE_KEY = "dragon-texture";
-  public static readonly SPRITE_KEY = "dragon-sprite";
+  public static readonly TEXTURE_KEY = "dragon-texture";
+  public readonly TEXTURE_KEY = DragonGraphic.TEXTURE_KEY;
+  protected static SIZE = { width: 64, height: 64 };
 
   static preload(scene: Phaser.Scene): void {
-    // Dragon is 2048x2048 (2x Rat)
-    // 4 cols = 512px
-    // 10 rows -> 204px height (approx 204.8)
-    scene.load.spritesheet(this.SPRITE_KEY, "assets/enemies/dragon.png", {
-      frameWidth: 512,
-      frameHeight: 204, 
-      margin: 0, 
-      spacing: 0
-    });
+    super.preload(scene);
   }
 
   static create(
@@ -22,48 +15,41 @@ export class DragonGraphic extends BaseEnemyGraphic {
     x: number,
     y: number
   ): Phaser.Physics.Arcade.Sprite {
-    // Create animations
-    if (!scene.anims.exists("dragon-walk-down")) {
-        const createAnim = (key: string, startFrame: number, endFrame: number, fps: number, loop: number) => {
-             scene.anims.create({
-                key: key,
-                frames: scene.anims.generateFrameNumbers(DragonGraphic.SPRITE_KEY, { start: startFrame, end: endFrame }),
-                frameRate: fps,
-                repeat: loop
-            });
-        };
+    const textureKey = new this().TEXTURE_KEY;
 
-        // Rows 0-3: Walk (4 frames each)
-        createAnim("dragon-walk-down", 0, 3, 8, -1);
-        createAnim("dragon-walk-left", 4, 7, 8, -1);
-        createAnim("dragon-walk-right", 8, 11, 8, -1);
-        createAnim("dragon-walk-up", 12, 15, 8, -1);
-
-        // Rows 4-7: Attack (4 frames each)
-        createAnim("dragon-attack-down", 16, 19, 12, 0);
-        createAnim("dragon-attack-left", 20, 23, 12, 0);
-        createAnim("dragon-attack-right", 24, 27, 12, 0);
-        createAnim("dragon-attack-up", 28, 31, 12, 0);
-
-        // Rows 8-9: Death (8 frames total: 32-39)
-        createAnim("dragon-die", 32, 39, 6, 0);
+    if (!scene.textures.exists(textureKey)) {
+      this.createTexture(scene, textureKey);
     }
 
-    const sprite = scene.physics.add.sprite(x, y, this.SPRITE_KEY);
+    const sprite = scene.physics.add.sprite(x, y, textureKey);
+    sprite.setSize(this.SIZE.width * 0.8, this.SIZE.height * 0.8);
     
-    // Hitbox: Keep it centered.
-    // Rat was 64x64. Dragon should be larger. Maybe 128x128?
-    sprite.setSize(128, 128); 
-    sprite.setOffset(192, 38); // Centering: (512-128)/2 = 192. (204-128)/2 = 38.
-
-    if (scene.anims.exists("dragon-walk-down")) {
-        sprite.play("dragon-walk-down");
-    }
-
+    this.createStandardAnimations(scene, "dragon", textureKey);
+    
     return sprite;
   }
 
   protected drawEnemy(graphics: Phaser.GameObjects.Graphics): void {
-    // Not used
+    // Escamas/Corpo (Bola roxa grande)
+    graphics.fillStyle(0x4b0082, 1); // Indigo
+    graphics.fillCircle(32, 32, 30);
+
+    // Olhos brilhantes amarelo/fogo
+    graphics.fillStyle(0xffff00, 1);
+    graphics.fillCircle(22, 25, 6);
+    graphics.fillCircle(42, 25, 6);
+    graphics.fillStyle(0xff0000, 1);
+    graphics.fillCircle(22, 25, 2);
+    graphics.fillCircle(42, 25, 2);
+
+    // Chifres/Espinhos
+    graphics.fillStyle(0x2a004a, 1);
+    graphics.fillTriangle(32, 2, 22, 12, 42, 12); // Superior
+    graphics.fillTriangle(60, 20, 50, 32, 62, 32); // Direito
+    graphics.fillTriangle(4, 20, 14, 32, 2, 32);   // Esquerdo
+
+    // Boca soltando "fumaça" (pequeno círculo cinza)
+    graphics.fillStyle(0x808080, 0.5);
+    graphics.fillCircle(32, 45, 5);
   }
 }

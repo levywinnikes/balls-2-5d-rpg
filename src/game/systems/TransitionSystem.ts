@@ -60,12 +60,17 @@ export class TransitionSystem {
 
       let nextLevelInt: number;
       const currentLevelInt = parseInt(currentLevel);
+      let targetGridY = gridY;
 
       if (
         tileDef.transition === "dwn" ||
         tileDef.transition === "down"
       ) {
         nextLevelInt = currentLevelInt - 1;
+        
+        // OFFSET LOGIC: Go DOWN means spawning 1 tile SOUTH (y + 1)
+        // This prevents looping.
+        targetGridY = gridY + 1;
       } else {
         return; // Transição inválida
       }
@@ -77,7 +82,7 @@ export class TransitionSystem {
         await this.performTransition(
           nextLevelStr,
           gridX,
-          gridY,
+          targetGridY,
           tileSize,
           mapData
         );

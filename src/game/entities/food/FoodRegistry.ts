@@ -1,4 +1,3 @@
-import Phaser from "phaser";
 import { ItemGraphic } from "../../graphics/ItemGraphic";
 import { WeaponDefinition } from "../weapons/WeaponRegistry";
 import { ItemType } from "../../../config/ItemConstants";
@@ -10,7 +9,7 @@ export class FoodRegistry {
       name: "item_rat_meat",
       description: "desc_rat_meat",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "rat_meat", "rat_meat.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "rat_meat"),
         create: (scene) => ItemGraphic.create(scene, "rat_meat"),
       },
       damage: 0,

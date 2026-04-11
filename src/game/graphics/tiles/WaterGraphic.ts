@@ -1,36 +1,30 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "./BaseTileGraphic";
 
-export class WaterGraphic {
-  static readonly TEXTURE_KEY = "water-texture";
-  private static readonly BASE_SIZE = { width: 128, height: 128 };
-  private static readonly COLLISION_SIZE = { width: 32, height: 32 }; // Match MountainGraphic
-  private static readonly TEXTURE_PATH = "assets/tiles/water/4511.gif";
+export class WaterGraphic extends BaseTileGraphic {
+  public static readonly TEXTURE_KEY = "water-texture";
+  public readonly TEXTURE_KEY = WaterGraphic.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
-    }
-  }
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    // Azul base
+    graphics.fillStyle(0x00bfff, 1); // DeepSkyBlue
+    graphics.fillRect(0, 0, 32, 32);
 
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    pool?: Phaser.GameObjects.Sprite[]
-  ): Phaser.GameObjects.Sprite {
-    const width = this.BASE_SIZE.width;
-    const height = this.BASE_SIZE.height;
+    // Ondas simples
+    graphics.lineStyle(1, 0xffffff, 0.4);
+    
+    // Onda 1
+    graphics.beginPath();
+    graphics.moveTo(5, 10);
+    graphics.lineTo(15, 12);
+    graphics.lineTo(25, 10);
+    graphics.strokePath();
 
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      //  return this.createDebugWall(scene, x, y, width, height);
-    }
-
-    // Create visual sprite
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setDisplaySize(width, height);
-    sprite.setOrigin(0.3, 0.5);
-    sprite.setDepth(0);
-
-    return sprite;
+    // Onda 2
+    graphics.beginPath();
+    graphics.moveTo(8, 22);
+    graphics.lineTo(18, 24);
+    graphics.lineTo(28, 22);
+    graphics.strokePath();
   }
 }

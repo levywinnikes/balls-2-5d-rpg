@@ -2,24 +2,18 @@ import Phaser from "phaser";
 import { BaseEnemyGraphic } from "./BaseEnemyGraphic";
 
 export class DemonGraphic extends BaseEnemyGraphic {
-  public readonly TEXTURE_KEY = "demon-texture";
-
-  static preload(scene: Phaser.Scene): void {
-    super.preload(scene, new this().TEXTURE_KEY);
-  }
+  public static readonly TEXTURE_KEY = "demon-texture";
 
   static create(
     scene: Phaser.Scene,
     x: number,
     y: number
   ): Phaser.Physics.Arcade.Sprite {
-    const textureKey = new this().TEXTURE_KEY;
-
-    if (!scene.textures.exists(textureKey)) {
-      this.createTexture(scene, textureKey);
-    }
+    const textureKey = this.TEXTURE_KEY;
+    if (!scene.textures.exists(textureKey)) this.createTexture(scene, textureKey);
 
     const sprite = scene.physics.add.sprite(x, y, textureKey);
+    this.createStandardAnimations(scene, "demon", textureKey);
     sprite.setSize(this.SIZE.width, this.SIZE.height);
     return sprite;
   }

@@ -1,43 +1,30 @@
 import { TileDefinition } from "./TileRegistry";
 import { GenericWallGraphic } from "./WallGraphic";
 
-// Helper to generate ID from path
-function getIdFromPath(path: string): string {
-  const parts = path.split('/');
-  const filename = parts.pop()?.replace(/\.[^/.]+$/, "") || ""; 
-  const folder = parts.pop() || "";
-  return `${folder}-${filename}`;
-}
-
-type WallEntry = string | { id: string; path: string; isCollidable?: boolean };
-
-// Add new Detail Walls here
-const definitions: WallEntry[] = [
-  { id: "brick-wall-corner-detail", path: "assets/tiles/wall/brick-wall/wall-corner-detail.png" },
-  { id: "house-wall-corner-detail", path: "assets/tiles/wall/wood-house/wall-corner-detail.png" },
-  "assets/tiles/wall/cave-wall/wall-corner-detail.png"
+// All detail wall definitions — IDs only, no PNG paths.
+// Textures are generated procedurally by GenericWallGraphic.
+const definitions: { id: string; isCollidable?: boolean }[] = [
+  { id: "brick-wall-corner-detail" },
+  { id: "house-wall-corner-detail" },
+  { id: "cave-wall-corner-detail" },
 ];
 
-
 export const DetailWalls: TileDefinition[] = definitions.map((entry) => {
-    const path = typeof entry === 'string' ? entry : entry.path;
-    const id = typeof entry === 'string' ? getIdFromPath(path) : entry.id;
-    const isCollidable = typeof entry === 'object' && entry.isCollidable !== undefined ? entry.isCollidable : false;
+    const { id, isCollidable = false } = entry;
 
     return {
       id,
       graphic: new GenericWallGraphic(
         id,
-        path,
         false,
         2,
-        { width: 128, height: 128 },
-        { width: 128, height: 128 }
+        { width: 32, height: 32 },
+        { width: 32, height: 32 }
       ),
       isCollidable,
       blocksRanged: true,
       baseDepth: 2,
-      bodySize: { width: 128, height: 128 },
-      bodyOffset: { x: 128, y: 128 },
+      bodySize: { width: 32, height: 32 },
+      bodyOffset: { x: 0, y: 0 },
     };
 });

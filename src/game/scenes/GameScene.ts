@@ -78,7 +78,7 @@ export default class GameScene extends Phaser.Scene {
   private currentLevel: string = "0";
   private droppedItemsGroup!: Phaser.Physics.Arcade.Group;
   private pickupZone!: Phaser.Physics.Arcade.Sprite;
-  private readonly PICKUP_RADIUS: number = 128;
+  private readonly PICKUP_RADIUS: number = 48;
   private isPathfindingReady: boolean = false;
   private autoSaveSystem!: AutoSaveSystem;
   public saveSystem!: SaveSystem;
@@ -119,23 +119,14 @@ export default class GameScene extends Phaser.Scene {
   preload(): void {
 
     TileRegistry.preloadAll(this);
-    this.load.svg("light_glow", "assets/light_glow.svg", { scale: 1 });
     PlayerGraphic.preload(this);
     EnemyRegistry.preloadAll(this);
     registerDefaultMagics();
     WeaponRegistry.preloadAll(this);
     this.load.json("npcs_data", "data/npcs.json");
-    this.load.json("enemies_data", "data/enemies.json"); // Load External Enemies
-    this.load.image("npc_elder", "assets/npcs/elder.png"); // Placeholder or real asset?
-    this.load.image("npc_guard", "assets/npcs/guard.png"); // Placeholder
+    this.load.json("enemies_data", "data/enemies.json");
     this.load.json("dialogues_data", "data/dialogues.json");
     this.load.json("quest_rats", "data/quests/rats.json");
-
-    // Projectile Animations
-    this.load.image("fireball_1", "assets/items/runes/fire_ball_animation/1.png");
-    this.load.image("fireball_2", "assets/items/runes/fire_ball_animation/2.png");
-    this.load.image("fireball_3", "assets/items/runes/fire_ball_animation/3.png");
-    this.load.image("fireball_4", "assets/items/runes/fire_ball_animation/4.png");
   }
 
   init(data: any) {
@@ -205,16 +196,23 @@ export default class GameScene extends Phaser.Scene {
   // --- BUSCA GLOBAL DE SPAWN ---
   public getSpawnCoordinate(): { x: number; y: number; level: string } {
     const mapName = this.registry.get("currentMap") || "newmap";
-    const mapData =
-      this.cache.json.get(`${mapName}_data`) || this.cache.json.get(mapName);
-    const fallback = { x: 320, y: 320, level: "0" };
+    const mapData = this.cache.json.get(`${mapName}_data`) || this.cache.json.get(mapName);
+    const fallback = { x: 4096, y: 4096, level: "0" }; // Center of 256x256 map
 
     if (!mapData) {
-        console.warn("Map data not found for spawn search");
         return fallback;
     }
 
-    // Explicitly find the 'player' type key if not 'ply'
+    // [OPTIMIZATION] Check explicit playerPos in map levels first
+    if (mapData.levels && mapData.levels["0"] && mapData.levels["0"].playerPos) {
+       return {
+         x: mapData.levels["0"].playerPos.x,
+         y: mapData.levels["0"].playerPos.y,
+         level: "0"
+       };
+    }
+
+    // Fallback: Scan map for 'player' type key
     let playerSymbol = "ply";
     if (mapData.entities) {
       const foundKey = Object.keys(mapData.entities).find(
@@ -223,30 +221,21 @@ export default class GameScene extends Phaser.Scene {
       if (foundKey) playerSymbol = foundKey;
     }
 
-    // Force strict search order: Level 0 MUST be checked first and returned if found.
-    // The previous logic was spread operatior, which is fine, but let's be verbose to be safe.
     const orderedLevels = ["0", ...Object.keys(mapData.levels).filter(k => k !== "0")];
 
     for (const levelKey of orderedLevels) {
-      if (!mapData.levels[levelKey]) continue;
-      
       const levelData = mapData.levels[levelKey];
+      if (!levelData || !levelData.map) continue;
+      
       const mapMatrix = levelData.map;
-
       for (let y = 0; y < mapMatrix.length; y++) {
-        for (let x = 0; x < mapMatrix[y].length; x++) {
-          const tileId = mapMatrix[y][x];
-          console.log(`[GameScene] Checking tile at (${x}, ${y}, Level ${levelKey}) -> '${tileId}'`);
-          if (tileId === playerSymbol) {
+        const row = mapMatrix[y];
+        for (let x = 0; x < row.length; x++) {
+          if (row[x] === playerSymbol) {
             const size = mapData.tileSize || 32;
-            // Center the player in the tile
-            const spawnX = x * size + size / 2;
-            const spawnY = y * size + size / 2;
-            
-            console.log(`Found spawn at Level ${levelKey}: ${spawnX}, ${spawnY}`);
             return {
-              x: spawnX,
-              y: spawnY,
+              x: x * size + size / 2,
+              y: y * size + size / 2,
               level: levelKey,
             };
           }
@@ -254,7 +243,6 @@ export default class GameScene extends Phaser.Scene {
       }
     }
     
-    console.warn("Player start position not found in map, using fallback.");
     return fallback;
   }
 
@@ -599,18 +587,23 @@ export default class GameScene extends Phaser.Scene {
                 this.currentLevel = spawnInfo.level;
              }
          }
-
          
          // Sync registry/state
          this.registry.set("currentLevel", this.currentLevel);
          PlayerState.getInstance().setCurrentLevel(this.currentLevel);
       }
-      
-      this.saveSystem = new SaveSystem(this);
-      
 
+         
+      // --- EMERGENCY SCALE FIX ---
+      // If the player position in the registry looks like it was from the 128px era, reset it.
+      // 32px maps typically spawn within 4000px. If it's way higher, it's likely stale.
+      if (initialPlayerPos && (initialPlayerPos.x > 8000 || initialPlayerPos.y > 8000)) {
+          console.warn("⚠️ Legacy 128px scale detected. Resetting player to spawn.");
+          initialPlayerPos = null;
+          this.registry.remove("playerPos");
+      }
 
-      console.log(`Starting/Respawning at Level ${this.currentLevel}, Pos: ${initialPlayerPos.x}, ${initialPlayerPos.y}`);
+      console.log(`Starting/Respawning at Level ${this.currentLevel}`);
 
       const { wallsLayer, mapWidth, mapHeight, items } =
         await this.mapLoader.setActiveLevel(this.currentLevel);
@@ -692,6 +685,11 @@ export default class GameScene extends Phaser.Scene {
       this.registry.set("player", this.player);
       this.registry.set("playerInitialized", true);
 
+      // Camera setup: Follow player and lock to map bounds
+      this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
+      this.cameras.main.setBounds(0, 0, mapWidth, mapHeight);
+      this.physics.world.setBounds(0, 0, mapWidth, mapHeight);
+
       this.autoSaveSystem = new AutoSaveSystem(this);
       this.saveSystem = new SaveSystem(this);
       
@@ -718,6 +716,60 @@ export default class GameScene extends Phaser.Scene {
       (this.pickupZone.body as Phaser.Physics.Arcade.Body).setCircle(
         this.PICKUP_RADIUS
       );
+
+      // --- PROCEDURAL NPC TEXTURES ---
+      const npcColors: [string, number][] = [
+        ["npc_elder", 0x6677aa], // Elder: blue/purple robe
+        ["npc_guard", 0x557755], // Guard: green armor
+      ];
+      npcColors.forEach(([key, color]) => {
+        if (!this.textures.exists(key)) {
+          const g = this.add.graphics();
+          g.fillStyle(color, 1); // Body
+          g.fillRect(8, 12, 16, 18);
+          g.fillStyle(0xffcc99, 1); // Face
+          g.fillRect(10, 4, 12, 10);
+          g.fillStyle(0x333333, 1); // Eyes
+          g.fillRect(12, 7, 3, 3);
+          g.fillRect(17, 7, 3, 3);
+          g.generateTexture(key, 32, 32);
+          g.destroy();
+        }
+      });
+
+      // --- PROCEDURAL FIREBALL ANIMATION FRAMES ---
+      const fireColors = [0xff8800, 0xff5500, 0xff3300, 0xffaa00];
+      const fireSizes = [6, 8, 10, 7];
+      for (let i = 1; i <= 4; i++) {
+        const key = `fireball_${i}`;
+        if (!this.textures.exists(key)) {
+          const g = this.add.graphics();
+          // Outer glow
+          g.fillStyle(fireColors[i - 1], 0.4);
+          g.fillCircle(16, 16, fireSizes[i - 1] + 3);
+          // Inner core
+          g.fillStyle(fireColors[i - 1], 1);
+          g.fillCircle(16, 16, fireSizes[i - 1]);
+          // White-hot center
+          g.fillStyle(0xffffff, 0.8);
+          g.fillCircle(16, 16, Math.max(2, fireSizes[i - 1] - 4));
+          g.generateTexture(key, 32, 32);
+          g.destroy();
+        }
+      }
+
+      // --- PROCEDURAL LIGHT GLOW TEXTURE ---
+      if (!this.textures.exists("light_glow")) {
+        const g = this.add.graphics();
+        // Radial white-to-transparent gradient (approximated with concentric circles)
+        for (let r = 128; r >= 0; r -= 8) {
+          const alpha = (1 - r / 128) * 0.6;
+          g.fillStyle(0xffffff, alpha);
+          g.fillCircle(128, 128, r);
+        }
+        g.generateTexture("light_glow", 256, 256);
+        g.destroy();
+      }
 
       // Create Projectile Animations
       if (!this.anims.exists("fire_burst_anim")) {
@@ -909,10 +961,10 @@ export default class GameScene extends Phaser.Scene {
 
   private handleResize = () => {
       if (!this.cameras || !this.cameras.main) return;
-      const VISIBLE_TILES_WIDTH = 15;
-      const TILE_SIZE = 128;
+      const VISIBLE_TILES_WIDTH = 20; // How many 32px tiles should be visible horizontally
+      const TILE_SIZE = 32;           // New tile size (was 128, now procedural 32px)
       const width = this.scale.width;
-      // Calculate Zoom to fit exactly VISIBLE_TILES_WIDTH
+      // Calculate Zoom to fit exactly VISIBLE_TILES_WIDTH tiles
       const zoom = width / (VISIBLE_TILES_WIDTH * TILE_SIZE);
       this.cameras.main.setZoom(zoom);
   }
@@ -987,9 +1039,9 @@ export default class GameScene extends Phaser.Scene {
 
       const worldX = pointer.worldX;
       const worldY = pointer.worldY;
-      const tileSize = this.mapLoader.getTileSize();
-      const gridX = Math.floor(worldX / tileSize);
-      const gridY = Math.floor(worldY / tileSize);
+      const tileSize = 32;
+      const gridX = Math.floor(worldX / 32);
+      const gridY = Math.floor(worldY / 32);
 
       const playerGridX = Math.floor(this.player.sprite.x / tileSize);
       const playerGridY = Math.floor(this.player.sprite.y / tileSize);
@@ -2144,7 +2196,7 @@ export default class GameScene extends Phaser.Scene {
     if (!this.player) return;
     
     let enemyData: any = null;
-    let type = dead.type;
+    // Removed unused 'type' variable
     let overrides = undefined;
 
     // 1. Check if it's an External Enemy (from enemies.json)
@@ -2681,7 +2733,8 @@ export default class GameScene extends Phaser.Scene {
       // Wait for animation or brief moment
       await new Promise(resolve => this.time.delayedCall(1000, resolve));
 
-      this.showFloatingText(this.player.sprite.x, this.player.sprite.y - 60, `-${damage}`, "#ff0000");
+      this.showFloatingText(this.player.sprite.x, this.player.sprite.y - 60, `FALL!`, "#ff0000");
+      this.showFloatingText(this.player.sprite.x, this.player.sprite.y - 40, `-${damage}`, "#ff0000");
       playerState.takeDamage(damage);
 
       this.player.sprite.play('player-idle');

@@ -161,14 +161,17 @@ export const EditorLayout: React.FC = () => {
                             onClick={() => setSelectedTile(item.id)}
                             style={{
                                 aspectRatio: "1/1",
-                                background: item.texturePath ? `url(${item.texturePath}) center/contain no-repeat #000` : "#333",
+                                background: "#333",
                                 border: selectedTile === item.id ? "2px solid #3b82f6" : "1px solid #444",
                                 cursor: "pointer",
-                                position: "relative"
+                                position: "relative",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center"
                             }}
                             title={`Tile ${item.id}`}
                          >
-                             {!item.texturePath && <span style={{position:"absolute", top:0, left:0, fontSize:"8px", color:"#fff", padding:"2px"}}>{item.id}</span>}
+                              <span style={{fontSize:"8px", color:"#fff", padding:"2px", textAlign: "center"}}>{item.id}</span>
                          </div>
                      ))}
                 </div>

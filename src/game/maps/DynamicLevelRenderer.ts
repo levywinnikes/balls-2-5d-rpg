@@ -16,6 +16,10 @@ export class DynamicLevelRenderer {
   public renderRadius: number = 20;
   private tilePool: TilePool;
   private debugGraphics: Phaser.GameObjects.Graphics | null;
+  private lastPlayerX: number = -999;
+  private lastPlayerY: number = -999;
+  private lastRenderLevel: string = "";
+  private updateThreshold: number = 8; // Only update map every 8 pixels (1/4 tile)
 
   constructor(scene: Phaser.Scene, tileSize: number, currentLevel: string) {
     this.scene = scene;
@@ -49,18 +53,31 @@ export class DynamicLevelRenderer {
   }
 
   private updateAllTileTints(enabled: boolean): void {
-      this.renderedTiles.forEach((levelMap) => {
-          levelMap.forEach((sprite, key) => {
-              // Extract isCollidable info from the tile definition (heuristic or stored data)
-              // Since we don't store the def in the map, we might need a better way if we want perfection.
-              // For now, let's re-calculate it or assume if it's in wallsLayer?
-              // Actually, simpler: when toggling, just clear and re-render or iterate and check properties.
-              // Let's iterate and check if it has a body.
-              const isCollidable = !!sprite.body;
-              this.applyDebugTint(sprite, isCollidable, enabled);
-          });
-      });
-  }
+      let depthTint = 0xffffff;
+    const currentLevelNum = parseInt(this.currentLevel);
+    
+    // THEMAL/DARKNESS EFFECTS FROM BIOME CONTRACT
+    if (currentLevelNum < 0) {
+        if (currentLevelNum <= -5) {
+            depthTint = 0xff8888; // Reddish Heat
+        } else {
+            // Darken (0xCCCCCC for -1, 0x999999 for -2, etc)
+            const darknessVal = Math.max(0x44, 0xff - Math.abs(currentLevelNum) * 0x33);
+            depthTint = Phaser.Display.Color.GetColor(darknessVal, darknessVal, darknessVal);
+        }
+    }
+
+    this.renderedTiles.forEach((levelTiles) => {
+        levelTiles.forEach((sprite) => {
+            // Apply depth tint first
+            sprite.setTint(depthTint);
+            
+            // Extract isCollidable info
+            const isCollidable = !!sprite.body;
+            this.applyDebugTint(sprite, isCollidable, enabled, depthTint);
+        });
+    });
+}
 
   private applyDebugTint(sprite: Phaser.GameObjects.Sprite, isCollidable: boolean, enabled: boolean, baseTint?: number): void {
       if (!enabled) {
@@ -208,10 +225,8 @@ export class DynamicLevelRenderer {
   }
 
   public update(playerX: number, playerY: number): void {
-    // Dynamic Radius for Large Screens
-    const tilesX = Math.ceil(this.scene.scale.width / this.tileSize / 2) + 4;
-    const tilesY = Math.ceil(this.scene.scale.height / this.tileSize / 2) + 4;
-    this.renderRadius = Math.max(20, Math.max(tilesX, tilesY));
+    // HARD LIMIT: 20 tiles radius (approx 41x41 area) for maximum performance regardless of screen size
+    this.renderRadius = 20;
 
     const mapData = this.scene.cache.json.get(
       `${this.scene.registry.get("currentMap")}_data`
@@ -221,6 +236,17 @@ export class DynamicLevelRenderer {
       return;
     }
     const currentLevel = this.scene.registry.get("currentLevel");
+    
+    // THROTTLING CHECK: Skip expensive nested loops if player hasn't moved enough
+    const distMoved = Phaser.Math.Distance.Between(playerX, playerY, this.lastPlayerX, this.lastPlayerY);
+    if (distMoved < this.updateThreshold && currentLevel === this.lastRenderLevel) {
+        return;
+    }
+
+    this.lastPlayerX = playerX;
+    this.lastPlayerY = playerY;
+    this.lastRenderLevel = currentLevel;
+
     if (currentLevel !== this.currentLevel) {
       this.currentLevel = currentLevel;
       this.updateCollisionForCurrentLevel();
@@ -250,8 +276,9 @@ export class DynamicLevelRenderer {
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         const symbol = currentLevelData.map[y]?.[x];
+        // [STABILITY FIX] Explicitly handle reservations. SYMBOL '...' is NOT a tile key.
         if (!symbol || symbol === "...") {
-          this.renderLowerLevelTile(x, y, mapData, tilesToKeep); // Renderiza nível inferior para "..." no mapa
+          this.renderLowerLevelTile(x, y, mapData, tilesToKeep);
           continue;
         }
         const tileDef = this.getTileDefinition(
@@ -318,12 +345,12 @@ export class DynamicLevelRenderer {
                           } else if (tileDef.id.includes("side")) {
                               // Side Wall (Vertical)
                               body.setSize(32, 32);
-                              body.setOffset((this.tileSize - 32) / 2, 96); 
+                              body.setOffset((this.tileSize - 32) / 2, this.tileSize - 32); 
                           } else {
                               // North Wall / Back Wall (Player overlaps)
                               // Collision at Bottom Base (matching South wall)
                               body.setSize(this.tileSize, 32);
-                              body.setOffset(0, 96);
+                              body.setOffset(0, this.tileSize - 32);
                           }
                       }
                       
@@ -349,7 +376,7 @@ export class DynamicLevelRenderer {
           if (tileDef.under === "...") {
             this.renderLowerLevelTile(x, y, mapData, tilesToKeep);
           } else {
-            const underTileId = tileDef.under;
+            const underTileId = this.resolveSymbolToId(tileDef.under, mapData);
             const underTileKey = `${this.currentLevel}_${x}_${y}_under`;
 
             if (!levelTiles.has(underTileKey)) {
@@ -479,6 +506,20 @@ export class DynamicLevelRenderer {
     }
   }
 
+  private resolveSymbolToId(symbol: string, mapData: MultiLevelMapData): string {
+    // 1. Check if it's already an ID in our tileset
+    if (mapData.tiles[symbol]) {
+        return mapData.tiles[symbol].id;
+    }
+    // 2. Check entities (some 'under' layers might point to entity symbols, though rare)
+    if (mapData.entities[symbol]) {
+        const entity = mapData.entities[symbol];
+        if (entity.under) return this.resolveSymbolToId(entity.under, mapData);
+    }
+    // 3. Fallback: treat as raw ID (might be using full ID directly in JSON)
+    return symbol;
+  }
+
   private getTileDefinition(
     symbol: string,
     mapData: MultiLevelMapData,
@@ -489,16 +530,10 @@ export class DynamicLevelRenderer {
     if (mapData.entities[symbol]) {
       const entityDef = mapData.entities[symbol];
       if (entityDef.under && entityDef.under !== "...") {
-        // REFACTOR: Return the entity's under ID directly as the 'id' for the visual representation
-        // This logic seems slightly flawed if 'getTileDefinition' is used for logic.
-        // But usually getTileDefinition is used to determine what to DRAW.
-        // If an entity has "under", we usually want to draw the UNDER tile?
-        // Wait, 'getTileDefinition' was returning { id: underTileDef.id, under: ... }.
-        // So we should return { id: entityDef.under, under: entityDef.under } to maintain compatibility if callers expect an ID.
-        // Let's verify usage.
-        
+        // RESOLVE symbol to ID
+        const resolvedId = this.resolveSymbolToId(entityDef.under, mapData);
         return {
-           id: entityDef.under, // Use the direct ID (e.g. "floor")
+           id: resolvedId, 
            under: entityDef.under
         };
       }
@@ -522,8 +557,10 @@ export class DynamicLevelRenderer {
     while (levelToCheck >= 0 && mapData.levels[levelToCheck.toString()]) {
       const levelData = mapData.levels[levelToCheck.toString()];
       const symbol = levelData.map[y]?.[x];
-      if (!symbol) {
-        break;
+
+      if (!symbol || symbol === "...") {
+        levelToCheck--;
+        continue;
       }
       const tileDef = this.getTileDefinition(
         symbol,
@@ -573,11 +610,12 @@ export class DynamicLevelRenderer {
       const isCollidableEffective = !!mapData.tiles[symbol]?.block || TileRegistry.isCollidable(tileDef.id);
       if (levelTiles.has(tileKey)) {
           // Lower level tiles MUST preserve 0x666666 tint
-          this.applyDebugTint(levelTiles.get(tileKey)!, isCollidableEffective, PlayerState.getInstance().isDebugCollisionEnabled(), 0x666666);
+          this.applyDebugTint(levelTiles.get(tileKey)!, isCollidableEffective, PlayerState.getInstance().isDebugCollisionEnabled(), 0x999999);
       }
       
       if (tileDef.under && tileDef.under !== "...") {
-        const underTileId = tileDef.under; 
+        // RESOLVE symbol to ID
+        const underTileId = this.resolveSymbolToId(tileDef.under, mapData);
         const underTileKey = `${levelToCheck}_${x}_${y}_under`;
         
         if (!levelTiles.has(underTileKey)) {
@@ -664,7 +702,8 @@ export class DynamicLevelRenderer {
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         const symbol = levelData.map[y]?.[x];
-        if (!symbol) {
+        // [STABILITY FIX] Skip absolute transparency on upper levels
+        if (!symbol || symbol === "...") {
           continue;
         }
         const tileDef = this.getTileDefinition(
@@ -825,7 +864,7 @@ export class DynamicLevelRenderer {
       // We will draw WHITE rectangles where the sky is visible (allowing the shadow to be seen)
       // Actually, standard masking: The mask shape reveals the content.
       // So we draw where we WANT shadows (Outdoors).
-      this.cloudMaskGraphics = this.scene.make.graphics({ x: 0, y: 0 }, false);
+      this.cloudMaskGraphics = this.scene.make.graphics({ x: 0, y: 0 });
       const mask = this.cloudMaskGraphics.createGeometryMask();
 
       // 3. Create the Shadow TileSprite (Covering the screen)

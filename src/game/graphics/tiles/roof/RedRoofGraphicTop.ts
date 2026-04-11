@@ -1,36 +1,23 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "../BaseTileGraphic";
 
-export class RedRoofTopGraphic {
-  static readonly TEXTURE_KEY = "red-roof-top-texture";
-  private static readonly BASE_SIZE = { width: 128, height: 128 };
-  private static readonly COLLISION_SIZE = { width: 32, height: 32 }; // Match MountainGraphic
-  private static readonly TEXTURE_PATH = "assets/tiles/roof/redrooftop.png";
+export class RedRoofGraphicTop extends BaseTileGraphic {
+  static readonly TEXTURE_KEY = "Red-Roof-texture-top";
+  public readonly TEXTURE_KEY = RedRoofGraphicTop.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
-    }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    pool?: Phaser.GameObjects.Sprite[]
-  ): Phaser.GameObjects.Sprite {
-    const width = this.BASE_SIZE.width;
-    const height = this.BASE_SIZE.height;
-
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      //  return this.createDebugWall(scene, x, y, width, height);
-    }
-
-    // Create visual sprite
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setDisplaySize(width, height);
-
-    sprite.setDepth(0);
-
-    return sprite;
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    // Topo do telhado — cumeeira
+    graphics.fillStyle(0x8b1010, 1); // Vermelho bem escuro para cumeeira
+    graphics.fillRect(0, 0, 32, 32);
+    // Cumeeira (linha de topo)
+    graphics.fillStyle(0x5a0000, 1);
+    graphics.fillRect(0, 0, 32, 6);
+    // Corpo da telha
+    graphics.fillStyle(0xb22020, 1);
+    graphics.fillRect(0, 6, 32, 26);
+    // Linhas de telha
+    graphics.lineStyle(1, 0x7a0f0f, 1);
+    graphics.strokeLineShape(new Phaser.Geom.Line(0, 18, 32, 18));
+    graphics.strokeLineShape(new Phaser.Geom.Line(16, 6, 16, 32));
   }
 }

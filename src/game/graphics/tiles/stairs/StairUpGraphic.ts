@@ -1,25 +1,18 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "../BaseTileGraphic";
 
-export class StairUpGraphic {
-  static readonly TEXTURE_KEY = "stair-up-texture";
-  private static readonly TEXTURE_PATH = "assets/tiles/stairs/wooden-stairs-up.png";
+export class StairUpGraphic extends BaseTileGraphic {
+  public static readonly TEXTURE_KEY = "stair-up-texture";
+  public readonly TEXTURE_KEY = StairUpGraphic.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    // Escada de madeira subindo (tons mais claros)
+    graphics.fillStyle(0x8b4513, 1);
+    graphics.fillRect(2, 2, 28, 28);
+    
+    graphics.lineStyle(2, 0xd2b48c, 1); // Tan color to highlight steps
+    for (let i = 0; i < 5; i++) {
+        graphics.strokeLineShape(new Phaser.Geom.Line(2, 6 + i * 5, 30, 6 + i * 5));
     }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    pool?: Phaser.GameObjects.Sprite[]
-  ): Phaser.GameObjects.Sprite {
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setDisplaySize(128, 128); // Force standard tile size
-    sprite.setOrigin(0.5, 0.75); // Standard origin for floor/stairs (checking TileRegistry usually uses 0.5, 0.75)
-    // No explicit scale needed if image is 128x128
-    return sprite;
   }
 }

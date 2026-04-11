@@ -20,14 +20,14 @@ export class WeaponRegistry {
       name: "item_wooden_sword",
       description: "desc_wooden_sword",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "wooden_sword", "wooden_sword.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "wooden_sword"),
         create: (scene) => ItemGraphic.create(scene, "wooden_sword"),
       },
       damage: 8,
       armor: 0,
       defense: 3,
       cooldown: 1000,
-      range: 200,
+      range: 48,
       type: ItemType.SWORD,
       exp_skill: 100,
       weight: 25.0,
@@ -40,14 +40,14 @@ export class WeaponRegistry {
       name: "item_torch",
       description: "desc_torch",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "torch", "torch.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "torch"),
         create: (scene) => ItemGraphic.create(scene, "torch"),
       },
       damage: 1,
       armor: 0,
       defense: 2,
       cooldown: 800,
-      range: 150,
+      range: 40,
       type: ItemType.CLUB, // Torch acts as a club/melee
       exp_skill: 10,
       weight: 15.0,
@@ -60,40 +60,14 @@ export class WeaponRegistry {
       name: "item_light_torch",
       description: "desc_light_torch",
       graphic: {
-        preload: (scene) => {
-            // Load 4 separate frames for Light Torch
-            scene.load.image("light_torch_1", "assets/items/light_torch/1.png");
-            scene.load.image("light_torch_2", "assets/items/light_torch/2.png");
-            scene.load.image("light_torch_3", "assets/items/light_torch/3.png");
-            scene.load.image("light_torch_4", "assets/items/light_torch/4.png");
-        },
-        create: (scene) => {
-            // Create sprite using the first frame
-            const sprite = scene.add.sprite(0, 0, "light_torch_1");
-            
-            if (!scene.anims.exists("light_torch_anim")) {
-                scene.anims.create({
-                    key: "light_torch_anim",
-                    frames: [
-                        { key: "light_torch_1" },
-                        { key: "light_torch_2" },
-                        { key: "light_torch_3" },
-                        { key: "light_torch_4" }
-                    ],
-                    frameRate: 5,
-                    repeat: -1
-                });
-            }
-            sprite.play("light_torch_anim");
-            sprite.setDisplaySize(32, 32);
-            return sprite;
-        },
+        preload: (scene) => ItemGraphic.preload(scene, "light_torch"),
+        create: (scene) => ItemGraphic.create(scene, "light_torch"),
       },
       damage: 5,
       armor: 0,
       defense: 2,
       cooldown: 800,
-      range: 150,
+      range: 40,
       type: ItemType.CLUB,
       element: "fire",
       lightRadius: 1200,
@@ -107,14 +81,14 @@ export class WeaponRegistry {
       name: "item_iron_axe",
       description: "desc_iron_axe",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "iron_axe", "iron_axe.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "iron_axe"),
         create: (scene) => ItemGraphic.create(scene, "iron_axe"),
       },
       damage: 15,
       armor: 0,
       defense: 1,
       cooldown: 1000,
-      range: 200,
+      range: 56,
       type: ItemType.AXE,
       exp_skill: 100,
       weight: 45.0,
@@ -128,14 +102,14 @@ export class WeaponRegistry {
       name: "item_dragon_axe",
       description: "desc_dragon_axe",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "dragon_axe", "dragon_axe.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "dragon_axe"),
         create: (scene) => ItemGraphic.create(scene, "dragon_axe"),
       },
       damage: 35, // Significantly better than Iron Axe (15)
       armor: 0,
       defense: 2,
       cooldown: 1000,
-      range: 200,
+      range: 56,
       type: ItemType.AXE,
       exp_skill: 120,
       weight: 60.0,
@@ -149,14 +123,14 @@ export class WeaponRegistry {
       id: "short_bow",
       name: "item_short_bow",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "short_bow", "short_bow.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "short_bow"),
         create: (scene) => ItemGraphic.create(scene, "short_bow"),
       },
       damage: 20,
       armor: 0,
       defense: 0,
       cooldown: 1000,
-      range: 2000,
+      range: 400,
       type: ItemType.DISTANCE,
       exp_skill: 100,
       weight: 15.0,
@@ -167,14 +141,14 @@ export class WeaponRegistry {
       id: "throwing_star",
       name: "item_throwing_star",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "throwing_star", "throwing_star.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "throwing_star"),
         create: (scene) => ItemGraphic.create(scene, "throwing_star"),
       },
       damage: 12,
       armor: 0,
       defense: 0,
       cooldown: 600,
-      range: 800,
+      range: 200,
       type: ItemType.DISTANCE, // or ItemType.AMMUNITION? Generally stars are weapons
       exp_skill: 10,
       weight: 2.0,
@@ -187,7 +161,7 @@ export class WeaponRegistry {
       id: "wooden_shield",
       name: "item_wooden_shield",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "wooden_shield", "wooden_shield.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "wooden_shield"),
         create: (scene) => ItemGraphic.create(scene, "wooden_shield"),
       },
       damage: 0,
@@ -207,7 +181,7 @@ export class WeaponRegistry {
       id: "iron_shield",
       name: "item_iron_shield",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "iron_shield", "iron_shield.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "iron_shield"),
         create: (scene) => ItemGraphic.create(scene, "iron_shield"),
       },
       damage: 0,
@@ -225,7 +199,7 @@ export class WeaponRegistry {
       id: "tower_shield",
       name: "item_tower_shield",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "tower_shield", "tower_shield.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "tower_shield"),
         create: (scene) => ItemGraphic.create(scene, "tower_shield"),
       },
       damage: 0,
@@ -244,7 +218,7 @@ export class WeaponRegistry {
       name: "item_dragon_shield",
       description: "desc_dragon_shield",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "dragon_shield", "dragon_shield.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "dragon_shield"),
         create: (scene) => ItemGraphic.create(scene, "dragon_shield"),
       },
       damage: 0,
@@ -265,7 +239,7 @@ export class WeaponRegistry {
       name: "item_dragon_armor",
       description: "desc_dragon_armor",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "dragon_armor", "dragon_armor.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "dragon_armor"),
         create: (scene) => ItemGraphic.create(scene, "dragon_armor"),
       },
       damage: 0,
@@ -284,7 +258,7 @@ export class WeaponRegistry {
       id: "leather_helmet",
       name: "item_leather_helmet",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "leather_helmet", "leather_helmet.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "leather_helmet"),
         create: (scene) => ItemGraphic.create(scene, "leather_helmet"),
       },
       damage: 0,
@@ -302,7 +276,7 @@ export class WeaponRegistry {
       id: "leather_armor",
       name: "item_leather_armor",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "leather_armor", "leather_armor.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "leather_armor"),
         create: (scene) => ItemGraphic.create(scene, "leather_armor"),
       },
       damage: 0,
@@ -320,7 +294,7 @@ export class WeaponRegistry {
       id: "leather_legs",
       name: "item_leather_legs",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "leather_legs", "leather_legs.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "leather_legs"),
         create: (scene) => ItemGraphic.create(scene, "leather_legs"),
       },
       damage: 0,
@@ -338,7 +312,7 @@ export class WeaponRegistry {
       id: "leather_boots",
       name: "item_leather_boots",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "leather_boots", "leather_boots.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "leather_boots"),
         create: (scene) => ItemGraphic.create(scene, "leather_boots"),
       },
       damage: 0,
@@ -358,7 +332,7 @@ export class WeaponRegistry {
       id: "plate_armor",
       name: "item_plate_armor",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "plate_armor", "plate_armor.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "plate_armor"),
         create: (scene) => ItemGraphic.create(scene, "plate_armor"),
       },
       damage: 0,
@@ -378,7 +352,7 @@ export class WeaponRegistry {
       id: "plate_legs",
       name: "item_plate_legs",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "plate_legs", "plate_legs.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "plate_legs"),
         create: (scene) => ItemGraphic.create(scene, "plate_legs"),
       },
       damage: 0,
@@ -396,7 +370,7 @@ export class WeaponRegistry {
       id: "iron_helmet",
       name: "item_iron_helmet",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "iron_helmet", "iron_helmet.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "iron_helmet"),
         create: (scene) => ItemGraphic.create(scene, "iron_helmet"),
       },
       damage: 0,
@@ -414,7 +388,7 @@ export class WeaponRegistry {
       id: "viking_helmet",
       name: "item_viking_helmet",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "viking_helmet", "viking_helmet.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "viking_helmet"),
         create: (scene) => ItemGraphic.create(scene, "viking_helmet"),
       },
       damage: 0,
@@ -432,7 +406,7 @@ export class WeaponRegistry {
       id: "steel_boots",
       name: "item_steel_boots",
       graphic: {
-        preload: (scene) => ItemGraphic.preload(scene, "steel_boots", "steel_boots.png"),
+        preload: (scene) => ItemGraphic.preload(scene, "steel_boots"),
         create: (scene) => ItemGraphic.create(scene, "steel_boots"),
       },
       damage: 0,

@@ -2,9 +2,16 @@ import Phaser from "phaser";
 
 export abstract class BaseEnemyGraphic {
   protected static SIZE = { width: 32, height: 32 };
-  public abstract readonly TEXTURE_KEY: string;
+  
+  // To be overridden in subclasses as 'static readonly TEXTURE_KEY'
+  // and 'public readonly TEXTURE_KEY' (for instance access if needed)
 
-  static preload(scene: Phaser.Scene, textureKey: string): void {
+  static preload(scene: Phaser.Scene): void {
+    const textureKey = (this as any).TEXTURE_KEY;
+    if (!textureKey) {
+        console.warn("BaseEnemyGraphic.preload called on class without TEXTURE_KEY", this);
+        return;
+    }
     if (!scene.textures.exists(textureKey)) {
       this.createTexture(scene, textureKey);
     }
@@ -13,29 +20,23 @@ export abstract class BaseEnemyGraphic {
   static createStandardAnimations(scene: Phaser.Scene, keyPrefix: string, spriteKey: string): void {
       if (scene.anims.exists(`${keyPrefix}-walk-down`)) return;
 
-      const createAnim = (key: string, start: number, end: number, fps: number, loop: number) => {
+      // Purely procedural fallback: all animations use the same single frame
+      const createStaticAnim = (key: string) => {
           scene.anims.create({
               key: key,
-              frames: scene.anims.generateFrameNumbers(spriteKey, { start, end }),
-              frameRate: fps,
-              repeat: loop
+              frames: [{ key: spriteKey, frame: 0 }],
+              frameRate: 1,
+              repeat: -1
           });
       };
 
-      // Walk (Rows 0-3)
-      createAnim(`${keyPrefix}-walk-down`, 0, 3, 8, -1);
-      createAnim(`${keyPrefix}-walk-left`, 4, 7, 8, -1);
-      createAnim(`${keyPrefix}-walk-right`, 8, 11, 8, -1);
-      createAnim(`${keyPrefix}-walk-up`, 12, 15, 8, -1);
+      const keys = [
+          "walk-down", "walk-left", "walk-right", "walk-up",
+          "attack-down", "attack-left", "attack-right", "attack-up",
+          "die"
+      ];
 
-      // Attack (Rows 4-7)
-      createAnim(`${keyPrefix}-attack-down`, 16, 19, 12, 0);
-      createAnim(`${keyPrefix}-attack-left`, 20, 23, 12, 0);
-      createAnim(`${keyPrefix}-attack-right`, 24, 27, 12, 0);
-      createAnim(`${keyPrefix}-attack-up`, 28, 31, 12, 0);
-
-      // Death (Rows 8-9)
-      createAnim(`${keyPrefix}-die`, 32, 39, 6, 0);
+      keys.forEach(k => createStaticAnim(`${keyPrefix}-${k}`));
   }
 
   protected static createTexture(
@@ -44,7 +45,7 @@ export abstract class BaseEnemyGraphic {
   ): void {
     const graphics = scene.add.graphics();
 
-    // Chamada indireta para o método de desenho
+    // Indirect call to drawEnemy (instantiating subclass)
     const instance = new (this as any)();
     instance.drawEnemy(graphics);
 
@@ -52,6 +53,5 @@ export abstract class BaseEnemyGraphic {
     graphics.destroy();
   }
 
-  // Método de instância ao invés de estático
   protected abstract drawEnemy(graphics: Phaser.GameObjects.Graphics): void;
 }

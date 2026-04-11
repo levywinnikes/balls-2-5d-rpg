@@ -73,7 +73,7 @@ export default class Dragon extends Enemy {
       // Better: Create a simple circle texture.
       
       if (!scene.textures.exists("fireball_texture")) {
-          const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
+          const graphics = scene.make.graphics({ x: 0, y: 0 });
           graphics.fillStyle(0xff4500, 1);
           graphics.fillCircle(10, 10, 10);
           graphics.generateTexture("fireball_texture", 20, 20);
@@ -81,7 +81,7 @@ export default class Dragon extends Enemy {
       
       fireball.setTexture("fireball_texture");
       
-      const angle = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, player.sprite.x, player.sprite.y);
+      // Angle calculated but not used; using physics.moveTo instead.
       scene.physics.moveTo(fireball, player.sprite.x, player.sprite.y, 400);
       
       // Cleanup fireball

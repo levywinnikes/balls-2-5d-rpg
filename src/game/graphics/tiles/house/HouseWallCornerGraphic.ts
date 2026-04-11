@@ -1,41 +1,24 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "../BaseTileGraphic";
 
-export class HouseWallCornerGraphic {
-  static readonly TEXTURE_KEY = "house-wall-corner-texture";
-  private static readonly BASE_SIZE = { width: 64, height: 64 };
-  private static readonly COLLISION_SIZE = { width: 32, height: 32 }; // Match MountainGraphic
-  private static readonly TEXTURE_PATH = "assets/tiles/wall/wall-corner.png";
+export class HouseWallCornerGraphic extends BaseTileGraphic {
+  static readonly TEXTURE_KEY = "house-wall-corner-right";
+  public readonly TEXTURE_KEY = HouseWallCornerGraphic.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    // Canto direito — parte frontal (sul)
+    graphics.fillStyle(0xc4874a, 1);
+    graphics.fillRect(0, 0, 32, 32);
+    // Coluna de canto
+    graphics.fillStyle(0x8a5530, 1);
+    graphics.fillRect(24, 0, 8, 32);
+    // Tábuas horizontais
+    graphics.fillStyle(0xa0693d, 1);
+    for (let y = 0; y < 32; y += 8) {
+      graphics.fillRect(0, y, 24, 2);
     }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number
-  ): Phaser.GameObjects.Sprite {
-    const width = this.BASE_SIZE.width;
-    const height = this.BASE_SIZE.height;
-
-    // Create visual sprite
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setDisplaySize(width, height);
-
-    sprite.setDepth(2);
-
-    // Configure physics body for collision (TileRegistry will enable physics)
-    if (scene.physics.world) {
-      scene.physics.add.existing(sprite, true); // Make sprite static
-      const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
-      body.setSize(this.COLLISION_SIZE.width, this.COLLISION_SIZE.height); // 32x32 hitbox
-      // body.setOffset(0, height * 0.5); // Align hitbox with base of sprite
-      body.debugShowBody = true; // Visualize hitbox
-      body.debugBodyColor = 0xff0000;
-    }
-
-    return sprite;
+    // Topo
+    graphics.fillStyle(0x7a4a25, 1);
+    graphics.fillRect(0, 0, 32, 2);
   }
 }

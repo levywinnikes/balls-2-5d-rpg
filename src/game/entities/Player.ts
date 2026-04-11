@@ -20,7 +20,7 @@ import { FloatingText } from "../effects/FloatingText";
 
 export default class Player {
   public sprite: Phaser.Physics.Arcade.Sprite;
-  private currentSpeed: number = 480;
+  private currentSpeed: number = 120;
   private shiftKey: Phaser.Input.Keyboard.Key;
   private lastDirection: "up" | "down" | "left" | "right" = "down";
   private lastAttackTime: number = 0;
@@ -39,7 +39,7 @@ export default class Player {
   public isFalling: boolean = false;
 
   private battleSystem?: BattleSystem;
-  private tileSize: number = 128;
+  private tileSize: number = 32;
 
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string) {
     this.state = PlayerState.getInstance();

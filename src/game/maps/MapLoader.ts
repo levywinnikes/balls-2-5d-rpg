@@ -204,6 +204,15 @@ export class MapLoader {
       return null;
   }
 
+  private resolveSymbolToId(symbol: string, mapData: MultiLevelMapData): string {
+    if (mapData.tiles[symbol]) return mapData.tiles[symbol].id;
+    if (mapData.entities[symbol]) {
+        const entity = mapData.entities[symbol];
+        if (entity.under) return this.resolveSymbolToId(entity.under, mapData);
+    }
+    return symbol;
+  }
+
   public checkLineOfSight(startX: number, startY: number, endX: number, endY: number, level: string): boolean {
     const start = new Phaser.Math.Vector2(startX, startY);
     const end = new Phaser.Math.Vector2(endX, endY);
@@ -227,7 +236,7 @@ export class MapLoader {
       if (symbol && symbol !== "...") {
         const tileDef = mapData.tiles[symbol] || mapData.entities[symbol];
         if (tileDef) {
-           const tileId = tileDef.id || mapData.tiles[tileDef.under]?.id;
+           const tileId = tileDef.id || (tileDef.under ? this.resolveSymbolToId(tileDef.under, mapData) : null);
            if (tileId && TileRegistry.doesTileBlockRanged(tileId)) {
              return false;
            }

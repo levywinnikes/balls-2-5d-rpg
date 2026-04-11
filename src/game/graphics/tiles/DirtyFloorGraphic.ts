@@ -2,7 +2,7 @@ import Phaser from "phaser";
 
 export class DirtyFloorGraphic {
   static readonly TEXTURE_KEY = "dirty-floor-texture";
-  private static readonly SIZE = { width: 128, height: 128 };
+  private static readonly SIZE = { width: 32, height: 32 };
 
   static preload(scene: Phaser.Scene): void {
     if (!scene.textures.exists(this.TEXTURE_KEY)) {

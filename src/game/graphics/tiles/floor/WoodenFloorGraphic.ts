@@ -1,32 +1,29 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "../BaseTileGraphic";
 
-export class WoodenFloorGraphic {
-  static readonly TEXTURE_KEY = "wooden-floor-texture";
-  private static readonly BASE_SIZE = { width: 128, height: 128 };
-  private static readonly COLLISION_SIZE = { width: 32, height: 32 }; // Match MountainGraphic
-  private static readonly TEXTURE_PATH = "assets/tiles/floor/wooden-floor.png";
+export class WoodenFloorGraphic extends BaseTileGraphic {
+  public static readonly TEXTURE_KEY = "wooden-floor-texture";
+  public readonly TEXTURE_KEY = WoodenFloorGraphic.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      scene.load.image(this.TEXTURE_KEY, this.TEXTURE_PATH);
-    }
-  }
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    // Marrom base
+    graphics.fillStyle(0x8b4513, 1); // SaddleBrown
+    graphics.fillRect(0, 0, 32, 32);
 
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    pool?: Phaser.GameObjects.Sprite[]
-  ): Phaser.GameObjects.Sprite {
-    const width = this.BASE_SIZE.width;
-    const height = this.BASE_SIZE.height;
+    // Linhas de tábuas
+    graphics.lineStyle(1, 0x5d2e0a, 1);
+    
+    // Linha horizontal superior/inferior
+    graphics.strokeLineShape(new Phaser.Geom.Line(0, 0, 32, 0));
+    graphics.strokeLineShape(new Phaser.Geom.Line(0, 31, 32, 31));
 
-    // Create visual sprite
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    sprite.setDisplaySize(width, height);
-    sprite.setOrigin(0.3, 0.5);
-    sprite.setDepth(0);
+    // Divisões horizontais (tábuas)
+    graphics.strokeLineShape(new Phaser.Geom.Line(0, 10, 32, 10));
+    graphics.strokeLineShape(new Phaser.Geom.Line(0, 21, 32, 21));
 
-    return sprite;
+    // Divisões verticais (desalinhadas)
+    graphics.strokeLineShape(new Phaser.Geom.Line(10, 0, 10, 10));
+    graphics.strokeLineShape(new Phaser.Geom.Line(22, 10, 22, 21));
+    graphics.strokeLineShape(new Phaser.Geom.Line(15, 21, 15, 32));
   }
 }
