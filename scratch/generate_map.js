@@ -113,35 +113,65 @@ for(let y=110; y<160; y++) {
     }
 }
 
-// --- PHASE 4: FINAL SMOOTHING ---
-console.log("Applying Final Smoothing Pass...");
+// --- PHASE 4: FINAL SMOOTHING (v3.0 Cardinal Masking) ---
+console.log("Applying Final Smoothing Pass v3.0...");
 function applySmoothing() {
     const grid = levels["0"];
     const backup = grid.map(row => [...row]);
-    const hierarchy = { 'snw': 10, 'grs': 5, 'pth': 4, 'snd': 3, 'wat': 1 };
+    
+    const hierarchy = (symbol) => {
+        if (!symbol) return 0;
+        if (symbol.startsWith("snw")) return 10;
+        if (symbol.startsWith("grs")) return 5;
+        if (symbol.startsWith("pth")) return 4;
+        if (symbol.startsWith("snd")) return 3;
+        if (symbol.startsWith("wat")) return 1;
+        return 0;
+    };
+
+    const LUT = {
+        0: null,
+        1: "s", 2: "w", 3: "sw", 4: "n", 5: null, 6: "nw", 7: "w", 
+        8: "e", 9: "se", 10: null, 11: "s", 12: "ne", 13: "e", 14: "n", 15: null
+    };
+
     for (let y = 1; y < HEIGHT - 1; y++) {
         for (let x = 1; x < WIDTH - 1; x++) {
             const center = backup[y][x];
-            if (center !== SYMBOLS.water && center !== SYMBOLS.sand) continue;
-            
-            const n = backup[y-1][x]; const s = backup[y+1][x]; const e = backup[y][x+1]; const w = backup[y][x-1];
-            const nw = backup[y-1][x-1]; const ne = backup[y-1][x+1]; const sw = backup[y+1][x-1]; const se = backup[y+1][x+1];
-            
-            let bestNeighbor = null;
-            
-            // PRIORITY 1: CORNERS (To prevent sawtooth)
-            if (hierarchy[n] > hierarchy[center] && hierarchy[w] > hierarchy[center]) bestNeighbor = { s: n, d: 'nw' };
-            else if (hierarchy[n] > hierarchy[center] && hierarchy[e] > hierarchy[center]) bestNeighbor = { s: n, d: 'ne' };
-            else if (hierarchy[s] > hierarchy[center] && hierarchy[w] > hierarchy[center]) bestNeighbor = { s: s, d: 'sw' };
-            else if (hierarchy[s] > hierarchy[center] && hierarchy[e] > hierarchy[center]) bestNeighbor = { s: s, d: 'se' };
-            // PRIORITY 2: CARDINALS
-            else if (hierarchy[n] > hierarchy[center]) bestNeighbor = { s: n, d: 'n' };
-            else if (hierarchy[s] > hierarchy[center]) bestNeighbor = { s: s, d: 's' };
-            else if (hierarchy[e] > hierarchy[center]) bestNeighbor = { s: e, d: 'e' };
-            else if (hierarchy[w] > hierarchy[center]) bestNeighbor = { s: w, d: 'w' };
+            const pCenter = hierarchy(center);
+            if (pCenter < 4) continue; // Skip liquid/empty
 
-            if (bestNeighbor) {
-                grid[y][x] = `${bestNeighbor.s}_${center === SYMBOLS.water ? 'wat' : 'snd'}_${bestNeighbor.d}`;
+            // Find target fluid (water or sand)
+            const n = backup[y-1][x]; const s = backup[y+1][x];
+            const e = backup[y][x+1]; const w = backup[y][x-1];
+            const neighbors = [n, s, e, w];
+            
+            const hasWater = neighbors.some(t => t && t.startsWith("wat"));
+            const hasSand = neighbors.some(t => t && t.startsWith("snd"));
+            
+            if (!hasWater && !hasSand) continue;
+
+            const target = hasWater ? "wat" : "snd";
+            const isTarget = (symbol) => {
+                if (!symbol) return false;
+                const p = hierarchy(symbol);
+                if (target === "wat") return p === 1;
+                return p === 3;
+            };
+
+            // 4-Bit Cardinal Mask (N:1, E:2, S:4, W:8)
+            let mask = 0;
+            if (isTarget(n)) mask += 1;
+            if (isTarget(e)) mask += 2;
+            if (isTarget(s)) mask += 4;
+            if (isTarget(w)) mask += 8;
+
+            const dir = LUT[mask];
+            if (dir) {
+                const prefix = center.startsWith("grs") ? "grs" : (center.startsWith("pth") ? "pth" : "snd");
+                if (prefix !== target) {
+                    grid[y][x] = `${prefix}_${target}_${dir}`;
+                }
             }
         }
     }

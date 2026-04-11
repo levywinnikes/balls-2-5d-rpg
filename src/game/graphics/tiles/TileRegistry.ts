@@ -31,8 +31,9 @@ import { FrozenTreeGraphic } from "./FrozenTreeGraphic";
 import { CloudGraphic } from "./CloudGraphic";
 import { BasaltGraphic } from "./BasaltGraphic";
 import { BedGraphic } from "./house/BedGraphic";
-import { TerrainTransitionGraphic, TransitionDirection } from "./TerrainTransitionGraphic";
+import { ProceduralTransition, TransitionDirection } from "./ProceduralTransition";
 
+// Central registry for all game tiles
 const COLORS = {
     grass: 0x4ade80,
     water: 0x00bfff,
@@ -352,7 +353,7 @@ export class TileRegistry {
     directions.forEach(dir => {
         this.registerTile({
             id: `grs_wat_${dir}`,
-            graphic: new TerrainTransitionGraphic(COLORS.grass, COLORS.water, dir, `grs_wat_${dir}`),
+            graphic: new ProceduralTransition(COLORS.grass, COLORS.water, dir, `grs_wat_${dir}`),
             isCollidable: false,
             blocksRanged: false,
             baseDepth: 0
@@ -363,7 +364,7 @@ export class TileRegistry {
     directions.forEach(dir => {
         this.registerTile({
             id: `grs_snd_${dir}`,
-            graphic: new TerrainTransitionGraphic(COLORS.grass, COLORS.sand, dir, `grs_snd_${dir}`),
+            graphic: new ProceduralTransition(COLORS.grass, COLORS.sand, dir, `grs_snd_${dir}`),
             isCollidable: false,
             blocksRanged: false,
             baseDepth: 0
@@ -374,7 +375,7 @@ export class TileRegistry {
     directions.forEach(dir => {
         this.registerTile({
             id: `pth_wat_${dir}`,
-            graphic: new TerrainTransitionGraphic(COLORS.grass, COLORS.water, dir, `pth_wat_${dir}`),
+            graphic: new ProceduralTransition(COLORS.grass, COLORS.water, dir, `pth_wat_${dir}`),
             isCollidable: false,
             blocksRanged: false,
             baseDepth: 0
