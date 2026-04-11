@@ -2151,46 +2151,40 @@ export default class GameScene extends Phaser.Scene {
              return true; // Block standard movement to take control
         }
     }
-
     return false;
   }
 
   private updateRespawns(delta: number): void {
     if (!this.player) return;
     const tileSize = this.mapLoader.getTileSize();
-    const playerGridX = Math.floor(this.player.sprite.x / tileSize);
-    const playerGridY = Math.floor(this.player.sprite.y / tileSize);
-    const r = this.dynamicLevelRenderer.renderRadius;
-    const mapData = this.cache.json.get(
-      `${this.registry.get("currentMap")}_data`
-    );
-    const levelData = mapData.levels[this.currentLevel];
-    const gridWidth = levelData.map[0].length;
-    const gridHeight = levelData.map.length;
-    const minX = Math.max(0, playerGridX - r);
-    const maxX = Math.min(gridWidth - 1, playerGridX + r);
-    const minY = Math.max(0, playerGridY - r);
-    const maxY = Math.min(gridHeight - 1, playerGridY + r);
+    
+    // Process dead enemies from last to first (safe for splice)
+    for (let i = this.deadEnemies.length - 1; i >= 0; i--) {
+      const dead = this.deadEnemies[i];
+      
+      // Calculate distance between player and spawn point
+      const dist = Phaser.Math.Distance.Between(
+        this.player.sprite.x, this.player.sprite.y,
+        dead.x, dead.y
+      );
+      
+      const distInTiles = dist / tileSize;
+      
+      // Rule (v2.62): Respawn timer ONLY counts if far away (> 32 tiles) or on different level
+      const sameLevel = dead.level === this.currentLevel;
+      const isFarEnough = !sameLevel || distInTiles > 32;
 
-    this.deadEnemies.forEach((dead, index) => {
-      const ex = Math.floor(dead.x / tileSize);
-      const ey = Math.floor(dead.y / tileSize);
-      const inView =
-        dead.level === this.currentLevel &&
-        ex >= minX &&
-        ex <= maxX &&
-        ey >= minY &&
-        ey >= maxY;
-      const isFar = !inView;
-      if (isFar) {
+      if (isFarEnough) {
         dead.elapsed += delta;
         if (dead.elapsed >= dead.respawnTime) {
           this.respawnEnemy(dead);
-          this.deadEnemies.splice(index, 1);
+          this.deadEnemies.splice(i, 1);
         }
       }
-    });
+    }
   }
+
+
 
   private respawnEnemy(dead: DeadEnemy): void {
     if (!this.player) return;
