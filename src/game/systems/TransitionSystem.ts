@@ -69,9 +69,10 @@ export class TransitionSystem {
       ) {
         nextLevelInt = currentLevelInt - 1;
         
-        // OFFSET LOGIC: Go DOWN means spawning 1 tile SOUTH (y + 1)
-        // This prevents looping.
-        targetGridY = gridY + 1;
+        // OFFSET LOGIC (2.5D): 
+        // Stair Down is at Y. Stair Up below was at Y + 1.
+        // To land safely BELOW the stair up, we need to land at Y + 2.
+        targetGridY = gridY + 2;
       } else {
         return; // Transição inválida
       }
@@ -121,12 +122,13 @@ export class TransitionSystem {
           const nextLevelStr = nextLevelInt.toString();
 
           if (mapData.levels[nextLevelStr]) {
-            // OFFSET LOGIC: Go UP means spawning 1 tile NORTH (y - 1)
-            // This prevents looping.
+            // OFFSET LOGIC (2.5D): 
+            // Stair Up is at Y. Stair Down above IS at Y - 1.
+            // To land safely ABOVE the stair down, we need to land at Y - 2.
             await this.performTransition(
               nextLevelStr,
               gridX,
-              gridY - 1, // Target Y is North of the stairs
+              gridY - 2, 
               tileSize,
               mapData
             );

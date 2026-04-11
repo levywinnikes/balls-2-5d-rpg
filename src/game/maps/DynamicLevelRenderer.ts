@@ -535,22 +535,8 @@ export class DynamicLevelRenderer {
     x: number,
     y: number
   ): { id: string; under?: string } | undefined {
-    if (mapData.entities[symbol]) {
-      const entityDef = mapData.entities[symbol];
-      if (entityDef.under && entityDef.under !== "...") {
-        // RESOLVE symbol to ID
-        const resolvedId = this.resolveSymbolToId(entityDef.under, mapData);
-        return {
-           id: resolvedId, 
-           under: entityDef.under
-        };
-      }
-      return {
-        id: "transparent",
-        under: undefined,
-      };
-
-    }
+    // With v2.50, entities are NO LONGER in the map grid.
+    // The grid strictly contains terrain tiles.
     return mapData.tiles[symbol];
   }
 

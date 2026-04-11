@@ -356,7 +356,7 @@ export class MapLoader {
   }
 
   private parseEntities(
-    levelData: LevelData,
+    levelData: any, // Use any to handle transition between interface versions
     tileSize: number
   ): {
     playerPos: { x: number; y: number };
@@ -375,9 +375,59 @@ export class MapLoader {
       enemies: [] as Array<any>,
       items: [] as ItemEntity[],
     };
+    
     const mapData = this.scene.cache.json.get(
       `${this.scene.registry.get("currentMap")}_data`
     );
+
+    // 1. NEW ARCHITECTURE (Layered Entities Array)
+    if (levelData.entities && Array.isArray(levelData.entities)) {
+        levelData.entities.forEach((entity: { x: number, y: number, symbol: string, uuid?: string, contents?: any }) => {
+            const entityDef = mapData.entities[entity.symbol];
+            if (!entityDef) return;
+            
+            const worldX = entity.x * tileSize + tileSize / 2;
+            const worldY = entity.y * tileSize + tileSize / 2;
+            
+            switch (entityDef.type) {
+                case "player":
+                    result.playerPos = { x: worldX, y: worldY };
+                    break;
+                case "enemy":
+                    const enemyId = entityDef.id || entity.symbol; // Use ID or symbol as fallback
+                    const enemyTypeDef = EnemyRegistry.getEnemyDefinition(enemyId);
+                    if (enemyTypeDef) {
+                        result.enemies.push({
+                            type: enemyId,
+                            x: worldX,
+                            y: worldY,
+                            health: enemyTypeDef.health,
+                            damage: enemyTypeDef.damage,
+                            respawnTime: entityDef.respawn,
+                        });
+                    }
+                    break;
+                case "item":
+                    result.items.push({
+                        itemId: entity.uuid || entityDef.uuid,
+                        weaponId: entityDef.id,
+                        x: worldX,
+                        y: worldY,
+                        contents: entity.contents || entityDef.contents
+                    });
+                    break;
+            }
+        });
+        
+        // If we have playerPos in levelData, prioritize it for the player
+        if (levelData.playerPos) {
+            result.playerPos = levelData.playerPos;
+        }
+        
+        return result;
+    }
+
+    // 2. BACKWARD COMPATIBILITY (Scanning tile grid)
     for (let y = 0; y < levelData.map.length; y++) {
       const row = levelData.map[y];
       for (let x = 0; x < row.length; x++) {
@@ -391,29 +441,20 @@ export class MapLoader {
             result.playerPos = { x: worldX, y: worldY };
             break;
           case "enemy":
-            if (!entityDef.id) {
-              console.warn("Enemy definition missing id");
-              continue;
+            const enemyId = entityDef.id || symbol;
+            const enemyTypeDef = EnemyRegistry.getEnemyDefinition(enemyId);
+            if (enemyTypeDef) {
+              result.enemies.push({
+                type: enemyId,
+                x: worldX,
+                y: worldY,
+                health: enemyTypeDef.health,
+                damage: enemyTypeDef.damage,
+                respawnTime: entityDef.respawn,
+              });
             }
-            const enemyTypeDef = EnemyRegistry.getEnemyDefinition(entityDef.id);
-            if (!enemyTypeDef) {
-              console.warn(`Enemy type ${entityDef.id} not found`);
-              continue;
-            }
-            result.enemies.push({
-              type: entityDef.id,
-              x: worldX,
-              y: worldY,
-              health: enemyTypeDef.health,
-              damage: enemyTypeDef.damage,
-              respawnTime: entityDef.respawn,
-            });
             break;
           case "item":
-             if (!entityDef.id) {
-                 console.warn("Item definition missing id (weaponId)");
-                 continue;
-             }
              result.items.push({
                  itemId: entityDef.uuid,
                  weaponId: entityDef.id,
