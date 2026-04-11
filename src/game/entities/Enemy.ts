@@ -632,12 +632,10 @@ export default class Enemy {
         const deathAnim = `${this.enemyType}-die`;
         if (this.sprite.scene.anims.exists(deathAnim)) {
             this.sprite.play(deathAnim);
-            this.sprite.once('animationcomplete', () => {
-                this.fadeAndDestroy();
-            });
-        } else {
-            this.fadeAndDestroy();
         }
+        
+        // Always trigger smooth fade-out (v2.61)
+        this.fadeAndDestroy();
         return true;
       }
     } catch (error) {

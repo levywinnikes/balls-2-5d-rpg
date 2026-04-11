@@ -92,7 +92,7 @@ export class EnemyRegistry {
     {
       id: "skeleton",
       graphic: SkeletonGraphic,
-      scale: 4.0, // Restoring original size
+      scale: 1.5, // Normalized for 32px world (v2.61)
       health: 30,
       damage: 8,
       speed: 160,
@@ -124,7 +124,7 @@ export class EnemyRegistry {
     {
       id: "goblin",
       graphic: GoblinGraphic,
-      scale: 4.0,
+      scale: 1.4, // Normalized for 32px world (v2.61)
       health: 20,
       damage: 7,
       speed: 280,
@@ -153,7 +153,7 @@ export class EnemyRegistry {
     {
       id: "orc",
       graphic: OrcGraphic,
-      scale: 4.5,
+      scale: 1.8, // Normalized for 32px world (v2.61)
       health: 45,
       damage: 12,
       speed: 400,
