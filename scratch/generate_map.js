@@ -204,7 +204,20 @@ createCaveLinks();
 
 // --- PHASE 5: ENTITIES (NOW DECOUPLED) ---
 console.log("Scattering Actors (Decoupled Layer)...");
+
+// Registry for item and actor templates
+const ENTITY_TEMPLATES = { 
+    "ply": { type: "player" }, 
+    "rak": { type: "enemy", id: "rat" },
+    "skl": { type: "enemy", id: "skeleton" }, 
+    "gob": { type: "enemy", id: "goblin" },
+    "orc": { type: "enemy", id: "orc" }, 
+    "dra": { type: "enemy", id: "dragon" },
+    "chs": { type: "item", id: "chest" }
+};
+
 function spawnActor(z, x, y, symbol) {
+    if (!levelEntities[z]) levelEntities[z] = [];
     levelEntities[z].push({ x, y, symbol });
 }
 
@@ -223,13 +236,16 @@ function scatterActors(z, density, symbols) {
         }
     }
 }
-scatterActors("0", 0.003, [ENEMIES.rat]);
-scatterActors("-1", 0.015, [ENEMIES.skeleton, ENEMIES.goblin]);
-scatterActors("-4", 0.04, [ENEMIES.orc, ENEMIES.dragon]);
 
-spawnActor("0", 128, 128, "ply"); // Player
+// Global Spawning
+scatterActors("0", 0.003, ["rak"]);
+scatterActors("-1", 0.015, ["skl", "gob"]);
+scatterActors("-4", 0.04, ["orc", "dra"]);
 
-// CLEAN SPAWN PLAZA (Terrain Only)
+// Player Initial Position (Level 0, decoupled)
+spawnActor("0", 128, 128, "ply");
+
+// CLEAN SPAWN PLAZA (Terrain Only - No logic overlap with player entity)
 for(let dy=-5; dy<=5; dy++) for(let dx=-5; dx<=5; dx++) levels["0"][128+dy][128+dx] = SYMBOLS.pavement;
 
 const tileDefinitions = {
