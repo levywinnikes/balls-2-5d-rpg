@@ -1,29 +1,11 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "./BaseTileGraphic";
 
-export class DungeonWallGraphic {
-  static readonly TEXTURE_KEY = "dungeon-wall-texture";
-  private static readonly SIZE = { width: 32, height: 32 };
+export class DungeonWallGraphic extends BaseTileGraphic {
+  public static readonly TEXTURE_KEY = "dungeon-wall-texture";
+  public readonly TEXTURE_KEY = DungeonWallGraphic.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      this.createTexture(scene);
-    }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number
-  ): Phaser.GameObjects.Sprite {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      this.createTexture(scene);
-    }
-    return scene.add.sprite(x, y, this.TEXTURE_KEY);
-  }
-
-  private static createTexture(scene: Phaser.Scene): void {
-    const graphics = scene.make.graphics();
-    
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
     // Base Wall Color (Darker Slate / Iron)
     graphics.fillStyle(0x1e293b, 1);
     graphics.fillRect(0, 0, 32, 32);
@@ -46,8 +28,5 @@ export class DungeonWallGraphic {
     // Weathering detail
     graphics.fillStyle(0x000000, 0.2);
     graphics.fillRect(0, 30, 32, 2); // Bottom shadow
-
-    graphics.generateTexture(this.TEXTURE_KEY, this.SIZE.width, this.SIZE.height);
-    graphics.destroy();
   }
 }

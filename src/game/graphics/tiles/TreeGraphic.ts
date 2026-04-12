@@ -1,32 +1,11 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "./BaseTileGraphic";
 
-export class TreeGraphic {
-  static readonly TEXTURE_KEY = "tree-texture";
-  private static readonly SIZE = { width: 32, height: 32 };
+export class TreeGraphic extends BaseTileGraphic {
+  public static readonly TEXTURE_KEY = "tree-texture";
+  public readonly TEXTURE_KEY = TreeGraphic.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      this.createTexture(scene);
-    }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    pool?: Phaser.GameObjects.Sprite[]
-  ): Phaser.GameObjects.Sprite {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      this.createTexture(scene);
-    }
-
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
-    return sprite;
-  }
-
-  private static createTexture(scene: Phaser.Scene): void {
-    const graphics = scene.add.graphics();
-
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
     // Tronco marrom
     graphics.fillStyle(0x8b4513, 1);
     graphics.fillRect(14, 20, 4, 12);
@@ -40,12 +19,5 @@ export class TreeGraphic {
     graphics.fillCircle(10, 16, 3);
     graphics.fillCircle(22, 16, 3);
     graphics.fillCircle(16, 10, 4);
-
-    graphics.generateTexture(
-      this.TEXTURE_KEY,
-      this.SIZE.width,
-      this.SIZE.height
-    );
-    graphics.destroy();
   }
 }

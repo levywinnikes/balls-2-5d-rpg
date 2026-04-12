@@ -1,33 +1,13 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "./BaseTileGraphic";
 
-export class SandGraphic {
-  static readonly TEXTURE_KEY = "sand-texture";
-  private static readonly SIZE = { width: 32, height: 32 };
+export class SandGraphic extends BaseTileGraphic {
+  public static readonly TEXTURE_KEY = "sand-texture";
+  public readonly TEXTURE_KEY = SandGraphic.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      this.createTexture(scene);
-    }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    pool?: Phaser.GameObjects.Sprite[]
-  ): Phaser.GameObjects.Sprite {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      this.createTexture(scene);
-    }
-
-    return scene.add.sprite(x, y, this.TEXTURE_KEY);
-  }
-
-  private static createTexture(scene: Phaser.Scene): void {
-    const graphics = scene.add.graphics();
-
-    const w = this.SIZE.width;
-    const h = this.SIZE.height;
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
+    const w = 32;
+    const h = 32;
 
     // Fundo areia clara (tons quentes)
     graphics.fillStyle(0xf4e1a1, 1); // amarelo areia claro
@@ -66,12 +46,12 @@ export class SandGraphic {
     // Pontinhos pequenos representando grãos de areia um pouco mais escuros
     graphics.fillStyle(0xd2b56a, 0.7);
     for (let i = 0; i < 10; i++) {
-      const x = Phaser.Math.Between(0, w);
-      const y = Phaser.Math.Between(0, h);
-      graphics.fillCircle(x, y, 0.6);
+        const x = Phaser.Math.Between(0, w);
+        const y = Phaser.Math.Between(0, h);
+        graphics.fillCircle(x, y, 0.6);
     }
 
-    // Pedrinhas pequenas (opcional)
+    // Pedrinhas pequenas
     graphics.fillStyle(0xbfa26a, 0.5);
     for (let i = 0; i < 5; i++) {
       const x = Phaser.Math.Between(2, w - 4);
@@ -84,7 +64,7 @@ export class SandGraphic {
       );
     }
 
-    // Conchinhas (bem estilizadas, simples círculos com um risco)
+    // Conchinhas
     graphics.fillStyle(0xfff5e1, 0.8);
     graphics.lineStyle(1, 0xe0d6b0, 0.6);
     for (let i = 0; i < 1; i++) {
@@ -96,9 +76,5 @@ export class SandGraphic {
       graphics.lineTo(x + 1, y);
       graphics.strokePath();
     }
-
-    // Gera textura
-    graphics.generateTexture(this.TEXTURE_KEY, w, h);
-    graphics.destroy();
   }
 }

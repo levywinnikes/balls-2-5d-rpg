@@ -27,12 +27,29 @@ export class ProceduralTransition extends BaseTileGraphic {
     scene: Phaser.Scene,
     x: number,
     y: number,
-    _pool?: Phaser.GameObjects.Sprite[]
+    pool?: Phaser.GameObjects.Sprite[]
   ): Phaser.GameObjects.Sprite {
     if (!scene.textures.exists(this.TEXTURE_KEY)) {
       this.createTextureInstance(scene);
     }
-    const sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
+    
+    let sprite: Phaser.GameObjects.Sprite;
+    // RECLAIM logic
+    if (pool && pool.length > 0) {
+        sprite = pool[0];
+        sprite.setTexture(this.TEXTURE_KEY);
+        sprite.setPosition(x, y);
+        sprite.setActive(true);
+        sprite.setVisible(true);
+        sprite.setAlpha(1);
+        sprite.setTint(0xffffff);
+        if (sprite.body) {
+            (sprite.body as Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody).enable = true;
+        }
+    } else {
+        sprite = scene.add.sprite(x, y, this.TEXTURE_KEY);
+    }
+    
     sprite.setDisplaySize(32, 32);
     return sprite;
   }
