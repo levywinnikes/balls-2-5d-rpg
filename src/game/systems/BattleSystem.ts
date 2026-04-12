@@ -535,7 +535,7 @@ export default class BattleSystem {
       let targetPos = { x, y };
       let projectileType: "homing" | "linear" = "linear";
 
-      const enemies = gameScene.getLevelEnemies(currentLevel) as Enemy[];
+      const enemies = gameScene.getActiveEnemies();
       
       if (isStar) {
           projectileType = "homing";
@@ -661,7 +661,7 @@ export default class BattleSystem {
               const impactX = hitEnemy.sprite.x;
               const impactY = hitEnemy.sprite.y;
 
-              const levelEnemies = gameScene.getLevelEnemies(gameScene.registry.get("currentLevel")) || [];
+              const levelEnemies = gameScene.getActiveEnemies();
               levelEnemies.forEach((e: Enemy) => {
                   if (e.isDefeated() || !e.sprite?.active) return;
                   if (Phaser.Math.Distance.Between(impactX, impactY, e.sprite.x, e.sprite.y) <= realRadius) {
@@ -673,7 +673,7 @@ export default class BattleSystem {
           // Ground Hit (Area)
            const radiusTiles = def.damage.area?.radius || 1;
            const realRadius = radiusTiles * gameScene.mapLoader.getTileSize();
-           const levelEnemies = gameScene.getLevelEnemies(gameScene.registry.get("currentLevel")) || [];
+           const levelEnemies = gameScene.getActiveEnemies();
            levelEnemies.forEach((e: Enemy) => {
                if (e.isDefeated() || !e.sprite?.active) return;
                if (Phaser.Math.Distance.Between(groundPos.x, groundPos.y, e.sprite.x, e.sprite.y) <= realRadius) {

@@ -17,6 +17,7 @@ import { WindowLayer } from "./components/window/WindowLayer";
 import { useWindowSystem } from "./components/window/WindowContext";
 import { HeroDashboard } from "./dashboard/HeroDashboard";
 import { useFPS } from "../hooks/useFPS";
+import { PerfMonitor } from "./components/PerfMonitor";
 
 export const GameOverlay: React.FC = () => {
     const { windows, toggleWindow, windowPositions, draggedItem, setDraggedItem, showFPS, isEditorMode, scale } = useUI();
@@ -398,6 +399,8 @@ export const GameOverlay: React.FC = () => {
                  FPS: {fps}
              </div>
          )}
+         
+         <PerfMonitor />
   
          <GroundTooltip />
          <NotificationSystem />

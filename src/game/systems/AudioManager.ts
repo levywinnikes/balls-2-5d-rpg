@@ -129,15 +129,23 @@ export class AudioManager {
         }, "8n").start("4n"); // Offset so melody comes in slightly after bass
 
         // Subtle pink noise atmosphere (very quiet - just air)
-        this.atmosphere.start();
+        if (this.atmosphere.state !== "started") {
+            this.atmosphere.start();
+        }
         this.atmosphereVol.volume.rampTo(-35, 2);
 
-        Tone.Transport.start();
+        if (Tone.Transport.state !== "started") {
+            Tone.Transport.start();
+        }
     }
 
     private stopGenerativeMusic() {
         this.atmosphereVol.volume.rampTo(-60, 1);
-        setTimeout(() => this.atmosphere.stop(), 1200);
+        setTimeout(() => {
+            if (this.atmosphere.state === "started") {
+                this.atmosphere.stop();
+            }
+        }, 1200);
 
         if (this.musicLoop) {
             this.musicLoop.cancel();

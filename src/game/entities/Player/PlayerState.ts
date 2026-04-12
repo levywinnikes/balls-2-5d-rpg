@@ -354,14 +354,59 @@ export class PlayerState extends EventEmitter {
     this.consumableManager = new ConsumableManager(this);
   }
 
+  // --- PERFORMANCE TRACKING ---
+  private _perfData = {
+      fps: 0,
+      enemyTime: 0,
+      mapTime: 0,
+      physicsTime: 0,
+      totalUpdateTime: 0,
+      activeEnemies: 0,
+      renderedTiles: 0,
+      totalObjects: 0,
+      culprits: [] as [string, number][]
+  };
+
+  private _diagnosticSettings = {
+      enableAI: true,
+      enableMapUpdate: true,
+      enableClouds: true,
+      enableLighting: true,
+      enableItemDepth: true,
+      enablePhysics: true,
+      enablePlayerState: true,
+      hideTiles: false,
+      hideEnemies: false,
+      hideItems: false
+  };
+
+  public updatePerfMetrics(metrics: any) {
+      this._perfData = { ...this._perfData, ...metrics };
+      this.emit("perfUpdated", this._perfData);
+  }
+
+  public getPerfData() {
+      return this._perfData;
+  }
+
+  public getDiagnosticSettings() {
+      return this._diagnosticSettings;
+  }
+
+  public updateDiagnosticSetting(key: keyof typeof PlayerState.prototype._diagnosticSettings, value: boolean) {
+      (this._diagnosticSettings as any)[key] = value;
+      this.emit("diagnosticUpdated", this._diagnosticSettings);
+  }
+
 
 
   public static getInstance(): PlayerState {
-    if (!PlayerState.instance) {
-      PlayerState.instance = new PlayerState();
-      PlayerState.instance.setMaxListeners(50); // Increase limit for UI hooks
+    const win = window as any;
+    if (!win._playerStateInstance) {
+      win._playerStateInstance = new PlayerState();
+      win._playerStateInstance.setMaxListeners(50); // Increase limit for UI hooks
     }
-    return PlayerState.instance;
+    return win._playerStateInstance;
   }
   
   // --- CONTAINER LOGIC ---

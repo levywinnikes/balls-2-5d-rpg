@@ -493,17 +493,24 @@ export class TileRegistry {
       levelOffset?: number;
       isUnderTile?: boolean;
       customDepth?: number;
+      reusableSprite?: Phaser.GameObjects.Sprite;
     } = {},
     pool?: Phaser.GameObjects.Sprite[]
   ): {
     sprite: Phaser.GameObjects.Sprite;
+    additionalSprites: Phaser.GameObjects.Sprite[];
     isCollidable: boolean;
   } {
     this.initialize();
     const tileDef = this.tiles.get(tileId);
     if (!tileDef) throw new Error(`Tile ${tileId} not registered`);
 
-    const created = tileDef.graphic.create(scene, x, y, pool);
+    const created = tileDef.graphic.create(
+        scene, 
+        x, 
+        y, 
+        options.reusableSprite ? [options.reusableSprite] : pool
+    );
 
     let mainSprite: Phaser.GameObjects.Sprite;
     let additionalSprites: Phaser.GameObjects.Sprite[] = [];
@@ -515,81 +522,48 @@ export class TileRegistry {
       mainSprite = created.main;
       additionalSprites = created.additional || [];
     } else if ("blockingPart" in created) {
-      // Special handling for SideWallGraphic
       mainSprite = created.blockingPart;
       additionalSprites = [created.upperPart];
     } else {
       throw new Error(`Invalid tile graphic return type for ${tileId}`);
     }
 
-    // Configurações comuns para o sprite principal
+    // Reuse or Init Main Sprite
     if (tileDef.origin) {
       mainSprite.setOrigin(tileDef.origin.x, tileDef.origin.y);
     }
-
-    // Calular Depth Baseado em Y-Sorting + Level Offset
-    // Se levelOffset for muito grande (ex: 10000), ele separa os andares.
-    // Dentro do andar, usamos Y.
-    // BaseDepth ainda serve como ajuste fino (ex: chão sempre abaixo de tudo no mesmo Y).
-    // Mas para Y-sort real, items devem ter depth = y.
     
-    // FORMULA: LevelOffset + Y + BaseAdjustment
-    // LevelOffset já vem multiplicado por 10000 do DynamicLevelRenderer
-    
+    // ... logic for depth ...
     let depth = (options.levelOffset || 0) + y;
-
-    // Ajustes específicos:
-    // Chão (Floor/Water) deve ficar sempre no fundo, independente do Y, para não cobrir pés
     if (tileDef.baseDepth === 0) {
-        // Força chão para uma camada "fundo" dentro do nível
-        // Se Y vai de 0 a 10000 (mapa grande), chão deve estar abaixo de 0?
-        // Ou simplesmente: depth = levelOffset - 1000;
         depth = (options.levelOffset || 0) - 1000; 
     } else {
-        // Paredes e Objetos altos usam Y.
-        // Adiciona baseDepth para ajustes finos em conflitos
         depth += (tileDef.baseDepth || 0);
     }
-
-    if (options.isUnderTile) {
-        depth -= 1; // Levemente abaixo da camada principal
-    }
-
+    if (options.isUnderTile) depth -= 1;
     mainSprite.setDepth(depth);
 
-    // Configurar física se for colidível
+    // Physics
     if (tileDef.isCollidable && scene.physics.world) {
       scene.physics.add.existing(mainSprite, true);
-      const body = mainSprite.body as Phaser.Physics.Arcade.Body;
-
-      if (tileDef.bodySize) {
-        body.setSize(tileDef.bodySize.width, tileDef.bodySize.height, false);
-      }
-
-      if (tileDef.bodyOffset) {
-        body.setOffset(tileDef.bodyOffset.x, tileDef.bodyOffset.y);
-      }
-      
-      // Update body to match changes
-      // body.updateFromGameObject(); // REMOVED: This resets size to texture size!
-
-      // Debug
-      (body as any).debugShowBody = true;
-      (body as any).debugBodyColor = 0x0000ff; // Blue for Registry overrides
-
+      const body = mainSprite.body as Phaser.Physics.Arcade.StaticBody;
+      if (tileDef.bodySize) body.setSize(tileDef.bodySize.width, tileDef.bodySize.height, false);
+      if (tileDef.bodyOffset) body.setOffset(tileDef.bodyOffset.x, tileDef.bodyOffset.y);
+      body.enable = true; // Ensure re-enabled
       body.immovable = true;
     }
 
-    // Configurações para sprites adicionais
+    // Additional Sprites
     additionalSprites.forEach((sprite) => {
-      if (tileDef.origin) {
-        sprite.setOrigin(tileDef.origin.x, tileDef.origin.y);
-      }
-      sprite.setDepth(depth + 0.1); // Pequeno ajuste para garantir ordem
+      if (tileDef.origin) sprite.setOrigin(tileDef.origin.x, tileDef.origin.y);
+      sprite.setDepth(depth + 0.1);
+      sprite.setVisible(true); // Ensure re-visible if from pool
+      sprite.setActive(true);
     });
 
     return {
       sprite: mainSprite,
+      additionalSprites,
       isCollidable: tileDef.isCollidable,
     };
   }

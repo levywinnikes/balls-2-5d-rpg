@@ -732,10 +732,12 @@ export default class Enemy {
   // Soft Separation: Apply velocity away from nearby enemies to prevent stacking
   private applySeparationForce(): void {
       if(!this.sprite?.body) return;
-
-      const scene = this.sprite.scene as GameScene;
       
-      const currentEnemies = scene.getLevelEnemies(this.level) || [];
+      // OPTIMIZATION: Only run if moving or every few frames
+      const scene = this.sprite.scene as GameScene;
+      if (scene.time.now % 100 > 32) return; // Throttle: Only once every ~100ms or so
+
+      const currentEnemies = scene.getActiveEnemies();
       const separationRadius = 24; // If closer than this, push apart
       const separationStrength = 20; // Force multiplier
 
@@ -743,18 +745,20 @@ export default class Enemy {
       let forceY = 0;
       let count = 0;
 
-      currentEnemies.forEach((other) => {
+      // OPTIMIZATION: We only care about enemies that are ALSO nearby (visual distance)
+      // Since update() is already culled to 1400px, we are much safer.
+      currentEnemies.forEach((other: Enemy) => {
           if (other === this || !other.sprite || !other.sprite.active || other.health <= 0) return;
 
-          const dist = Phaser.Math.Distance.Between(
-              this.sprite.x, this.sprite.y,
-              other.sprite.x, other.sprite.y
-          );
+          // Quick Manhattan distance check before expensive sqrt or logic
+          const dx = this.sprite.x - other.sprite.x;
+          const dy = this.sprite.y - other.sprite.y;
+          if (Math.abs(dx) > separationRadius || Math.abs(dy) > separationRadius) return;
+
+          const dist = Math.sqrt(dx*dx + dy*dy);
 
           if (dist < separationRadius && dist > 0) {
               // Push away
-              const dx = this.sprite.x - other.sprite.x;
-              const dy = this.sprite.y - other.sprite.y;
               // Normalize and inverse weight by distance (closer = stronger push)
               forceX += (dx / dist) / dist; 
               forceY += (dy / dist) / dist;
@@ -794,5 +798,10 @@ export default class Enemy {
       this.hud.updatePosition();
       this.hud.updateHealth();
     }
+  }
+
+  public destroy(): void {
+      if (this.hud) this.hud.destroy();
+      if (this.sprite) this.sprite.destroy();
   }
 }

@@ -21,7 +21,7 @@ export const SidebarMinimap: React.FC = () => {
   // 1. Carregar o JSON da pasta PUBLIC ao iniciar
   useEffect(() => {
     // IMPORTANTE: O nome do arquivo aqui deve ser EXATAMENTE como está na pasta public
-    const mapUrl = `${window.location.origin}/newmap.json`;
+    const mapUrl = `${window.location.origin}/newmap.json?v=${Date.now()}`;
     fetch(mapUrl)
       .then((res) => {
         if (!res.ok) throw new Error("Falha ao carregar mapa");

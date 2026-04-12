@@ -59,15 +59,20 @@ export default class GameScene extends Phaser.Scene {
   public mapLoader!: MapLoader;
   private dynamicLevelRenderer!: DynamicLevelRenderer;
   battleSystem!: BattleSystem;
-  public enemiesByLevel: Map<string, Enemy[]> = new Map();
-  private decorationsByLevel: Map<string, Phaser.GameObjects.Sprite[]> = new Map();
+  public enemiesByLevel: Map<string, any[]> = new Map();
+  private decorationsByLevel: Map<string, any[]> = new Map();
   // Getter for safe access or just make public. 
   // Since we already made it public above (renamed private to public in replacement), 
   // or we can just add a getter if we want to keep it private.
   // Actually, for simplicity and performance in game loop, public property is fine.
   
-  public getLevelEnemies(level: string): Enemy[] {
+  public getLevelEnemiesMetadata(level: string): any[] {
       return this.enemiesByLevel.get(level) || [];
+  }
+
+  public getActiveEnemies(): Enemy[] {
+      if (!this.dynamicLevelRenderer) return [];
+      return Array.from(this.dynamicLevelRenderer.activeEnemies.values());
   }
   private deadEnemies: DeadEnemy[] = [];
   private isInitialized: boolean = false;
@@ -112,6 +117,19 @@ export default class GameScene extends Phaser.Scene {
   
 
 
+
+  // PERFORMANCE METRICS
+  public perf = {
+      startTime: 0,
+      enemyTime: 0,
+      mapTime: 0,
+      physicsTime: 0,
+      totalUpdateTime: 0,
+      activeEnemies: 0,
+      renderedTiles: 0,
+      totalObjects: 0,
+      culprits: [] as [string, number][]
+  };
 
   constructor() {
     super({ key: "GameScene" });
@@ -248,122 +266,74 @@ export default class GameScene extends Phaser.Scene {
   }
 
   public loadDecorations(mapData: any): void {
-    // Clear existing decorations
-    this.decorationsByLevel.forEach(decs => decs.forEach(d => d.destroy()));
+    // We NO LONGER create Sprites here. We store the metadata for the DynamicLevelRenderer.
     this.decorationsByLevel.clear();
 
     for (const level in mapData.levels) {
         const levelData = mapData.levels[level];
-        // Note: MapLoader.setActiveLevel provides entities for current level, 
-        // but we need them ALL for level switching.
-        // I'll call a dedicated helper or use a loop if MapLoader has all.
-        // Actually, I just updated MapLoader to return decorations in LoadResult.
-        // However, loadEnemies iterates mapData.levels manually.
         const result = (this.mapLoader as any).parseEntities(levelData, this.mapLoader.getTileSize());
-        const levelDecorations: Phaser.GameObjects.Sprite[] = [];
+        const levelDecorations: any[] = [];
         
         result.decorations.forEach((data: any) => {
-            // RESOLVE SYMBOL TO REGISTERED ID
-            // symbol might be "tre", but the ID in registry is "tree"
             const tileDefInMap = mapData.tiles[data.symbol];
             const tileId = tileDefInMap ? tileDefInMap.id : data.symbol;
             
-            const registryDef = TileRegistry.getTileDefinition(tileId);
-            if (!registryDef) {
-                console.warn(`[GameScene] Decoration symbol '${data.symbol}' (ID: '${tileId}') not found in TileRegistry. Skipping.`);
-                return;
-            }
-
-            const worldX = data.x;
-            const worldY = data.y;
-            const levelOffset = parseInt(level) * 10000;
-            
-            // Reusing TileRegistry to handle procedural graphics
-            const { sprite } = TileRegistry.createTile(this, tileId, worldX, worldY, {
-                levelOffset: levelOffset,
-                isUnderTile: false
+            levelDecorations.push({
+                tileId,
+                worldX: data.x,
+                worldY: data.y,
+                scale: data.scale,
+                rotation: data.rotation,
+                isCollidable: data.isCollidable
             });
-            
-            sprite.setDepth(worldY + levelOffset + 10); // Subtle priority over ground tiles
-            
-            // Apply organic variations
-            if (data.scale) sprite.setScale(data.scale);
-            if (data.rotation) sprite.setRotation(data.rotation);
-            
-            // Initial visibility
-            sprite.setVisible(level === this.currentLevel);
-            sprite.setActive(level === this.currentLevel);
-            
-            // Handle collision
-            if (data.isCollidable) {
-                this.physics.add.existing(sprite, true);
-                if (this.mapLoader.getWallsLayer(level)) {
-                    this.mapLoader.getWallsLayer(level)?.add(sprite);
-                }
-            }
-            
-            levelDecorations.push(sprite);
         });
         this.decorationsByLevel.set(level, levelDecorations);
     }
+    console.log(`[GameScene] Cached decorations meta for ${this.decorationsByLevel.size} levels.`);
   }
 
   public async loadEnemies(mapData: any): Promise<void> {
-    this.enemiesByLevel.clear(); // Clear existing map to avoid duplicates
+    this.enemiesByLevel.clear();
     
-    // 1. Load enemies from Map Data (Legacy / Map Editor)
+    // Store as metadata for lazy instantiation
     for (const level in mapData.levels) {
       const enemyData = this.mapLoader.getEnemiesForLevel(level);
-      const levelEnemies: Enemy[] = [];
+      const levelEnemies: any[] = [];
       enemyData.forEach((data) => {
-        const id = `${level}_${data.x}_${data.y}`;
-        const enemy = new Enemy(this, data.x, data.y, data.type);
-        enemy.level = level;
-        enemy.id = id;
-        enemy.respawnTime =
-          data.respawnTime ||
-          EnemyRegistry.getEnemyDefinition(data.type)?.respawnTime ||
-          5000;
-        enemy.sprite.setVisible(false);
-        levelEnemies.push(enemy);
+        levelEnemies.push({
+            id: `${level}_${data.x}_${data.y}`,
+            type: data.type,
+            x: data.x,
+            y: data.y,
+            respawnTime: data.respawnTime || EnemyRegistry.getEnemyDefinition(data.type)?.respawnTime || 5000
+        });
       });
       this.enemiesByLevel.set(level, levelEnemies);
     }
 
-    // 2. Load enemies from External JSON (data/enemies.json)
+    // Load external enemies metadata
     if (this.cache.json.exists("enemies_data")) {
         const externalArgs = this.cache.json.get("enemies_data");
         const currentMap = this.registry.get("currentMap") || "newmap";
         const mapEnemiesBlob = externalArgs[currentMap];
 
         if (Array.isArray(mapEnemiesBlob)) {
-             console.log(`[GameScene] Loading ${mapEnemiesBlob.length} external enemies for map '${currentMap}'`);
-             
              mapEnemiesBlob.forEach((def: any) => {
                  const level = def.level || "0";
-                 const x = def.x;
-                 const y = def.y;
-                 const type = def.id;
-                 // Unique ID generation
-                 const id = `ext_${level}_${x}_${y}`;
-                 
-                 try {
-                     const enemy = new Enemy(this, x, y, type, def.overrides);
-                     enemy.level = level;
-                     enemy.id = id;
-                     enemy.respawnTime = def.respawnTime || 
-                         EnemyRegistry.getEnemyDefinition(type)?.respawnTime || 5000;
-                     enemy.sprite.setVisible(false); 
-
-                     const existing = this.enemiesByLevel.get(level) || [];
-                     existing.push(enemy);
-                     this.enemiesByLevel.set(level, existing);
-                 } catch (err) {
-                     console.error(`Failed to spawn external enemy ${type} at ${x},${y}`, err);
-                 }
+                 const existing = this.enemiesByLevel.get(level) || [];
+                 existing.push({
+                     id: `ext_${level}_${def.x}_${def.y}`,
+                     type: def.id,
+                     x: def.x,
+                     y: def.y,
+                     respawnTime: def.respawnTime || EnemyRegistry.getEnemyDefinition(def.id)?.respawnTime || 5000,
+                     overrides: def.overrides
+                 });
+                 this.enemiesByLevel.set(level, existing);
              });
         }
     }
+    console.log(`[GameScene] Cached enemies meta.`);
   }
 
   // --- PROXIMITY LOOT SYSTEM ---
@@ -658,9 +628,9 @@ export default class GameScene extends Phaser.Scene {
          
       // --- EMERGENCY SCALE FIX ---
       // If the player position in the registry looks like it was from the 128px era, reset it.
-      // 32px maps typically spawn within 4000px. If it's way higher, it's likely stale.
-      if (initialPlayerPos && (initialPlayerPos.x > 8000 || initialPlayerPos.y > 8000)) {
-          console.warn("⚠️ Legacy 128px scale detected. Resetting player to spawn.");
+      // 32px maps typically spawn within reasonable bounds. Increased for 512x512 Continental Scale.
+      if (initialPlayerPos && (initialPlayerPos.x > 20000 || initialPlayerPos.y > 20000)) {
+          console.warn("⚠️ Extreme scale detected. Resetting player to spawn.");
           initialPlayerPos = null;
           this.registry.remove("playerPos");
       }
@@ -724,17 +694,6 @@ export default class GameScene extends Phaser.Scene {
       const mapData = this.cache.json.get(`${initialMap}_data`);
       await this.loadEnemies(mapData);
       this.loadDecorations(mapData);
-      
-      // DEBUG: Verify Enemy State immediately after creation
-      this.enemiesByLevel.forEach((enemies, lvl) => {
-          if (enemies.length > 0) {
-              enemies.forEach(e => {
-                  console.warn(`[LIFECYCLE:CREATE] ${e.id} (Lvl ${lvl}): HP=${e.health}, Active=${e.sprite.active}, Visible=${e.sprite.visible}, Scene=${!!e.sprite.scene}`);
-              });
-          }
-      });
-
-      this.setupEnemyDamageTracking();
 
       this.cursors = this.input.keyboard!.createCursorKeys();
       this.cameras.main.setRoundPixels(true);
@@ -1896,8 +1855,12 @@ export default class GameScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     if (!this.isInitialized) return;
     
+    this.perf.startTime = performance.now();
+    
+    const diag = PlayerState.getInstance().getDiagnosticSettings();
+
     // Update PlayerState (Hunger, Regen, etc)
-    if (this.player && this.player.sprite && this.player.sprite.active) {
+    if (this.player && this.player.sprite && this.player.sprite.active && diag.enablePlayerState) {
         PlayerState.getInstance().update(time, delta);
     }
     
@@ -2009,23 +1972,40 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.pickupZone.setPosition(this.player.sprite.x, this.player.sprite.y);
+    const hideItems = diag.hideItems;
     this.droppedItemsGroup.getChildren().forEach((item: any) => {
-      if (!item.isBeingDragged) item.updateDepth();
+        if (item.active) {
+            item.setVisible(!hideItems);
+            if (!hideItems && diag.enableItemDepth && !item.isBeingDragged) {
+                item.updateDepth();
+            }
+        }
     });
+
     // Drag Validation (Tibia-like: cancel if walk away)
     if (!PlayerState.getInstance().validateDragDistance(this.player.sprite.x, this.player.sprite.y, this.currentLevel)) {
         PlayerState.getInstance().cancelGroundDrag();
     }
     
     // Update Dynamic Floor Rendering
-    this.dynamicLevelRenderer.update(
-      this.player.sprite.x,
-      this.player.sprite.y
-    );
-    this.dynamicLevelRenderer.updateClouds(time, delta);
+    const mapStart = performance.now();
+    if (diag.enableMapUpdate) {
+        this.dynamicLevelRenderer.update(
+          this.player.sprite.x,
+          this.player.sprite.y
+        );
+    }
+    this.perf.mapTime = performance.now() - mapStart;
+    this.perf.renderedTiles = (this.dynamicLevelRenderer as any).getRenderedTilesCount?.() || 0;
 
+    if (diag.enableClouds) {
+        this.dynamicLevelRenderer.updateClouds(time, delta);
+    }
+
+    const physicsStart = performance.now();
     const walls = this.mapLoader.getWallsLayer();
-    if (walls) this.physics.world.collide(this.player.sprite, walls);
+    if (walls && diag.enablePhysics) this.physics.world.collide(this.player.sprite, walls);
+    this.perf.physicsTime = performance.now() - physicsStart;
 
     if (!this.isUiDragging) {
         this.player.update(this.cursors);
@@ -2048,7 +2028,21 @@ export default class GameScene extends Phaser.Scene {
 
 
 
-    this.updateEnemies();
+    const enemyStart = performance.now();
+    const activeEnemies = this.getActiveEnemies();
+    const hideEnemies = diag.hideEnemies;
+
+    activeEnemies.forEach(enemy => {
+        if (enemy.sprite && this.player) {
+            enemy.sprite.setVisible(!hideEnemies);
+            if (diag.enableAI && !hideEnemies) {
+                enemy.update(this.player);
+            }
+        }
+    });
+
+    this.perf.enemyTime = performance.now() - enemyStart;
+    this.perf.activeEnemies = activeEnemies.length;
 
     if (
       this.selectedEnemy &&
@@ -2061,21 +2055,35 @@ export default class GameScene extends Phaser.Scene {
     if (
       this.selectedEnemy &&
       !this.selectedEnemy.isDefeated() &&
-      this.selectedEnemy.level === this.currentLevel
+      this.selectedEnemy.level === this.currentLevel &&
+      diag.enableAI
     ) {
       if (this.player.canAttack(this.selectedEnemy)) {
-        this.battleSystem.startBattle(this.player, this.selectedEnemy);
-        this.player.setLastAttackTime(Date.now());
+          this.battleSystem.startBattle(this.player, this.selectedEnemy);
+          this.player.setLastAttackTime(Date.now());
       }
     }
 
     this.updateRespawns(delta);
 
     // Apply Lighting LAST to overwrite renderer/enemy resets
-    this.updateDarkness(time, delta);
+    if (diag.enableLighting) {
+        this.updateDarkness(time, delta);
+    } else {
+        // Clear tints if disabled
+        if (this.dynamicLevelRenderer) (this.dynamicLevelRenderer as any).resetLighting?.();
+        this.enemiesByLevel.forEach(list => list.forEach(e => e.sprite?.clearTint()));
+        this.droppedItemsGroup.getChildren().forEach((item: any) => item.clearTint());
+    }
+
+    this.perf.totalUpdateTime = performance.now() - this.perf.startTime;
+    this.perf.totalObjects = this.children.length; // Count all sprites/graphics in scene
+    this.perf.culprits = this.dynamicLevelRenderer.getDNAAnalysis();
+    PlayerState.getInstance().updatePerfMetrics(this.perf);
   }
 
-  private updateEnemies() {
+  private updateEnemies(): number {
+    let tickingCount = 0;
     this.enemiesByLevel.forEach((levelEnemies, lvl) => {
       const newLevelEnemies = levelEnemies.filter((enemy) => {
         // FIX: Detect "Zombie" state
@@ -2100,6 +2108,34 @@ export default class GameScene extends Phaser.Scene {
         const levelNum = parseInt(lvl);
         const currentNum = parseInt(this.currentLevel);
         const diff = levelNum - currentNum;
+
+        // --- OPTIMIZATION: PROXIMITY CULLING ---
+        // Only update AI for enemies on current level and within distance
+        // Distant enemies or enemies on other floors stay static.
+        const distToPlayer = Phaser.Math.Distance.Between(
+            enemy.sprite.x, enemy.sprite.y,
+            this.player!.sprite.x, this.player!.sprite.y
+        );
+
+        if (diff !== 0 || distToPlayer > 1400) {
+            // Far away or different floor?
+            if (enemy.sprite.body) enemy.sprite.setVelocity(0,0);
+            
+            // Still handle visibility for multi-floor rendering
+            let visible = false;
+            if (diff < 0) {
+                const gridX = Math.floor(enemy.sprite.x / this.mapLoader.getTileSize());
+                const gridY = Math.floor(enemy.sprite.y / this.mapLoader.getTileSize());
+                visible = this.isPositionVisibleFromAbove(currentNum, levelNum, gridX, gridY);
+            } else if (diff === 0) {
+                visible = true; // In range for update distance, but viewport cull handled by Phaser
+            }
+            
+            enemy.sprite.setVisible(visible);
+            return true; 
+        }
+
+        tickingCount++;
         const gridX = Math.floor(enemy.sprite.x / this.mapLoader.getTileSize());
         const gridY = Math.floor(enemy.sprite.y / this.mapLoader.getTileSize());
         let visible = false;
@@ -2163,6 +2199,7 @@ export default class GameScene extends Phaser.Scene {
       });
       this.enemiesByLevel.set(lvl, newLevelEnemies);
     });
+    return tickingCount;
   }
 
   // Fall Safety System
@@ -2405,10 +2442,9 @@ export default class GameScene extends Phaser.Scene {
       if (this.mapLoader) this.mapLoader.destroy();
       if (this.dynamicLevelRenderer) this.dynamicLevelRenderer.destroy();
 
-      this.enemiesByLevel.forEach((enemies) =>
-        enemies.forEach((enemy) => enemy.sprite?.destroy())
-      );
+      // Metadata doesn't need destruction, only clearing
       this.enemiesByLevel.clear();
+      this.decorationsByLevel.clear();
       this.deadEnemies = [];
 
       if (this.player) {
@@ -2445,9 +2481,10 @@ export default class GameScene extends Phaser.Scene {
     this.selectedEnemy = null;
     let clickedEnemy: Enemy | null = null;
 
-    this.enemiesByLevel.get(this.currentLevel)?.forEach((enemy) => {
+    this.dynamicLevelRenderer.activeEnemies.forEach((enemy) => {
       if (
         !enemy.isDefeated() &&
+        enemy.sprite && enemy.sprite.active &&
         enemy.sprite.getBounds().contains(worldPoint.x, worldPoint.y)
       ) {
         clickedEnemy = enemy;
@@ -2483,14 +2520,12 @@ export default class GameScene extends Phaser.Scene {
       // FIRST: Check if clicking on an enemy (for single-target or AoE)
       let targetEnemy: Enemy | null = null;
       
-      this.enemiesByLevel.forEach((enemies) => {
-          enemies.forEach((enemy) => {
-              if (!enemy.sprite || enemy.isDefeated()) return;
-              const bounds = enemy.sprite.getBounds();
-              if (bounds.contains(x, y)) {
-                  targetEnemy = enemy;
-              }
-          });
+      this.dynamicLevelRenderer.activeEnemies.forEach((enemy) => {
+          if (!enemy.sprite || !enemy.sprite.active || enemy.isDefeated()) return;
+          const bounds = enemy.sprite.getBounds();
+          if (bounds.contains(x, y)) {
+              targetEnemy = enemy;
+          }
       });
       
       if (targetEnemy) {
@@ -2680,17 +2715,6 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  private setupEnemyDamageTracking(): void {
-    this.enemiesByLevel.forEach((enemies) => {
-      enemies.forEach((enemy) => {
-        const originalTakeDamage = enemy.takeDamage.bind(enemy);
-        enemy.takeDamage = (amount: number) => {
-          const result = originalTakeDamage(amount);
-          return result;
-        };
-      });
-    });
-  }
 
   public handleEnemyDeath(enemy: Enemy): void {
     console.warn(`[LIFECYCLE:DEATH] Handling death for ${enemy.id}. AlreadyDeadList=${this.deadEnemies.some(d => d.id === enemy.id)}`);
@@ -2887,7 +2911,7 @@ export default class GameScene extends Phaser.Scene {
       const py = this.player.sprite.y;
 
       // 2. Update Tile Lighting
-      if (renderer && renderer.updateLighting) {
+      if (renderer && renderer.updateLighting && PlayerState.getInstance().getDiagnosticSettings().enableLighting) {
           renderer.updateLighting(px, py, finalRadiusWorld);
       }
 
