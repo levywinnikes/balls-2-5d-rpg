@@ -32,7 +32,7 @@ export const ExpandedMapContent: React.FC = () => {
 
   // Carrega mapa
   useEffect(() => {
-    fetch("newmap.json")
+    fetch("newmap.json?v=" + Date.now())
       .then((res) => res.json())
       .then((data) => {
         setMapData(data);

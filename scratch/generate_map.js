@@ -1,15 +1,26 @@
 const fs = require('fs');
+const { createNoise2D } = require('simplex-noise');
 
 /**
- * 🌎 ADVANCED PROCEDURAL WORLD ENGINE v2.50 - DUNGEON REMASTERED
+ * 🌎 ADVANCED PROCEDURAL WORLD ENGINE v3.5 - ORGANIC MASSIVE WORLD
  * --------------------------------------------------
- * [FIXED] Monsters now spawn correctly on 'dungeon_floor' tiles.
- * [FIXED] Cave links and organic caves use the new stone and wall sets.
- * [FIXED] Minimap colors for all new dungeon elements.
+ * [NEW] Tri-Noise System: Elevation, Moisture, and Forest maps.
+ * [NEW] Physical Z-Axis Altitude: Real mountains on levels 1, 2, and 3.
+ * [NEW] Organic Forests: Trees as entities with random scale/rotation.
+ * [NEW] Auto-Ramp Stairs: Navigable elevation transitions.
  */
+
+const noiseElevation = createNoise2D();
+const noiseMoisture = createNoise2D();
+const noiseForest = createNoise2D();
 
 const WIDTH = 256;
 const HEIGHT = 256;
+
+// Adjustment Variables (Zoom)
+const SCALE_ELEVATION = 120;
+const SCALE_MOISTURE = 180;
+const SCALE_FOREST = 50;
 
 const SYMBOLS = {
     grass: 'grs', path: 'pth', tree: 'tre', rock: 'rok', sand: 'snd', water: 'wat',
@@ -17,10 +28,6 @@ const SYMBOLS = {
     stair_up: 'sup', stair_down: 'sdn', hole: 'hol', empty: '...',
     basalt: 'bas', lava: 'lav', cloud: 'cld', pavement: 'pav',
     dungeon_floor: 'dfn', dungeon_wall: 'dwl'
-};
-
-const ENEMIES = {
-    rat: 'rak', skeleton: 'skl', goblin: 'gob', orc: 'orc', dragon: 'dra'
 };
 
 function createLayer(fill = SYMBOLS.empty) {
@@ -42,21 +49,101 @@ const levelEntities = {
     "3": [], "2": [], "1": [], "0": [], "-1": [], "-2": [], "-3": [], "-4": []
 };
 
-// --- PHASE 1: BASE TERRAIN ---
-console.log("Generating Base Geometry...");
+function spawnActor(z, x, y, symbol, extra = {}) {
+    if (!levelEntities[z]) levelEntities[z] = [];
+    levelEntities[z].push({ x, y, symbol, ...extra });
+}
+
+// --- PHASE 1: ORGANIC TERRAIN SHAPING ---
+console.log("Shaping Organic Continents and Altitudes...");
+const heightMap = Array.from({ length: HEIGHT }, () => Array(WIDTH).fill(0));
+
 for (let y = 0; y < HEIGHT; y++) {
     for (let x = 0; x < WIDTH; x++) {
-        const dx = x - WIDTH/2;
-        const dy = y - HEIGHT/2;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        const beachWidth = 8;
-        const baseRadius = 110 + Math.sin(x/15)*5 + Math.cos(y/15)*5;
+        // 1. Noise Sampling
+        let e = (noiseElevation(x / SCALE_ELEVATION, y / SCALE_ELEVATION) + 1) / 2;
+        let m = (noiseMoisture(x / SCALE_MOISTURE, y / SCALE_MOISTURE) + 1) / 2;
 
-        if (dist < baseRadius) {
-            const snowBorder = 65 + Math.sin(x/10)*8 + (Math.random()*4);
-            if (y < snowBorder) levels["0"][y][x] = SYMBOLS.snw;
-            else if (dist < baseRadius - beachWidth) levels["0"][y][x] = SYMBOLS.grass;
-            else levels["0"][y][x] = SYMBOLS.sand;
+        // 2. Radial Mask (Island preservation)
+        const dx = (x - WIDTH/2) / (WIDTH/2);
+        const dy = (y - HEIGHT/2) / (HEIGHT/2);
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        e = (e + (1 - dist * 1.2)) / 2;
+        e = Math.max(0, Math.min(1, e));
+
+        // 3. Altitude Tiering (Z 0 to 3)
+        let H = 0;
+        let biome = SYMBOLS.water;
+
+        if (e < 0.42) {
+            biome = SYMBOLS.water; H = 0;
+        } else if (e < 0.48) {
+            biome = SYMBOLS.sand; H = 0;
+        } else if (e < 0.70) {
+            biome = SYMBOLS.grass; H = 0;
+        } else if (e < 0.82) {
+            biome = SYMBOLS.grass; H = 1; // Highlands
+        } else if (e < 0.92) {
+            biome = (m > 0.6) ? SYMBOLS.snow : SYMBOLS.mountain; 
+            H = 2; // Mid Mountains
+        } else {
+            biome = SYMBOLS.snow; H = 3; // High Peaks
+        }
+
+        heightMap[y][x] = H;
+
+        // 4. Populate Physical Layers (Solid Stack)
+        for (let z = 0; z <= H; z++) {
+            let symbol = biome;
+            // Lower layers of mountains should be mountain tiles or grass
+            if (z < H) {
+                symbol = (biome === SYMBOLS.snow || biome === SYMBOLS.mountain) ? SYMBOLS.mountain : SYMBOLS.grass;
+            }
+            levels[z.toString()][y][x] = symbol;
+        }
+    }
+}
+
+// --- PHASE 1.1: NAVIGABLE RAMPS (Auto-Stairs) ---
+console.log("Placing Navigable Ramps...");
+for (let y = 1; y < HEIGHT - 1; y++) {
+    for (let x = 1; x < WIDTH - 1; x++) {
+        const h = heightMap[y][x];
+        // Check neighbors for height changes
+        const neighbors = [[1,0], [-1,0], [0,1], [0,-1]];
+        for (const [ox, oy] of neighbors) {
+            const nh = heightMap[y+oy][x+ox];
+            if (nh === h + 1 && Math.random() < 0.15) { // 15% chance at borders to avoid stair spam
+                levels[h.toString()][y][x] = SYMBOLS.stair_up;
+                levels[nh.toString()][y+oy][x+ox] = SYMBOLS.stair_down;
+                // Ensure safe landings
+                levels[h.toString()][y+oy][x+ox] = SYMBOLS.grass;
+                levels[nh.toString()][y][x] = (nh >= 2) ? SYMBOLS.mountain : SYMBOLS.grass;
+                break; 
+            }
+        }
+    }
+}
+
+// --- PHASE 1.2: ORGANIC FORESTS (Entity Injection) ---
+console.log("Planting Organic Forests...");
+for (let y = 0; y < HEIGHT; y++) {
+    for (let x = 0; x < WIDTH; x++) {
+        const h = heightMap[y][x];
+        const biome = levels[h.toString()][y][x];
+        
+        if (biome === SYMBOLS.grass && (x < 100 || x > 175 || y < 100 || y > 175)) {
+            const f = (noiseForest(x / SCALE_FOREST, y / SCALE_FOREST) + 1) / 2;
+            
+            // NEW: Sub-sampling (34% chance) inside the noise-defined forest zones
+            // Plus random jitter (offX/offY) to escape the grid
+            if (f > 0.62 && Math.random() < 0.34) {
+                const scale = 0.85 + Math.random() * 0.5;
+                const rotation = -0.15 + Math.random() * 0.3;
+                const offX = (Math.random() - 0.5) * 0.8; // Up to 80% tile width offset
+                const offY = (Math.random() - 0.5) * 0.8;
+                spawnActor(h.toString(), x, y, "tre", { scale, rotation, offX, offY });
+            }
         }
     }
 }
@@ -82,7 +169,7 @@ createWideRiver(128, 128, 1, 0.5, 120);
 createWideRiver(128, 128, -1, 0.8, 120);
 
 // --- PHASE 3: TOWN ---
-console.log("Establishing Solid Town Foundation...");
+console.log("Establishing Town Foundation...");
 for(let y=100; y<175; y++) {
     for(let x=100; x<175; x++) {
         levels["0"][y][x] = SYMBOLS.pavement;
@@ -94,11 +181,8 @@ function ensureSafeTransition(toZ, x, y) {
     if (!targetLayer) return;
     const isSub = (parseInt(toZ) < 0);
     const safeTile = isSub ? SYMBOLS.dungeon_floor : SYMBOLS.floor;
-    
     for (let dy = -1; dy <= 1; dy++) {
-        if (y + dy >= 0 && y + dy < HEIGHT) {
-            targetLayer[y + dy][x] = safeTile;
-        }
+        if (y + dy >= 0 && y + dy < HEIGHT) targetLayer[y + dy][x] = safeTile;
     }
 }
 
@@ -127,11 +211,10 @@ function buildHouse(sx, sy, w, h, floors) {
         levels[(i+1).toString()][stairY_next][shaftX] = SYMBOLS.stair_down;
     }
 }
-console.log("Building Houses with Aligned Stairs...");
 for(let i=0; i<3; i++) for(let j=0; j<3; j++) buildHouse(110+i*22, 110+j*22, 7, 7, (i+j)%2+1 === 1 ? 2 : 3);
 
 // --- PHASE 4: ORGANIC CAVES ---
-console.log("Digging Organic Caves with Dungeon Tiles...");
+console.log("Digging Organic Caves...");
 function digOrganicCaves(z) {
     const layer = levels[z];
     const density = (z === "-1" || z === "-2") ? 0.48 : 0.42;
@@ -155,13 +238,7 @@ function digOrganicCaves(z) {
                     }
                 }
                 if (wallCount >= 5) layer[y][x] = SYMBOLS.dungeon_wall;
-                else {
-                    if (z === "-3" || z === "-4") {
-                        if (layer[y][x] !== SYMBOLS.lava) layer[y][x] = SYMBOLS.basalt;
-                    } else {
-                        layer[y][x] = SYMBOLS.dungeon_floor;
-                    }
-                }
+                else layer[y][x] = (z === "-3" || z === "-4") ? SYMBOLS.basalt : SYMBOLS.dungeon_floor;
             }
         }
     }
@@ -200,31 +277,12 @@ createCaveLinks();
 
 // --- PHASE 5: ENTITIES ---
 console.log("Scattering Actors and Rewards...");
-const ENTITY_TEMPLATES = { 
-    "ply": { type: "player" }, 
-    "rak": { type: "enemy", id: "rat" },
-    "skl": { type: "enemy", id: "skeleton" }, 
-    "gob": { type: "enemy", id: "goblin" },
-    "orc": { type: "enemy", id: "orc" }, 
-    "dra": { type: "enemy", id: "dragon" },
-    "chs": { type: "item", id: "chest" }
-};
-function spawnActor(z, x, y, symbol) {
-    if (!levelEntities[z]) levelEntities[z] = [];
-    levelEntities[z].push({ x, y, symbol });
-}
 function scatterActors(z, density, symbols) {
     const layer = levels[z];
     for (let y = 0; y < HEIGHT; y++) {
         for (let x = 0; x < WIDTH; x++) {
             if (z === "0" && x >= 100 && x <= 175 && y >= 100 && y <= 175) continue;
-            const isWalkable = (
-                layer[y][x] === SYMBOLS.grass || 
-                layer[y][x] === SYMBOLS.floor || 
-                layer[y][x] === SYMBOLS.basalt || 
-                layer[y][x] === SYMBOLS.pavement ||
-                layer[y][x] === SYMBOLS.dungeon_floor
-            );
+            const isWalkable = (layer[y][x] === SYMBOLS.grass || layer[y][x] === SYMBOLS.floor || layer[y][x] === SYMBOLS.basalt || layer[y][x] === SYMBOLS.pavement || layer[y][x] === SYMBOLS.dungeon_floor);
             if (isWalkable && Math.random() < density) {
                 const s = symbols[Math.floor(Math.random() * symbols.length)];
                 spawnActor(z, x, y, s);
@@ -247,33 +305,26 @@ const tileDefinitions = {
     "snd": { id: "sand", color: "#fde047" }, "wat": { id: "water", block: true, color: "#3b82f6" },
     "snw": { id: "snow", color: "#ffffff" }, "flr": { id: "floor", color: "#8b4513" },
     "wal": { id: "house-wall", block: true, color: "#5a3825" }, "rof": { id: "red-roof", color: "#ef4444" },
-    "sup": { id: "stair_up", color: "#daa520", transition: "up" }, 
-    "sdn": { id: "stair_down", color: "#daa520", transition: "down" },
-    "hol": { id: "hole", color: "#262626", transition: "down" }, 
-    "lav": { id: "lava", block: true, color: "#ff4500" }, "cld": { id: "cloud", color: "#ffffff" },
-    "mnt": { id: "mountain", block: true, color: "#404040" }, "pav": { id: "pavement", color: "#808080" },
-    "dfn": { id: "dungeon-floor", color: "#334155" }, "dwl": { id: "dungeon-wall", block: true, color: "#1e293b" }
+    "sup": { id: "stair_up", color: "#daa520", transition: "up" }, "sdn": { id: "stair_down", color: "#daa520", transition: "down" },
+    "hol": { id: "hole", color: "#262626", transition: "down" }, "lav": { id: "lava", block: true, color: "#ff4500" }, 
+    "cld": { id: "cloud", color: "#ffffff" }, "mnt": { id: "mountain", block: true, color: "#404040" }, 
+    "pav": { id: "pavement", color: "#808080" }, "dfn": { id: "dungeon-floor", color: "#334155" }, 
+    "dwl": { id: "dungeon-wall", block: true, color: "#1e293b" }
 };
 
 const finalEntitiesTemplates = { 
     "ply": { type: "player" }, "rak": { type: "enemy", id: "rat" },
     "skl": { type: "enemy", id: "skeleton" }, "gob": { type: "enemy", id: "goblin" },
     "orc": { type: "enemy", id: "orc" }, "dra": { type: "enemy", id: "dragon" },
-    "chs": { type: "item", id: "chest" }
+    "chs": { type: "item", id: "chest" },
+    "tre": { type: "decoration", id: "tree" }
 };
 
-const mapData = {
-    tileSize: 32, tiles: tileDefinitions, entities: finalEntitiesTemplates,
-    levels: {}
-};
-
+const mapData = { tileSize: 32, tiles: tileDefinitions, entities: finalEntitiesTemplates, levels: {} };
 for (const z in levels) {
-    mapData.levels[z] = {
-        map: levels[z],
-        entities: levelEntities[z]
-    };
+    mapData.levels[z] = { map: levels[z], entities: levelEntities[z] };
     if (z === "0") mapData.levels[z].playerPos = { x: 128*32, y: 128*32 };
 }
 
 fs.writeFileSync('public/newmap.json', JSON.stringify(mapData));
-console.log("v2.50 WORLD GENERATED (Dungeon Remastered)!");
+console.log("v3.50 WORLD GENERATED (Organic Continents & Z-Axis Peaks)!");

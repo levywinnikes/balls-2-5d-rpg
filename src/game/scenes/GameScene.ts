@@ -60,6 +60,7 @@ export default class GameScene extends Phaser.Scene {
   private dynamicLevelRenderer!: DynamicLevelRenderer;
   battleSystem!: BattleSystem;
   public enemiesByLevel: Map<string, Enemy[]> = new Map();
+  private decorationsByLevel: Map<string, Phaser.GameObjects.Sprite[]> = new Map();
   // Getter for safe access or just make public. 
   // Since we already made it public above (renamed private to public in replacement), 
   // or we can just add a getter if we want to keep it private.
@@ -246,7 +247,68 @@ export default class GameScene extends Phaser.Scene {
     return fallback;
   }
 
-  public async loadEnemies(mapData: { levels: any }): Promise<void> {
+  public loadDecorations(mapData: any): void {
+    // Clear existing decorations
+    this.decorationsByLevel.forEach(decs => decs.forEach(d => d.destroy()));
+    this.decorationsByLevel.clear();
+
+    for (const level in mapData.levels) {
+        const levelData = mapData.levels[level];
+        // Note: MapLoader.setActiveLevel provides entities for current level, 
+        // but we need them ALL for level switching.
+        // I'll call a dedicated helper or use a loop if MapLoader has all.
+        // Actually, I just updated MapLoader to return decorations in LoadResult.
+        // However, loadEnemies iterates mapData.levels manually.
+        const result = (this.mapLoader as any).parseEntities(levelData, this.mapLoader.getTileSize());
+        const levelDecorations: Phaser.GameObjects.Sprite[] = [];
+        
+        result.decorations.forEach((data: any) => {
+            // RESOLVE SYMBOL TO REGISTERED ID
+            // symbol might be "tre", but the ID in registry is "tree"
+            const tileDefInMap = mapData.tiles[data.symbol];
+            const tileId = tileDefInMap ? tileDefInMap.id : data.symbol;
+            
+            const registryDef = TileRegistry.getTileDefinition(tileId);
+            if (!registryDef) {
+                console.warn(`[GameScene] Decoration symbol '${data.symbol}' (ID: '${tileId}') not found in TileRegistry. Skipping.`);
+                return;
+            }
+
+            const worldX = data.x;
+            const worldY = data.y;
+            const levelOffset = parseInt(level) * 10000;
+            
+            // Reusing TileRegistry to handle procedural graphics
+            const { sprite } = TileRegistry.createTile(this, tileId, worldX, worldY, {
+                levelOffset: levelOffset,
+                isUnderTile: false
+            });
+            
+            sprite.setDepth(worldY + levelOffset + 10); // Subtle priority over ground tiles
+            
+            // Apply organic variations
+            if (data.scale) sprite.setScale(data.scale);
+            if (data.rotation) sprite.setRotation(data.rotation);
+            
+            // Initial visibility
+            sprite.setVisible(level === this.currentLevel);
+            sprite.setActive(level === this.currentLevel);
+            
+            // Handle collision
+            if (data.isCollidable) {
+                this.physics.add.existing(sprite, true);
+                if (this.mapLoader.getWallsLayer(level)) {
+                    this.mapLoader.getWallsLayer(level)?.add(sprite);
+                }
+            }
+            
+            levelDecorations.push(sprite);
+        });
+        this.decorationsByLevel.set(level, levelDecorations);
+    }
+  }
+
+  public async loadEnemies(mapData: any): Promise<void> {
     this.enemiesByLevel.clear(); // Clear existing map to avoid duplicates
     
     // 1. Load enemies from Map Data (Legacy / Map Editor)
@@ -661,6 +723,7 @@ export default class GameScene extends Phaser.Scene {
 
       const mapData = this.cache.json.get(`${initialMap}_data`);
       await this.loadEnemies(mapData);
+      this.loadDecorations(mapData);
       
       // DEBUG: Verify Enemy State immediately after creation
       this.enemiesByLevel.forEach((enemies, lvl) => {
@@ -2571,6 +2634,15 @@ export default class GameScene extends Phaser.Scene {
     this.updateLevelCollisions();
     this.updatePathfindingGrid();
     
+    // Switch Decorations Visibility
+    this.decorationsByLevel.forEach((decorations, lvl) => {
+        const isVisible = (lvl === level);
+        decorations.forEach(d => {
+            d.setVisible(isVisible);
+            d.setActive(isVisible);
+        });
+    });
+
     // 5. Load/Spawn Items from Persistence (Fresh clean set)
     this.loadPersistentItems();
   }

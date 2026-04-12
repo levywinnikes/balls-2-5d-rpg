@@ -52,6 +52,7 @@ export interface LoadResult {
   playerPos: { x: number; y: number };
   enemies: Array<{
     type: string;
+    level: string;
     x: number;
     y: number;
     health: number;
@@ -59,6 +60,14 @@ export interface LoadResult {
     respawnTime?: number;
   }>;
   items: ItemEntity[];
+  decorations: Array<{
+    symbol: string;
+    x: number;
+    y: number;
+    scale?: number;
+    rotation?: number;
+    isCollidable?: boolean;
+  }>;
   mapWidth: number;
   mapHeight: number;
 }
@@ -140,6 +149,7 @@ export class MapLoader {
       playerPos: entities.playerPos,
       enemies: entities.enemies.map(e => ({...e, level})), // PASS LEVEL TO ENEMY DEF
       items: entities.items,
+      decorations: entities.decorations,
       mapWidth: cachedData.mapWidth,
       mapHeight: cachedData.mapHeight,
     };
@@ -365,11 +375,20 @@ export class MapLoader {
       respawnTime?: number;
     }>;
     items: ItemEntity[];
+    decorations: Array<{
+      symbol: string;
+      x: number;
+      y: number;
+      scale?: number;
+      rotation?: number;
+      isCollidable?: boolean;
+    }>;
   } {
     const result = {
       playerPos: { x: 0, y: 0 },
       enemies: [] as Array<any>,
       items: [] as ItemEntity[],
+      decorations: [] as Array<any>,
     };
     
     const mapData = this.scene.cache.json.get(
@@ -378,7 +397,7 @@ export class MapLoader {
 
     // 1. NEW ARCHITECTURE (Layered Entities Array)
     if (levelData.entities && Array.isArray(levelData.entities)) {
-        levelData.entities.forEach((entity: { x: number, y: number, symbol: string, uuid?: string, contents?: any }) => {
+        levelData.entities.forEach((entity: { x: number, y: number, symbol: string, uuid?: string, contents?: any, scale?: number, rotation?: number, offX?: number, offY?: number }) => {
             const entityDef = mapData.entities[entity.symbol];
             if (!entityDef) return;
             
@@ -410,6 +429,16 @@ export class MapLoader {
                         x: worldX,
                         y: worldY,
                         contents: entity.contents || entityDef.contents
+                    });
+                    break;
+                case "decoration":
+                    result.decorations.push({
+                        symbol: entity.symbol,
+                        x: worldX + (entity.offX || 0) * tileSize,
+                        y: worldY + (entity.offY || 0) * tileSize,
+                        scale: entity.scale,
+                        rotation: entity.rotation,
+                        isCollidable: entityDef.isCollidable ?? true
                     });
                     break;
             }
