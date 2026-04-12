@@ -71,6 +71,7 @@ export interface GameSaveData {
     enchantedRunes?: Array<{runeId: string, count: number}>;
     quests?: any;
     activeBuffs?: any[]; // Save active buffs
+    markers?: any[]; // Save map markers
   };
   deadEnemies: DeadEnemy[];
   activeEnemies: ActiveEnemyState[];
@@ -353,7 +354,8 @@ export class SaveSystem {
               // Or use bracket notation as a hack? Bracket notation is fine for now to avoid context switch loop.
               enchantedRunes: playerState.enchantedRunes,
               quests: QuestManager.getInstance().getSaveData(),
-              activeBuffs: playerState.getBuffsSaveData()
+              activeBuffs: playerState.getBuffsSaveData(),
+              markers: playerState.getMarkers()
             },
             deadEnemies: [],
             activeEnemies: [],
@@ -432,7 +434,8 @@ export class SaveSystem {
             inventory: [{itemId: "wooden_sword", count: 1}],
             persistentItems: [],
             exploredAreas: [],
-            quests: { active: [], completed: [] }
+            quests: { active: [], completed: [] },
+            markers: []
         },
         deadEnemies: [],
         activeEnemies: [],

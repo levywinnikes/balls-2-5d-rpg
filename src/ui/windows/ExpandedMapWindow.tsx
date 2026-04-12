@@ -2,12 +2,14 @@ import React, { useRef, useEffect, useLayoutEffect, useState, useCallback } from
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { usePlayerState } from "../../hooks/usePlayerState";
 import { useUI } from "../../context/UIContext";
-import { ChevronUp, ChevronDown, Plus, Minus, Crosshair } from "lucide-react";
+import { ChevronUp, ChevronDown, Plus, Minus, Crosshair, MapPin, Navigation, Trash2, Activity } from "lucide-react";
 import { WorldMapService } from "../../services/WorldMapService";
+import { NavigationService } from "../../services/NavigationService";
 
 export const ExpandedMapContent: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const windowRef = useRef<HTMLDivElement>(null);
   const [mapData, setMapData] = useState<any>(WorldMapService.getMapData());
   const playerState = PlayerState.getInstance();
   const { s, scale } = useUI();
@@ -23,6 +25,9 @@ export const ExpandedMapContent: React.FC = () => {
   const [fadeProgress, setFadeProgress] = useState<number>(1);
   const prevLevelRef = useRef<string | null>(null);
   const fadeStartRef = useRef<number>(0);
+
+  // --- CONTEXT MENU STATE ---
+  const [menu, setMenu] = useState<{ x: number, y: number, gridX: number, gridY: number } | null>(null);
 
   // --- AUTO-FOLLOW DE ANDAR ---
   const currentPlayerLevel = usePlayerState(
@@ -48,7 +53,16 @@ export const ExpandedMapContent: React.FC = () => {
         WorldMapService.setMapData(data);
         setMapData(data);
         setViewLevel(playerState.getCurrentLevel());
+        NavigationService.init(data); // Init GPS
       });
+  }, [playerState]);
+
+  // --- DIAGNOSTICS STATE ---
+  const [navStats, setNavStats] = useState<any>(null);
+  useEffect(() => {
+    const handleStats = (stats: any) => setNavStats(stats);
+    playerState.on("navigationDiagnostics", handleStats);
+    return () => { playerState.off("navigationDiagnostics", handleStats); };
   }, [playerState]);
 
   const handleLevelChange = (newLevel: string) => {
@@ -106,26 +120,114 @@ export const ExpandedMapContent: React.FC = () => {
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!containerRef.current) return;
     setIsDragging(true);
-    setDragStart({
-      x: e.pageX - containerRef.current.offsetLeft,
-      y: e.pageY - containerRef.current.offsetTop,
-      sL: containerRef.current.scrollLeft,
-      sT: containerRef.current.scrollTop
-    });
+    // Normalize mouse start position by UI scale
+    const x = (e.pageX - containerRef.current.offsetLeft) / scale;
+    const y = (e.pageY - containerRef.current.offsetTop) / scale;
+    setDragStart({ x, y, sL: containerRef.current.scrollLeft, sT: containerRef.current.scrollTop });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging || !containerRef.current) return;
     e.preventDefault();
-    const x = e.pageX - containerRef.current.offsetLeft;
-    const y = e.pageY - containerRef.current.offsetTop;
-        const walkX = (x - dragStart.x) * 1.5;
-        const walkY = (y - dragStart.y) * 1.5;
-        containerRef.current.scrollLeft = dragStart.sL - walkX;
-        containerRef.current.scrollTop = dragStart.sT - walkY;
-    };
+    
+    // Normalize current mouse position by UI scale
+    const x = (e.pageX - containerRef.current.offsetLeft) / scale;
+    const y = (e.pageY - containerRef.current.offsetTop) / scale;
+    
+    // The difference (walk) is now in "internal pixels"
+    const walkX = (x - dragStart.x) * 1.5;
+    const walkY = (y - dragStart.y) * 1.5;
+    
+    containerRef.current.scrollLeft = dragStart.sL - walkX;
+    containerRef.current.scrollTop = dragStart.sT - walkY;
+  };
 
     const handleMouseUp = () => setIsDragging(false);
+
+    // --- CONTEXT MENU (RIGHT CLICK) ---
+    const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+
+    const handleContextMenu = (e: React.MouseEvent) => {
+        e.preventDefault();
+        if (!containerRef.current || !windowRef.current) return;
+
+        const container = containerRef.current;
+        const windowRect = windowRef.current.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        
+        // --- SCALE NORMALIZATION ---
+        // clientX/Y are viewport pixels. we MUST divide by UI scale to get internal CSS pixels
+        const localX = (e.clientX - containerRect.left) / scale;
+        const localY = (e.clientY - containerRect.top) / scale;
+        
+        const menuX = (e.clientX - windowRect.left) / scale;
+        const menuY = (e.clientY - windowRect.top) / scale;
+
+        // Exact pixel on the potentially zoomed map
+        const worldX = (container.scrollLeft + localX) / zoom;
+        const worldY = (container.scrollTop + localY) / zoom;
+        
+        const gridX = Math.floor(worldX / 4);
+        const gridY = Math.floor(worldY / 4);
+
+        console.log(`[Map Sync] Mouse:(${e.clientX},${e.clientY}) UIScale:${scale.toFixed(2)} Local:(${menuX.toFixed(1)},${menuY.toFixed(1)}) -> Grid:(${gridX},${gridY})`);
+
+        // Find if we clicked on a marker - pick radius 2.5
+        const marker = playerState.getMarkers().find(m => {
+            const mx = Math.floor(m.x / 32);
+            const my = Math.floor(m.y / 32);
+            return m.level === viewLevel && Math.abs(mx - gridX) <= 2 && Math.abs(my - gridY) <= 2;
+        });
+
+        setSelectedMarkerId(marker ? marker.id : null);
+        setMenu({ x: menuX, y: menuY, gridX, gridY });
+    };
+
+    const handleAddMarker = () => {
+        if (!menu) return;
+        const id = `marker_${Date.now()}`;
+        playerState.addMarker({
+            id,
+            x: menu.gridX * (mapData?.tileSize || 32),
+            y: menu.gridY * (mapData?.tileSize || 32),
+            level: viewLevel,
+            label: `Marker ${playerState.getMarkers().length + 1}`,
+            color: "#ff0000"
+        });
+        setMenu(null);
+    };
+
+    const handleRenameMarker = () => {
+        if (!selectedMarkerId) return;
+        const marker = playerState.getMarkers().find(m => m.id === selectedMarkerId);
+        if (!marker) return;
+
+        const newName = window.prompt("Enter new marker name:", marker.label);
+        if (newName !== null && newName.trim() !== "") {
+            playerState.updateMarkerLabel(selectedMarkerId, newName);
+        }
+        setMenu(null);
+    };
+
+    const handleSetDestination = () => {
+        if (!menu) return;
+        const pPos = playerState.getPosition();
+        const destGrid = { x: menu.gridX, y: menu.gridY, level: viewLevel };
+        console.log(`[Navigation] Requesting path from`, pPos, `to grid`, destGrid);
+        NavigationService.findPath(pPos, { x: menu.gridX * 32, y: menu.gridY * 32, level: viewLevel });
+        setMenu(null);
+    };
+
+    const handleClearPath = () => {
+        playerState.setActiveRoute(null);
+        setNavStats(null);
+        setMenu(null);
+    };
+
+    const handleRemoveMarker = (id: string) => {
+        playerState.removeMarker(id);
+        setMenu(null);
+    };
 
     // --- MOUSE WHEEL ZOOM ---
     useEffect(() => {
@@ -138,14 +240,14 @@ export const ExpandedMapContent: React.FC = () => {
             if (!container) return;
 
             const rect = container.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
+            const mouseX = (e.clientX - rect.left) / scale;
+            const mouseY = (e.clientY - rect.top) / scale;
 
             // Calculate the map coordinate (world position) currently under the mouse
             const contentX = (container.scrollLeft + mouseX) / zoom;
             const contentY = (container.scrollTop + mouseY) / zoom;
 
-            const zoomDelta = e.deltaY < 0 ? 0.4 : -0.4;
+            const zoomDelta = e.deltaY < 0 ? 0.2 : -0.2; // Decreased sensitivity
             const nextZoom = Math.min(Math.max(zoom + zoomDelta, 0.5), 4);
 
         if (nextZoom !== zoom) {
@@ -214,12 +316,12 @@ export const ExpandedMapContent: React.FC = () => {
         // Draw Previous Level (Fading Out)
         if (prevBuffer && alpha < 1) {
             ctx.globalAlpha = 1 - alpha;
-            ctx.drawImage(prevBuffer, 0, 0);
+            ctx.drawImage(prevBuffer, 0, 0, canvas.width, canvas.height);
         }
 
         // Draw Current Level (Fading In)
         ctx.globalAlpha = alpha;
-        ctx.drawImage(currentBuffer, 0, 0);
+        ctx.drawImage(currentBuffer, 0, 0, canvas.width, canvas.height);
         ctx.globalAlpha = 1.0;
       }
 
@@ -236,6 +338,76 @@ export const ExpandedMapContent: React.FC = () => {
         
         ctx.fillStyle = "#F00";
         ctx.fillRect(drawX, drawY, 1, 1);
+      }
+
+      // --- DRAW MARKERS ---
+      playerState.getMarkers().forEach(m => {
+          if (m.level === viewLevel) {
+              const mx = Math.floor(m.x / 32);
+              const my = Math.floor(m.y / 32);
+              
+              // Pulsing effect
+              const pulse = Math.sin(time / 200) * 0.5 + 0.5;
+              ctx.fillStyle = m.color || "#ff0000";
+              ctx.beginPath();
+              ctx.arc(mx + 0.5, my + 0.5, 1.5 + pulse, 0, Math.PI * 2);
+              ctx.fill();
+              
+              ctx.strokeStyle = "white";
+              ctx.lineWidth = 0.5;
+              ctx.stroke();
+
+              // --- DRAW LABEL ---
+              ctx.fillStyle = "white";
+              ctx.font = "bold 8px Inter, sans-serif";
+              ctx.textAlign = "left";
+              // Add a subtle shadow for readability
+              ctx.shadowColor = "rgba(0,0,0,0.8)";
+              ctx.shadowBlur = 2;
+              ctx.fillText(m.label, mx + 4, my + 1);
+              ctx.shadowBlur = 0; // Reset after text
+          }
+      });
+
+      // --- DRAW GPS ROUTE ---
+      const route = playerState.getActiveRoute();
+      if (route && route.length > 0) {
+          ctx.beginPath();
+          ctx.strokeStyle = "#ff3b3b";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 2]); // Dashed GPS line
+          
+          let first = true;
+          route.forEach((p: any) => {
+              if (p.level === viewLevel) {
+                  // Multiply by 4 because the canvas and internal buffer are 4x the grid size
+                  const dx = (parseInt(p.x) * 4) + 2; 
+                  const dy = (parseInt(p.y) * 4) + 2;
+
+                  if (first) {
+                      ctx.moveTo(dx, dy);
+                      first = false;
+                  } else {
+                      ctx.lineTo(dx, dy);
+                  }
+              } else {
+                  first = true; // Break line between floors
+              }
+          });
+          ctx.stroke();
+          ctx.setLineDash([]); 
+      }
+
+      // --- DRAW CLICK TARGET (CROSSHAIR FOR DEBUG) ---
+      if (menu) {
+          const cx = menu.gridX * 4 + 2;
+          const cy = menu.gridY * 4 + 2;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(cx - 5, cy); ctx.lineTo(cx + 5, cy);
+          ctx.moveTo(cx, cy - 5); ctx.lineTo(cx, cy + 5);
+          ctx.stroke();
       }
 
       animationId = requestAnimationFrame(render);
@@ -258,7 +430,7 @@ export const ExpandedMapContent: React.FC = () => {
   };
   
   return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div ref={windowRef} style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
         <div
           style={{
             display: "flex",
@@ -306,14 +478,21 @@ export const ExpandedMapContent: React.FC = () => {
             </button>
           </div>
           <div style={{ flex: 1 }} />
-          <button
-            onClick={handleCenter}
-            style={{ ...btnStyle, color: "#fbbf24" }}
-            title="Find Me"
-          >
-            <Crosshair size={14 * scale} /> Center Player
-          </button>
-        </div>
+            <button
+              onClick={handleCenter}
+              style={{ ...btnStyle, color: "#fbbf24" }}
+              title="Find Me"
+            >
+              <Crosshair size={14 * scale} /> Center Player
+            </button>
+            <button
+              onClick={() => playerState.toggleDebugGPS()}
+              style={{ ...btnStyle, color: playerState.isDebugGPSEnabled() ? "#10b981" : "#666" }}
+              title="Toggle GPS Diagnostics"
+            >
+              <Activity size={14 * scale} />
+            </button>
+          </div>
         <div
           ref={containerRef}
           className="custom-scrollbar"
@@ -321,6 +500,8 @@ export const ExpandedMapContent: React.FC = () => {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
+          onContextMenu={handleContextMenu}
+          onClick={() => setMenu(null)}
           style={{
             flex: 1,
             overflow: "hidden", // Hide actual scrollbars as we pan manually
@@ -359,6 +540,94 @@ export const ExpandedMapContent: React.FC = () => {
             />
           </div>
         </div>
+        
+        {/* --- CONTEXT MENU UI --- */}
+        {menu && (
+            <div 
+                style={{
+                    position: "absolute",
+                    top: menu!.y,
+                    left: menu!.x,
+                    background: "rgba(30, 30, 30, 0.95)",
+                    border: "1px solid #555",
+                    borderRadius: "6px",
+                    padding: "4px",
+                    zIndex: 10000,
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)",
+                    minWidth: "150px"
+                }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div 
+                    onClick={handleSetDestination}
+                    style={{ padding: "8px 12px", cursor: "pointer", color: "#fbbf24", display: "flex", alignItems: "center", gap: "8px", borderBottom: "1px solid #444" }}
+                    className="map-menu-item"
+                >
+                    <Crosshair size={14} /> Set Destination
+                </div>
+                <div 
+                    onClick={handleAddMarker}
+                    style={{ padding: "8px 12px", cursor: "pointer", color: "#ddd", display: "flex", alignItems: "center", gap: "8px" }}
+                    className="map-menu-item"
+                >
+                    <Plus size={14} /> Add Marker
+                </div>
+                {selectedMarkerId && (
+                    <>
+                        <div 
+                            onClick={handleRenameMarker}
+                            style={{ padding: "8px 12px", cursor: "pointer", color: "#fbbf24", display: "flex", alignItems: "center", gap: "8px", borderTop: "1px solid #444" }}
+                        >
+                            <MapPin size={14} /> Rename Marker
+                        </div>
+                        <div 
+                            onClick={() => handleRemoveMarker(selectedMarkerId as string)}
+                            style={{ padding: "8px 12px", cursor: "pointer", color: "#f87171", display: "flex", alignItems: "center", gap: "8px", borderTop: "1px solid #444" }}
+                        >
+                            <Trash2 size={14} /> Remove Marker
+                        </div>
+                    </>
+                )}
+                {playerState.getActiveRoute() && (
+                    <div 
+                        onClick={handleClearPath}
+                        style={{ padding: "8px 12px", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center", gap: "8px", borderTop: "1px solid #444" }}
+                        className="map-menu-item"
+                    >
+                        <Trash2 size={14} /> Clear Path
+                    </div>
+                )}
+            </div>
+        )}
+
+        {/* --- GPS DIAGNOSTICS OVERLAY --- */}
+        {playerState.isDebugGPSEnabled() && navStats && (
+            <div 
+                style={{
+                    position: "absolute",
+                    bottom: "16px",
+                    left: "16px",
+                    background: "rgba(0,0,0,0.8)",
+                    border: "1px solid #10b981",
+                    color: "#10b981",
+                    padding: "8px 12px",
+                    borderRadius: "4px",
+                    fontSize: "11px",
+                    fontFamily: "monospace",
+                    pointerEvents: "none",
+                    zIndex: 1000,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "2px"
+                }}
+            >
+                <div>GPS DIAGNOSTICS</div>
+                <div style={{ opacity: 0.7 }}>-------------------</div>
+                <div>TIME: {navStats.time.toFixed(2)}ms</div>
+                <div>NODES: {navStats.nodes}</div>
+                <div>PATH: {navStats.length} steps</div>
+            </div>
+        )}
       </div>
   );
 };

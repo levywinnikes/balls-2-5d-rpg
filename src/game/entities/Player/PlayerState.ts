@@ -67,6 +67,21 @@ export interface SkillState {
     experience: number;
 }
 
+export interface MapMarker {
+    id: string;
+    x: number;
+    y: number;
+    level: string;
+    label: string;
+    color: string;
+}
+
+export interface PathPoint {
+    x: number;
+    y: number;
+    level: string;
+}
+
 export class PlayerState extends EventEmitter {
   private static instance: PlayerState;
   
@@ -158,6 +173,56 @@ export class PlayerState extends EventEmitter {
 
   public setWindowConfig(id: string, config: { x: number; y: number; width: number; height: number; minimized?: boolean }) {
       this.windowConfigs[id] = { ...config };
+  }
+
+  // --- GPS & MARKERS ---
+  private _markers: MapMarker[] = [];
+  private _activeRoute: PathPoint[] | null = null;
+  private _debugGPS: boolean = false;
+
+  public getMarkers(): MapMarker[] {
+      return this._markers;
+  }
+
+  public addMarker(marker: MapMarker) {
+      // Evitar duplicatas exatas na mesma posição e nível
+      const exists = this._markers.some(m => Math.floor(m.x/32) === Math.floor(marker.x/32) && Math.floor(m.y/32) === Math.floor(marker.y/32) && m.level === marker.level);
+      if (exists) return;
+
+      this._markers.push(marker);
+      this.emit("markersChanged", this._markers);
+  }
+
+  public removeMarker(id: string) {
+      this._markers = this._markers.filter(m => m.id !== id);
+      this.emit("markersChanged", this._markers);
+  }
+
+  public updateMarkerLabel(id: string, newLabel: string) {
+      const marker = this._markers.find(m => m.id === id);
+      if (marker) {
+          marker.label = newLabel;
+          this.emit("markersChanged", this._markers);
+      }
+  }
+
+  public getActiveRoute(): PathPoint[] | null {
+      return this._activeRoute;
+  }
+
+  public setActiveRoute(path: PathPoint[] | null) {
+      this._activeRoute = path;
+      this.emit("routeChanged", this._activeRoute);
+  }
+
+  public isDebugGPSEnabled(): boolean {
+      return this._debugGPS;
+  }
+
+  public toggleDebugGPS(): boolean {
+      this._debugGPS = !this._debugGPS;
+      this.emit("debugGPSChanged", this._debugGPS);
+      return this._debugGPS;
   }
 
   /**
@@ -2416,8 +2481,6 @@ export class PlayerState extends EventEmitter {
     if (data.level !== undefined) {
         this.level = data.level;
         // Sanitization: Recalculate MaxHealth based on Level to fix any save corruption
-        this.level = data.level;
-        // Sanitization: Recalculate MaxHealth based on Level to fix any save corruption
         const baseHealth = 100;
         // Adjusted to 5 HP per level (User Request)
         this.maxHealth = baseHealth + (this.level - 1) * 5;
@@ -2429,7 +2492,6 @@ export class PlayerState extends EventEmitter {
     }
     // if (data.maxHealth !== undefined) this.maxHealth = data.maxHealth; // Deprecated: Always calculated from Level
     if (data.experience !== undefined) this.experience = data.experience;
-    if (data.attackDamage !== undefined) this.attackDamage = data.attackDamage;
     if (data.attackDamage !== undefined) this.attackDamage = data.attackDamage;
 
     // --- MIGRATION & LOAD ---
@@ -2511,6 +2573,12 @@ export class PlayerState extends EventEmitter {
                 this.addBuff(buff.id, buff.attr, buff.value, remaining, buff.isPercent);
             }
         });
+    }
+
+    // Restore Map Markers
+    if (data.markers) {
+        this._markers = data.markers;
+        this.emit("markersChanged", this._markers);
     }
 
     this.equippedWeaponId = data.equippedWeaponId || null; 
@@ -2705,6 +2773,11 @@ export class PlayerState extends EventEmitter {
     if (data.equippedAmmoId !== undefined) {
         this.equippedAmmoId = data.equippedAmmoId;
         this.equippedAmmoItem = data.equippedAmmoItem || (data.equippedAmmoId ? { itemId: data.equippedAmmoId, count: 1, uid: "equipped_ammo" } : null);
+    }
+
+    if (data.markers) {
+        this._markers = data.markers;
+        this.emit("markersChanged", this._markers);
     }
     
     if (data.windowConfigs) {
