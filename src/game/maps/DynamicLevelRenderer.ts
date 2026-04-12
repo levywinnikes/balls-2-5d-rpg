@@ -1000,17 +1000,30 @@ export class DynamicLevelRenderer {
       });
   }
 
-  public getDNAAnalysis(): any {
-      const breakdown: Record<string, number> = {};
+  public getDNAAnalysis(): { culprits: [string, number][], poolSize: number, types: Record<string, number> } {
+      const textureBreakdown: Record<string, number> = {};
+      const typeBreakdown: Record<string, number> = {};
+      
       this.scene.children.each((child: any) => {
-          const type = child.constructor.name;
+          // Object Type Breakdown
+          const type = child.constructor.name || child.type || "Unknown";
+          typeBreakdown[type] = (typeBreakdown[type] || 0) + 1;
+
+          // Texture Breakdown (Original Cullprits)
           const key = child.texture?.key || "no-texture";
           const label = `${type} (${key})`;
-          breakdown[label] = (breakdown[label] || 0) + 1;
+          textureBreakdown[label] = (textureBreakdown[label] || 0) + 1;
       });
-      return Object.entries(breakdown)
+
+      const culprits = Object.entries(textureBreakdown)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5);
+
+      return {
+          culprits,
+          poolSize: this.tilePool.getRawPool().length,
+          types: typeBreakdown
+      };
   }
 
   public purgeOrphans(): void {

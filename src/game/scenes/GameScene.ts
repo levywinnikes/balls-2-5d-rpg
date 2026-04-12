@@ -128,6 +128,8 @@ export default class GameScene extends Phaser.Scene {
       activeEnemies: 0,
       renderedTiles: 0,
       totalObjects: 0,
+      poolSize: 0,
+      types: {} as Record<string, number>,
       culprits: [] as [string, number][]
   };
 
@@ -2077,8 +2079,11 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.perf.totalUpdateTime = performance.now() - this.perf.startTime;
-    this.perf.totalObjects = this.children.length; // Count all sprites/graphics in scene
-    this.perf.culprits = this.dynamicLevelRenderer.getDNAAnalysis();
+    const dna = this.dynamicLevelRenderer.getDNAAnalysis();
+    this.perf.culprits = dna.culprits;
+    this.perf.types = dna.types;
+    this.perf.poolSize = dna.poolSize;
+    this.perf.totalObjects = this.children.length; 
     PlayerState.getInstance().updatePerfMetrics(this.perf);
   }
 

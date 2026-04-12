@@ -364,6 +364,8 @@ export class PlayerState extends EventEmitter {
       activeEnemies: 0,
       renderedTiles: 0,
       totalObjects: 0,
+      poolSize: 0,
+      types: {} as Record<string, number>,
       culprits: [] as [string, number][]
   };
 

@@ -45,7 +45,23 @@ export class GenericWallGraphic {
       this.createProceduralTexture(scene);
     }
 
-    const sprite = scene.add.sprite(x, y, this.textureKey);
+    let sprite: Phaser.GameObjects.Sprite;
+    // RECLAIM logic: Check pool first
+    if (pool && pool.length > 0) {
+        sprite = pool[0];
+        sprite.setTexture(this.textureKey);
+        sprite.setPosition(x, y);
+        sprite.setActive(true);
+        sprite.setVisible(true);
+        sprite.setAlpha(1);
+        sprite.setTint(0xffffff);
+        if (sprite.body) {
+            (sprite.body as Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody).enable = true;
+        }
+    } else {
+        sprite = scene.add.sprite(x, y, this.textureKey);
+    }
+    
     sprite.setDisplaySize(this.targetSize.width, this.targetSize.height);
     sprite.setOrigin(this.origin.x, this.origin.y);
     sprite.setDepth(this.baseDepth);
@@ -55,6 +71,7 @@ export class GenericWallGraphic {
       const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
       body.setSize(this.collisionSize.width, this.collisionSize.height);
       body.setOffset(this.collisionOffset.x, this.collisionOffset.y);
+      body.enable = true;
     }
 
     return sprite;

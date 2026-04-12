@@ -22,6 +22,8 @@ export const PerfMonitor: React.FC = () => {
             s.activeEnemies = data.activeEnemies; // Don't smooth counts
             s.renderedTiles = data.renderedTiles;
             s.totalObjects = data.totalObjects;
+            s.poolSize = data.poolSize;
+            s.types = data.types;
             s.culprits = data.culprits;
             
             setMetrics({ ...s });
@@ -119,6 +121,10 @@ export const PerfMonitor: React.FC = () => {
                         <span className="text-gray-400">Tiles Rendered</span>
                         <span className="text-white font-bold">{metrics.renderedTiles}</span>
                     </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-400">Sprites in Pool</span>
+                        <span className="text-blue-400 font-bold">{metrics.poolSize || 0}</span>
+                    </div>
                     <div className="flex justify-between border-t border-gray-800/50 mt-1 pt-1">
                         <span className="text-gray-400">Total Scene Objects</span>
                         <span className={`font-bold ${metrics.totalObjects > 5000 ? 'text-orange-400' : 'text-emerald-400'}`}>
@@ -154,9 +160,18 @@ export const PerfMonitor: React.FC = () => {
                         ))}
                     </div>
 
-                    {/* DNA ANALYSIS */}
+                    {/* DNA ANALYSIS & BREAKDOWN */}
                     <div className="mt-4 pt-2 border-t border-blue-500/20">
-                        <div className="text-[9px] text-blue-300 uppercase tracking-tighter mb-1 font-bold">DNA Analysis (Top 5)</div>
+                        <div className="text-[9px] text-blue-300 uppercase tracking-tighter mb-1 font-bold">Object Breakdown</div>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-[1px] mb-2">
+                            {Object.entries(metrics.types || {}).map(([type, count]: [string, any]) => (
+                                <div key={type} className="flex justify-between text-[8px] font-mono">
+                                    <span className="text-gray-500">{type}</span>
+                                    <span className="text-blue-400/80">{count}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="text-[9px] text-blue-300 uppercase tracking-tighter mb-1 font-bold">Top Textures</div>
                         <div className="space-y-[2px]">
                             {metrics.culprits?.map(([name, count]: [string, number]) => (
                                 <div key={name} className="flex justify-between text-[8px] font-mono">
