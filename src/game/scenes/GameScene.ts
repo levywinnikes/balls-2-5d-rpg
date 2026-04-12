@@ -694,6 +694,11 @@ export default class GameScene extends Phaser.Scene {
       this.enemySelectionIndicator = new EnemySelectionIndicator(this);
 
       const mapData = this.cache.json.get(`${initialMap}_data`);
+      
+      // PRE-RENDER WORLD MAP (CPU-intensive task during loading screen)
+      const { WorldMapService } = require("../../services/WorldMapService");
+      WorldMapService.preRenderAll(mapData);
+
       await this.loadEnemies(mapData);
       this.loadDecorations(mapData);
 
