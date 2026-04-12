@@ -21,9 +21,9 @@ export class DynamicLevelRenderer {
   private lastPlayerX: number = -999;
   private lastPlayerY: number = -999;
   private lastRenderLevel: string = "";
-  private updateThreshold: number = 16;   // Only update map every 16 pixels
-  private lastUpdateTime: number = 0;      // New: Time-based throttle
-  private updateThrottleMs: number = 1000; // New: 1 second limit
+  private updateThreshold: number = 4;    // Only update map every 4 pixels (Super Smooth)
+  private lastUpdateTime: number = 0;      // Time-based throttle
+  private updateThrottleMs: number = 60;   // 60ms limit (Fast refresh)
 
   constructor(scene: Phaser.Scene, tileSize: number, currentLevel: string) {
     this.scene = scene;
