@@ -1,29 +1,11 @@
 import Phaser from "phaser";
+import { BaseTileGraphic } from "./BaseTileGraphic";
 
-export class DungeonFloorGraphic {
-  static readonly TEXTURE_KEY = "dungeon-floor-texture";
-  private static readonly SIZE = { width: 32, height: 32 };
+export class DungeonFloorGraphic extends BaseTileGraphic {
+  public static readonly TEXTURE_KEY = "dungeon-floor-texture";
+  public readonly TEXTURE_KEY = DungeonFloorGraphic.TEXTURE_KEY;
 
-  static preload(scene: Phaser.Scene): void {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      this.createTexture(scene);
-    }
-  }
-
-  static create(
-    scene: Phaser.Scene,
-    x: number,
-    y: number
-  ): Phaser.GameObjects.Sprite {
-    if (!scene.textures.exists(this.TEXTURE_KEY)) {
-      this.createTexture(scene);
-    }
-    return scene.add.sprite(x, y, this.TEXTURE_KEY);
-  }
-
-  private static createTexture(scene: Phaser.Scene): void {
-    const graphics = scene.make.graphics();
-    
+  protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
     // Base Stone Color (Deep Slate)
     graphics.fillStyle(0x334155, 1);
     graphics.fillRect(0, 0, 32, 32);
@@ -54,8 +36,5 @@ export class DungeonFloorGraphic {
         const ry = Math.random() * 32;
         graphics.strokeRect(rx, ry, 2, 1);
     }
-
-    graphics.generateTexture(this.TEXTURE_KEY, this.SIZE.width, this.SIZE.height);
-    graphics.destroy();
   }
 }

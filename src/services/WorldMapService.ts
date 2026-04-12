@@ -32,7 +32,7 @@ export class WorldMapService {
     console.log(`WorldMapService: Pre-render complete in ${Math.round(end - start)}ms`);
   }
 
-  private static renderLevelToBuffer(viewLevel: string, mapData: any): void {
+  public static renderLevelToBuffer(viewLevel: string, mapData: any): void {
     if (this.bufferCache[viewLevel]) return;
 
     const levelData = mapData.levels[viewLevel];

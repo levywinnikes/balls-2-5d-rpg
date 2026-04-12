@@ -30,7 +30,7 @@ import { IceGraphic } from "./IceGraphic";
 import { FrozenTreeGraphic } from "./FrozenTreeGraphic";
 import { CloudGraphic } from "./CloudGraphic";
 import { BasaltGraphic } from "./BasaltGraphic";
-import { BedGraphic } from "./house/BedGraphic";
+import { BedHeadGraphic, BedBodyGraphic } from "./house/BedGraphic";
 import { PavementGraphic } from "./floor/PavementGraphic";
 import { ProceduralTransition, TransitionDirection } from "./ProceduralTransition";
 import { DungeonFloorGraphic } from "./DungeonFloorGraphic";
@@ -383,10 +383,7 @@ export class TileRegistry {
       },
       {
         id: "bed_head",
-        graphic: {
-          preload: (scene: Phaser.Scene) => BedGraphic.preload(scene),
-          create: (scene: Phaser.Scene, x: number, y: number) => BedGraphic.create(scene, x, y, "head")
-        },
+        graphic: BedHeadGraphic,
         isCollidable: true,
         blocksRanged: false,
         baseDepth: 1,
@@ -394,10 +391,7 @@ export class TileRegistry {
       },
       {
         id: "bed_foot",
-        graphic: {
-          preload: (scene: Phaser.Scene) => BedGraphic.preload(scene),
-          create: (scene: Phaser.Scene, x: number, y: number) => BedGraphic.create(scene, x, y, "body")
-        },
+        graphic: BedBodyGraphic,
         isCollidable: true,
         blocksRanged: false,
         baseDepth: 1,

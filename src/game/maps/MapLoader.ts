@@ -322,7 +322,7 @@ export class MapLoader {
       return; 
   }
 
-  private async loadLevel(
+  public async loadLevel(
     mapName: string,
     level: string,
     data: MultiLevelMapData

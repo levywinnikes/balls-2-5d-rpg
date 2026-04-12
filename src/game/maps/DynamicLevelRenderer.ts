@@ -28,8 +28,8 @@ export class DynamicLevelRenderer {
   constructor(scene: Phaser.Scene, tileSize: number, currentLevel: string) {
     this.scene = scene;
     this.tileSize = tileSize;
-    this.currentLevel = currentLevel;
-    this.tilePool = new TilePool(scene, 2000); // 2000 sprites pool
+    this.currentLevel = String(currentLevel);
+    this.tilePool = new TilePool(scene, 8000); // 8000 sprites pool (Support multi-level density)
 
     this.debugGraphics = scene.add.graphics();
     this.debugGraphics.setDepth(200000);
@@ -229,9 +229,10 @@ export class DynamicLevelRenderer {
       console.warn("Map data not found");
       return;
     }
-    const currentLevel = this.scene.registry.get("currentLevel");
+    const currentLevelValue = this.scene.registry.get("currentLevel");
+    const currentLevel = currentLevelValue !== undefined ? String(currentLevelValue) : "0";
     
-    // THROTTLING CHECK: 1 second limit OR level change OR distance
+    // THROTTLING CHECK: level change OR time/distance
     const timeSinceLastUpdate = Date.now() - this.lastUpdateTime;
     const distMoved = Phaser.Math.Distance.Between(playerX, playerY, this.lastPlayerX, this.lastPlayerY);
     
@@ -251,9 +252,11 @@ export class DynamicLevelRenderer {
     
     // Level change handling
     if (currentLevel !== this.currentLevel) {
+      console.log(`[Renderer] Level Switch: ${this.currentLevel} -> ${currentLevel}. Purging old tiles.`);
       this.currentLevel = currentLevel;
       this.updateCollisionForCurrentLevel();
       this.clearLazyObjects(); // Clear lazy rendering caches on level switch
+      // CRITICAL: When level switches, we want a clean slate for the new level's viewport
     }
 
     const currentLevelData = mapData.levels[this.currentLevel];
@@ -531,12 +534,16 @@ export class DynamicLevelRenderer {
   ): void {
     const currentLevelNum = parseInt(this.currentLevel);
     let levelToCheck = currentLevelNum - 1;
-    while (levelToCheck >= 0 && mapData.levels[levelToCheck.toString()]) {
+    
+    // Check floors below current (Limit to 3 levels deep for performance)
+    let depthCount = 0;
+    while (mapData.levels[levelToCheck.toString()] && depthCount < 3) {
       const levelData = mapData.levels[levelToCheck.toString()];
       const symbol = levelData.map[y]?.[x];
 
       if (!symbol || symbol === "...") {
         levelToCheck--;
+        depthCount++;
         continue;
       }
       const tileDef = this.getTileDefinition(
@@ -613,36 +620,6 @@ export class DynamicLevelRenderer {
         tilesToKeep.push(underTileKey);
       }
       break;
-    }
-    if (levelToCheck < 0) {
-      const worldX = x * this.tileSize + this.tileSize / 2;
-      const worldY = y * this.tileSize + this.tileSize / 2;
-      const levelOffset = this.getDepthForLevel(0, currentLevelNum);
-      const tileKey = `0_${x}_${y}_fallback`;
-      
-      let level0Tiles = this.renderedTiles.get("0");
-      if(!level0Tiles) {
-           level0Tiles = new Map();
-           this.renderedTiles.set("0", level0Tiles);
-      }
-
-      if (!level0Tiles.has(tileKey)) {
-        const reusable = this.tilePool.get() || undefined;
-        const { sprite, additionalSprites } = TileRegistry.createTile(
-          this.scene,
-          "water",
-          worldX,
-          worldY,
-          { levelOffset, isUnderTile: true, reusableSprite: reusable }
-        );
-        sprite.setTint(0x666666);
-        sprite.setAlpha(0.8);
-        sprite.setName(tileKey);
-        sprite.setVisible(!PlayerState.getInstance().getDiagnosticSettings().hideTiles);
-        sprite.setActive(true);
-        level0Tiles.set(tileKey, [sprite, ...additionalSprites]);
-      }
-      tilesToKeep.push(tileKey);
     }
   }
 
@@ -740,11 +717,18 @@ export class DynamicLevelRenderer {
 
   private cleanupTiles(tilesToKeep: string[]): void {
     const keepSet = new Set(tilesToKeep);
+    const mapLoader = (this.scene as any).mapLoader;
+
     this.renderedTiles.forEach((levelTiles, level) => {
       const keysToRemove: string[] = [];
       levelTiles.forEach((sprites, key) => {
         if (!keepSet.has(key)) {
-          sprites.forEach(sprite => this.tilePool.release(sprite));
+          // IMPORTANT: Remove from physics group to prevent internal leak/accumulation
+          const wallsLayer = mapLoader?.getWallsLayer?.(level);
+          sprites.forEach(sprite => {
+              if (wallsLayer) wallsLayer.remove(sprite);
+              this.tilePool.release(sprite);
+          });
           keysToRemove.push(key);
         }
       });
@@ -954,7 +938,12 @@ export class DynamicLevelRenderer {
 
       this.renderedDecorations.forEach((sprites, key) => {
           if (!keysToKeep.has(key)) {
-              sprites.forEach(s => this.tilePool.release(s));
+              const mapLoader = (this.scene as any).mapLoader;
+              const wallsLayer = mapLoader?.getWallsLayer?.(this.currentLevel);
+              sprites.forEach(s => {
+                  if (wallsLayer) wallsLayer.remove(s);
+                  this.tilePool.release(s);
+              });
               this.renderedDecorations.delete(key);
           }
       });

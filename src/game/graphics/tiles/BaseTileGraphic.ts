@@ -1,5 +1,12 @@
 import Phaser from "phaser";
 
+/**
+ * ⚠️ MANDATORY TILE CONTRACT ⚠️
+ * All tiles MUST inherit from BaseTileGraphic to ensure:
+ * 1. Texture singleton across the game.
+ * 2. REUSE: All tiles must check the provided 'pool' argument before adding new sprites.
+ * 3. CONSISTENCY: Single-sprite graphics only (use the standard return type).
+ */
 export abstract class BaseTileGraphic {
   protected static SIZE = { width: 32, height: 32 };
   

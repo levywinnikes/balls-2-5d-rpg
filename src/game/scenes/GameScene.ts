@@ -133,6 +133,8 @@ export default class GameScene extends Phaser.Scene {
       culprits: [] as [string, number][]
   };
 
+  private processedData: any = null;
+
   constructor() {
     super({ key: "GameScene" });
   }
@@ -151,6 +153,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   init(data: any) {
+    this.processedData = data.processedData || null;
     this.isTransitioning = false;
     this.enemiesByLevel.clear(); // FIX: Clear stale enemies from previous run
     
@@ -216,6 +219,10 @@ export default class GameScene extends Phaser.Scene {
 
   // --- BUSCA GLOBAL DE SPAWN ---
   public getSpawnCoordinate(): { x: number; y: number; level: string } {
+    if (this.processedData?.spawnInfo) {
+        return this.processedData.spawnInfo;
+    }
+
     const mapName = this.registry.get("currentMap") || "newmap";
     const mapData = this.cache.json.get(`${mapName}_data`) || this.cache.json.get(mapName);
     const fallback = { x: 4096, y: 4096, level: "0" }; // Center of 256x256 map
@@ -695,9 +702,11 @@ export default class GameScene extends Phaser.Scene {
 
       const mapData = this.cache.json.get(`${initialMap}_data`);
       
-      // PRE-RENDER WORLD MAP (CPU-intensive task during loading screen)
-      const { WorldMapService } = require("../../services/WorldMapService");
-      WorldMapService.preRenderAll(mapData);
+      // PRE-RENDER WORLD MAP (Now handled by LoadingScene for better progress reporting)
+      if (!this.processedData) {
+          const { WorldMapService } = require("../../services/WorldMapService");
+          WorldMapService.preRenderAll(mapData);
+      }
 
       await this.loadEnemies(mapData);
       this.loadDecorations(mapData);
@@ -1789,6 +1798,15 @@ export default class GameScene extends Phaser.Scene {
   ): Promise<void> {
     const gridWidth = Math.ceil(mapWidth / tileSize);
     const gridHeight = Math.ceil(mapHeight / tileSize);
+    
+    // Check if we have pre-calculated grid
+    if (this.processedData?.pathfindingGrids?.[this.currentLevel]) {
+        console.log(`[Pathfinding] Using pre-calculated grid for Level ${this.currentLevel}`);
+        this.pathfindingGrid = this.processedData.pathfindingGrids[this.currentLevel];
+        this.pathfindingManager.updateGrid(this.pathfindingGrid);
+        return;
+    }
+
     this.pathfindingGrid = Array(gridHeight)
       .fill(0)
       .map(() => Array(gridWidth).fill(0));
