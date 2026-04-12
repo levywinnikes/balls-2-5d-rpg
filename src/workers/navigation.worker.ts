@@ -26,9 +26,10 @@ let levels: string[] = [];
 let portalsByLevel: Record<string, Portal[]> = {};
 
 // Helper to check if a tile is walkable
-function isWalkable(x: number, y: number, level: string): boolean {
+function isWalkable(x: number, y: number, level: string | number): boolean {
     if (!mapData) return false;
-    const levelData = mapData.levels[level];
+    const levelStr = level.toString();
+    const levelData = mapData.levels[levelStr];
     if (!levelData || !levelData.map) return false;
 
     if (y < 0 || y >= levelData.map.length || x < 0 || x >= levelData.map[0].length) return false;
@@ -36,9 +37,28 @@ function isWalkable(x: number, y: number, level: string): boolean {
     const symbol = levelData.map[y][x];
     const tileDef = mapData.tiles[symbol];
     
-    // Explicit return to be safe
     if (!tileDef) return false;
     return !tileDef.block;
+}
+
+// Find the closest walkable point around a coordinate if it is blocked
+function findNearestWalkable(targetX: number, targetY: number, level: string | number): { x: number, y: number } {
+    if (isWalkable(targetX, targetY, level)) return { x: targetX, y: targetY };
+    
+    // Check spiraling out (simple 5x5 check)
+    for (let radius = 1; radius <= 3; radius++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+            for (let dy = -radius; dy <= radius; dy++) {
+                if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue; // Only check the perimeter
+                const nx = targetX + dx;
+                const ny = targetY + dy;
+                if (isWalkable(nx, ny, level)) {
+                    return { x: nx, y: ny };
+                }
+            }
+        }
+    }
+    return { x: targetX, y: targetY }; // Fallback to original if no walkable nearby
 }
 
 function getHeuristic(x1: number, y1: number, l1: number, x2: number, y2: number, l2: number): number {
@@ -48,6 +68,7 @@ function getHeuristic(x1: number, y1: number, l1: number, x2: number, y2: number
 
 onmessage = function(e: MessageEvent) {
     const { type, data } = e.data;
+    if (type === "FIND_PATH") console.log(`[NavWorker] FIND_PATH received for L${data.start.level}`);
 
     if (type === "INIT_MAP") {
         mapData = data;
@@ -79,29 +100,44 @@ onmessage = function(e: MessageEvent) {
     }
 
     if (type === "FIND_PATH") {
-        const { start, end } = data;
-        console.log("[Pathfinder] Finding path from:", start, "to:", end);
+        const { start: rawStart, end: rawEnd } = data;
+        const start = findNearestWalkable(rawStart.x, rawStart.y, rawStart.level);
+        const end = findNearestWalkable(rawEnd.x, rawEnd.y, rawEnd.level);
+        const startLevel = rawStart.level.toString();
+        const endLevel = rawEnd.level.toString();
+
+        console.log(`[Pathfinder] Normalized: (${start.x},${start.y},L${startLevel}) -> (${end.x},${end.y},L${endLevel})`);
         const startTime = performance.now();
         
         const startNode: NavNode = { 
-            x: start.x, y: start.y, level: parseInt(start.level), 
-            g: 0, h: getHeuristic(start.x, start.y, parseInt(start.level), end.x, end.y, parseInt(end.level)),
+            x: start.x, y: start.y, level: parseInt(startLevel), 
+            g: 0, h: getHeuristic(start.x, start.y, parseInt(startLevel), end.x, end.y, parseInt(endLevel)),
             f: 0, parent: null 
         };
         startNode.f = startNode.g + startNode.h;
 
         const openList: NavNode[] = [startNode];
+        const openSet = new Map<string, NavNode>();
+        openSet.set(`${start.x},${start.y},${startLevel}`, startNode);
+
         const closedSet = new Set<string>();
         let nodesSearched = 0;
 
         while (openList.length > 0) {
-            // Pick lowest F
-            openList.sort((a, b) => a.f - b.f);
-            const current = openList.shift()!;
+            // Pick lowest F (O(N) instead of O(N log N) sort)
+            let bestIdx = 0;
+            for (let i = 1; i < openList.length; i++) {
+                if (openList[i].f < openList[bestIdx].f) bestIdx = i;
+            }
+            
+            const current = openList.splice(bestIdx, 1)[0];
+            const currentKey = `${current.x},${current.y},${current.level}`;
+            openSet.delete(currentKey);
+            closedSet.add(currentKey);
             nodesSearched++;
 
             // Goal reached?
-            if (current.x === end.x && current.y === end.y && current.level === parseInt(end.level)) {
+            if (current.x === end.x && current.y === end.y && current.level.toString() === endLevel) {
                 const path = [];
                 let temp: NavNode | null = current;
                 while (temp) {
@@ -123,9 +159,6 @@ onmessage = function(e: MessageEvent) {
                 return;
             }
 
-            const key = `${current.x},${current.y},${current.level}`;
-            closedSet.add(key);
-
             // Neighbors
             const neighbors = [
                 { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
@@ -139,13 +172,13 @@ onmessage = function(e: MessageEvent) {
                 const nKey = `${nx},${ny},${nLevel}`;
 
                 if (closedSet.has(nKey)) continue;
-                if (!isWalkable(nx, ny, nLevel.toString())) continue;
+                if (!isWalkable(nx, ny, nLevel)) continue;
 
                 const g = current.g + 1;
-                const h = getHeuristic(nx, ny, nLevel, end.x, end.y, parseInt(end.level));
+                const h = getHeuristic(nx, ny, nLevel, end.x, end.y, parseInt(endLevel));
                 const f = g + h;
 
-                const existing = openList.find(o => o.x === nx && o.y === ny && o.level === nLevel);
+                const existing = openSet.get(nKey);
                 if (existing) {
                     if (g < existing.g) {
                         existing.g = g;
@@ -153,7 +186,9 @@ onmessage = function(e: MessageEvent) {
                         existing.parent = current;
                     }
                 } else {
-                    openList.push({ x: nx, y: ny, level: nLevel, g, h, f, parent: current });
+                    const newNode = { x: nx, y: ny, level: nLevel, g, h, f, parent: current };
+                    openList.push(newNode);
+                    openSet.set(nKey, newNode);
                 }
             }
 
@@ -163,20 +198,27 @@ onmessage = function(e: MessageEvent) {
                 if (current.x === p.fromX && current.y === p.fromY) {
                     const nKey = `${p.toX},${p.toY},${p.toLevel}`;
                     if (closedSet.has(nKey)) continue;
-                    
-                    // Note: We don't check isWalkable on destination because stairs are usually walkable-but-blocked tiles or valid landing spots
-                    // But we should check if the level even exists
                     if (!mapData.levels[p.toLevel.toString()]) continue;
 
                     const g = current.g + 2; // Penalty for using stairs
-                    const h = getHeuristic(p.toX, p.toY, p.toLevel, end.x, end.y, parseInt(end.level));
+                    const h = getHeuristic(p.toX, p.toY, p.toLevel, end.x, end.y, parseInt(endLevel));
                     const f = g + h;
 
-                    openList.push({ x: p.toX, y: p.toY, level: p.toLevel, g, h, f, parent: current });
+                    const existing = openSet.get(nKey);
+                    if (existing) {
+                        if (g < existing.g) {
+                            existing.g = g;
+                            existing.f = f;
+                            existing.parent = current;
+                        }
+                    } else {
+                        const newNode = { x: p.toX, y: p.toY, level: p.toLevel, g, h, f, parent: current };
+                        openList.push(newNode);
+                        openSet.set(nKey, newNode);
+                    }
                 }
             }
             
-            // Safety break
             if (nodesSearched > 50000) break;
         }
 

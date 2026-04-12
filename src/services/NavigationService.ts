@@ -35,20 +35,17 @@ export class NavigationService {
         this.worker.postMessage({ type: "INIT_MAP", data: mapData });
     }
 
-    public static findPath(start: { x: number, y: number, level: string }, end: { x: number, y: number, level: string }) {
+    public static findPath(startGrid: { x: number, y: number, level: string }, endGrid: { x: number, y: number, level: string }) {
         if (!this.worker || !this.isInitialized) {
             console.warn("[NavigationService] Worker not ready.");
             return;
         }
 
-        // Convert world coords to grid coords for the worker
-        // tileSize is 32 in this game
-        const tileSize = 32;
         this.worker.postMessage({ 
             type: "FIND_PATH", 
             data: { 
-                start: { x: Math.floor(start.x / tileSize), y: Math.floor(start.y / tileSize), level: start.level },
-                end: { x: Math.floor(end.x / tileSize), y: Math.floor(end.y / tileSize), level: end.level }
+                start: { x: startGrid.x, y: startGrid.y, level: startGrid.level },
+                end: { x: endGrid.x, y: endGrid.y, level: endGrid.level }
             } 
         });
     }

@@ -166,7 +166,7 @@ export const SidebarMinimap: React.FC = () => {
         }
       }
 
-      // Cruz do Jogador (Só se o andar bater)
+      // 3. Cruz do Jogador (Só se o andar bater)
       if (pPos.level === viewLevel) {
         ctx.fillStyle = "#FFFFFF";
         const crossSize = 2 * zoom;
@@ -184,6 +184,24 @@ export const SidebarMinimap: React.FC = () => {
           crossSize
         );
       }
+
+      // 4. Marcações do Usuário
+      const markers = playerState.getMarkers();
+      markers.forEach(m => {
+        if (String(m.level) === String(viewLevel)) {
+          // Precisão Pixel-at-Center (considerando Zoom)
+          const mx = centerX + (m.x - pPos.x) / tileSizeGame * currentTileSize;
+          const my = centerY + (m.y - pPos.y) / tileSizeGame * currentTileSize;
+          
+          const dotSize = 4 * zoom;
+          ctx.fillStyle = m.color || "#ff0000";
+          ctx.fillRect(mx - dotSize / 2, my - dotSize / 2, dotSize, dotSize);
+          
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 0.5 * zoom;
+          ctx.strokeRect(mx - dotSize / 2, my - dotSize / 2, dotSize, dotSize);
+        }
+      });
 
       animationFrameId = requestAnimationFrame(render);
     };
@@ -216,7 +234,44 @@ export const SidebarMinimap: React.FC = () => {
         ref={canvasRef}
         width={200}
         height={200}
-        style={{ width: "100%", height: "100%", imageRendering: "pixelated" }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (!mapData) return;
+          const rect = canvasRef.current?.getBoundingClientRect();
+          if (!rect) return;
+
+          // Mouse Position in Canvas Coords (0-200)
+          const scaleX = 200 / rect.width;
+          const scaleY = 200 / rect.height;
+          const mouseX = (e.clientX - rect.left) * scaleX;
+          const mouseY = (e.clientY - rect.top) * scaleY;
+
+          // Game Data
+          const tileSizeGame = mapData.tileSize || 32;
+          const pPos = playerState.getPosition();
+          const currentTileSize = BASE_TILE_SIZE * zoom;
+
+          // Inverse Math: From canvas back to world grid
+          // centerX is 100
+          const gridOffsetX = (mouseX - 100) / currentTileSize;
+          const gridOffsetY = (mouseY - 100) / currentTileSize;
+          
+          const targetWorldX = (pPos.x / tileSizeGame + gridOffsetX) * tileSizeGame;
+          const targetWorldY = (pPos.y / tileSizeGame + gridOffsetY) * tileSizeGame;
+
+          const label = window.prompt("Nome da marcação:");
+          if (label) {
+            playerState.addMarker({
+                id: `mm_${Date.now()}`,
+                x: targetWorldX,
+                y: targetWorldY,
+                level: viewLevel,
+                label: label,
+                color: "#ff0000"
+            });
+          }
+        }}
+        style={{ width: "100%", height: "100%", imageRendering: "pixelated", cursor: "crosshair" }}
       />
 
       <div className="absolute top-1 right-1 flex flex-col gap-1 z-10">
