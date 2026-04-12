@@ -1764,26 +1764,56 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  private async updateLevelCollisions(): Promise<void> {
+  private updateLevelCollisions(centerX?: number, centerY?: number, radius: number = 20): void {
     const wallsLayer = this.mapLoader.getWallsLayer();
     if (!wallsLayer || !this.player) return;
-    this.physics.world.colliders.destroy();
     
-    // Player vs Walls
+    // SAFE: Clear physics world colliders to prevent stacking
+    if (this.physics.world.colliders) {
+        this.physics.world.colliders.getActive().forEach(c => c.destroy());
+    }
+    
+    // 1. REBUILD LANDING SHIELD (Solidify nearby blocks)
+    if (centerX !== undefined && centerY !== undefined) {
+        wallsLayer.clear(true, true);
+        
+        const mapData = this.cache.json.get(`${this.registry.get("currentMap")}_data`);
+        const levelData = mapData?.levels[this.currentLevel];
+        
+        if (levelData && levelData.map && Array.isArray(levelData.map)) {
+            const startX = Math.max(0, Math.floor(centerX / 32) - radius);
+            const endX = Math.min((levelData.map[0]?.length || 0) - 1, Math.floor(centerX / 32) + radius);
+            const startY = Math.max(0, Math.floor(centerY / 32) - radius);
+            const endY = Math.min(levelData.map.length - 1, Math.floor(centerY / 32) + radius);
+            
+            for (let y = startY; y <= endY; y++) {
+                if (!levelData.map[y]) continue;
+                for (let x = startX; x <= endX; x++) {
+                    const symbol = levelData.map[y][x];
+                    const tileDef = mapData.tiles[symbol] || mapData.entities[symbol];
+                    
+                    if (tileDef && (tileDef.block || tileDef.type === "wall" || tileDef.isCollidable)) {
+                        const wx = x * 32 + 16;
+                        const wy = y * 32 + 16;
+                        const obj = wallsLayer.create(wx, wy);
+                        obj.setVisible(false);
+                        obj.setActive(false); 
+                        if (obj.body) obj.body.updateFromGameObject();
+                    }
+                }
+            }
+        }
+    }
+    
+    // 2. Set up Colliders
     this.physics.add.collider(this.player.sprite, wallsLayer);
     
     const currentEnemies = this.enemiesByLevel.get(this.currentLevel) || [];
     const activeSprites = currentEnemies.map(e => e.sprite).filter(s => s && s.active);
 
     if (activeSprites.length > 0) {
-        // Batch: Enemies vs Walls
         this.physics.add.collider(activeSprites, wallsLayer);
-        
-        // Batch: Enemies vs Enemies (Stacking Prevention)
         this.physics.add.collider(activeSprites, activeSprites);
-
-        // Individual: Player vs Enemy (Melee Block)
-        // Individual: Player vs Enemy (Melee Block & Walk-Through Prevention)
         currentEnemies.forEach((enemy) => {
              this.physics.add.collider(this.player!.sprite, enemy.sprite);
         });
@@ -2694,10 +2724,13 @@ export default class GameScene extends Phaser.Scene {
         playerState.markLevelVisited(level);
     }
 
-    this.updateLevelCollisions();
+    // 5. Heavy Rebuilds (Synchronous again to avoid freezes)
+    const targetX = this.player?.sprite.x || 4096;
+    const targetY = this.player?.sprite.y || 4096;
+    this.updateLevelCollisions(targetX, targetY, 32); 
     this.updatePathfindingGrid();
     
-    // Switch Decorations Visibility
+    // 6. Visuals
     this.decorationsByLevel.forEach((decorations, lvl) => {
         const isVisible = (lvl === level);
         decorations.forEach(d => {
@@ -2706,7 +2739,7 @@ export default class GameScene extends Phaser.Scene {
         });
     });
 
-    // 5. Load/Spawn Items from Persistence (Fresh clean set)
+    // 7. Load Items
     this.loadPersistentItems();
   }
 
