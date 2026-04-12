@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useLayoutEffect, useState, useCallback } from
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { usePlayerState } from "../../hooks/usePlayerState";
 import { useUI } from "../../context/UIContext";
-import { ChevronUp, ChevronDown, Plus, Minus, MapPin, Trash2 } from "lucide-react";
+import { ChevronUp, ChevronDown, Plus, Minus, MapPin, Trash2, Maximize } from "lucide-react";
 import { WorldMapService } from "../../services/WorldMapService";
 
 export const ExpandedMapContent: React.FC = () => {
@@ -94,6 +94,29 @@ export const ExpandedMapContent: React.FC = () => {
       behavior: "smooth"
     });
   }, [mapData, viewLevel, zoom, playerState]);
+  
+  const handleFitToScreen = useCallback(() => {
+    if (!containerRef.current || !mapData) return;
+    const levelData = mapData.levels[viewLevel];
+    if (!levelData) return;
+    
+    // Map dimension in raw pixels (4px per tile is the source buffer size)
+    const mapW = levelData.map[0].length * 4;
+    const mapH = levelData.map.length * 4;
+    const containerW = containerRef.current.clientWidth;
+    const containerH = containerRef.current.clientHeight;
+    
+    // Calculate zoom to fit with 5% margin
+    const fitZoom = Math.min(containerW / mapW, containerH / mapH) * 0.95;
+    setZoom(Math.max(fitZoom, 0.1));
+    
+    // Center it
+    containerRef.current.scrollTo({
+      left: (mapW * fitZoom) / 2 - containerW / 2,
+      top: (mapH * fitZoom) / 2 - containerH / 2,
+      behavior: "smooth"
+    });
+  }, [mapData, viewLevel]);
 
   // --- AUTO-CENTER ON OPEN ---
   useEffect(() => {
@@ -231,7 +254,7 @@ export const ExpandedMapContent: React.FC = () => {
             const contentY = (container.scrollTop + mouseY) / zoom;
 
             const zoomDelta = e.deltaY < 0 ? 0.2 : -0.2; // Decreased sensitivity
-            const nextZoom = Math.min(Math.max(zoom + zoomDelta, 0.5), 4);
+            const nextZoom = Math.min(Math.max(zoom + zoomDelta, 0.1), 4);
 
         if (nextZoom !== zoom) {
             // CAPTURE ANCHOR: Store world-coord under mouse and mouse position
@@ -338,36 +361,7 @@ export const ExpandedMapContent: React.FC = () => {
           }
       });
 
-      // --- DRAW GPS ROUTE ---
-      const route = playerState.getActiveRoute();
-      if (route && route.length > 0) {
-          // Diagnostic log every second
-          if (animationId % 60 === 0) console.log(`[MapRender] Path visibility check: ${route.length} points.`);
-          
-          ctx.beginPath();
-          ctx.strokeStyle = "#ff0000"; // Solid Bright Red
-          ctx.lineWidth = 3; 
-          ctx.lineCap = "round";
-          ctx.lineJoin = "round";
-          
-          let first = true;
-          route.forEach((p: any) => {
-              if (String(p.level) === String(viewLevel)) {
-                  const dx = (Number(p.x) * 4) + 2; 
-                  const dy = (Number(p.y) * 4) + 2;
-
-                  if (first) {
-                      ctx.moveTo(dx, dy);
-                      first = false;
-                  } else {
-                      ctx.lineTo(dx, dy);
-                  }
-              } else {
-                  first = true;
-              }
-          });
-          ctx.stroke();
-      }
+      // --- DRAW GPS ROUTE (REMOVED) ---
 
       // --- DRAW CLICK TARGET (CROSSHAIR FOR DEBUG) ---
       if (menu) {
@@ -421,11 +415,18 @@ export const ExpandedMapContent: React.FC = () => {
               <Plus size={14 * scale} />
             </button>
             <button
-              onClick={() => setZoom((z) => Math.max(z - 0.5, 0.5))}
+              onClick={() => setZoom((z) => Math.max(z - 0.5, 0.1))}
               style={btnStyle}
               title="Zoom Out"
             >
               <Minus size={14 * scale} />
+            </button>
+            <button
+               onClick={handleFitToScreen}
+               style={{ ...btnStyle, color: "#a855f7" }} // Purple accent
+               title="Fit to Screen"
+            >
+               <Maximize size={14 * scale} />
             </button>
           </div>
           <div
