@@ -36,7 +36,7 @@ class WindowRegistry {
 
 WindowRegistry.register("hero_menu", HeroMenuContent, "Hero", 800, 600);
 WindowRegistry.register("settings", SettingsContent, "Settings", 300, 550);
-WindowRegistry.register("expandedMap", ExpandedMapContent, "World Map", 600, 500);
+WindowRegistry.register("expandedMap", ExpandedMapContent, "World Map", 900, 650);
 WindowRegistry.register("questLog", QuestLogContent, "Quest Log", 700, 500);
 WindowRegistry.register("container", ContainerContent, "Container", 300, 200);
 WindowRegistry.register("altar", AltarContent, "Altar", 440, 420);

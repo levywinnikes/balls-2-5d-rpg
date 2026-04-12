@@ -89,6 +89,7 @@ export const GameWindowBase: React.FC<GameWindowProps & { position?: { x: number
     <Rnd
       ref={rndRef}
       defaultPosition={initialPos}
+      bounds="window"
       size={{
         width: currentSize.width * scale,
         height: (isMinimized ? headerHeight : currentSize.height) * scale,

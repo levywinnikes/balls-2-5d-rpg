@@ -149,6 +149,17 @@ export class PlayerState extends EventEmitter {
     this.isInputBlocked = blocked;
   }
 
+  // --- UI PERSISTENCE ---
+  private windowConfigs: Record<string, { x: number; y: number; width: number; height: number; minimized?: boolean }> = {};
+
+  public getWindowConfig(id: string) {
+      return this.windowConfigs[id];
+  }
+
+  public setWindowConfig(id: string, config: { x: number; y: number; width: number; height: number; minimized?: boolean }) {
+      this.windowConfigs[id] = { ...config };
+  }
+
   /**
    * Pauses the game scene to improve performance when menu is open
    */
@@ -407,6 +418,12 @@ export class PlayerState extends EventEmitter {
     if (!win._playerStateInstance) {
       win._playerStateInstance = new PlayerState();
       win._playerStateInstance.setMaxListeners(50); // Increase limit for UI hooks
+    } else {
+        // HMR PROTECTION: If new methods are missing on a stale instance (surviving HMR),
+        // we re-patch the prototype to keep the singleton functional without a full refresh.
+        if (!win._playerStateInstance.getWindowConfig) {
+            Object.setPrototypeOf(win._playerStateInstance, PlayerState.prototype);
+        }
     }
     return win._playerStateInstance;
   }
@@ -2690,6 +2707,10 @@ export class PlayerState extends EventEmitter {
         this.equippedAmmoItem = data.equippedAmmoItem || (data.equippedAmmoId ? { itemId: data.equippedAmmoId, count: 1, uid: "equipped_ammo" } : null);
     }
     
+    if (data.windowConfigs) {
+        this.windowConfigs = { ...data.windowConfigs };
+    }
+
     // Inventory
     this.inventory = [];
     if (data.inventory) {

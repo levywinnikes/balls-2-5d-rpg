@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from "react";
 import { WindowRegistry } from "./WindowRegistry";
+import { PlayerState } from "../../../game/entities/Player/PlayerState";
 
 export interface WindowInstance {
     id: string; // Unique ID (e.g. "inventory", "hero_menu")
@@ -48,6 +49,11 @@ export const WindowProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return;
         }
 
+        // PERSISTENCE LOAD
+        const savedConfig = PlayerState.getInstance().getWindowConfig(id);
+        const pos = initialPos || (savedConfig ? { x: savedConfig.x, y: savedConfig.y } : undefined);
+        const size = savedConfig ? { width: savedConfig.width, height: savedConfig.height } : undefined;
+
         setOpenWindows(prev => {
             if (prev[id]) {
                 // Already open, just focus
@@ -60,9 +66,10 @@ export const WindowProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 [id]: {
                     id,
                     zIndex: getNextZ(),
-                    minimized: false,
+                    minimized: savedConfig?.minimized || false,
                     pinned: false,
-                    position: initialPos
+                    position: pos,
+                    size: size
                 }
             };
         });
@@ -83,17 +90,22 @@ export const WindowProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 delete copy[id];
                 return copy;
             }
-            // Open logic duplicate but simpler for toggle
+            
              const entry = WindowRegistry.get(id);
              if(!entry) return prev;
+
+             // PERSISTENCE LOAD
+             const savedConfig = PlayerState.getInstance().getWindowConfig(id);
 
              return {
                 ...prev,
                 [id]: {
                     id,
                     zIndex: getNextZ(),
-                    minimized: false,
-                    pinned: false
+                    minimized: savedConfig?.minimized || false,
+                    pinned: false,
+                    position: savedConfig ? { x: savedConfig.x, y: savedConfig.y } : undefined,
+                    size: savedConfig ? { width: savedConfig.width, height: savedConfig.height } : undefined
                 }
              };
         });
@@ -102,7 +114,20 @@ export const WindowProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const updateWindow = useCallback((id: string, updates: Partial<WindowInstance>) => {
         setOpenWindows(prev => {
             if (!prev[id]) return prev;
-            return { ...prev, [id]: { ...prev[id], ...updates } };
+            const updated = { ...prev[id], ...updates };
+
+            // PERSISTENCE SAVE
+            if (updates.position || updates.size || updates.minimized !== undefined) {
+                PlayerState.getInstance().setWindowConfig(id, {
+                    x: updated.position?.x ?? 0,
+                    y: updated.position?.y ?? 0,
+                    width: updated.size?.width ?? 0,
+                    height: updated.size?.height ?? 0,
+                    minimized: updated.minimized
+                });
+            }
+
+            return { ...prev, [id]: updated };
         });
     }, []);
 
