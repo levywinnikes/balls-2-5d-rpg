@@ -82,11 +82,11 @@ export const ExpandedMapContent: React.FC = () => {
       setViewLevel(pPos.level);
     }
     
-    // Calculate scroll target
-    const PIXEL_SIZE = 4 * zoom;
+    // Calculate scroll target based on 1:1 map scaled by zoom
     const tileSize = mapData.tileSize || 32;
-    const drawX = (pPos.x / tileSize) * PIXEL_SIZE;
-    const drawY = (pPos.y / tileSize) * PIXEL_SIZE;
+    const PIXEL_SCALE = 4 * zoom; // This matches the visual scale we apply via CSS
+    const drawX = (pPos.x / tileSize) * PIXEL_SCALE;
+    const drawY = (pPos.y / tileSize) * PIXEL_SCALE;
     
     const container = containerRef.current;
     container.scrollTo({
@@ -99,7 +99,7 @@ export const ExpandedMapContent: React.FC = () => {
   // --- BUFFERED RENDERING ---
   const bufferRef = useRef<HTMLCanvasElement | null>(null);
 
-  // 1. Render static map background to buffer
+  // 1. Render static map background to buffer (ONLY ON LEVEL CHANGE)
   useEffect(() => {
     if (!mapData || !mapData.levels[viewLevel]) return;
 
@@ -107,22 +107,20 @@ export const ExpandedMapContent: React.FC = () => {
     const mapGrid = levelData.map;
     const rows = mapGrid.length;
     const cols = mapGrid[0].length;
-    const PIXEL_SIZE = 4 * zoom;
     const definitions = { ...mapData.tiles, ...mapData.entities };
 
-    // Create or resize buffer
+    // Buffer is ALWAYS 1px per tile for maximum efficiency
     if (!bufferRef.current) {
       bufferRef.current = document.createElement("canvas");
     }
     const buffer = bufferRef.current;
-    buffer.width = cols * PIXEL_SIZE;
-    buffer.height = rows * PIXEL_SIZE;
+    buffer.width = cols;
+    buffer.height = rows;
 
     const bCtx = buffer.getContext("2d");
     if (!bCtx) return;
 
-    // Fast render to buffer
-    bCtx.fillStyle = "#111"; // Fallback background
+    bCtx.fillStyle = "#111";
     bCtx.fillRect(0, 0, buffer.width, buffer.height);
 
     for (let y = 0; y < rows; y++) {
@@ -131,12 +129,12 @@ export const ExpandedMapContent: React.FC = () => {
         if (tile === "...") continue;
         const color = getTileColor(tile, definitions);
         bCtx.fillStyle = color;
-        bCtx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+        bCtx.fillRect(x, y, 1, 1);
       }
     }
-  }, [mapData, viewLevel, zoom, getTileColor]);
+  }, [mapData, viewLevel, getTileColor]); // REMOVED ZOOM DEP
 
-  // 2. Render Loop (Only draws buffer + dynamic player)
+  // 2. Render Loop (Draws buffer + dynamic player at 1:1 scale)
   useEffect(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -146,12 +144,12 @@ export const ExpandedMapContent: React.FC = () => {
     let animationId: number;
 
     const render = () => {
-      // Set canvas size to match buffer
+      // Set canvas size to match 1:1 map data
       if (bufferRef.current) {
         if (canvas.width !== bufferRef.current.width) canvas.width = bufferRef.current.width;
         if (canvas.height !== bufferRef.current.height) canvas.height = bufferRef.current.height;
 
-        // Draw cached background
+        // Draw cached background (FAST 512x512 draw)
         ctx.drawImage(bufferRef.current, 0, 0);
       } else {
         ctx.fillStyle = "#000";
@@ -159,22 +157,20 @@ export const ExpandedMapContent: React.FC = () => {
       }
 
       const pPos = playerState.getPosition();
-      const PIXEL_SIZE = 4 * zoom;
 
-      // Draw Player if on this level
+      // Draw Player if on this level (Draw at 1px scale, CSS will zoom it)
       if (pPos.level === viewLevel) {
         const tileSize = mapData?.tileSize || 32;
-        const drawX = (pPos.x / tileSize) * PIXEL_SIZE;
-        const drawY = (pPos.y / tileSize) * PIXEL_SIZE;
+        const drawX = Math.floor(pPos.x / tileSize);
+        const drawY = Math.floor(pPos.y / tileSize);
 
-        // Crosshair style for better visibility
+        // Bright dot for the player
         ctx.fillStyle = "#FFF";
-        ctx.fillRect(drawX - 1 * zoom, drawY - 6 * zoom, 2 * zoom, 12 * zoom);
-        ctx.fillRect(drawX - 6 * zoom, drawY - 1 * zoom, 12 * zoom, 2 * zoom);
+        ctx.fillRect(drawX - 1, drawY, 3, 1);
+        ctx.fillRect(drawX, drawY - 1, 1, 3);
         
-        ctx.strokeStyle = "#F00";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(drawX - 3 * zoom, drawY - 3 * zoom, 6 * zoom, 6 * zoom);
+        ctx.fillStyle = "#F00";
+        ctx.fillRect(drawX, drawY, 1, 1);
       }
 
       animationId = requestAnimationFrame(render);
@@ -182,7 +178,7 @@ export const ExpandedMapContent: React.FC = () => {
 
     render();
     return () => cancelAnimationFrame(animationId);
-  }, [viewLevel, zoom, playerState, mapData?.tileSize]);
+  }, [viewLevel, playerState, mapData?.tileSize]); // REMOVED ZOOM DEP
 
   const btnStyle = {
     padding: `${s(4)}px ${s(8)}px`,
@@ -264,7 +260,15 @@ export const ExpandedMapContent: React.FC = () => {
             cursor: "grab",
           }}
         >
-          <canvas ref={canvasRef} />
+          <canvas 
+            ref={canvasRef} 
+            style={{
+                width: mapData ? mapData.levels[viewLevel]?.map[0].length * 4 * zoom : 0,
+                height: mapData ? mapData.levels[viewLevel]?.map.length * 4 * zoom : 0,
+                imageRendering: "pixelated",
+                display: "block"
+            }}
+          />
         </div>
       </div>
   );
