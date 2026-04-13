@@ -1,3 +1,10 @@
+/**
+ * MAIN GAME SCENE
+ * Controls the primary game loop, physics, and world interaction.
+ * DOCUMENTATION: 
+ * - High-level Architecture: /docs/ARCHITECTURE_OVERVIEW.md
+ * - Map System (BMS): /docs/SYSTEM_BMS.md
+ */
 import { TileRegistry } from "../graphics/tiles/TileRegistry";
 import { ContainerRegistry } from "../entities/containers/ContainerRegistry";
 import { AudioManager } from "../systems/AudioManager";
@@ -26,6 +33,7 @@ import { AutoSaveSystem } from "../systems/AutoSaveSystem";
 import { SaveSystem } from "../systems/SaveSystem";
 import { DialogueManager } from "../systems/DialogueManager";
 import { QuestManager } from "../systems/QuestManager";
+import { MultiLevelMapData } from "../maps/MapTypes";
 
 export interface DeadEnemy {
   id: string;
@@ -231,7 +239,18 @@ export default class GameScene extends Phaser.Scene {
         return fallback;
     }
 
-    // [OPTIMIZATION] Check explicit playerPos in map levels first
+    // [OPTIMIZATION] Check for global config first (v5.5)
+    if (mapData.config && mapData.config.startLevel) {
+        const startLv = mapData.config.startLevel;
+        if (mapData.levels[startLv] && mapData.levels[startLv].playerPos) {
+            return {
+                x: mapData.levels[startLv].playerPos.x,
+                y: mapData.levels[startLv].playerPos.y,
+                level: startLv
+            };
+        }
+    }
+
     if (mapData.levels && mapData.levels["0"] && mapData.levels["0"].playerPos) {
        return {
          x: mapData.levels["0"].playerPos.x,
@@ -242,24 +261,24 @@ export default class GameScene extends Phaser.Scene {
 
     // Fallback: Scan map for 'player' type key
     let playerSymbol = "ply";
-    if (mapData.entities) {
-      const foundKey = Object.keys(mapData.entities).find(
-        (key) => mapData.entities[key].type === "player"
+    if (mapData.entityTemplates) {
+      const foundKey = Object.keys(mapData.entityTemplates).find(
+        (key) => mapData.entityTemplates[key].type === "player"
       );
       if (foundKey) playerSymbol = foundKey;
     }
 
-    const orderedLevels = ["0", ...Object.keys(mapData.levels).filter(k => k !== "0")];
+    // --- BUSCA BINÁRIA DE SPAWN ---
+    const orderedLevels = ["1", "0", ...Object.keys(mapData.levels).filter(k => k !== "0" && k !== "1")];
 
     for (const levelKey of orderedLevels) {
       const levelData = mapData.levels[levelKey];
-      if (!levelData || !levelData.map) continue;
+      if (!levelData) continue;
       
-      const mapMatrix = levelData.map;
-      for (let y = 0; y < mapMatrix.length; y++) {
-        const row = mapMatrix[y];
-        for (let x = 0; x < row.length; x++) {
-          if (row[x] === playerSymbol) {
+      for (let y = 0; y < mapData.height; y++) {
+        for (let x = 0; x < mapData.width; x++) {
+          const symbol = this.mapLoader.getTileAt(x, y, levelKey);
+          if (symbol === playerSymbol) {
             const size = mapData.tileSize || 32;
             return {
               x: x * size + size / 2,
@@ -284,7 +303,7 @@ export default class GameScene extends Phaser.Scene {
         const levelDecorations: any[] = [];
         
         result.decorations.forEach((data: any) => {
-            const tileDefInMap = mapData.tiles[data.symbol];
+            const tileDefInMap = mapData.tileDefinitions[data.symbol];
             const tileId = tileDefInMap ? tileDefInMap.id : data.symbol;
             
             levelDecorations.push({
@@ -566,6 +585,38 @@ export default class GameScene extends Phaser.Scene {
        // Placeholder for potential message display (e.g. floating text)
   };
 
+  private onZJump = async (delta: number) => {
+      if (!this.player || !this.player.sprite || !this.transitionSystem) return;
+      
+      const currentLevelStr = this.registry.get("currentLevel") || "0";
+      const currentLevelInt = parseInt(currentLevelStr);
+      const nextLevelInt = currentLevelInt + delta;
+      const nextLevelStr = nextLevelInt.toString();
+      
+      const mapName = this.registry.get("currentMap") || "newmap";
+      const mapData = this.cache.json.get(`${mapName}_data`);
+      
+      if (mapData && mapData.levels && mapData.levels[nextLevelStr]) {
+          console.log(`[DEBUG] Z-Jump: ${currentLevelStr} -> ${nextLevelStr}`);
+          const gridX = Math.floor(this.player.sprite.x / 32);
+          const gridY = Math.floor(this.player.sprite.y / 32);
+          
+          // Use performTransition directly from transitionSystem
+          // We cast to any if performTransition is private, but it's private in TransitionSystem.ts.
+          // I should make it public or use a wrapper.
+          // Wait, performTransition is private. I'll make it public in TransitionSystem.ts in the next step.
+          (this.transitionSystem as any).performTransition(
+              nextLevelStr,
+              gridX,
+              gridY,
+              32,
+              mapData
+          );
+      } else {
+          this.showFloatingText(this.player.sprite.x, this.player.sprite.y - 40, "Level Not Found", 0xff0000);
+      }
+  };
+
 
 
   async create(): Promise<void> { // Changed to match file (async)
@@ -573,19 +624,15 @@ export default class GameScene extends Phaser.Scene {
       this.input.mouse?.disableContextMenu();
 
       // START: Clear previous listeners to prevent duplicates
-      PlayerState.getInstance().off("startGroundDrag", this.onStartGroundDrag);
-      PlayerState.getInstance().off("endGroundDrag", this.onEndGroundDrag);
-      PlayerState.getInstance().off("uiDragStart", this.onUiDragStart);
-      PlayerState.getInstance().off("uiDragEnd", this.onUiDragEnd);
-      PlayerState.getInstance().off("prepareRuneCast", this.onPrepareRuneCast);
-      PlayerState.getInstance().off("spawnDroppedItem", this.onSpawnDroppedItem);
       PlayerState.getInstance().off("message", this.onMessage);
+      PlayerState.getInstance().off("requestZJump", this.onZJump);
       
       // Register listeners immediately
       PlayerState.getInstance().on("startGroundDrag", this.onStartGroundDrag);
       PlayerState.getInstance().on("endGroundDrag", this.onEndGroundDrag);
       PlayerState.getInstance().on("uiDragStart", this.onUiDragStart);
       PlayerState.getInstance().on("uiDragEnd", this.onUiDragEnd);
+      PlayerState.getInstance().on("requestZJump", this.onZJump);
       
       // Cleanup previous potential listeners
       PlayerState.getInstance().on("prepareRuneCast", this.onPrepareRuneCast);
@@ -605,11 +652,29 @@ export default class GameScene extends Phaser.Scene {
           DialogueManager.getInstance().loadDialogues(dialogues);
       }
 
-      if (!this.cache.json.exists(`${initialMap}_data`)) {
-        throw new Error("Dados do mapa não carregados");
+      let initialPlayerPos = this.registry.get("playerPos");
+
+      // v5.6: FORCE Level switch if map defines a startLevel and we aren't loading a specific save
+      const mapData = this.cache.json.get(`${initialMap}_data`);
+      if (mapData?.config?.startLevel && !this.isRespawning && !this.processedData?.playerState) {
+          console.log(`[SPAWN] Forcing Start Level: ${mapData.config.startLevel}`);
+          this.currentLevel = mapData.config.startLevel;
+          this.registry.set("currentLevel", this.currentLevel);
+          PlayerState.getInstance().setCurrentLevel(this.currentLevel);
+          // Also clear stale playerPos if it exists to force re-search
+          this.registry.remove("playerPos");
+          initialPlayerPos = null;
       }
 
-      let initialPlayerPos = this.registry.get("playerPos");
+      if (!initialPlayerPos || this.isRespawning) {
+          const spawnInfo = this.getSpawnCoordinate();
+          initialPlayerPos = { x: spawnInfo.x, y: spawnInfo.y };
+          if (this.currentLevel !== spawnInfo.level) {
+              this.currentLevel = spawnInfo.level;
+              this.registry.set("currentLevel", this.currentLevel);
+              PlayerState.getInstance().setCurrentLevel(this.currentLevel);
+          }
+      }
       
       // If we are respawning, ignore the 'playerPos' from registry if it's stale (though handlePlayerDeath sets it)
       // Actually, handlePlayerDeath sets explicit playerPos in start data.
@@ -699,13 +764,11 @@ export default class GameScene extends Phaser.Scene {
         this.currentLevel
       );
       this.enemySelectionIndicator = new EnemySelectionIndicator(this);
-
-      const mapData = this.cache.json.get(`${initialMap}_data`);
       
-      // PRE-RENDER WORLD MAP (Now handled by LoadingScene for better progress reporting)
+      // PRE-RENDER WORLD MAP (Now handled with BMS binary data)
       if (!this.processedData) {
           const { WorldMapService } = require("../../services/WorldMapService");
-          WorldMapService.preRenderAll(mapData);
+          WorldMapService.preRenderAll(mapData, this.mapLoader.getBinaryLevels());
       }
 
       await this.loadEnemies(mapData);
@@ -1189,14 +1252,13 @@ export default class GameScene extends Phaser.Scene {
               const mapData = this.cache.json.get(`${currentMap}_data`);
               
               if (mapData && mapData.levels && mapData.levels[this.currentLevel]) {
-                   const levelData = mapData.levels[this.currentLevel];
-                   const symbol = levelData.map[gridY]?.[gridX];
+                   const symbol = this.mapLoader.getTileAt(gridX, gridY, this.currentLevel);
                    if (symbol) {
-                       let tileDef = mapData.tiles[symbol];
+                       let tileDef = mapData.tileDefinitions[symbol];
                        
-                       // Fallback to checking entities if not in tiles (e.g. chest is now an entity)
-                       if (!tileDef && mapData.entities) {
-                           tileDef = mapData.entities[symbol];
+                       // Fallback to checking entityTemplates if not in tileDefinitions
+                       if (!tileDef && mapData.entityTemplates) {
+                           tileDef = mapData.entityTemplates[symbol];
                        }
 
                        console.log(`[Interaction] Clicked: ${gridX},${gridY} Symbol: ${symbol} ID: ${tileDef?.id}`);
@@ -1219,8 +1281,8 @@ export default class GameScene extends Phaser.Scene {
                                let containerUid = `map_${this.currentLevel}_${gridX}_${gridY}`;
                                
                                // Check for specific UUID override in Entities layer
-                               if (mapData.entities) {
-                                   const entityDef = mapData.entities[symbol];
+                               if (mapData.entityTemplates) {
+                                   const entityDef = mapData.entityTemplates[symbol];
                                    if (entityDef && entityDef.uuid) {
                                        containerUid = entityDef.uuid;
                                    }
@@ -1290,14 +1352,13 @@ export default class GameScene extends Phaser.Scene {
   public isTileBlocked(x: number, y: number): boolean {
       const currentMap = this.registry.get("currentMap");
       const mapData = this.cache.json.get(`${currentMap}_data`);
-      if (!mapData || !mapData.levels || !mapData.levels[this.currentLevel]) return true; // Blocked if no data
+      if (!mapData || !mapData.levels || !this.mapLoader) return true; // Blocked if no data
 
-      const levelData = mapData.levels[this.currentLevel];
-      const symbol = levelData.map[y]?.[x];
+      const symbol = this.mapLoader.getTileAt(x, y, this.currentLevel);
       if (!symbol || symbol === "...") return true; // Blocked (Void)
       
       // Check collision
-      const tileDef = mapData.tiles[symbol] || (mapData.entities ? mapData.entities[symbol] : null);
+      const tileDef = mapData.tileDefinitions[symbol] || (mapData.entityTemplates ? mapData.entityTemplates[symbol] : null);
       if (tileDef && tileDef.block) return true;
       
       return false;
@@ -1778,19 +1839,17 @@ export default class GameScene extends Phaser.Scene {
         wallsLayer.clear(true, true);
         
         const mapData = this.cache.json.get(`${this.registry.get("currentMap")}_data`);
-        const levelData = mapData?.levels[this.currentLevel];
         
-        if (levelData && levelData.map && Array.isArray(levelData.map)) {
-            const startX = Math.max(0, Math.floor(centerX / 32) - radius);
-            const endX = Math.min((levelData.map[0]?.length || 0) - 1, Math.floor(centerX / 32) + radius);
-            const startY = Math.max(0, Math.floor(centerY / 32) - radius);
-            const endY = Math.min(levelData.map.length - 1, Math.floor(centerY / 32) + radius);
-            
-            for (let y = startY; y <= endY; y++) {
-                if (!levelData.map[y]) continue;
-                for (let x = startX; x <= endX; x++) {
-                    const symbol = levelData.map[y][x];
-                    const tileDef = mapData.tiles[symbol] || mapData.entities[symbol];
+        const startY = Math.max(0, Math.floor(centerY / 32) - radius);
+        const endY = Math.min(mapData.height - 1, Math.floor(centerY / 32) + radius);
+        const startX = Math.max(0, Math.floor(centerX / 32) - radius);
+        const endX = Math.min(mapData.width - 1, Math.floor(centerX / 32) + radius);
+
+        for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+                const symbol = this.mapLoader.getTileAt(x, y, this.currentLevel);
+                if (symbol && symbol !== "...") {
+                    const tileDef = mapData.tileDefinitions[symbol] || mapData.entityTemplates[symbol];
                     
                     if (tileDef && (tileDef.block || tileDef.type === "wall" || tileDef.isCollidable)) {
                         const wx = x * 32 + 16;
@@ -1846,9 +1905,9 @@ export default class GameScene extends Phaser.Scene {
     const levelData = mapData.levels[this.currentLevel];
     for (let y = 0; y < gridHeight; y++) {
       for (let x = 0; x < gridWidth; x++) {
-        const tileSymbol = levelData.map[y]?.[x];
+        const tileSymbol = this.mapLoader.getTileAt(x, y, this.currentLevel);
         const tileDef =
-          mapData.tiles[tileSymbol] || mapData.entities[tileSymbol];
+          mapData.tileDefinitions[tileSymbol || ""] || mapData.entityTemplates[tileSymbol || ""];
         if (
           tileSymbol === "..." ||
           (tileDef && (tileDef.block || tileDef.type === "wall"))
@@ -1961,9 +2020,8 @@ export default class GameScene extends Phaser.Scene {
       const mapData = this.cache.json.get(
         `${this.registry.get("currentMap")}_data`
       );
-      const levelData = mapData.levels[this.currentLevel];
-      const mapHeight = levelData.map.length;
-      const mapWidth = levelData.map[0].length;
+      const mapHeight = mapData.height;
+      const mapWidth = mapData.width;
       playerState.exploreArea(
         this.currentLevel,
         gridX,
@@ -2233,10 +2291,9 @@ export default class GameScene extends Phaser.Scene {
           const mapData = this.cache.json.get(
             `${this.registry.get("currentMap")}_data`
           );
-          const upperLevelData = mapData.levels[lvl];
-          const upperTile = upperLevelData?.map[gridY]?.[gridX];
+          const upperTile = this.mapLoader.getTileAt(gridX, gridY, lvl);
           const isUpperTileTransparent =
-            upperTile === "..." || mapData.tiles[upperTile]?.under === "...";
+            upperTile === "..." || mapData.tileDefinitions[upperTile || ""]?.under === "...";
           const isUpperTileRendered = this.isTileRenderedInLevel(
             lvl,
             gridX,

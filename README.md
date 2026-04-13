@@ -1,5 +1,11 @@
 # Balls 2.5D RPG
 
+> [!IMPORTANT]
+> **🤖 FOR AI ASSISTANTS (MANDATORY READ)**
+> 1. **Binary Map System (BMS)**: This project uses a binary storage engine. **NEVER** use `.map` arrays or `tiles/entities` property names. Reference `/docs/SYSTEM_BMS.md` before any changes to maps.
+> 2. **Side-Effect Analysis**: Before modifying any logic in `MapLoader`, `GameScene`, or `NavigationService`, analyze potential collateral effects on level transitions and pathfinding.
+> 3. **Architecture**: See `/docs/ARCHITECTURE_OVERVIEW.md` for the React-Phaser bridge logic.
+
 Um novo jogo baseado na engine Isometric RPG (tibia-react).
 
 ## Inicialização

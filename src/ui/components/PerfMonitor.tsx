@@ -45,6 +45,19 @@ export const PerfMonitor: React.FC = () => {
                 if (!isVisible) setIsVisible(true);
                 e.preventDefault();
             }
+
+            // DEBUG SHORTCUTS: PGUP / PGDN
+            const debugKeysEnabled = PlayerState.getInstance().getDiagnosticSettings().enableDebugKeys;
+            if (debugKeysEnabled) {
+                if (e.key === 'PageUp') {
+                    PlayerState.getInstance().requestZJump(1);
+                    e.preventDefault();
+                }
+                if (e.key === 'PageDown') {
+                    PlayerState.getInstance().requestZJump(-1);
+                    e.preventDefault();
+                }
+            }
         };
 
         PlayerState.getInstance().on('perfUpdated', handlePerfUpdate);
@@ -158,6 +171,30 @@ export const PerfMonitor: React.FC = () => {
                                 </span>
                             </label>
                         ))}
+                    </div>
+
+                    {/* Z-AXIS NAVIGATION TOOLS */}
+                    <div className="mt-4 pt-2 border-t border-blue-500/20">
+                        <div className="text-[9px] text-blue-300 uppercase tracking-tighter mb-2 font-bold">Z-Axis Navigation</div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button 
+                                onClick={() => PlayerState.getInstance().requestZJump(1)}
+                                className="bg-blue-900/40 hover:bg-blue-600/60 text-blue-200 text-[8px] font-bold py-1 px-2 rounded border border-blue-500/30 transition-all pointer-events-auto cursor-pointer"
+                            >
+                                🔼 JUMP UP [Z+1]
+                            </button>
+                            <button 
+                                onClick={() => PlayerState.getInstance().requestZJump(-1)}
+                                className="bg-blue-900/40 hover:bg-blue-600/60 text-blue-200 text-[8px] font-bold py-1 px-2 rounded border border-blue-500/30 transition-all pointer-events-auto cursor-pointer"
+                            >
+                                🔽 JUMP DOWN [Z-1]
+                            </button>
+                        </div>
+                        {diag.enableDebugKeys && (
+                            <div className="mt-1 text-[7px] text-emerald-400 text-center animate-pulse">
+                                Hotkeys Active: [PGUP] / [PGDN]
+                            </div>
+                        )}
                     </div>
 
                     {/* DNA ANALYSIS & BREAKDOWN */}

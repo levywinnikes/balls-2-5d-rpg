@@ -1,0 +1,33 @@
+# Project Governance for AI Assistants
+
+You are an AI assistant working on the "Balls 2.5D RPG" project. This project has a specific architecture designed for high-performance continental maps.
+
+## MANDATORY WORKFLOW
+1. **Always read documentation before editing core systems.** 
+   - Files: `src/game/maps/MapLoader.ts`, `src/game/scenes/GameScene.ts`, `src/services/WorldMapService.ts`.
+   - Docs: `docs/SYSTEM_BMS.md` and `docs/ARCHITECTURE_OVERVIEW.md`.
+2. **Side-Effect Analysis**: Before executing a code change, ask yourself:
+   - "Does this change assume the presence of a `.map` array?" (If yes, ABORT. Mapping is binary.)
+   - "How will this affect level transitions (Z-Axis)?"
+   - "Does this impact pre-rendered minimap buffers?"
+
+## SYSTEM RULES
+- **Map System (BMS)**: 
+  - Source of Truth: `MapLoader`. 
+  - Standard Property Names: `tileDefinitions` (not `tiles`), `entityTemplates` (not `entities`).
+  - Access Pattern: `MapLoader.getTileAt(x, y, level)` – NO array indexing.
+- **Phaser-React Bridge**: 
+  - Use `PlayerState` EventEmitter for all communications.
+- **Graphics**: 
+  - Use `BaseTileGraphic` for procedural tile generation.
+
+## COLLATERAL RISK MATRIX
+If you modify these files, you MUST check the related systems:
+| Modified File | System at Risk | Action |
+| :--- | :--- | :--- |
+| `MapLoader.ts` | Scaling & Loading | Verify `LoadingScene.ts` |
+| `TransitionSystem.ts` | Level Transitions | Manual check of Z-up/Z-down logic |
+| `NavigationService.ts` | AI Pathfinding | Check `navigation.worker.ts` compliance |
+| `WorldMapService.ts` | Minimap / UI | Verify `SidebarMinimap.tsx` re-rendering |
+
+*Failure to adhere to these rules will result in engine crashes due to binary data mismatches.*

@@ -1,3 +1,8 @@
+/**
+ * MAIN REACT APPLICATION ENTRY
+ * Handles UI layout, context providers, and Phaser engine mounting.
+ * AI GUIDANCE: See /docs/AI_READ_FIRST.md and /docs/ARCHITECTURE_OVERVIEW.md
+ */
 import React, { useEffect, useRef, useState } from "react";
 import Phaser from "phaser";
 import BootScene from "./game/scenes/BootScene";

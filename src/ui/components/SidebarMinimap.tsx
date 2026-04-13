@@ -1,3 +1,8 @@
+/**
+ * REGRAS DE OURO (GOLDEN RULES):
+ * 1. O jogo deve suportar tanto BROWSER quanto EXECUTÁVEL (Desktop).
+ * 2. O EXECUTÁVEL é a prioridade; evite o uso de window.prompt, window.alert ou qualquer API síncrona de bloqueio que possa falhar em wrappers desktop.
+ */
 import React, { useRef, useEffect, useState } from "react";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { usePlayerState } from "../../hooks/usePlayerState";
@@ -11,6 +16,8 @@ import {
   Plus,
   Minus,
 } from "lucide-react";
+
+import { WorldMapService } from "../../services/WorldMapService";
 
 const BASE_TILE_SIZE = 4;
 const VIEW_RANGE = 20;
@@ -36,14 +43,25 @@ export const SidebarMinimap: React.FC = () => {
   }, [playerLevel]);
 
   useEffect(() => {
-    const mapUrl = `${window.location.origin}/newmap.json`;
-    fetch(mapUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load map");
-        return res.json();
-      })
-      .then((data) => setMapData(data))
-      .catch(err => console.error("Minimap load error:", err));
+    // 1. Initial Load from Cache
+    const cachedData = WorldMapService.getMapData();
+    if (cachedData) setMapData(cachedData);
+
+    // 2. Listen for Updates
+    const onData = (data: any) => setMapData(data);
+    const onBuffers = () => {
+        // Force a re-render and ensure mapData is fresh
+        const freshData = WorldMapService.getMapData();
+        if (freshData) setMapData({ ...freshData });
+    };
+
+    WorldMapService.emitter.on("mapDataUpdated", onData);
+    WorldMapService.emitter.on("buffersReady", onBuffers);
+
+    return () => {
+        WorldMapService.emitter.off("mapDataUpdated", onData);
+        WorldMapService.emitter.off("buffersReady", onBuffers);
+    };
   }, []);
 
   const colorCache = useRef<Record<string, string>>({});
@@ -124,7 +142,7 @@ export const SidebarMinimap: React.FC = () => {
         return;
       }
 
-      const mapGrid = levelData.map;
+      const buffer = WorldMapService.getBuffer(viewLevel);
       const explored = playerState.getExploredArea(viewLevel);
       const tileSizeGame = mapData.tileSize || 32;
       const currentTileSize = BASE_TILE_SIZE * zoom;
@@ -134,36 +152,44 @@ export const SidebarMinimap: React.FC = () => {
       const centerX = width / 2;
       const centerY = height / 2;
 
-      const visibleRange = VIEW_RANGE / zoom;
-      const startY = Math.floor(pGridY - visibleRange);
-      const endY = Math.ceil(pGridY + visibleRange);
-      const startX = Math.floor(pGridX - visibleRange);
-      const endX = Math.ceil(pGridX + visibleRange);
+      if (buffer) {
+          // Calculate the camera view in world-map-pixels
+          const visibleRange = VIEW_RANGE / zoom;
+          const sX = pGridX - visibleRange;
+          const sY = pGridY - visibleRange;
+          const sW = visibleRange * 2;
+          const sH = visibleRange * 2;
 
-      for (let y = startY; y <= endY; y++) {
-        for (let x = startX; x <= endX; x++) {
-          if (y < 0 || y >= mapGrid.length || x < 0 || x >= mapGrid[0].length)
-            continue;
+          // Target dimensions on the minimap canvas
+          const dW = sW * currentTileSize;
+          const dH = sH * currentTileSize;
+          const dX = centerX - dW / 2;
+          const dY = centerY - dH / 2;
+
+          // Create a temporary canvas for Fog of War masking if needed
+          // Or just draw directly if no fog logic is required at this zoom level
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(buffer, sX, sY, sW, sH, dX, dY, dW, dH);
           
-          // KEEP FOG OF WAR: Skip rendering if not explored
-          if (explored && !explored[y][x]) continue;
+          // Apply Fog of War mask (Iterate local grid to clear un-explored tiles)
+          if (explored) {
+              const startX = Math.floor(sX);
+              const endX = Math.ceil(sX + sW);
+              const startY = Math.floor(sY);
+              const endY = Math.ceil(sY + sH);
 
-          const symbol = mapGrid[y][x];
-          if (symbol === "...") continue;
-
-          const color = getTileColor(symbol, mapData);
-
-          const drawX = centerX + (x - pGridX) * currentTileSize;
-          const drawY = centerY + (y - pGridY) * currentTileSize;
-
-          ctx.fillStyle = color;
-          ctx.fillRect(
-            drawX,
-            drawY,
-            currentTileSize + 0.6,
-            currentTileSize + 0.6
-          );
-        }
+              ctx.fillStyle = "#000000";
+              for (let y = startY; y <= endY; y++) {
+                  for (let x = startX; x <= endX; x++) {
+                      if (y < 0 || y >= mapData.height || x < 0 || x >= mapData.width) continue;
+                      if (!explored[y] || !explored[y][x]) {
+                          const drawX = centerX + (x - pGridX) * currentTileSize;
+                          const drawY = centerY + (y - pGridY) * currentTileSize;
+                          ctx.fillRect(drawX, drawY, currentTileSize + 0.5, currentTileSize + 0.5);
+                      }
+                  }
+              }
+          }
       }
 
       // 3. Cruz do Jogador (Só se o andar bater)
@@ -259,17 +285,18 @@ export const SidebarMinimap: React.FC = () => {
           const targetWorldX = (pPos.x / tileSizeGame + gridOffsetX) * tileSizeGame;
           const targetWorldY = (pPos.y / tileSizeGame + gridOffsetY) * tileSizeGame;
 
-          const label = window.prompt("Nome da marcação:");
-          if (label) {
-            playerState.addMarker({
-                id: `mm_${Date.now()}`,
-                x: targetWorldX,
-                y: targetWorldY,
-                level: viewLevel,
-                label: label,
-                color: "#ff0000"
-            });
-          }
+          // EXEC COMPATIBILITY: Avoid window.prompt for executable support.
+          // Using a default name for now; the user can rename it in the Expanded Map.
+          const label = `Mark ${playerState.getMarkers().length + 1}`;
+          
+          playerState.addMarker({
+              id: `mm_${Date.now()}`,
+              x: targetWorldX,
+              y: targetWorldY,
+              level: viewLevel,
+              label: label,
+              color: "#ff0000"
+          });
         }}
         style={{ width: "100%", height: "100%", imageRendering: "pixelated", cursor: "crosshair" }}
       />

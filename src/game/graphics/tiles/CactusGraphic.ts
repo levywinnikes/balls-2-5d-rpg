@@ -6,31 +6,32 @@ export class CactusGraphic extends BaseTileGraphic {
   public readonly TEXTURE_KEY = CactusGraphic.TEXTURE_KEY;
 
   protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
-    // 1. Fundo Areia (igual ao SandGraphic para blend)
-    graphics.fillStyle(0xf4e1a1, 1);
+    // Fundo Areia (Padrão para deserto)
+    graphics.fillStyle(0xfde047, 1);
     graphics.fillRect(0, 0, 32, 32);
 
-    // 2. Cactus (Verde Escuro)
-    graphics.fillStyle(0x2d5a27, 1);
+    // Corpo do Cacto (Verde vibrante)
+    graphics.fillStyle(0x166534, 1);
     
     // Tronco principal
-    graphics.fillRect(12, 10, 8, 20);
-    graphics.fillCircle(16, 10, 4); // Topo redondo
+    graphics.fillRect(13, 8, 6, 20);
+    graphics.fillCircle(16, 8, 3);
 
     // Braço esquerdo
-    graphics.fillRect(8, 15, 4, 3);
-    graphics.fillRect(6, 10, 3, 8);
-    graphics.fillCircle(7.5, 10, 1.5);
+    graphics.fillRect(9, 14, 4, 3);
+    graphics.fillRect(7, 10, 3, 7);
+    graphics.fillCircle(8.5, 10, 1.5);
 
     // Braço direito
-    graphics.fillRect(20, 18, 4, 3);
-    graphics.fillRect(23, 13, 3, 8);
-    graphics.fillCircle(24.5, 13, 1.5);
+    graphics.fillRect(19, 18, 4, 3);
+    graphics.fillRect(22, 13, 3, 8);
+    graphics.fillCircle(23.5, 13, 1.5);
 
-    // Pontinhos/Espinhos (Amarelo claro)
-    graphics.fillStyle(0xffffcc, 0.6);
+    // Detalhes/Espinhos (Pontos amarelos minúsculos)
+    graphics.fillStyle(0xfef08a, 1);
     graphics.fillRect(15, 12, 1, 1);
-    graphics.fillRect(18, 15, 1, 1);
-    graphics.fillRect(7, 12, 1, 1);
+    graphics.fillRect(17, 18, 1, 1);
+    graphics.fillRect(8, 12, 1, 1);
+    graphics.fillRect(24, 15, 1, 1);
   }
 }

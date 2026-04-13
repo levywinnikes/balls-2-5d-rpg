@@ -35,6 +35,19 @@ import { PavementGraphic } from "./floor/PavementGraphic";
 import { ProceduralTransition, TransitionDirection } from "./ProceduralTransition";
 import { DungeonFloorGraphic } from "./DungeonFloorGraphic";
 import { DungeonWallGraphic } from "./DungeonWallGraphic";
+import { CrackedEarthGraphic } from "./CrackedEarthGraphic";
+import { MudGraphic } from "./MudGraphic";
+import { CorruptedGrassGraphic } from "./CorruptedGrassGraphic";
+import { ToxicWaterGraphic } from "./ToxicWaterGraphic";
+import { IceCaveFloorGraphic } from "./IceCaveFloorGraphic";
+import { CrystalSpikeGraphic } from "./CrystalSpikeGraphic";
+import { ObsidianFloorGraphic } from "./ObsidianFloorGraphic";
+import { CobblestoneGraphic } from "./CobblestoneGraphic";
+import { RuinedPathGraphic } from "./RuinedPathGraphic";
+import { SewerBrickGraphic } from "./floor/SewerBrickGraphic";
+import { ManholeGraphic } from "./floor/ManholeGraphic";
+import { GothicWallGraphic } from "./wall/GothicWallGraphic";
+import { FoundationWallGraphic } from "./wall/FoundationWallGraphic";
 
 // Central registry for all game tiles
 const COLORS = {
@@ -221,6 +234,16 @@ export class TileRegistry {
         baseDepth: 0,
       },
       {
+        id: "sewer-brick",
+        graphic: SewerBrickGraphic,
+        color: "#1e293b",
+        stepSound: "mountain",
+        speedModifier: 1.0,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
         id: "tree",
         graphic: TreeGraphic,
         color: "#166534",
@@ -298,7 +321,15 @@ export class TileRegistry {
       },
       {
         id: "hole",
-        graphic: StairDownGraphic, // Placeholder or create HoleGraphic
+        graphic: ManholeGraphic, 
+        color: "#171717",
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "manhole",
+        graphic: ManholeGraphic,
         color: "#171717",
         isCollidable: false,
         blocksRanged: false,
@@ -411,6 +442,115 @@ export class TileRegistry {
         id: "dungeon-wall",
         graphic: DungeonWallGraphic,
         color: "#1e293b",
+        isCollidable: true,
+        blocksRanged: true,
+        baseDepth: 2,
+        bodySize: { width: 32, height: 32 },
+      },
+      {
+        id: "cracked-earth",
+        graphic: CrackedEarthGraphic,
+        color: "#d2b48c",
+        stepSound: "sand",
+        speedModifier: 0.8,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "mud",
+        graphic: MudGraphic,
+        color: "#451a03",
+        stepSound: "water",
+        speedModifier: 0.5,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "corrupted-grass",
+        graphic: CorruptedGrassGraphic,
+        color: "#312e81",
+        stepSound: "grass",
+        speedModifier: 0.8,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "toxic-water",
+        graphic: ToxicWaterGraphic,
+        color: "#064e3b",
+        stepSound: "water",
+        speedModifier: 0.4,
+        isCollidable: true,
+        blocksRanged: false,
+        baseDepth: 0,
+        bodySize: { width: 32, height: 32 },
+      },
+      {
+        id: "ice-cave-floor",
+        graphic: IceCaveFloorGraphic,
+        color: "#0c4a6e",
+        stepSound: "floor",
+        speedModifier: 1.0,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "crystal-spike",
+        graphic: CrystalSpikeGraphic,
+        color: "#38bdf8",
+        isCollidable: true,
+        blocksRanged: true,
+        baseDepth: 1,
+        bodySize: { width: 24, height: 24 },
+        bodyOffset: { x: 4, y: 4 },
+      },
+      {
+        id: "obsidian-floor",
+        graphic: ObsidianFloorGraphic,
+        color: "#0a0a0a",
+        stepSound: "mountain",
+        speedModifier: 1.0,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "cobblestone",
+        graphic: CobblestoneGraphic,
+        color: "#64748b",
+        stepSound: "floor",
+        speedModifier: 1.0,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "ruined-path",
+        graphic: RuinedPathGraphic,
+        color: "#78350f",
+        stepSound: "dirty",
+        speedModifier: 1.0,
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      },
+      {
+        id: "gothic-wall",
+        graphic: GothicWallGraphic,
+        color: "#78716c",
+        isCollidable: true,
+        blocksRanged: true,
+        baseDepth: 2,
+        bodySize: { width: 32, height: 32 },
+      },
+      {
+        id: "foundation-brick",
+        graphic: FoundationWallGraphic,
+        color: "#262626",
         isCollidable: true,
         blocksRanged: true,
         baseDepth: 2,

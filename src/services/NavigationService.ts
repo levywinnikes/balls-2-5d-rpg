@@ -1,4 +1,9 @@
 
+/**
+ * NAVIGATION SERVICE
+ * Managed interface for navigation workers and pathfinding logic.
+ * AI GUIDANCE: See /docs/AI_READ_FIRST.md and /docs/SYSTEM_BMS.md
+ */
 import { PlayerState } from "../game/entities/Player/PlayerState";
 
 export class NavigationService {
@@ -6,11 +11,9 @@ export class NavigationService {
     private static isInitialized = false;
     private static lastDiagnostics: any = null;
 
-    public static init(mapData: any) {
+    public static init(mapData: any, binaryLevels: Record<string, Uint8Array>) {
         if (this.isInitialized) return;
         
-        // We use the worker as a standard worker. 
-        // In Vite/CRA, we might need new URL(...)
         this.worker = new Worker(new URL('../workers/navigation.worker.ts', import.meta.url));
         
         this.worker.onmessage = (e) => {
@@ -32,7 +35,7 @@ export class NavigationService {
             }
         };
 
-        this.worker.postMessage({ type: "INIT_MAP", data: mapData });
+        this.worker.postMessage({ type: "INIT_MAP", data: mapData, binaryLevels });
     }
 
     public static findPath(startGrid: { x: number, y: number, level: string }, endGrid: { x: number, y: number, level: string }) {

@@ -1,3 +1,9 @@
+/**
+ * PLAYER STATE SINGLETON
+ * Core source of truth for all player data and global game state events.
+ * Handles synchronization between Phaser (Engine) and React (UI).
+ * DOCUMENTATION: See /docs/ARCHITECTURE_OVERVIEW.md
+ */
 import { ItemType } from "../../../config/ItemConstants";
 import { EventEmitter } from "events";
 import { WeaponDefinition, WeaponRegistry } from "../weapons/WeaponRegistry";
@@ -455,7 +461,10 @@ export class PlayerState extends EventEmitter {
       enablePlayerState: true,
       hideTiles: false,
       hideEnemies: false,
-      hideItems: false
+      hideItems: false,
+      enableNoClip: false,
+      enableSuperSpeed: false,
+      enableDebugKeys: false
   };
 
   public updatePerfMetrics(metrics: any) {
@@ -476,6 +485,10 @@ export class PlayerState extends EventEmitter {
       this.emit("diagnosticUpdated", this._diagnosticSettings);
   }
 
+  public requestZJump(delta: number) {
+      this.emit("requestZJump", delta);
+  }
+
 
 
   public static getInstance(): PlayerState {
@@ -486,7 +499,7 @@ export class PlayerState extends EventEmitter {
     } else {
         // HMR PROTECTION: If new methods are missing on a stale instance (surviving HMR),
         // we re-patch the prototype to keep the singleton functional without a full refresh.
-        if (!win._playerStateInstance.getWindowConfig) {
+        if (!win._playerStateInstance.requestZJump) {
             Object.setPrototypeOf(win._playerStateInstance, PlayerState.prototype);
         }
     }

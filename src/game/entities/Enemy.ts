@@ -7,6 +7,7 @@ import GameScene from "../scenes/GameScene";
 import { EnemyHud } from "../hud/EnemyHud";
 import { PathfindingManager } from "../systems/PathfindingManager";
 import { AudioManager } from "../systems/AudioManager";
+import { MultiLevelMapData } from "../maps/MapTypes";
 
 export default class Enemy {
   public sprite: Phaser.Physics.Arcade.Sprite;
@@ -430,32 +431,31 @@ export default class Enemy {
     const scene = this.sprite.scene as GameScene;
     const mapData = scene.cache.json.get(
       `${scene.registry.get("currentMap")}_data`
-    );
-    const levelData = mapData.levels[this.level];
-
+    ) as MultiLevelMapData;
+    
     const tileX = Math.floor(x / this.tileSize);
     const tileY = Math.floor(y / this.tileSize);
 
-    // Verificar limites do mapa
+    // Verificar limites do mapa usando metadados BMS
     if (
       tileY < 0 ||
-      tileY >= levelData.map.length ||
+      tileY >= mapData.height ||
       tileX < 0 ||
-      tileX >= levelData.map[0].length
+      tileX >= mapData.width
     ) {
       return false;
     }
 
-    const tileSymbol = levelData.map[tileY][tileX];
-    const tileDef = mapData.tiles[tileSymbol] || mapData.entities[tileSymbol];
+    const tileSymbol = (scene as any).mapLoader.getTileAt(tileX, tileY, this.level);
+    const tileDef = mapData.tileDefinitions[tileSymbol || ""] || (mapData.entityTemplates ? mapData.entityTemplates[tileSymbol || ""] : null);
 
     // Tiles não transitáveis:
-    // 1. Tiles "..."
-    // 2. Tiles com block: true
-    // 3. Entidades sólidas
+    // 1. Tiles "..." (vazio/void)
+    // 2. Tiles com block: true ou tipo wall
     return !(
+      !tileSymbol ||
       tileSymbol === "..." ||
-      (tileDef && (tileDef.block || tileDef.type === "wall"))
+      (tileDef && (tileDef.block || tileDef.type === "wall" || tileDef.isCollidable))
     );
   }
 

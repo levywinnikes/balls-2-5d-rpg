@@ -107,6 +107,17 @@ export default class Player {
       : this.state.getCurrentSpeed()) 
       * speedMultiplier 
       * this.state.getSpeedPenaltyMultiplier(); // Apply Overburden Penalty
+
+    // SUPER SPEED OVERRIDE
+    if (this.state.getDiagnosticSettings().enableSuperSpeed) {
+        this.currentSpeed *= 6.0;
+    }
+
+    const noClip = this.state.getDiagnosticSettings().enableNoClip;
+    if (this.sprite.body) {
+        (this.sprite.body as Phaser.Physics.Arcade.Body).checkCollision.none = noClip;
+    }
+
     this.sprite.setVelocity(0);
 
     const movingLeft = cursors.left?.isDown;
@@ -120,10 +131,9 @@ export default class Player {
     if (directionX !== 0 || directionY !== 0) {
       // PREDICTIVE MOVEMENT CHECK FOR VOID
       const scene = this.sprite.scene as any;
-      if (scene && scene.checkPlayerVoidMove) {
+      if (scene && scene.checkPlayerVoidMove && !noClip) {
           const moveDir = { x: directionX, y: directionY };
           const shouldBlock = scene.checkPlayerVoidMove(this.sprite.x, this.sprite.y, moveDir);
-          console.log(`[Player] Void check: ${shouldBlock}`);
           if (shouldBlock) {
              // Blocked by Safety
              this.sprite.setVelocity(0);

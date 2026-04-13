@@ -272,36 +272,30 @@ export class DynamicLevelRenderer {
     this.updateDecorations(gridX, gridY);
     this.updateEnemies(gridX, gridY);
 
+    const mapWidthTiles = Math.floor(this.scene.physics.world.bounds.width / this.tileSize);
+    const mapHeightTiles = Math.floor(this.scene.physics.world.bounds.height / this.tileSize);
+
     const minX = Math.max(0, gridX - this.renderRadius);
-    const maxX = Math.min(
-      currentLevelData.map[0].length - 1,
-      gridX + this.renderRadius
-    );
+    const maxX = Math.min(mapWidthTiles - 1, gridX + this.renderRadius);
     const minY = Math.max(0, gridY - this.renderRadius);
-    const maxY = Math.min(
-      currentLevelData.map.length - 1,
-      gridY + this.renderRadius
-    );
-    const tilesToKeep: string[] = [];
+    const maxY = Math.min(mapHeightTiles - 1, gridY + this.renderRadius);
     const mapLoader = (this.scene as any).mapLoader as MapLoader | undefined;
     const wallsLayer = mapLoader?.getWallsLayer?.();
+
+    if (!mapLoader) return;
+
+    const tilesToKeep: string[] = [];
 
     // Renderiza tiles do nível atual
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        const symbol = currentLevelData.map[y]?.[x];
+        const symbol = mapLoader.getTileAt(x, y, this.currentLevel);
         // [STABILITY FIX] Explicitly handle reservations. SYMBOL '...' is NOT a tile key.
         if (!symbol || symbol === "...") {
           this.renderLowerLevelTile(x, y, mapData, tilesToKeep);
           continue;
         }
-        const tileDef = this.getTileDefinition(
-          symbol,
-          mapData,
-          this.currentLevel,
-          x,
-          y
-        );
+        const tileDef = mapData.tileDefinitions[symbol];
         if (!tileDef || tileDef.id === "transparent") {
           this.renderLowerLevelTile(x, y, mapData, tilesToKeep); // Renderiza nível inferior para tiles transparentes
           continue;
@@ -338,9 +332,9 @@ export class DynamicLevelRenderer {
           
           levelTiles.set(tileKey, [sprite, ...additionalSprites]);
 
-          if (isCollidable || mapData.tiles[symbol]?.block === true) {
+          if (isCollidable || mapData.tileDefinitions[symbol]?.block === true) {
             if (wallsLayer) wallsLayer.add(sprite);
-            if (mapData.tiles[symbol]?.block === true || isCollidable) {
+            if (mapData.tileDefinitions[symbol]?.block === true || isCollidable) {
                  const body = sprite.body as Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody;
                   if (body) {
                       if ('setImmovable' in body) body.setImmovable(true);
@@ -350,7 +344,7 @@ export class DynamicLevelRenderer {
                           if (registryDef.bodySize) body.setSize(registryDef.bodySize.width, registryDef.bodySize.height);
                           if (registryDef.bodyOffset) body.setOffset(registryDef.bodyOffset.x, registryDef.bodyOffset.y);
                       } else if (tileDef.id.includes("wall") || tileDef.id.includes("chest")) {
-                          if (mapData.tiles[symbol]?.isFrontWall) {
+                          if (tileDef.isFrontWall) {
                               body.setSize(this.tileSize, 32); 
                               body.setOffset(0, this.tileSize - 32); 
                           } else if (tileDef.id.includes("side")) {
@@ -371,7 +365,7 @@ export class DynamicLevelRenderer {
             spriteList.forEach(s => s.setVisible(!hideTiles));
         }
         
-        const isCollidableEffective = TileRegistry.isCollidable(tileDef.id) || (mapData.tiles[symbol]?.block === true);
+        const isCollidableEffective = TileRegistry.isCollidable(tileDef.id) || (mapData.tileDefinitions[symbol]?.block === true);
         if (levelTiles.has(tileKey)) {
             levelTiles.get(tileKey)!.forEach(s => this.applyDebugTint(s, isCollidableEffective, PlayerState.getInstance().isDebugCollisionEnabled()));
         }
@@ -431,15 +425,15 @@ export class DynamicLevelRenderer {
       let hasOverlap = false;
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
-          const symbol = levelData.map[y]?.[x];
+          const symbol = mapLoader.getTileAt(x, y, levelToCheck.toString());
           if (
             !symbol ||
             symbol === "..." ||
-            mapData.tiles[symbol]?.under === "..."
+            mapData.tileDefinitions[symbol]?.under === "..."
           ) {
             continue;
           }
-          const tileDef = mapData.tiles[symbol] || mapData.entities[symbol];
+          const tileDef = mapData.tileDefinitions[symbol] || mapData.entityTemplates[symbol];
           if (tileDef) {
             const worldX = x * this.tileSize + this.tileSize / 2;
             const worldY = y * this.tileSize + this.tileSize / 2;
@@ -506,11 +500,11 @@ export class DynamicLevelRenderer {
   }
 
   private resolveSymbolToId(symbol: string, mapData: MultiLevelMapData): string {
-    if (mapData.tiles[symbol]) {
-        return mapData.tiles[symbol].id;
+    if (mapData.tileDefinitions[symbol]) {
+        return mapData.tileDefinitions[symbol].id;
     }
-    if (mapData.entities[symbol]) {
-        const entity = mapData.entities[symbol];
+    if (mapData.entityTemplates[symbol]) {
+        const entity = mapData.entityTemplates[symbol];
         if (entity.under) return this.resolveSymbolToId(entity.under, mapData);
     }
     return symbol;
@@ -523,7 +517,7 @@ export class DynamicLevelRenderer {
     x: number,
     y: number
   ): { id: string; under?: string } | undefined {
-    return mapData.tiles[symbol];
+    return mapData.tileDefinitions[symbol];
   }
 
   private renderLowerLevelTile(
@@ -533,13 +527,13 @@ export class DynamicLevelRenderer {
     tilesToKeep: string[]
   ): void {
     const currentLevelNum = parseInt(this.currentLevel);
+    const mapLoader = (this.scene as any).mapLoader as MapLoader;
     let levelToCheck = currentLevelNum - 1;
     
     // Check floors below current (Limit to 3 levels deep for performance)
     let depthCount = 0;
     while (mapData.levels[levelToCheck.toString()] && depthCount < 3) {
-      const levelData = mapData.levels[levelToCheck.toString()];
-      const symbol = levelData.map[y]?.[x];
+      const symbol = mapLoader.getTileAt(x, y, levelToCheck.toString());
 
       if (!symbol || symbol === "...") {
         levelToCheck--;
@@ -588,7 +582,7 @@ export class DynamicLevelRenderer {
       }
       tilesToKeep.push(tileKey);
       
-      const isCollidableEffective = !!mapData.tiles[symbol]?.block || TileRegistry.isCollidable(tileDef.id);
+      const isCollidableEffective = !!mapData.tileDefinitions[symbol]?.block || TileRegistry.isCollidable(tileDef.id);
       if (levelTiles.has(tileKey)) {
           levelTiles.get(tileKey)!.forEach(s => this.applyDebugTint(s, isCollidableEffective, PlayerState.getInstance().isDebugCollisionEnabled(), 0x999999));
       }
@@ -635,6 +629,7 @@ export class DynamicLevelRenderer {
     maxY: number
   ): void {
     const currentLevelNum = parseInt(this.currentLevel);
+    const mapLoader = (this.scene as any).mapLoader as MapLoader;
     const levelStr = level.toString();
     const levelData = mapData.levels[levelStr];
     
@@ -648,7 +643,7 @@ export class DynamicLevelRenderer {
 
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        const symbol = levelData.map[y]?.[x];
+        const symbol = mapLoader.getTileAt(x, y, levelStr);
         if (!symbol || symbol === "...") continue;
         const tileDef = this.getTileDefinition(symbol, mapData, levelStr, x, y);
         if (!tileDef || tileDef.id === "transparent") continue;
@@ -677,7 +672,7 @@ export class DynamicLevelRenderer {
         tilesToKeep.push(tileKey);
         
         if (tileDef.under && tileDef.under !== "...") {
-          const underTileDef = mapData.tiles[tileDef.under];
+          const underTileDef = mapData.tileDefinitions[tileDef.under];
           if (underTileDef) {
             const underTileKey = `${level}_${x}_${y}_under_upper`;
             if (!levelTiles.has(underTileKey)) {
@@ -703,7 +698,7 @@ export class DynamicLevelRenderer {
           }
         }
         
-        const isCollidableEffective = !!mapData.tiles[symbol]?.block || TileRegistry.isCollidable(tileDef.id);
+        const isCollidableEffective = !!mapData.tileDefinitions[symbol]?.block || TileRegistry.isCollidable(tileDef.id);
         if (levelTiles.has(tileKey)) {
             levelTiles.get(tileKey)!.forEach(s => this.applyDebugTint(s, isCollidableEffective, PlayerState.getInstance().isDebugCollisionEnabled()));
         }
@@ -851,13 +846,15 @@ export class DynamicLevelRenderer {
 
   private isExposedToSky(x: number, y: number, mapData: MultiLevelMapData): boolean {
       const currentLevelNum = parseInt(this.currentLevel);
+      const mapLoader = (this.scene as any).mapLoader as MapLoader;
+      
       for (const levelKey in mapData.levels) {
           const lvl = parseInt(levelKey);
           if (lvl <= currentLevelNum) continue;
-          const levelData = mapData.levels[levelKey];
-          const symbol = levelData.map[y]?.[x];
+          
+          const symbol = mapLoader.getTileAt(x, y, levelKey);
           if (symbol && symbol !== "...") {
-               const tileDef = mapData.tiles[symbol] || mapData.entities[symbol];
+               const tileDef = mapData.tileDefinitions[symbol] || mapData.entityTemplates[symbol];
                if (tileDef && tileDef.id === "transparent") continue;
                return false;
           }

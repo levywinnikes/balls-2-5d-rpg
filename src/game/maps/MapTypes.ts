@@ -1,29 +1,50 @@
+/**
+ * BINARY MAP SYSTEM TYPES
+ * Interface definitions for the BMS metadata and level structures.
+ * DOCUMENTATION: See /docs/SYSTEM_BMS.md
+ */
 export interface LevelData {
-  map: string[][];
+  binFile: string;
+  entities: any[];
   playerPos?: { x: number; y: number };
 }
 
 export interface MultiLevelMapData {
-  mapName?: string; // Optional name
+  mapName?: string;
   tileSize: number;
+  width: number;
+  height: number;
+  tileAtlas: string[];
   levels: { [level: string]: LevelData };
-  tiles: Record<
+  config?: {
+    startLevel?: string;
+    [key: string]: any;
+  };
+  tileDefinitions: Record<
     string,
     {
       id: string;
+      type?: string; 
       block?: boolean;
+      isCollidable?: boolean;
       under?: string;
       color?: string;
       isFrontWall?: boolean;
       blockUnder?: boolean;
+      category?: string;
     }
   >;
-  entities: Record<
+  entityTemplates: Record<
     string,
     {
       type: string;
-      id: string; // Made required as per usage, or optional? DynamicLevelRenderer checks .under, editor-ui checks id/type
+      id?: string;
+      block?: boolean;
       under?: string;
+      respawn?: number;
+      uuid?: string;
+      contents?: { id: string; count: number }[];
+      category?: string;
     }
   >;
 }

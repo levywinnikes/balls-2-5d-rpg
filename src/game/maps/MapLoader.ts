@@ -1,3 +1,8 @@
+/**
+ * MAP LOADER SERVICE
+ * Core interface for the Binary Map System (BMS).
+ * DOCUMENTATION: See /docs/SYSTEM_BMS.md for architecture and data format.
+ */
 import Phaser from "phaser";
 import { EnemyRegistry } from "../entities/EnemyRegistry";
 import { PlayerState } from "../entities/Player/PlayerState";
@@ -5,39 +10,7 @@ import { TileRegistry } from "../graphics/tiles/TileRegistry";
 import { WeaponRegistry } from "../entities/weapons/WeaponRegistry";
 import { ItemRegistry } from "../entities/items/ItemRegistry";
 
-interface LevelData {
-  map: string[][];
-  playerPos?: { x: number; y: number };
-  safeZones?: { minX: number; minY: number; maxX: number; maxY: number }[];
-}
-
-interface MultiLevelMapData {
-  tileSize: number;
-  levels: { [level: string]: LevelData };
-  tiles: Record<
-    string,
-    {
-      id: string;
-      block?: boolean;
-      under?: string;
-      color?: string;
-      isFrontWall?: boolean;
-      blockUnder?: boolean;
-      category?: string; // e.g. "grass", "dirty", "snow"
-    }
-  >;
-  entities: Record<
-    string,
-    {
-      type: string;
-      id?: string;
-      under?: string;
-      respawn?: number;
-      uuid?: string;
-      contents?: { id: string; count: number }[];
-    }
-  >;
-}
+import { LevelData, MultiLevelMapData } from "./MapTypes";
 
 export interface ItemEntity {
   itemId?: string; // Optional fixed UUID
@@ -75,10 +48,13 @@ export interface LoadResult {
 export class MapLoader {
   private scene: Phaser.Scene;
   private wallsLayers: Map<string, Phaser.Physics.Arcade.StaticGroup>;
-  private currentLevel: string = "0";
+  private currentLevel: string = "1"; // BMS default to Level 1
   private tileSize: number = 32;
   private mapWidth: number = 0;
   private mapHeight: number = 0;
+  private binaryLevels: Map<string, Uint8Array> = new Map();
+  private mapMetadata: MultiLevelMapData | null = null;
+  private tileAtlas: string[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -105,6 +81,10 @@ export class MapLoader {
       return this.wallsLayers.get(level || this.currentLevel);
   }
 
+  public getBinaryLevels(): Map<string, Uint8Array> {
+      return this.binaryLevels;
+  }
+
   public getEnemiesForLevel(level: string) {
     const currentMap = this.scene.registry.get("currentMap");
     const data = this.scene.cache.json.get(`${currentMap}_${level}`);
@@ -112,23 +92,42 @@ export class MapLoader {
     return this.parseEntities(data.levelData, this.tileSize).enemies;
   }
 
+  private async fetchBinary(url: string): Promise<Uint8Array> {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch binary: ${url}`);
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
+  }
+
   public async loadAllLevels(mapName: string): Promise<void> {
     try {
-      const data = await this.loadJson(`${mapName}.json`);
+      console.log(`[BMS] Loading Metadata: maps/${mapName}.json`);
+      const data = await this.loadJson(`maps/${mapName}.json`);
+      this.mapMetadata = data;
       this.tileSize = data.tileSize;
-      const { normalizedData, needsNormalization } =
-        this.normalizeMapSizes(data);
-      if (needsNormalization) {
-        this.generateNormalizedJson(mapName, normalizedData);
-      }
-      this.scene.cache.json.add(`${mapName}_data`, normalizedData);
-      await Promise.all(
-        Object.keys(normalizedData.levels).map((level) =>
-          this.loadLevel(mapName, level, normalizedData)
-        )
-      );
+      this.mapWidth = data.width * data.tileSize;
+      this.mapHeight = data.height * data.tileSize;
+      this.tileAtlas = data.tileAtlas;
+
+      this.scene.cache.json.add(`${mapName}_data`, data);
+
+      // We load ALL binaries up front as they are small (1MB each)
+      // and we want smooth transitions.
+      const levelPromises = Object.keys(data.levels).map(async (level) => {
+          const levelInfo = data.levels[level];
+          const binUrl = `maps/${levelInfo.binFile}`;
+          const binData = await this.fetchBinary(binUrl);
+          this.binaryLevels.set(level, binData);
+          
+          // Original loadLevel style logic to init physics group
+          await this.loadLevel(mapName, level, data);
+      });
+
+      await Promise.all(levelPromises);
+      console.log(`[BMS] Sub-systems initialized for ${this.binaryLevels.size} levels.`);
+      
     } catch (error) {
-      console.error("Error loading all levels:", error);
+      console.error("Error loading all levels (BMS):", error);
       throw error;
     }
   }
@@ -164,46 +163,35 @@ export class MapLoader {
   }
 
   public getTileAt(x: number, y: number, level: string): string | null {
-    const currentMap = this.scene.registry.get("currentMap");
-    const levelKey = `${currentMap}_${level}`;
-    const cachedData = this.scene.cache.json.get(levelKey);
+    const binData = this.binaryLevels.get(level);
+    if (!binData || !this.mapMetadata) return null;
 
-    if (!cachedData || !cachedData.levelData || !cachedData.levelData.map) {
-        return null;
-    }
+    const width = this.mapMetadata.width;
+    const height = this.mapMetadata.height;
 
-    const map = cachedData.levelData.map;
-    if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) {
-        return null;
-    }
+    if (x < 0 || x >= width || y < 0 || y >= height) return null;
 
-    const tileId = map[y][x];
-    console.log(`[MapLoader] getTileAt(${x}, ${y}, ${level}) -> '${tileId}'`);
-    return tileId;
+    const index = binData[y * width + x];
+    const symbol = this.tileAtlas[index];
+    
+    return symbol || null;
   }
 
   public getTerrainCategory(x: number, y: number, level: string): string | null {
-      const currentMap = this.scene.registry.get("currentMap");
-      const mapData = this.scene.cache.json.get(`${currentMap}_data`);
-      if (!mapData) return null;
+      if (!this.mapMetadata) return null;
 
-      const levelData = mapData.levels[level];
-      if (!levelData) return null;
+      const symbol = this.getTileAt(x, y, level);
+      if (!symbol) return null;
 
-      if (y < 0 || y >= levelData.map.length || x < 0 || x >= levelData.map[0].length) {
-          return null;
-      }
-      
-      const symbol = levelData.map[y][x];
       // Check direct tile definition
-      const tileDef = mapData.tiles[symbol];
+      const tileDef = this.mapMetadata.tileDefinitions[symbol];
       if (tileDef) {
           if (tileDef.category) return tileDef.category;
           if (tileDef.id) return tileDef.id; // Fallback to ID
           
           // Check 'under' layer
-          if (tileDef.under && mapData.tiles[tileDef.under]) {
-              const under = mapData.tiles[tileDef.under];
+          if (tileDef.under && this.mapMetadata.tileDefinitions[tileDef.under]) {
+              const under = this.mapMetadata.tileDefinitions[tileDef.under];
               return under.category || under.id || null;
           }
       }
@@ -211,9 +199,9 @@ export class MapLoader {
   }
 
   private resolveSymbolToId(symbol: string, mapData: MultiLevelMapData): string {
-    if (mapData.tiles[symbol]) return mapData.tiles[symbol].id;
-    if (mapData.entities[symbol]) {
-        const entity = mapData.entities[symbol];
+    if (mapData.tileDefinitions[symbol]) return mapData.tileDefinitions[symbol].id;
+    if (mapData.entityTemplates[symbol]) {
+        const entity = mapData.entityTemplates[symbol];
         if (entity.under) return this.resolveSymbolToId(entity.under, mapData);
     }
     return symbol;
@@ -224,25 +212,19 @@ export class MapLoader {
     const end = new Phaser.Math.Vector2(endX, endY);
     const line = new Phaser.Geom.Line(start.x, start.y, end.x, end.y);
 
-    const currentMap = this.scene.registry.get("currentMap");
-    const mapData = this.scene.cache.json.get(`${currentMap}_data`);
-    if (!mapData) return true;
+    if (!this.mapMetadata) return true;
 
-    const levelData = mapData.levels[level];
-    if (!levelData) return true;
-
-    // Aumentar precisão usando passos menores (1/4 do tileSize)
     const points = Phaser.Geom.Line.BresenhamPoints(line, this.tileSize / 4);
     
     for (const point of points) {
       const gridX = Math.floor(point.x / this.tileSize);
       const gridY = Math.floor(point.y / this.tileSize);
       
-      const symbol = levelData.map[gridY]?.[gridX];
+      const symbol = this.getTileAt(gridX, gridY, level);
       if (symbol && symbol !== "...") {
-        const tileDef = mapData.tiles[symbol] || mapData.entities[symbol];
+        const tileDef = this.mapMetadata.tileDefinitions[symbol] || this.mapMetadata.entityTemplates[symbol];
         if (tileDef) {
-           const tileId = tileDef.id || (tileDef.under ? this.resolveSymbolToId(tileDef.under, mapData) : null);
+           const tileId = tileDef.id || (tileDef.under ? this.resolveSymbolToId(tileDef.under, this.mapMetadata) : null);
            if (tileId && TileRegistry.doesTileBlockRanged(tileId)) {
              return false;
            }
@@ -256,76 +238,10 @@ export class MapLoader {
       this.wallsLayers.clear();
   }
 
-  private normalizeMapSizes(data: MultiLevelMapData): {
-    normalizedData: MultiLevelMapData;
-    needsNormalization: boolean;
-  } {
-    let maxRows = 0;
-    let maxCols = 0;
-    for (const level in data.levels) {
-      const levelData = data.levels[level];
-      maxRows = Math.max(maxRows, levelData.map.length);
-      maxCols = Math.max(maxCols, levelData.map[0]?.length || 0);
-    }
-    let needsNormalization = false;
-    for (const level in data.levels) {
-      const levelData = data.levels[level];
-      if (
-        levelData.map.length !== maxRows ||
-        levelData.map[0]?.length !== maxCols
-      ) {
-        needsNormalization = true;
-        break;
-      }
-    }
-    if (!needsNormalization) {
-      return { normalizedData: data, needsNormalization: false };
-    }
-    const normalizedLevels: { [level: string]: LevelData } = {};
-    for (const level in data.levels) {
-      const levelData = data.levels[level];
-      const currentRows = levelData.map.length;
-      const currentCols = levelData.map[0]?.length || 0;
-      const fillTile = level === "0" ? "wat" : "...";
-      const newMap: string[][] = [];
-      for (let y = 0; y < maxRows; y++) {
-        const row: string[] = [];
-        for (let x = 0; x < maxCols; x++) {
-          if (y < currentRows && x < currentCols) {
-            row.push(levelData.map[y][x]);
-          } else {
-            row.push(fillTile);
-          }
-        }
-        newMap.push(row);
-      }
-      normalizedLevels[level] = {
-        map: newMap,
-        playerPos: levelData.playerPos,
-        safeZones: levelData.safeZones,
-      };
-    }
-    const normalizedData: MultiLevelMapData = {
-      ...data,
-      levels: normalizedLevels,
-    };
-    return { normalizedData, needsNormalization: true };
-  }
-
-  private generateNormalizedJson(
-    mapName: string,
-    normalizedData: MultiLevelMapData
-  ): void {
-      // Just console log or no-op as we are running in browser context mostly
-      // and cannot write to disk easily here without server support.
-      // The original code tried to format JSON string, but returned void.
-      return; 
-  }
-
   public async loadLevel(
     mapName: string,
     level: string,
-    data: MultiLevelMapData
+    data: any
   ): Promise<void> {
     const levelKey = `${mapName}_${level}`;
 
@@ -350,8 +266,8 @@ export class MapLoader {
     this.wallsLayers.set(level, wallsLayer);
 
     const levelData = data.levels[level];
-    const mapHeight = levelData.map.length * this.tileSize;
-    const mapWidth = levelData.map[0].length * this.tileSize;
+    const mapHeight = data.height * this.tileSize;
+    const mapWidth = data.width * this.tileSize;
 
     this.scene.cache.json.add(levelKey, {
       wallsLayer,
@@ -362,7 +278,7 @@ export class MapLoader {
   }
 
   private parseEntities(
-    levelData: any, // Use any to handle transition between interface versions
+    levelData: any,
     tileSize: number
   ): {
     playerPos: { x: number; y: number };
@@ -391,14 +307,14 @@ export class MapLoader {
       decorations: [] as Array<any>,
     };
     
-    const mapData = this.scene.cache.json.get(
+    const mapMetadata = this.scene.cache.json.get(
       `${this.scene.registry.get("currentMap")}_data`
     );
 
-    // 1. NEW ARCHITECTURE (Layered Entities Array)
+    // 1. BMS ARCHITECTURE (Entities Array)
     if (levelData.entities && Array.isArray(levelData.entities)) {
         levelData.entities.forEach((entity: { x: number, y: number, symbol: string, uuid?: string, contents?: any, scale?: number, rotation?: number, offX?: number, offY?: number }) => {
-            const entityDef = mapData.entities[entity.symbol];
+            const entityDef = mapMetadata.entityTemplates[entity.symbol];
             if (!entityDef) return;
             
             const worldX = entity.x * tileSize + tileSize / 2;
@@ -409,7 +325,7 @@ export class MapLoader {
                     result.playerPos = { x: worldX, y: worldY };
                     break;
                 case "enemy":
-                    const enemyId = entityDef.id || entity.symbol; // Use ID or symbol as fallback
+                    const enemyId = entityDef.id || entity.symbol; 
                     const enemyTypeDef = EnemyRegistry.getEnemyDefinition(enemyId);
                     if (enemyTypeDef) {
                         result.enemies.push({
@@ -444,7 +360,6 @@ export class MapLoader {
             }
         });
         
-        // If we have playerPos in levelData, prioritize it for the player
         if (levelData.playerPos) {
             result.playerPos = levelData.playerPos;
         }
@@ -452,73 +367,24 @@ export class MapLoader {
         return result;
     }
 
-    // 2. BACKWARD COMPATIBILITY (Scanning tile grid)
-    for (let y = 0; y < levelData.map.length; y++) {
-      const row = levelData.map[y];
-      for (let x = 0; x < row.length; x++) {
-        const symbol = row[x];
-        const entityDef = mapData.entities[symbol];
-        if (!entityDef) continue;
-        const worldX = x * tileSize + tileSize / 2;
-        const worldY = y * tileSize + tileSize / 2;
-        switch (entityDef.type) {
-          case "player":
-            result.playerPos = { x: worldX, y: worldY };
-            break;
-          case "enemy":
-            const enemyId = entityDef.id || symbol;
-            const enemyTypeDef = EnemyRegistry.getEnemyDefinition(enemyId);
-            if (enemyTypeDef) {
-              result.enemies.push({
-                type: enemyId,
-                x: worldX,
-                y: worldY,
-                health: enemyTypeDef.health,
-                damage: enemyTypeDef.damage,
-                respawnTime: entityDef.respawn,
-              });
-            }
-            break;
-          case "item":
-             result.items.push({
-                 itemId: entityDef.uuid,
-                 weaponId: entityDef.id,
-                 x: worldX,
-                 y: worldY,
-                 contents: entityDef.contents
-             });
-             break;
-        }
-      }
-    }
+    // 2. BACKWARD COMPATIBILITY (Scanning tile grid - Disabled in BMS)
     return result;
   }
 
-  private async loadJson(url: string): Promise<MultiLevelMapData> {
-    return new Promise((resolve) => {
+  private async loadJson(url: string): Promise<any> {
+    return new Promise((resolve, reject) => {
       this.scene.load.json("tempMapData", url);
       this.scene.load.once("complete", () => {
         const data = this.scene.cache.json.get("tempMapData");
         this.scene.cache.json.remove("tempMapData");
-        
-        // Basic preprocessing for simplified map formats (array of strings vs array of arrays)
-        const normalizedData: MultiLevelMapData = {
-          ...data,
-          levels: {},
-        };
-        for (const level in data.levels) {
-            const levelData = data.levels[level];
-            let map: string[][];
-            if (levelData.map.length > 0 && typeof levelData.map[0] === "string") {
-                 // Convert list of strings to list of string arrays (splitting by space/tab is unsafe if symbols have length?
-                 // Usually symbols are fixed length or separated. The original code split by \s+.
-                 map = levelData.map.map((row: string) => row.trim().split(/\s+/));
-            } else {
-                map = levelData.map;
-            }
-            normalizedData.levels[level] = { ...levelData, map };
+        if (!data) {
+            reject(new Error(`Failed to load JSON: ${url}`));
+            return;
         }
-        resolve(normalizedData);
+        resolve(data);
+      });
+      this.scene.load.once("loaderror", (file: any) => {
+          if (file.key === "tempMapData") reject(new Error(`Load error for ${url}`));
       });
       this.scene.load.start();
     });

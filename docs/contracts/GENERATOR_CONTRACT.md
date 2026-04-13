@@ -1,53 +1,38 @@
-# World Generator Contract (v2.50)
+# World Generator Contract (v5.0)
 
-This contract defines the absolute rules for the Procedural World Engine. AI agents must follow these standards to ensure world consistency, traversability, and rendering integrity.
+This contract defines the absolute rules for the Procedural World Engine. AI agents MUST follow these standards to ensure world consistency, traversability, and rendering integrity.
 
 ## 1. Procedural Engine Standards
 - **Grid Standard**: All geometry and placement must be multiples of 32 (32px Grid).
-- **Infinite Depth Support**: The engine officially supports 8 floors (Z:+3 to Z:-4).
-- **Spawn Integrity**: Level 0 at (128, 128) must be a 10x10 dry, monster-free pavement plaza.
-- **Actor/Terrain Decoupling**: Entities (Player, Enemies, Items) MUST be stored in the `entities` array per level, NOT in the floor `map` grid. This allows entities to stand on any biome naturally.
+- **Infinite Depth Support**: The engine officially supports floors from Z:+3 to Z:-4.
+- **Actor/Terrain Decoupling**: Entities (Player, Enemies, Items) MUST be stored in the `entities` array per level, NOT in the floor `map` grid.
 
 ## 2. Perspective & Height (The 2.5D Rule)
-- **Root Position**: All structures start at a physical $(X, Y)$ coordinate.
 - **Vertical Shift**: For every floor level $Z$, the structure is visually offset in the map grid at $(X, Y - Z)$.
-- **Constant Footprint**: The $(W, H)$ of a house remains identical across levels.
-- **Roof Persistence**: Roofs are placed at $Z_{max} + 1$, matching the top floor footprint but shifted by an additional -1 in the $Y$ axis.
+- **Roof Persistence**: Roofs are placed at $Z_{max} + 1$, matching the top floor footprint but shifted by -1 in the $Y$ axis.
 
-## 3. Stair Pairing & Navigation (Global Alignment)
-- **Global Sync**: A `sup` (stair_up) at Level $Z$ and a `sdn` (stair_down) at Level $Z+1$ MUST share the exact same global $(X, Y)$ coordinates for perfect verticality.
-- **Alternating Shaft Rule (Multi-Story Standard)**: To prevent softlocks in buildings with 3+ floors, the `stair_up` and `stair_down` transitions on a single floor MUST NOT occupy the same space.
-    - **Implementation**: Alternate the stair shaft X-coordinate based on floor parity (e.g., Even floors use X+2, Odd floors use X+4).
-- **Phase Priority Rule**: All landing zone clearance and terrain smoothing (cleanup) MUST occur BEFORE placing functional objects (stairs, items, NPCs). Placing objects first and then running cleanup causes critical bugs (overwriting functional tiles with floor).
-- **Safe Landing Rule (The 2-Tile Offset)**: To prevent infinite loops, the player MUST NOT spawn directly on top of the return stair.
+## 3. Stair Pairing & Navigation (CRITICAL)
+- **Global Sync**: A `sup` at Level $Z$ and a `sdn` at Level $Z+1$ MUST share the exact same global $(X, Y)$ coordinates.
+- **Alternating Shaft Rule**: Shafts MUST alternate X-coordinates based on floor parity (Even floors use X+2, Odd floors use X+4) to prevent multi-story softlocks.
+- **Safe Landing (2-Tile Offset)**: 
     - **Ascending**: Player arrives at `(X, Y-2)` relative to the original `sup` coordinate.
     - **Descending**: Player arrives at `(X, Y+2)` relative to the original `sdn` coordinate.
-- **Landing Safety**: `ensureSafeTransition` must be called to guarantee a 1x1 walkable `floor` tile at the landing destination.
-- **Cave Access**: Level 0 must contain clear `hole` tiles leading to Level -1. Subterranean levels must have high stair density (40+ per level) for continuity.
+- **Landing Safety**: `ensureSafeTransition` must be called to guarantee a walkable tile (`floor` or `dungeon_floor`) at the landing destination.
 
-## 4. Mandatory Metadata & Colors
-- **Map Presence**: EVERY tile definition MUST include a `color` attribute (Hex string).
-- **Color Consistency**: The color should represent the average visual tone of the tile for the World Map.
-- **Minimap Logic**: Failure to provide a color results in a black void (Critical Bug).
+## 4. Vertical Structural Integrity (New in v5.0)
+- **Support Foundation Requirement**: No habitable tile (floor) can exist at Level $Z > 0$ without a supporting structure at Level $Z-1$.
+- **2.5D Foundation Offset**: A tile $(X, Y, Z)$ is visually "supported" by the tile at $(X, Y+1, Z-1)$.
+- **Foundation Fill**: When building at $Z$, the generator MUST fill $(X, Y+1, Z-1)$ with a wall or solid basalt to prevent "floating" visuals.
 
-## 5. Urban & Architectural Standards
-- **Town Foundation**: The town square (100-175 range) MUST be on a `pavement` (`pav`) foundation.
-- **Interior Materials**: Houses must use `floor` tiles as their ground material to prevent grass indoors.
-- **Persistence**: Terrain tiles MUST NOT be overwritten or removed to place entities.
+## 5. Suspended Urban Architectures
+- **The Platform City**: Cities (Town biome) are generated on **Level 1 (Z:1)**.
+- **Sewer Sub-Level (Z:0)**: Beneath every city tile on Z:1, a sewer/basement system MUST exist on Z:0.
+- **Platform Ledge Rule**: Any city tile on Z:1 that borders a non-city tile MUST have a `wall` (masonry) placed on Z:0 at $(X, Y+1)$ to serve as the platform foundation wall.
+- **Access Holes**: `hole` symbols in the city pavement lead to the Sewer level. All `hole` arrival points at Z:0 must have a `stair_up` for return.
 
-## 6. Population & Biomes
-- **Safe Zones**: Town (Level 0, 100-175) is a strict 0% monster zone.
-- **Depth Tiering**:
-    - **Highlands (Z:+1 to +3)**: 0.1% density.
-    - **Surface (Z:0)**: 0.3% density (Rats).
-    - **Caves (Z:-1 to -3)**: 1.5% - 4% density (Skeletons/Goblins).
-    - **Abyss (Z:-4)**: 6% density (Orcs/Dragons).
+## 6. Compound Blueprint Architectures
+- **Blueprint Logic**: Complex buildings (Churches, Mansions) must be defined as composite shapes (multiple rectangles at varying Heights).
+- **Consitency**: Blueprints must automatically apply the **Support Foundation Requirement** to all sub-components.
 
-## 7. Geographical Features
-- **Solid Coastlines**: Water -> Sand -> Grass transitions must be contiguous and noise-free.
-- **Smoothing Pass**: Use transitional tiles (e.g., `grs_wat_n`) to eliminate square edges. Priority: Snow > Grass > Path > Sand > Water.
-
-## 8. Rendering & Logic
-- **Culling**: Renderer only processes within viewport + 2 tile buffer.
-- **Invisibility**: Upper levels ($Z+1$) are hidden when the player is under a roof.
-- **Tile Comments**: Mandatory: `// MANDATORY: Ensure 'color' is defined for Minimap/WorldMap support.`
+---
+*Note: This contract must be consulted and referenced in the header of all world generation scripts.*

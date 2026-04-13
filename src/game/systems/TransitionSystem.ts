@@ -32,24 +32,24 @@ export class TransitionSystem {
     const currentLevel = this.scene.registry.get("currentLevel");
     const levelData = mapData.levels[currentLevel];
 
-    if (!levelData || !levelData.map) return;
+    if (!levelData) return;
 
     // Verificações de limites
     if (
       gridY < 0 ||
-      gridY >= levelData.map.length ||
+      gridY >= mapData.height ||
       gridX < 0 ||
-      gridX >= levelData.map[0].length
+      gridX >= mapData.width
     ) {
       return;
     }
 
-    const tileSymbol = levelData.map[gridY][gridX];
+    const tileSymbol = this.mapLoader.getTileAt(gridX, gridY, currentLevel);
     if (!tileSymbol) return;
 
     // --- MUDANÇA PRINCIPAL AQUI ---
     // Em vez de usar uma lista fixa, olhamos a definição do tile no JSON
-    const tileDef = mapData.tiles[tileSymbol];
+    const tileDef = mapData.tileDefinitions[tileSymbol];
 
     // Se o tile tem a propriedade "transition" definida no JSON
     if (tileDef && tileDef.transition) {
@@ -108,13 +108,13 @@ export class TransitionSystem {
 
       const currentLevel = this.scene.registry.get("currentLevel");
       const levelData = mapData.levels[currentLevel];
-      if (!levelData || !levelData.map) return;
+      if (!levelData) return;
 
       // Validate bounds
-      if (gridY < 0 || gridY >= levelData.map.length || gridX < 0 || gridX >= levelData.map[0].length) return;
+      if (gridY < 0 || gridY >= mapData.height || gridX < 0 || gridX >= mapData.width) return;
 
-      const tileSymbol = levelData.map[gridY][gridX];
-      const tileDef = mapData.tiles[tileSymbol];
+      const tileSymbol = this.mapLoader.getTileAt(gridX, gridY, currentLevel);
+      const tileDef = mapData.tileDefinitions[tileSymbol || ""];
 
       if (tileDef && tileDef.transition === "up") {
           const currentLevelInt = parseInt(currentLevel);
@@ -138,7 +138,7 @@ export class TransitionSystem {
       }
   }
 
-  private async performTransition(
+  public async performTransition(
     newLevel: string,
     gridX: number,
     gridY: number,
@@ -165,9 +165,8 @@ export class TransitionSystem {
       };
 
       // Verifica colisão no destino (para não nascer dentro da parede)
-      const newLevelData = mapData.levels[newLevel];
-      const newTileSymbol = newLevelData.map[gridY][gridX];
-      const newTileDef = mapData.tiles[newTileSymbol];
+      const newTileSymbol = this.mapLoader.getTileAt(gridX, gridY, newLevel);
+      const newTileDef = mapData.tileDefinitions[newTileSymbol || ""];
 
       if (newTileDef && newTileDef.block) {
         console.warn(

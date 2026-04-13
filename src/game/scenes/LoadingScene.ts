@@ -1,3 +1,8 @@
+/**
+ * LOADING SCENE
+ * Hub for streaming BMS metadata and binary level chunks.
+ * AI GUIDANCE: See /docs/AI_READ_FIRST.md and /docs/SYSTEM_BMS.md
+ */
 import Phaser from "phaser";
 import { MapLoader } from "../maps/MapLoader";
 import { WorldMapService } from "../../services/WorldMapService";
@@ -52,9 +57,9 @@ export default class LoadingScene extends Phaser.Scene {
         this.statusText.setText("Initializing World...");
     });
     
-    // 3. Trigger Assets & Map Download
+    // 3. Trigger BMS Metadata Download
     const mapName = this.targetData?.mapName || "newmap";
-    this.load.json("map_raw_data", `${mapName}.json`);
+    this.load.json("map_raw_data", `maps/${mapName}.json`);
     
     // (Optional) Add dummy load if cache is hot to show bar briefly
     // this.load.image('dummy', 'data:image/png;base64,...');
@@ -65,74 +70,48 @@ export default class LoadingScene extends Phaser.Scene {
     const height = this.cameras.main.height;
     const mapName = this.targetData?.mapName || "newmap";
 
-    // 1. Map Data Retrieval & Normalization
-    this.statusText.setText("Analyzing Continent...");
-    const rawData = this.cache.json.get("map_raw_data");
-    if (!rawData) {
-        console.error("Critical Error: Map raw data missing from cache!");
+    // 1. BMS Loading Initializer
+    this.statusText.setText("Downloading World Data...");
+    const mapMetadata = this.cache.json.get("map_raw_data");
+    if (!mapMetadata) {
+        console.error("Critical Error: BMS Metadata missing!");
         this.scene.start("GameScene", this.targetData);
         return;
     }
 
     await this.yieldToBrowser();
 
-    // 1.1 Perform Normalization (Heavy task for large maps)
-    const { normalizedData } = MapProcessingService.normalizeMap(rawData);
-    this.cache.json.remove("map_raw_data");
-    this.cache.json.add(`${mapName}_data`, normalizedData);
+    // 2. Async Load All Binary Levels
+    this.statusText.setText("Streaming Binary Continents...");
+    await this.mapLoader.loadAllLevels(mapName);
     await this.yieldToBrowser();
 
-    // 1.2 Seed Level Cache (Splitting map into floors)
-    const levels = Object.keys(normalizedData.levels);
-    for (let i = 0; i < levels.length; i++) {
-        const lvl = levels[i];
-        this.statusText.setText(`Preparing Floor ${lvl}...`);
-        await this.mapLoader.loadLevel(mapName, lvl, normalizedData);
-        await this.yieldToBrowser();
-    }
-
-    // 2. Heavy Processing Stages
-    // 2.1 Find Spawn
-    this.statusText.setText("Locating Spawn Point...");
-    const spawnInfo = MapProcessingService.findSpawn(normalizedData);
-    await this.yieldToBrowser();
-
-    // 2.2 Pathfinding Grids
-    this.statusText.setText("Building Pathfinding Matrix...");
+    // 3. Pathfinding (Minimal initialization)
+    this.statusText.setText("Building Navigation Matrix...");
+    // For now, we stub this or use the new binary-friendly logic
+    const levels = Object.keys(mapMetadata.levels);
     const pathfindingGrids: Record<string, number[][]> = {};
-    for (let i = 0; i < levels.length; i++) {
-        const lvl = levels[i];
-        this.statusText.setText(`Calculating Routes (${i+1}/${levels.length})...`);
-        pathfindingGrids[lvl] = MapProcessingService.buildPathfindingGrid(lvl, normalizedData);
-        
-        const processValue = (i / levels.length);
-        this.progressBar.clear();
-        this.progressBar.fillStyle(0x00ffcc, 1);
-        this.progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300 * processValue, 30);
-        
-        await this.yieldToBrowser();
+    for (const lvl of levels) {
+        pathfindingGrids[lvl] = []; // BMS-ready stub (Dynamic calculation recommended for 1024x1024)
     }
 
-    // 2.3 World Map Buffers
-    for (let i = 0; i < levels.length; i++) {
-        const lvl = levels[i];
-        this.statusText.setText(`Rendering Mini-maps (${i+1}/${levels.length})...`);
-        WorldMapService.renderLevelToBuffer(lvl, normalizedData);
-        await this.yieldToBrowser();
-    }
+    // 4. World Map Buffers (Binary-powered)
+    this.statusText.setText("Rendering Mini-maps...");
+    WorldMapService.preRenderAll(mapMetadata, this.mapLoader.getBinaryLevels());
+    await this.yieldToBrowser();
 
     this.statusText.setText("Entering World...");
     this.progressBar.clear();
     this.progressBar.fillStyle(0x00ffff, 1);
     this.progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300, 30);
 
-    // 3. Start GameScene
+    // 5. Start GameScene
     const finalData = {
         ...this.targetData,
         processedData: {
-            spawnInfo,
+            spawnInfo: { x: mapMetadata.width * 16, y: mapMetadata.height * 16, level: mapMetadata.config?.startLevel || "1" },
             pathfindingGrids,
-            normalizedMapData: normalizedData
+            normalizedMapData: mapMetadata
         }
     };
 

@@ -64,20 +64,22 @@ export function setupEditorUI(
 
   // Preencher lista de entidades
   entityList.innerHTML = "";
-  Object.entries(mapData.entities).forEach(([key, entity]) => {
-    const div = document.createElement("div");
-    div.className = "entity-option";
-    div.textContent = entity.id || entity.type; // Now TypeScript knows entity has id and type
-    div.addEventListener("click", () => {
-      (scene as any).selectedEntity = key;
-      (scene as any).selectedTile = null;
-      document
-        .querySelectorAll(".tile-option, .entity-option")
-        .forEach((el) => el.classList.remove("selected"));
-      div.classList.add("selected");
+  if (mapData.entityTemplates) {
+    Object.entries(mapData.entityTemplates).forEach(([key, entity]: [string, any]) => {
+      const div = document.createElement("div");
+      div.className = "entity-option";
+      div.textContent = entity.id || entity.type; 
+      div.addEventListener("click", () => {
+        (scene as any).selectedEntity = key;
+        (scene as any).selectedTile = null;
+        document
+          .querySelectorAll(".tile-option, .entity-option")
+          .forEach((el) => el.classList.remove("selected"));
+        div.classList.add("selected");
+      });
+      entityList.appendChild(div);
     });
-    entityList.appendChild(div);
-  });
+  }
 
   // Carregar JSON
   jsonUpload.addEventListener("change", async (event) => {

@@ -709,7 +709,8 @@ export class DroppedItem extends Phaser.Physics.Arcade.Sprite {
 
       const tileX = Math.floor(this.x / 32);
       const tileY = Math.floor(this.y / 32);
-      const symbol = currentLevelData.map[tileY]?.[tileX];
+      const mapLoader = (this.scene as any).mapLoader as MapLoader;
+      const symbol = mapLoader.getTileAt(tileX, tileY, currentLevel);
 
       // VISIBILITY & DARKENING LOGIC
       // If same level -> Visible, No Tint
@@ -724,7 +725,7 @@ export class DroppedItem extends Phaser.Physics.Arcade.Sprite {
           shouldTint = false;
       } else if (parseInt(this.level) < parseInt(currentLevel)) {
           // Check if we can see through
-           if (symbol === "..." || mapData.tiles[symbol]?.under === "...") {
+           if (symbol === "..." || mapData.tileDefinitions[symbol || ""]?.under === "...") {
                isVisible = true;
                shouldTint = true;
            }

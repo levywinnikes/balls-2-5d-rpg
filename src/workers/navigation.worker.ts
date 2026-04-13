@@ -22,20 +22,26 @@ interface Portal {
 }
 
 let mapData: any = null;
+let binaryLevels: Record<string, Uint8Array> = {};
 let levels: string[] = [];
 let portalsByLevel: Record<string, Portal[]> = {};
+let mapWidth = 0;
+let mapHeight = 0;
 
 // Helper to check if a tile is walkable
 function isWalkable(x: number, y: number, level: string | number): boolean {
-    if (!mapData) return false;
+    if (!mapData || !binaryLevels) return false;
     const levelStr = level.toString();
-    const levelData = mapData.levels[levelStr];
-    if (!levelData || !levelData.map) return false;
+    const buffer = binaryLevels[levelStr];
+    if (!buffer) return false;
 
-    if (y < 0 || y >= levelData.map.length || x < 0 || x >= levelData.map[0].length) return false;
+    if (y < 0 || y >= mapHeight || x < 0 || x >= mapWidth) return false;
 
-    const symbol = levelData.map[y][x];
-    const tileDef = mapData.tiles[symbol];
+    const tileIdx = buffer[y * mapWidth + x];
+    const symbol = mapData.tileAtlas[tileIdx];
+    if (!symbol) return false;
+
+    const tileDef = mapData.tileDefinitions[symbol] || (mapData.entityTemplates ? mapData.entityTemplates[symbol] : null);
     
     if (!tileDef) return false;
     return !tileDef.block;
@@ -71,18 +77,24 @@ onmessage = function(e: MessageEvent) {
     if (type === "FIND_PATH") console.log(`[NavWorker] FIND_PATH received for L${data.start.level}`);
 
     if (type === "INIT_MAP") {
-        mapData = data;
+        mapData = data.data;
+        binaryLevels = data.binaryLevels;
+        mapWidth = mapData.width;
+        mapHeight = mapData.height;
         levels = Object.keys(mapData.levels).sort((a, b) => parseInt(a) - parseInt(b));
         
-        // Pre-index portals for speed
+        // Pre-index portals for speed using binary data
         portalsByLevel = {};
         levels.forEach(lvl => {
             portalsByLevel[lvl] = [];
-            const grid = mapData.levels[lvl].map;
-            for (let y = 0; y < grid.length; y++) {
-                for (let x = 0; x < grid[0].length; x++) {
-                    const symbol = grid[y][x];
-                    const tileDef = mapData.tiles[symbol];
+            const buffer = binaryLevels[lvl];
+            if (!buffer) return;
+
+            for (let y = 0; y < mapHeight; y++) {
+                for (let x = 0; x < mapWidth; x++) {
+                    const tileIdx = buffer[y * mapWidth + x];
+                    const symbol = mapData.tileAtlas[tileIdx];
+                    const tileDef = mapData.tileDefinitions[symbol];
                     if (tileDef && tileDef.transition) {
                         const currentL = parseInt(lvl);
                         if (tileDef.transition === "down" || tileDef.transition === "dwn" || tileDef.id === "hole") {
