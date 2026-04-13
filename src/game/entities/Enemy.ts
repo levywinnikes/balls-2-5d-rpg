@@ -11,6 +11,7 @@ import { MultiLevelMapData } from "../maps/MapTypes";
 
 export default class Enemy {
   public sprite: Phaser.Physics.Arcade.Sprite;
+  public shadow: Phaser.GameObjects.Sprite;
   public health: number;
   private damage: number;
   public enemyType: string;
@@ -89,12 +90,23 @@ export default class Enemy {
     
     this.loot = enemyDef.loot || []; 
     this.magicAttacks = enemyDef.magicAttacks || [];
+
+    // --- SHADOW SYSTEM ---
+    const { BaseTileGraphic } = require("../graphics/tiles/BaseTileGraphic");
+    this.shadow = scene.add.sprite(x, y + 12, BaseTileGraphic.SHADOW_TEXTURE_KEY);
+    this.shadow.setAlpha(0.35);
+    this.shadow.setDepth(this.sprite.depth - 1);
+    const baseScale = enemyDef.scale ?? 4.0;
+    this.shadow.setScale(baseScale * 0.3); // Scale shadow with enemy size
   }
 
   // ... (methods) ...
 
   public update(player: Player): void {
-    if (this.health <= 0 || !this.sprite || !this.sprite.active || !this.sprite.scene) return;
+    if (this.health <= 0 || !this.sprite || !this.sprite.active || !this.sprite.scene) {
+        if (this.shadow) this.shadow.destroy();
+        return;
+    }
 
     const currentLevel = (this.sprite.scene as GameScene).registry.get("currentLevel");
     if (this.level !== currentLevel) {
@@ -112,7 +124,15 @@ export default class Enemy {
     const oldY = this.sprite.y;
     
     // Y-Sorting for correct depth perception
-    this.sprite.setDepth(this.sprite.y);
+    this.sprite.setDepth(this.sprite.y + 10);
+
+    // Sync Shadow
+    if (this.shadow) {
+        this.shadow.setPosition(this.sprite.x, this.sprite.y + 10);
+        this.shadow.setDepth(this.sprite.depth - 1);
+        this.shadow.setVisible(this.sprite.visible);
+        this.shadow.setAlpha(0.6);
+    }
 
     if (this.hud && (oldX !== this.sprite.x || oldY !== this.sprite.y)) {
       this.hud.updatePosition();

@@ -640,6 +640,11 @@ export class TileRegistry {
 
   static preloadAll(scene: Phaser.Scene): void {
     this.initialize();
+    
+    // Generate global shadow texture once
+    const { BaseTileGraphic } = require("./BaseTileGraphic");
+    BaseTileGraphic.generateShadowTexture(scene);
+
     this.tiles.forEach((tile) => {
       tile.graphic.preload(scene);
     });

@@ -2107,9 +2107,17 @@ export default class GameScene extends Phaser.Scene {
           this.player.sprite.x,
           this.player.sprite.y
         );
+
+        // SYNC ENTITIES TO PERSPECTIVE CONTAINERS
+        if (this.player?.sprite) {
+            // Shadow FIRST, then Sprite (Last is on top)
+            if ((this.player as any).shadow) {
+                this.dynamicLevelRenderer.syncEntityToContainer((this.player as any).shadow, this.currentLevel);
+            }
+            this.dynamicLevelRenderer.syncEntityToContainer(this.player.sprite, this.currentLevel);
+        }
     }
     this.perf.mapTime = performance.now() - mapStart;
-    this.perf.renderedTiles = (this.dynamicLevelRenderer as any).getRenderedTilesCount?.() || 0;
 
     if (diag.enableClouds) {
         this.dynamicLevelRenderer.updateClouds(time, delta);
@@ -2148,9 +2156,23 @@ export default class GameScene extends Phaser.Scene {
     activeEnemies.forEach(enemy => {
         if (enemy.sprite && this.player) {
             enemy.sprite.setVisible(!hideEnemies);
+            
+            // Sync to container for perspective (Shadow FIRST)
+            if (enemy.shadow) {
+                this.dynamicLevelRenderer.syncEntityToContainer(enemy.shadow, enemy.level);
+            }
+            this.dynamicLevelRenderer.syncEntityToContainer(enemy.sprite, enemy.level);
+
             if (diag.enableAI && !hideEnemies) {
                 enemy.update(this.player);
             }
+        }
+    });
+
+    // SYNC DROPPED ITEMS
+    this.droppedItemsGroup.getChildren().forEach((child: any) => {
+        if (child.active) {
+            this.dynamicLevelRenderer.syncEntityToContainer(child, (child as any).level || this.currentLevel);
         }
     });
 

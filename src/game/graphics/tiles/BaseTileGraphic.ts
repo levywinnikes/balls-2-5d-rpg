@@ -9,6 +9,7 @@ import Phaser from "phaser";
  */
 export abstract class BaseTileGraphic {
   protected static SIZE = { width: 32, height: 32 };
+  public static readonly SHADOW_TEXTURE_KEY = "global-shadow-texture";
   
   // To be overridden in subclasses as 'static readonly TEXTURE_KEY'
   // and 'public readonly TEXTURE_KEY' (for instance access if needed)
@@ -70,6 +71,18 @@ export abstract class BaseTileGraphic {
 
     sprite.setDisplaySize(this.SIZE.width, this.SIZE.height);
     return sprite;
+  }
+  
+  public static generateShadowTexture(scene: Phaser.Scene): void {
+    if (scene.textures.exists(this.SHADOW_TEXTURE_KEY)) return;
+    
+    const graphics = scene.add.graphics();
+    graphics.fillStyle(0x000000, 0.4); // Semi-transparent black
+    // Draw an elliptical shadow
+    graphics.fillEllipse(16, 8, 24, 12);
+    
+    graphics.generateTexture(this.SHADOW_TEXTURE_KEY, 32, 16);
+    graphics.destroy();
   }
 
   protected abstract drawTile(graphics: Phaser.GameObjects.Graphics): void;

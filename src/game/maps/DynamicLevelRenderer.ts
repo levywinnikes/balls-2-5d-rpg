@@ -14,7 +14,8 @@ export class DynamicLevelRenderer {
   // CHANGED: Map<Level, Map<TileKey, Sprite[]>> to support multiple sprites per tile and ensure full cleanup
   private renderedTiles: Map<string, Map<string, Phaser.GameObjects.Sprite[]>> = new Map();
   private renderedDecorations: Map<string, Phaser.GameObjects.Sprite[]> = new Map();
-  public activeEnemies: Map<string, any> = new Map(); // Track spawned enemies
+  private levelContainers: Map<string, Phaser.GameObjects.Container> = new Map();
+  public activeEnemies: Map<string, any> = new Map();
   public renderRadius: number = 20;
   private tilePool: TilePool;
   private debugGraphics: Phaser.GameObjects.Graphics | null;
@@ -53,30 +54,46 @@ export class DynamicLevelRenderer {
   }
 
   private updateAllTileTints(enabled: boolean): void {
-      let depthTint = 0xffffff;
-    const currentLevelNum = parseInt(this.currentLevel);
-    
-    // THEMAL/DARKNESS EFFECTS FROM BIOME CONTRACT
-    if (currentLevelNum < 0) {
-        if (currentLevelNum <= -5) {
-            depthTint = 0xff8888; // Reddish Heat
-        } else {
-            // Darken (0xCCCCCC for -1, 0x999999 for -2, etc)
-            const darknessVal = Math.max(0x44, 0xff - Math.abs(currentLevelNum) * 0x33);
-            depthTint = Phaser.Display.Color.GetColor(darknessVal, darknessVal, darknessVal);
-        }
-    }
+    const player = (this.scene as any).player as any;
+    if (!player || !player.sprite) return;
 
-    this.renderedTiles.forEach((levelTiles) => {
-        levelTiles.forEach((sprites) => {
-            sprites.forEach(sprite => {
-                // Apply depth tint first
-                sprite.setTint(depthTint);
-                
-                // Extract isCollidable info (Main sprite usually has the body)
-                const isCollidable = !!sprite.body;
-                this.applyDebugTint(sprite, isCollidable, enabled, depthTint);
-            });
+    const currentLevelNum = parseInt(this.currentLevel);
+    const playerX = player.sprite.x;
+    const playerY = player.sprite.y;
+
+    this.levelContainers.forEach((container, levelKey) => {
+        const levelNum = parseInt(levelKey);
+        const levelDiff = levelNum - currentLevelNum;
+        
+        // 1. Perspective SCALE (Subtle 4% per level for stability)
+        const perspectiveScale = 1 + (levelDiff * 0.04);
+        
+        // 2. Perspective TRANSFORM (Vertical Z-Stacking)
+        // Shift levels UP by 28px per Z-level to keep buildings 'grounded'
+        const zShiftY = levelDiff * -28; 
+        
+        container.setScale(perspectiveScale);
+        container.x = playerX * (1 - perspectiveScale);
+        container.y = playerY * (1 - perspectiveScale) + zShiftY;
+
+        container.y = playerY * (1 - perspectiveScale) + zShiftY;
+
+        // 3. Perspective TINT
+        let finalTint = 0xffffff;
+        if (levelDiff > 0) {
+            finalTint = Phaser.Display.Color.GetColor(Math.min(255, 220 + levelDiff * 20), Math.min(255, 220 + levelDiff * 20), 180);
+        } else if (levelDiff < 0) {
+            const darknessVal = Math.max(80, 255 + levelDiff * 50);
+            finalTint = Phaser.Display.Color.GetColor(darknessVal, darknessVal, Math.min(255, darknessVal + 30));
+        }
+
+        // Apply tints to children
+        container.iterate((child: any) => {
+            if (!child.active) return;
+
+            if (child.setTint) {
+                child.setTint(finalTint);
+            }
         });
     });
 }
@@ -174,6 +191,18 @@ export class DynamicLevelRenderer {
     const levelMap = this.renderedTiles.get(level);
     if (!levelMap) return [];
     return Array.from(levelMap.values()).flat();
+  }
+
+  private getLevelContainer(level: string): Phaser.GameObjects.Container {
+      let container = this.levelContainers.get(level);
+      if (!container) {
+          container = this.scene.add.container(0, 0);
+          const levelNum = parseInt(level);
+          // Set base depth
+          container.setDepth(this.getDepthForLevel(levelNum, parseInt(this.currentLevel)));
+          this.levelContainers.set(level, container);
+      }
+      return container;
   }
 
   public invalidateTile(level: string, x: number, y: number): void {
@@ -326,45 +355,46 @@ export class DynamicLevelRenderer {
             worldY,
             { levelOffset, isUnderTile: false, reusableSprite: reusable }
           );
+          
+          // Add to perspective container
+          this.getLevelContainer(this.currentLevel).add(sprite);
+          additionalSprites.forEach(s => this.getLevelContainer(this.currentLevel).add(s));
+
           sprite.setName(tileKey);
           sprite.setVisible(!hideTiles);
           sprite.setActive(true);
           
           levelTiles.set(tileKey, [sprite, ...additionalSprites]);
 
+          // --- RESTORED PHYSICS COLLISION (FIX v6.1) ---
           if (isCollidable || mapData.tileDefinitions[symbol]?.block === true) {
+            const wallsLayer = mapLoader?.getWallsLayer?.(this.currentLevel);
             if (wallsLayer) wallsLayer.add(sprite);
-            if (mapData.tileDefinitions[symbol]?.block === true || isCollidable) {
-                 const body = sprite.body as Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody;
-                  if (body) {
-                      if ('setImmovable' in body) body.setImmovable(true);
+            
+            const body = sprite.body as Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody;
+            if (body) {
+                if ('setImmovable' in body) body.setImmovable(true);
 
-                      const registryDef = TileRegistry.getTileDefinition(tileDef.id);
-                      if (registryDef?.bodySize || registryDef?.bodyOffset) {
-                          if (registryDef.bodySize) body.setSize(registryDef.bodySize.width, registryDef.bodySize.height);
-                          if (registryDef.bodyOffset) body.setOffset(registryDef.bodyOffset.x, registryDef.bodyOffset.y);
-                      } else if (tileDef.id.includes("wall") || tileDef.id.includes("chest")) {
-                          if (tileDef.isFrontWall) {
-                              body.setSize(this.tileSize, 32); 
-                              body.setOffset(0, this.tileSize - 32); 
-                          } else if (tileDef.id.includes("side")) {
-                              body.setSize(32, 32);
-                              body.setOffset((this.tileSize - 32) / 2, this.tileSize - 32); 
-                          } else {
-                              body.setSize(this.tileSize, 32);
-                              body.setOffset(0, this.tileSize - 32);
-                          }
-                      }
-                  }
+                const registryDef = TileRegistry.getTileDefinition(tileDef.id);
+                if (registryDef?.bodySize || registryDef?.bodyOffset) {
+                    if (registryDef.bodySize) body.setSize(registryDef.bodySize.width, registryDef.bodySize.height);
+                    if (registryDef.bodyOffset) body.setOffset(registryDef.bodyOffset.x, registryDef.bodyOffset.y);
+                } else if (tileDef.id.includes("wall") || tileDef.id.includes("chest")) {
+                    if (tileDef.isFrontWall) {
+                        body.setSize(this.tileSize, 32); 
+                        body.setOffset(0, this.tileSize - 32); 
+                    } else if (tileDef.id.includes("side")) {
+                        body.setSize(32, 32);
+                        body.setOffset((this.tileSize - 32) / 2, this.tileSize - 32); 
+                        body.setSize(this.tileSize, 32);
+                        body.setOffset(0, this.tileSize - 32);
+                    }
+                }
             }
           }
         }
         
-        const spriteList = levelTiles.get(tileKey);
-        if (spriteList) {
-            spriteList.forEach(s => s.setVisible(!hideTiles));
-        }
-        
+        const sprList = levelTiles.get(tileKey);
         const isCollidableEffective = TileRegistry.isCollidable(tileDef.id) || (mapData.tileDefinitions[symbol]?.block === true);
         if (levelTiles.has(tileKey)) {
             levelTiles.get(tileKey)!.forEach(s => this.applyDebugTint(s, isCollidableEffective, PlayerState.getInstance().isDebugCollisionEnabled()));
@@ -389,6 +419,12 @@ export class DynamicLevelRenderer {
                    y * this.tileSize + this.tileSize / 2,
                    { levelOffset: this.getDepthForLevel(parseInt(this.currentLevel), parseInt(this.currentLevel)), isUnderTile: true, reusableSprite: reusable }
                  );
+                 
+                 this.getLevelContainer(this.currentLevel).add(sprite);
+                 additionalSprites.forEach(s => this.getLevelContainer(this.currentLevel).add(s));
+
+                 sprite.setData("worldX", x * this.tileSize + this.tileSize / 2);
+                 sprite.setData("worldY", y * this.tileSize + this.tileSize / 2);
                  sprite.setName(underTileKey);
                  sprite.setVisible(!hideTiles);
                  sprite.setActive(true);
@@ -477,6 +513,9 @@ export class DynamicLevelRenderer {
         droppedItem.updateDepth();
         });
     }
+
+    // APPLY PERSPECTIVE SHADING/SCALING (v5.8 Premium Visuals)
+    this.updateAllTileTints(PlayerState.getInstance().isDebugCollisionEnabled());
 
     this.cleanupTiles(tilesToKeep);
 
@@ -573,6 +612,10 @@ export class DynamicLevelRenderer {
           worldY,
           { levelOffset, isUnderTile: false, reusableSprite: reusable }
         );
+        
+        this.getLevelContainer(levelStr).add(sprite);
+        additionalSprites.forEach(s => this.getLevelContainer(levelStr).add(s));
+
         sprite.setTint(0x666666);
         sprite.setAlpha(0.8);
         sprite.setName(tileKey);
@@ -601,7 +644,13 @@ export class DynamicLevelRenderer {
               worldY,
               { levelOffset: levelOffset - 1, isUnderTile: true, reusableSprite: reusable }
             );
-            sprite.setTint(0x666666);
+            
+             this.getLevelContainer(levelStr).add(sprite);
+             additionalSprites.forEach(s => this.getLevelContainer(levelStr).add(s));
+
+             sprite.setData("worldX", worldX);
+             sprite.setData("worldY", worldY);
+             sprite.setTint(0x666666);
             sprite.setAlpha(0.8);
             sprite.setName(underTileKey);
             sprite.setVisible(!PlayerState.getInstance().getDiagnosticSettings().hideTiles);
@@ -663,6 +712,10 @@ export class DynamicLevelRenderer {
             worldY,
             { levelOffset, isUnderTile: false, reusableSprite: reusable }
           );
+          
+          this.getLevelContainer(levelStr).add(sprite);
+          additionalSprites.forEach(s => this.getLevelContainer(levelStr).add(s));
+
           sprite.setAlpha(1.0);
           sprite.setName(tileKey);
           sprite.setVisible(true);
@@ -688,6 +741,10 @@ export class DynamicLevelRenderer {
                 worldY,
                 { levelOffset: levelOffset - 1, isUnderTile: true, reusableSprite: reusable }
               );
+              
+              this.getLevelContainer(levelStr).add(sprite);
+              additionalSprites.forEach(s => this.getLevelContainer(levelStr).add(s));
+
               sprite.setAlpha(1.0);
               sprite.setName(underTileKey);
               sprite.setVisible(true);
@@ -706,6 +763,13 @@ export class DynamicLevelRenderer {
     }
   }
 
+  public syncEntityToContainer(sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.GameObject, level: string): void {
+      const container = this.getLevelContainer(level);
+      if (sprite.parentContainer !== container) {
+          container.add(sprite as any);
+      }
+  }
+
   private getDepthForLevel(targetLevel: number, currentLevel: number): number {
     return (targetLevel - currentLevel) * 100000;
   }
@@ -722,6 +786,8 @@ export class DynamicLevelRenderer {
           const wallsLayer = mapLoader?.getWallsLayer?.(level);
           sprites.forEach(sprite => {
               if (wallsLayer) wallsLayer.remove(sprite);
+              // CRITICAL: Remove from container before pooling to prevent zombie movements
+              sprite.parentContainer?.remove(sprite); 
               this.tilePool.release(sprite);
           });
           keysToRemove.push(key);
@@ -737,7 +803,10 @@ export class DynamicLevelRenderer {
 
   private clearRenderedTiles(): void {
     this.renderedTiles.forEach((tiles) =>
-      tiles.forEach((spriteList) => spriteList.forEach(sprite => sprite.destroy()))
+      tiles.forEach((spriteList) => spriteList.forEach(sprite => {
+          sprite.parentContainer?.remove(sprite);
+          sprite.destroy();
+      }))
     );
     this.renderedTiles.clear();
   }
@@ -1045,6 +1114,9 @@ export class DynamicLevelRenderer {
           tiles.forEach((sprites) => sprites.forEach(s => s.destroy()));
       });
       this.renderedTiles.clear();
+      
+      this.levelContainers.forEach(c => c.destroy());
+      this.levelContainers.clear();
 
       if (this.debugGraphics) {
           this.debugGraphics.destroy();

@@ -20,6 +20,7 @@ import { FloatingText } from "../effects/FloatingText";
 
 export default class Player {
   public sprite: Phaser.Physics.Arcade.Sprite;
+  private shadow: Phaser.GameObjects.Sprite;
   private currentSpeed: number = 120;
   private shiftKey: Phaser.Input.Keyboard.Key;
   private lastDirection: "up" | "down" | "left" | "right" = "down";
@@ -46,6 +47,13 @@ export default class Player {
     this.currentSpeed = this.state.getCurrentSpeed();
     this.sprite = PlayerGraphic.create(scene, x, y);
     this.sprite.setCollideWorldBounds(true);
+
+    // Initial shadow creation
+    const { BaseTileGraphic } = require("../graphics/tiles/BaseTileGraphic");
+    this.shadow = scene.add.sprite(x, y + 4, BaseTileGraphic.SHADOW_TEXTURE_KEY);
+    this.shadow.setAlpha(0.4);
+    this.shadow.setDepth(this.sprite.depth - 1);
+    this.shadow.setScale(1.2);
 
     this.hud = new PlayerHealthBar(scene, this);
 
@@ -173,7 +181,16 @@ export default class Player {
 
     // Update Depth for Y-Sorting (Dynamic Layering)
     // Assumes player is always on current level relative to rendering
-    this.sprite.setDepth(this.sprite.y);
+    // FIX: Add a base depth of +10 to ensure player is ABOVE the floor tiles at the same Y
+    this.sprite.setDepth(this.sprite.y + 10);
+    
+    // Sync Shadow Position and Depth
+    if (this.shadow) {
+        this.shadow.setPosition(this.sprite.x, this.sprite.y + 10);
+        this.shadow.setDepth(this.sprite.depth - 1); // Directly below player but above floor
+        this.shadow.setAlpha(0.6); // Darker shadow
+        this.shadow.setScale(1.5); // Larger shadow
+    }
 
     // --- IRON SHIELD BANTER LOGIC ---
     const now = Date.now();

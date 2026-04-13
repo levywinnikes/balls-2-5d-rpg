@@ -333,6 +333,7 @@ export class EnemyRegistry {
     chaseRange: number;
     returnToSpawn: boolean;
     magicAttacks: string[];
+    scale: number;
   } {
     const enemyDef = this.enemies.find((e) => e.id === enemyId);
     if (!enemyDef) throw new Error(`Enemy ${enemyId} not registered`);
@@ -379,7 +380,8 @@ export class EnemyRegistry {
       chaseRange: stats.chaseRange * 32, // Convert tiles to pixels
       returnToSpawn: stats.returnToSpawn,
       armor: stats.armor,
-      magicAttacks: stats.magicAttacks || []
+      magicAttacks: stats.magicAttacks || [],
+      scale: scale
     };
   }
 
