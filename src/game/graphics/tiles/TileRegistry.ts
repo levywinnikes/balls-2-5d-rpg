@@ -48,6 +48,9 @@ import { SewerBrickGraphic } from "./floor/SewerBrickGraphic";
 import { ManholeGraphic } from "./floor/ManholeGraphic";
 import { GothicWallGraphic } from "./wall/GothicWallGraphic";
 import { FoundationWallGraphic } from "./wall/FoundationWallGraphic";
+import { StoneWallGraphic } from "./wall/StoneWallGraphic";
+import { StoneStatueGraphic } from "./decoration/StoneStatueGraphic";
+import { WoodenRoofGraphic } from "./roof/WoodenRoofGraphic";
 
 // Central registry for all game tiles
 const COLORS = {
@@ -268,6 +271,17 @@ export class TileRegistry {
         color: "#475569",
         stepSound: "mountain",
         speedModifier: 0.6,
+        isCollidable: true,
+        blocksRanged: true,
+        baseDepth: 2,
+        bodySize: { width: 32, height: 32 },
+      },
+      {
+        id: "mountain-edge",
+        graphic: MountainGraphic,
+        color: "#64748b",
+        stepSound: "mountain",
+        speedModifier: 0.8, // Slightly easier to walk on
         isCollidable: true,
         blocksRanged: true,
         baseDepth: 2,
@@ -555,6 +569,33 @@ export class TileRegistry {
         blocksRanged: true,
         baseDepth: 2,
         bodySize: { width: 32, height: 32 },
+      },
+      {
+        id: "stone-wall",
+        graphic: StoneWallGraphic,
+        color: "#4b5563",
+        isCollidable: true,
+        blocksRanged: true,
+        baseDepth: 2,
+        bodySize: { width: 32, height: 32 },
+      },
+      {
+        id: "stone-statue",
+        graphic: StoneStatueGraphic,
+        color: "#6b7280",
+        isCollidable: true,
+        blocksRanged: true,
+        baseDepth: 3,
+        bodySize: { width: 24, height: 24 },
+        bodyOffset: { x: 4, y: 4 },
+      },
+      {
+        id: "wooden-roof",
+        graphic: WoodenRoofGraphic,
+        color: "#78350f",
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
       },
     ]);
 

@@ -45,7 +45,8 @@ const SYMBOLS = {
     dungeon_floor: 'dfn', dungeon_wall: 'dwl', mountain_edge: 'mte',
     cracked_earth: 'cre', mud: 'mud', corrupted_grass: 'cgr', toxic_water: 'twat',
     ice_cave_floor: 'icf', crystal_spike: 'csp', obsidian_floor: 'obs',
-    cobblestone: 'cob', ruined_path: 'rpa', foundation_brick: 'fdb', gothic_wall: 'gtw'
+    cobblestone: 'cob', ruined_path: 'rpa', foundation_brick: 'fdb', gothic_wall: 'gtw',
+    stone_statue: 'ss', stone_wall: 'sw', wooden_roof: 'wr', house_wall: 'hwa'
 };
 
 function createLayer(fill = SYMBOLS.empty) {
@@ -272,12 +273,17 @@ for (let y = CITY_CENTER_Y - CITY_RADIUS; y <= CITY_CENTER_Y + CITY_RADIUS; y++)
     }
 }
 
-// 3. URBAN SANITIZATION (Directly Clean Z:0)
-console.log("Sanitizing Level 0 Foundation Slab...");
+// 3. URBAN SANITIZATION (Directly Clean Z:0 and Clear Sky Z:2+)
+console.log("Sanitizing Urban Levels (Z:0 Solid, Z:2+ Clear)...");
 pavementSet.forEach(pos => {
     const [x, y] = pos.split(',').map(Number);
     // Clear all biome noise (trees, grass, snow) and replace with solid basalt foundation
     levels["0"][y][x] = SYMBOLS.basalt;
+    
+    // Clear the "Sky" above the city so mountains don't float over houses
+    for (let z = 2; z <= 7; z++) {
+        levels[z.toString()][y][x] = SYMBOLS.empty;
+    }
 });
 
 // --- PHASE 3.1: PLATFORM MASONRY FOUNDATIONS (Z:0) ---
@@ -361,13 +367,14 @@ function buildStructure(sx, sy, blueprint) {
                     const isWall = (x === rx || x === rx + part.w - 1 || y === ry || y === ry + part.h - 1);
                     
                     if (isWall) {
-                        levels[z][y][x] = part.type ? SYMBOLS.gothic_wall : SYMBOLS.wall;
+                        let wallSym = part.type === 'sw' ? SYMBOLS.stone_wall : (part.type === 'gtw' ? SYMBOLS.gothic_wall : SYMBOLS.house_wall);
+                        levels[z][y][x] = wallSym;
                         // For doors (only on ground level Z:1 for city houses)
                         if (baseZ + f === 1 && y === ry + part.h - 1 && x === Math.floor(rx + part.w/2)) {
                             levels[z][y][x] = SYMBOLS.floor;
                         }
                     } else {
-                        levels[z][y][x] = SYMBOLS.floor;
+                        levels[z][y][x] = part.innerContent === 'ss' ? SYMBOLS.stone_statue : SYMBOLS.floor;
                     }
                     buildFoundation(x, y, baseZ + f);
                 }
@@ -379,7 +386,7 @@ function buildStructure(sx, sy, blueprint) {
                 for (let x = rx; x < rx + part.w; x++) {
                     for (let y = roofY; y < roofY + part.h; y++) {
                         if (y >= 0 && y < HEIGHT && x >= 0 && x < WIDTH) {
-                            levels[roofZ][y][x] = SYMBOLS.roof;
+                            levels[roofZ][y][x] = part.roofType === 'wr' ? SYMBOLS.wooden_roof : SYMBOLS.roof;
                         }
                     }
                 }
@@ -461,6 +468,17 @@ const BLUEPRINTS = {
     },
     house: {
         parts: [{ x: 0, y: 0, w: 6, h: 6, floors: 2, z: 1 }]
+    },
+    shrine_statue: {
+        parts: [
+            { x: 0, y: 0, w: 3, h: 3, floors: 1, z: 1, type: 'sw' }, // Platform base
+            { x: 1, y: 1, w: 1, h: 1, floors: 1, z: 2, innerContent: 'ss' } // Statue on platform
+        ]
+    },
+    guard_tower: {
+        parts: [
+            { x: 0, y: 0, w: 4, h: 4, floors: 3, z: 1, type: 'sw', roofType: 'wr' }
+        ]
     }
 };
 function ensureSafeTransition(toZ, x, y) {
@@ -484,7 +502,17 @@ buildStructure(CITY_CENTER_X - 15, CITY_CENTER_Y - 15, BLUEPRINTS.church);
 houseFootprints.push({x1: 490, y1: 490, x2: 530, y2: 530});
 buildStructure(CITY_CENTER_X + 10, CITY_CENTER_Y + 5, BLUEPRINTS.mansion);
 
-// 2. GRID PARCEL PLACEMENT (Coherent Rows)
+// 2. EXPLORATION PACK: FIXED POIS
+console.log("Placing Exploration Pack POIs...");
+// Shrine in the NW Forest
+buildStructure(300, 300, BLUEPRINTS.shrine_statue);
+// Guard Towers at City Quadrants
+buildStructure(CITY_CENTER_X - CITY_RADIUS - 10, CITY_CENTER_Y, BLUEPRINTS.guard_tower); // West
+buildStructure(CITY_CENTER_X + CITY_RADIUS + 5, CITY_CENTER_Y, BLUEPRINTS.guard_tower); // East
+buildStructure(CITY_CENTER_X, CITY_CENTER_Y - CITY_RADIUS - 10, BLUEPRINTS.guard_tower); // North
+buildStructure(CITY_CENTER_X, CITY_CENTER_Y + CITY_RADIUS + 5, BLUEPRINTS.guard_tower); // South
+
+// 3. GRID PARCEL PLACEMENT (Coherent Rows)
 const BLOCK_SIZE = 12;
 for (let by = CITY_CENTER_Y - CITY_RADIUS + 5; by < CITY_CENTER_Y + CITY_RADIUS - 5; by += BLOCK_SIZE) {
     for (let bx = CITY_CENTER_X - CITY_RADIUS + 5; bx < CITY_CENTER_X + CITY_RADIUS - 5; bx += BLOCK_SIZE) {
@@ -741,7 +769,11 @@ const tileDefinitions = {
     "cob": { id: "cobblestone", color: "#64748b" },
     "rpa": { id: "ruined-path", color: "#78350f" },
     "fdb": { id: "foundation-brick", block: true, color: "#262626" },
-    "gtw": { id: "gothic-wall", block: true, color: "#78716c" }
+    "gtw": { id: "gothic-wall", block: true, color: "#78716c" },
+    "ss": { id: "stone-statue", block: true, color: "#6b7280" },
+    "sw": { id: "stone-wall", block: true, color: "#4b5563" },
+    "wr": { id: "wooden-roof", color: "#78350f" },
+    "hwa": { id: "house-wall", block: true, color: "#5a3825" }
 };
 
 const finalEntitiesTemplates = { 

@@ -2,7 +2,8 @@ import Phaser from "phaser";
 import { BaseTileGraphic } from "./BaseTileGraphic";
 
 export class ConcreteWallGraphic extends BaseTileGraphic {
-  public readonly TEXTURE_KEY = "concrete-wall-texture";
+  static readonly TEXTURE_KEY = "concrete-wall-texture";
+  public readonly TEXTURE_KEY = ConcreteWallGraphic.TEXTURE_KEY;
 
   protected drawTile(graphics: Phaser.GameObjects.Graphics): void {
     // Cinza base

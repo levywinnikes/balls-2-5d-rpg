@@ -707,7 +707,7 @@ export class DynamicLevelRenderer {
   }
 
   private getDepthForLevel(targetLevel: number, currentLevel: number): number {
-    return (targetLevel - currentLevel) * 10000;
+    return (targetLevel - currentLevel) * 100000;
   }
 
   private cleanupTiles(tilesToKeep: string[]): void {
