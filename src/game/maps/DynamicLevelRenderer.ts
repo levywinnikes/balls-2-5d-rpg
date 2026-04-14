@@ -11,7 +11,6 @@ export class DynamicLevelRenderer {
   private scene: Phaser.Scene;
   private tileSize: number;
   private currentLevel: string;
-  // CHANGED: Map<Level, Map<TileKey, Sprite[]>> to support multiple sprites per tile and ensure full cleanup
   private renderedTiles: Map<string, Map<string, Phaser.GameObjects.Sprite[]>> = new Map();
   private renderedDecorations: Map<string, Phaser.GameObjects.Sprite[]> = new Map();
   private levelContainers: Map<string, Phaser.GameObjects.Container> = new Map();
@@ -76,9 +75,10 @@ export class DynamicLevelRenderer {
         container.x = playerX * (1 - perspectiveScale);
         container.y = playerY * (1 - perspectiveScale) + zShiftY;
 
-        container.y = playerY * (1 - perspectiveScale) + zShiftY;
+        // 3. Perspectives Gap Math (REMOVED v7.8 for Visual Stability)
+        // Reverting back to standard sprite rendering to restore visual sharpness.
 
-        // 3. Perspective TINT
+        // 4. Perspective TINT
         let finalTint = 0xffffff;
         if (levelDiff > 0) {
             finalTint = Phaser.Display.Color.GetColor(Math.min(255, 220 + levelDiff * 20), Math.min(255, 220 + levelDiff * 20), 180);
@@ -200,6 +200,7 @@ export class DynamicLevelRenderer {
           const levelNum = parseInt(level);
           // Set base depth
           container.setDepth(this.getDepthForLevel(levelNum, parseInt(this.currentLevel)));
+          
           this.levelContainers.set(level, container);
       }
       return container;

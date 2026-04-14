@@ -62,20 +62,9 @@ export class TransitionSystem {
       const currentLevelInt = parseInt(currentLevel);
       let targetGridY = gridY;
 
-      if (
-        tileDef.transition === "dwn" ||
-        tileDef.transition === "down" ||
-        tileDef.id === "hole"
-      ) {
-        nextLevelInt = currentLevelInt - 1;
-        
-        // OFFSET LOGIC (2.5D): 
-        // Stair Down is at Y. Stair Up below was at Y + 1.
-        // To land safely BELOW the stair up, we need to land at Y + 2.
-        targetGridY = gridY + 2;
-      } else {
-        return; // Transição inválida
-      }
+      // ALL automatic vertical transitions are now disabled based on USER REQUEST (v7.5)
+      // Transitions must be triggered manually via tryManualTransition (Click).
+      return;
 
       const nextLevelStr = nextLevelInt.toString();
 
@@ -116,24 +105,40 @@ export class TransitionSystem {
       const tileSymbol = this.mapLoader.getTileAt(gridX, gridY, currentLevel);
       const tileDef = mapData.tileDefinitions[tileSymbol || ""];
 
-      if (tileDef && tileDef.transition === "up") {
+      // MANUAL TRANSITIONS (UP or DOWN) via Click
+      if (tileDef && tileDef.transition) {
           const currentLevelInt = parseInt(currentLevel);
-          const nextLevelInt = currentLevelInt + 1;
+          const type = tileDef.transition;
+
+          if (type === "up") {
+              const nextLevelInt = currentLevelInt + 1;
+              const nextLevelStr = nextLevelInt.toString();
+
+              if (mapData.levels[nextLevelStr]) {
+                // To land safely ABOVE the stair down, we need to land at Y - 2.
+                await this.performTransition(nextLevelStr, gridX, gridY - 2, tileSize, mapData);
+              } else {
+                 this.scene.showFloatingText(gridX * tileSize, gridY * tileSize, "Blocked", 0xff0000);
+              }
+          } else if (type === "down" || type === "dwn") {
+              const nextLevelInt = currentLevelInt - 1;
+              const nextLevelStr = nextLevelInt.toString();
+
+              if (mapData.levels[nextLevelStr]) {
+                // To land safely BELOW the stair up, we need to land at Y + 2.
+                await this.performTransition(nextLevelStr, gridX, gridY + 2, tileSize, mapData);
+              } else {
+                 this.scene.showFloatingText(gridX * tileSize, gridY * tileSize, "Blocked", 0xff0000);
+              }
+          }
+      } else if (tileDef && tileDef.id === "hole") {
+          // Special case for holes/manholes also requiring click
+          const currentLevelInt = parseInt(currentLevel);
+          const nextLevelInt = currentLevelInt - 1;
           const nextLevelStr = nextLevelInt.toString();
 
           if (mapData.levels[nextLevelStr]) {
-            // OFFSET LOGIC (2.5D): 
-            // Stair Up is at Y. Stair Down above IS at Y - 1.
-            // To land safely ABOVE the stair down, we need to land at Y - 2.
-            await this.performTransition(
-              nextLevelStr,
-              gridX,
-              gridY - 2, 
-              tileSize,
-              mapData
-            );
-          } else {
-             this.scene.showFloatingText(gridX * tileSize, gridY * tileSize, "Blocked", 0xff0000);
+              await this.performTransition(nextLevelStr, gridX, gridY + 2, tileSize, mapData);
           }
       }
   }
