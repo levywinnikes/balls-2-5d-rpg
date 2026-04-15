@@ -36,7 +36,7 @@ export class SideFaceGraphic {
 
     const isVertical = direction === "east" || direction === "west";
     const texW = isVertical ? width : 32;
-    const texH = isVertical ? 32 : height;
+    const texH = isVertical ? height : height;  // All faces use sideFaceHeight
 
     const graphics = scene.add.graphics();
 
@@ -137,7 +137,7 @@ export class SideFaceGraphic {
   ): Phaser.GameObjects.Sprite {
     const isVertical = direction === "east" || direction === "west";
     const texW = isVertical ? sideWidth : 32;
-    const texH = isVertical ? 32 : height;
+    const texH = height;  // All faces use same height
 
     const textureKey = this.generateTexture(scene, direction, baseColor, height, isVertical ? sideWidth : 32);
 

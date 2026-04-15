@@ -60,42 +60,43 @@ export default class LevelRenderer {
     (window as any)._levelRenderer = this;
   }
 
+  private is3DEnabled(): boolean {
+    return PlayerState.getInstance().getDiagnosticSettings().enable3D;
+  }
+
   private updateAllTileTints(enabled: boolean): void {
     const player = (this.scene as any).player as any;
     if (!player || !player.sprite) return;
 
     const currentLevelNum = parseInt(this.currentLevel);
-    const playerX = player.sprite.x;
-    const playerY = player.sprite.y;
+    const use3D = this.is3DEnabled();
 
     this.levelContainers.forEach((container, levelKey) => {
         const levelNum = parseInt(levelKey);
         const levelDiff = levelNum - currentLevelNum;
         
-        // 1. Perspective SCALE (Subtle 4% per level for stability)
-        const perspectiveScale = 1 + (levelDiff * 0.04);
+        // NO SCALE — scaling causes parallax distortion
+        container.setScale(1);
         
-        // 2. Perspective TRANSFORM (Vertical Z-Stacking)
-        // Shift levels UP by 28px per Z-level to keep buildings 'grounded'
-        const zShiftY = levelDiff * -28; 
-        
-        container.setScale(perspectiveScale);
-        container.x = playerX * (1 - perspectiveScale);
-        container.y = playerY * (1 - perspectiveScale) + zShiftY;
+        // NO Z-SHIFT — tiles stay at grid position on ALL levels.
+        // The 3D effect comes from side faces extending downward,
+        // not from displacing tiles vertically (which creates "staircase" artifacts).
+        container.x = 0;
+        container.y = 0;
 
-        // 3. Update CONTAINER DEPTH dynamically based on current level
-        // This ensures that levels below the player have high negative depth, and levels above have high positive depth.
+        // Update CONTAINER DEPTH dynamically based on current level
         container.setDepth(levelDiff * 100000);
 
-        // 3.5 Force DEPTH SORTING within the container
-        // Phaser 3 Containers do NOT sort by depth automatically.
+        // Force DEPTH SORTING within the container
         container.sort('depth');
 
-        // 4. Perspective TINT
+        // Perspective TINT (applies in both modes for visual depth cues)
         let finalTint = 0xffffff;
         if (levelDiff > 0) {
-            finalTint = Phaser.Display.Color.GetColor(Math.min(255, 220 + levelDiff * 20), Math.min(255, 220 + levelDiff * 20), 180);
+            // Upper levels slightly washed out
+            finalTint = Phaser.Display.Color.GetColor(Math.min(255, 230 + levelDiff * 15), Math.min(255, 230 + levelDiff * 15), 200);
         } else if (levelDiff < 0) {
+            // Lower levels darker
             const darknessVal = Math.max(80, 255 + levelDiff * 50);
             finalTint = Phaser.Display.Color.GetColor(darknessVal, darknessVal, Math.min(255, darknessVal + 30));
         }
@@ -103,13 +104,12 @@ export default class LevelRenderer {
         // Apply tints to children
         container.iterate((child: any) => {
             if (!child.active) return;
-
             if (child.setTint) {
                 child.setTint(finalTint);
             }
         });
     });
-}
+  }
 
   private applyDebugTint(sprite: Phaser.GameObjects.Sprite, isCollidable: boolean, enabled: boolean, baseTint?: number): void {
       if (!enabled) {
@@ -528,8 +528,13 @@ export default class LevelRenderer {
         });
     }
 
-    // CARDBOARD 3D: Render side faces between levels
-    this.renderSideFaces(mapData, minX, maxX, minY, maxY, playerX, playerY);
+    // CARDBOARD 3D: Render side faces (only in 3D mode)
+    if (this.is3DEnabled()) {
+      this.renderSideFaces(mapData, minX, maxX, minY, maxY, playerX, playerY);
+    } else {
+      // Clean up side faces when in 2D mode
+      this.cleanupSideFaces(new Set());
+    }
 
     // APPLY PERSPECTIVE SHADING/SCALING (v5.8 Premium Visuals)
     this.updateAllTileTints(PlayerState.getInstance().isDebugCollisionEnabled());
@@ -796,9 +801,62 @@ export default class LevelRenderer {
   // ========================================================================
 
   /**
-   * Renderiza faces laterais para criar o efeito "cubinho" em todos os andares visíveis.
-   * Para cada tile com "altura" (paredes, árvores, etc.) verifica vizinhos vazios
-   * e gera faces laterais nas bordas expostas.
+   * IDs de tiles que são considerados "estruturais" (geram cubos 3D).
+   * Apenas paredes e bloqueios verdadeiros. NÃO inclui escadas, camas, etc.
+   */
+  private isStructuralTile(tileId: string): boolean {
+    // Whitelist: apenas paredes, muros e bloqueios estruturais
+    if (tileId.includes("wall")) return true;
+    if (tileId.includes("foundation")) return true;
+    if (tileId === "tree") return true;
+    if (tileId === "frozen-tree") return true;
+    if (tileId === "mountain") return true;
+    if (tileId === "mountain-edge") return true;
+    if (tileId === "rock") return true;
+    if (tileId === "crystal-spike") return true;
+    if (tileId === "cactus") return true;
+    return false;
+  }
+
+  /**
+   * IDs que NUNCA devem gerar side faces (mesmo se block:true)
+   */
+  private shouldSkipSideFace(tileId: string): boolean {
+    if (tileId.includes("roof")) return true;
+    if (tileId.includes("stair")) return true;
+    if (tileId.includes("bed")) return true;
+    if (tileId.includes("hole")) return true;
+    if (tileId.includes("manhole")) return true;
+    if (tileId.includes("chest")) return true;
+    if (tileId.includes("statue")) return true;
+    if (tileId === "water") return true;
+    if (tileId === "lava") return true;
+    if (tileId === "toxic-water") return true;
+    return false;
+  }
+
+  /**
+   * Verifica se um vizinho é "estrutural" (parede/muro) no mesmo nível.
+   * Se for estrutural, NÃO gera face nessa borda (faz parte do mesmo bloco).
+   */
+  private isNeighborStructural(nx: number, ny: number, lvl: string, mapData: MultiLevelMapData): boolean {
+    const mapLoader = (this.scene as any).mapLoader as MapLoader;
+    const nSym = mapLoader.getTileAt(nx, ny, lvl);
+    if (!nSym || nSym === "...") return false;
+    const nDef = mapData.tileDefinitions[nSym];
+    if (!nDef) return false;
+    return this.isStructuralTile(nDef.id);
+  }
+
+  /**
+   * Renderiza faces laterais para criar o efeito "cubinho" 3D.
+   * 
+   * REGRAS DO NOVO SISTEMA:
+   * 1. Tiles ficam na MESMA posição em todos os andares (sem z-shift)
+   * 2. Side faces se estendem PRA BAIXO do tile, criando a "saia" do cubo
+   * 3. Apenas o nível ATUAL gera side faces (evita faixas de andares superiores)
+   * 4. Faces só nas bordas EXTERNAS (vizinho NÃO estrutural)
+   * 5. Depth dos tiles é MAIOR que das faces (tile na frente do bloquinho)
    */
   private renderSideFaces(
     mapData: MultiLevelMapData,
@@ -813,77 +871,95 @@ export default class LevelRenderer {
 
     const currentLevelNum = parseInt(this.currentLevel);
     const sideFaceKeysToKeep = new Set<string>();
+
+    // ONLY process the current level — upper/lower level faces cause "floating strips"
+    const levelStr = this.currentLevel;
+
+    // Calculate structural height: how many levels have walls at each position
+    // This makes multi-story buildings have taller side faces
     const allLevels = Object.keys(mapData.levels).map(l => parseInt(l)).sort((a, b) => a - b);
 
-    // Função para verificar se um vizinho NÃO tem altura (é chão/vazio)
-    const checkNeighborIsFlat = (nx: number, ny: number, lvl: string): boolean => {
-      const nSym = mapLoader.getTileAt(nx, ny, lvl);
-      if (!nSym || nSym === "...") return true;
-      const nDef = mapData.tileDefinitions[nSym];
-      if (!nDef) return true;
-      if (nDef.id === "transparent") return true;
-      const nRegDef = TileRegistry.getTileDefinition(nDef.id);
-      const nHasHeight = (nRegDef && (nRegDef.baseDepth || 0) > 0) || nDef.block;
-      return !nHasHeight;
-    };
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const symbol = mapLoader.getTileAt(x, y, levelStr);
+        if (!symbol || symbol === "...") continue;
 
-    for (const level of allLevels) {
-      if (level < currentLevelNum) continue;
-      const levelStr = level.toString();
+        const tileDef = mapData.tileDefinitions[symbol];
+        if (!tileDef || tileDef.id === "transparent") continue;
 
-      for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-          const symbol = mapLoader.getTileAt(x, y, levelStr);
-          if (!symbol || symbol === "...") continue;
+        // SKIP: tiles that should never have side faces
+        if (this.shouldSkipSideFace(tileDef.id)) continue;
 
-          const tileDef = mapData.tileDefinitions[symbol];
-          if (!tileDef || tileDef.id === "transparent") continue;
-          if (tileDef.id.includes("roof")) continue;
+        // ONLY: structural tiles generate 3D cubes
+        if (!this.isStructuralTile(tileDef.id) && !tileDef.block) continue;
 
-          // Só gerar faces para tiles COM altura
-          const regDef = TileRegistry.getTileDefinition(tileDef.id);
-          const hasHeight = (regDef && (regDef.baseDepth || 0) > 0) || tileDef.block;
-          if (!hasHeight) continue;
+        const worldX = x * this.tileSize + this.tileSize / 2;
+        const worldY = y * this.tileSize + this.tileSize / 2;
+        const faceColor = SideFaceGraphic.getColorForTileId(tileDef.id);
+        const halfTile = this.tileSize / 2;
 
-          const worldX = x * this.tileSize + this.tileSize / 2;
-          const worldY = y * this.tileSize + this.tileSize / 2;
-          const faceColor = SideFaceGraphic.getColorForTileId(tileDef.id);
-          const halfTile = this.tileSize / 2;
-
-          // FACE SUL
-          if (checkNeighborIsFlat(x, y + 1, levelStr)) {
-            const key = `sf_s_${level}_${x}_${y}`;
-            sideFaceKeysToKeep.add(key);
-            if (!this.renderedSideFaces.has(key)) {
-              this.createSideFaceSprite(key, "south", worldX - halfTile, worldY + halfTile, faceColor, level, levelStr, worldX, worldY);
+        // Calculate height multiplier: count how many structural floors above
+        let structuralFloors = 1;
+        for (const lvl of allLevels) {
+          if (lvl <= currentLevelNum) continue;
+          const aboveSym = mapLoader.getTileAt(x, y, lvl.toString());
+          if (aboveSym && aboveSym !== "...") {
+            const aboveDef = mapData.tileDefinitions[aboveSym];
+            if (aboveDef && this.isStructuralTile(aboveDef.id)) {
+              structuralFloors++;
+            } else {
+              break; // Stop at first non-structural level
             }
+          } else {
+            break;
           }
+        }
 
-          // FACE NORTE
-          if (checkNeighborIsFlat(x, y - 1, levelStr)) {
-            const key = `sf_n_${level}_${x}_${y}`;
-            sideFaceKeysToKeep.add(key);
-            if (!this.renderedSideFaces.has(key)) {
-              this.createSideFaceSprite(key, "north", worldX - halfTile, worldY - halfTile - this.sideFaceHeight, faceColor, level, levelStr, worldX, worldY);
-            }
+        const totalFaceHeight = this.sideFaceHeight * structuralFloors;
+
+        // FACE SUL — extends DOWNWARD from tile bottom edge
+        // Only if southern neighbor is NOT structural (exposed edge)
+        if (!this.isNeighborStructural(x, y + 1, levelStr, mapData)) {
+          const key = `sf_s_${currentLevelNum}_${x}_${y}`;
+          sideFaceKeysToKeep.add(key);
+          if (!this.renderedSideFaces.has(key)) {
+            this.createSideFaceSprite(
+              key, "south",
+              worldX - halfTile,           // X: left edge of tile
+              worldY + halfTile,           // Y: bottom edge of tile (extends DOWN)
+              faceColor, currentLevelNum, levelStr, worldX, worldY,
+              totalFaceHeight
+            );
           }
+        }
 
-          // FACE LESTE
-          if (checkNeighborIsFlat(x + 1, y, levelStr)) {
-            const key = `sf_e_${level}_${x}_${y}`;
-            sideFaceKeysToKeep.add(key);
-            if (!this.renderedSideFaces.has(key)) {
-              this.createSideFaceSprite(key, "east", worldX + halfTile, worldY - halfTile, faceColor, level, levelStr, worldX, worldY);
-            }
+        // FACE LESTE — extends DOWNWARD from tile bottom-right corner
+        if (!this.isNeighborStructural(x + 1, y, levelStr, mapData)) {
+          const key = `sf_e_${currentLevelNum}_${x}_${y}`;
+          sideFaceKeysToKeep.add(key);
+          if (!this.renderedSideFaces.has(key)) {
+            this.createSideFaceSprite(
+              key, "east",
+              worldX + halfTile,           // X: right edge of tile
+              worldY + halfTile,           // Y: bottom edge (extends DOWN)
+              faceColor, currentLevelNum, levelStr, worldX, worldY,
+              totalFaceHeight
+            );
           }
+        }
 
-          // FACE OESTE
-          if (checkNeighborIsFlat(x - 1, y, levelStr)) {
-            const key = `sf_w_${level}_${x}_${y}`;
-            sideFaceKeysToKeep.add(key);
-            if (!this.renderedSideFaces.has(key)) {
-              this.createSideFaceSprite(key, "west", worldX - halfTile - this.sideFaceWidth, worldY - halfTile, faceColor, level, levelStr, worldX, worldY);
-            }
+        // FACE OESTE — extends DOWNWARD from tile bottom-left corner
+        if (!this.isNeighborStructural(x - 1, y, levelStr, mapData)) {
+          const key = `sf_w_${currentLevelNum}_${x}_${y}`;
+          sideFaceKeysToKeep.add(key);
+          if (!this.renderedSideFaces.has(key)) {
+            this.createSideFaceSprite(
+              key, "west",
+              worldX - halfTile - this.sideFaceWidth,  // X: left edge - sideWidth
+              worldY + halfTile,                       // Y: bottom edge (extends DOWN)
+              faceColor, currentLevelNum, levelStr, worldX, worldY,
+              totalFaceHeight
+            );
           }
         }
       }
@@ -894,31 +970,40 @@ export default class LevelRenderer {
   }
 
   /**
-   * Cria um sprite de face lateral posicionado na borda do tile.
+   * Cria um sprite de face lateral que se estende PRA BAIXO do tile.
+   * 
+   * A face é adicionada ao container do nível ATUAL para manter o depth correto.
+   * O depth da face é MENOR que o do tile, garantindo que o tile fica NA FRENTE do cubo.
    */
   private createSideFaceSprite(
     key: string,
-    direction: "south" | "north" | "east" | "west",
+    direction: "south" | "east" | "west",
     faceX: number,
     faceY: number,
     color: number,
     level: number,
     levelStr: string,
     tileWorldX: number,
-    tileWorldY: number
+    tileWorldY: number,
+    customHeight?: number
   ): void {
+    const faceHeight = customHeight || this.sideFaceHeight;
     const sprite = SideFaceGraphic.createFace(
       this.scene, faceX, faceY, direction, color,
-      this.sideFaceHeight, this.sideFaceWidth
+      faceHeight, this.sideFaceWidth
     );
 
     sprite.setOrigin(0, 0);
 
     const currentLevelNum = parseInt(this.currentLevel);
     const levelOffset = this.getDepthForLevel(level, currentLevelNum);
-    const dirBonus = direction === "south" ? 3 : direction === "north" ? -1 : 1;
-    sprite.setDepth(levelOffset + tileWorldY + dirBonus);
+    
+    // DEPTH: Face renders BEHIND the wall tile (tile in front of cube)
+    // Wall tile depth = levelOffset + worldY + baseDepth (typically +2)
+    // Face depth = levelOffset + worldY + 0.5 (behind wall, in front of floor at Y-5000)
+    sprite.setDepth(levelOffset + tileWorldY + 0.5);
 
+    // Add to current level container
     this.getLevelContainer(levelStr).add(sprite);
 
     sprite.setData("sf_direction", direction);
@@ -930,6 +1015,9 @@ export default class LevelRenderer {
 
   /**
    * Ajusta opacidade das faces baseado na posição do jogador.
+   * Em top-down 2.5D:
+   * - South faces: sempre visíveis (olhamos "de cima")
+   * - East/West: visíveis quando jogador está do lado correspondente
    */
   private updateSideFacePerspective(playerX: number, playerY: number): void {
     this.renderedSideFaces.forEach((sprites) => {
@@ -941,10 +1029,9 @@ export default class LevelRenderer {
 
         let alpha = 0;
         switch (dir) {
-          case "south": alpha = playerY > tY ? 0.95 : 0.2; break;
-          case "north": alpha = playerY < tY ? 0.75 : 0.1; break;
-          case "east":  alpha = playerX > tX ? 0.85 : 0.15; break;
-          case "west":  alpha = playerX < tX ? 0.85 : 0.15; break;
+          case "south": alpha = 0.9; break; // South always visible in top-down
+          case "east":  alpha = playerX > tX ? 0.8 : 0.15; break;
+          case "west":  alpha = playerX < tX ? 0.8 : 0.15; break;
         }
         sprite.setAlpha(alpha);
       });

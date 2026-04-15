@@ -464,7 +464,8 @@ export class PlayerState extends EventEmitter {
       hideItems: false,
       enableNoClip: false,
       enableSuperSpeed: false,
-      enableDebugKeys: false
+      enableDebugKeys: false,
+      enable3D: true
   };
 
   public updatePerfMetrics(metrics: any) {
