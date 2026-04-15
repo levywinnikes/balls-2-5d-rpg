@@ -6,6 +6,7 @@ import { TilePool } from "../graphics/TilePool";
 import type { DroppedItem } from "../entities/DroppedItem";
 import { PlayerState } from "../entities/Player/PlayerState";
 import { MultiLevelMapData } from "./MapTypes";
+import { SideFaceGraphic } from "../graphics/tiles/SideFaceGraphic";
 
 export default class LevelRenderer {
   private scene: Phaser.Scene;
@@ -13,6 +14,7 @@ export default class LevelRenderer {
   private currentLevel: string;
   private renderedTiles: Map<string, Map<string, Phaser.GameObjects.Sprite[]>> = new Map();
   private renderedDecorations: Map<string, Phaser.GameObjects.Sprite[]> = new Map();
+  private renderedSideFaces: Map<string, Phaser.GameObjects.Sprite[]> = new Map();
   private levelContainers: Map<string, Phaser.GameObjects.Container> = new Map();
   public activeEnemies: Map<string, any> = new Map();
   public renderRadius: number = 20;
@@ -24,6 +26,12 @@ export default class LevelRenderer {
   private updateThreshold: number = 4;    // Only update map every 4 pixels (Super Smooth)
   private lastUpdateTime: number = 0;      // Time-based throttle
   private updateThrottleMs: number = 60;   // 60ms limit (Fast refresh)
+
+  // --- CARDBOARD 3D SYSTEM ---
+  public sideFaceHeight: number = 28;      // Altura das faces laterais (px) — configurável!
+  public sideFaceWidth: number = 8;        // Largura das faces east/west (px)
+  public sideFacesEnabled: boolean = true; // Toggle para ativar/desativar faces 3D
+  private readonly zShiftPerLevel: number = 28; // Deslocamento vertical por nível (deve coincidir com updateAllTileTints)
 
   constructor(scene: Phaser.Scene, tileSize: number, currentLevel: string) {
     this.scene = scene;
@@ -520,6 +528,9 @@ export default class LevelRenderer {
         });
     }
 
+    // CARDBOARD 3D: Render side faces between levels
+    this.renderSideFaces(mapData, minX, maxX, minY, maxY, playerX, playerY);
+
     // APPLY PERSPECTIVE SHADING/SCALING (v5.8 Premium Visuals)
     this.updateAllTileTints(PlayerState.getInstance().isDebugCollisionEnabled());
 
@@ -780,6 +791,180 @@ export default class LevelRenderer {
     return (targetLevel - currentLevel) * 100000;
   }
 
+  // ========================================================================
+  // CARDBOARD 3D SYSTEM — Geração de faces laterais entre andares
+  // ========================================================================
+
+  /**
+   * Renderiza faces laterais para criar o efeito "cubinho" em todos os andares visíveis.
+   * Para cada tile com "altura" (paredes, árvores, etc.) verifica vizinhos vazios
+   * e gera faces laterais nas bordas expostas.
+   */
+  private renderSideFaces(
+    mapData: MultiLevelMapData,
+    minX: number, maxX: number,
+    minY: number, maxY: number,
+    playerX: number, playerY: number
+  ): void {
+    if (!this.sideFacesEnabled) return;
+
+    const mapLoader = (this.scene as any).mapLoader as MapLoader;
+    if (!mapLoader) return;
+
+    const currentLevelNum = parseInt(this.currentLevel);
+    const sideFaceKeysToKeep = new Set<string>();
+    const allLevels = Object.keys(mapData.levels).map(l => parseInt(l)).sort((a, b) => a - b);
+
+    // Função para verificar se um vizinho NÃO tem altura (é chão/vazio)
+    const checkNeighborIsFlat = (nx: number, ny: number, lvl: string): boolean => {
+      const nSym = mapLoader.getTileAt(nx, ny, lvl);
+      if (!nSym || nSym === "...") return true;
+      const nDef = mapData.tileDefinitions[nSym];
+      if (!nDef) return true;
+      if (nDef.id === "transparent") return true;
+      const nRegDef = TileRegistry.getTileDefinition(nDef.id);
+      const nHasHeight = (nRegDef && (nRegDef.baseDepth || 0) > 0) || nDef.block;
+      return !nHasHeight;
+    };
+
+    for (const level of allLevels) {
+      if (level < currentLevelNum) continue;
+      const levelStr = level.toString();
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const symbol = mapLoader.getTileAt(x, y, levelStr);
+          if (!symbol || symbol === "...") continue;
+
+          const tileDef = mapData.tileDefinitions[symbol];
+          if (!tileDef || tileDef.id === "transparent") continue;
+          if (tileDef.id.includes("roof")) continue;
+
+          // Só gerar faces para tiles COM altura
+          const regDef = TileRegistry.getTileDefinition(tileDef.id);
+          const hasHeight = (regDef && (regDef.baseDepth || 0) > 0) || tileDef.block;
+          if (!hasHeight) continue;
+
+          const worldX = x * this.tileSize + this.tileSize / 2;
+          const worldY = y * this.tileSize + this.tileSize / 2;
+          const faceColor = SideFaceGraphic.getColorForTileId(tileDef.id);
+          const halfTile = this.tileSize / 2;
+
+          // FACE SUL
+          if (checkNeighborIsFlat(x, y + 1, levelStr)) {
+            const key = `sf_s_${level}_${x}_${y}`;
+            sideFaceKeysToKeep.add(key);
+            if (!this.renderedSideFaces.has(key)) {
+              this.createSideFaceSprite(key, "south", worldX - halfTile, worldY + halfTile, faceColor, level, levelStr, worldX, worldY);
+            }
+          }
+
+          // FACE NORTE
+          if (checkNeighborIsFlat(x, y - 1, levelStr)) {
+            const key = `sf_n_${level}_${x}_${y}`;
+            sideFaceKeysToKeep.add(key);
+            if (!this.renderedSideFaces.has(key)) {
+              this.createSideFaceSprite(key, "north", worldX - halfTile, worldY - halfTile - this.sideFaceHeight, faceColor, level, levelStr, worldX, worldY);
+            }
+          }
+
+          // FACE LESTE
+          if (checkNeighborIsFlat(x + 1, y, levelStr)) {
+            const key = `sf_e_${level}_${x}_${y}`;
+            sideFaceKeysToKeep.add(key);
+            if (!this.renderedSideFaces.has(key)) {
+              this.createSideFaceSprite(key, "east", worldX + halfTile, worldY - halfTile, faceColor, level, levelStr, worldX, worldY);
+            }
+          }
+
+          // FACE OESTE
+          if (checkNeighborIsFlat(x - 1, y, levelStr)) {
+            const key = `sf_w_${level}_${x}_${y}`;
+            sideFaceKeysToKeep.add(key);
+            if (!this.renderedSideFaces.has(key)) {
+              this.createSideFaceSprite(key, "west", worldX - halfTile - this.sideFaceWidth, worldY - halfTile, faceColor, level, levelStr, worldX, worldY);
+            }
+          }
+        }
+      }
+    }
+
+    this.cleanupSideFaces(sideFaceKeysToKeep);
+    this.updateSideFacePerspective(playerX, playerY);
+  }
+
+  /**
+   * Cria um sprite de face lateral posicionado na borda do tile.
+   */
+  private createSideFaceSprite(
+    key: string,
+    direction: "south" | "north" | "east" | "west",
+    faceX: number,
+    faceY: number,
+    color: number,
+    level: number,
+    levelStr: string,
+    tileWorldX: number,
+    tileWorldY: number
+  ): void {
+    const sprite = SideFaceGraphic.createFace(
+      this.scene, faceX, faceY, direction, color,
+      this.sideFaceHeight, this.sideFaceWidth
+    );
+
+    sprite.setOrigin(0, 0);
+
+    const currentLevelNum = parseInt(this.currentLevel);
+    const levelOffset = this.getDepthForLevel(level, currentLevelNum);
+    const dirBonus = direction === "south" ? 3 : direction === "north" ? -1 : 1;
+    sprite.setDepth(levelOffset + tileWorldY + dirBonus);
+
+    this.getLevelContainer(levelStr).add(sprite);
+
+    sprite.setData("sf_direction", direction);
+    sprite.setData("sf_tileX", tileWorldX);
+    sprite.setData("sf_tileY", tileWorldY);
+
+    this.renderedSideFaces.set(key, [sprite]);
+  }
+
+  /**
+   * Ajusta opacidade das faces baseado na posição do jogador.
+   */
+  private updateSideFacePerspective(playerX: number, playerY: number): void {
+    this.renderedSideFaces.forEach((sprites) => {
+      sprites.forEach(sprite => {
+        if (!sprite.active) return;
+        const dir = sprite.getData("sf_direction") as string;
+        const tX = sprite.getData("sf_tileX") as number;
+        const tY = sprite.getData("sf_tileY") as number;
+
+        let alpha = 0;
+        switch (dir) {
+          case "south": alpha = playerY > tY ? 0.95 : 0.2; break;
+          case "north": alpha = playerY < tY ? 0.75 : 0.1; break;
+          case "east":  alpha = playerX > tX ? 0.85 : 0.15; break;
+          case "west":  alpha = playerX < tX ? 0.85 : 0.15; break;
+        }
+        sprite.setAlpha(alpha);
+      });
+    });
+  }
+
+  /**
+   * Remove faces laterais fora do viewport.
+   */
+  private cleanupSideFaces(keysToKeep: Set<string>): void {
+    const keysToRemove: string[] = [];
+    this.renderedSideFaces.forEach((sprites, key) => {
+      if (!keysToKeep.has(key)) {
+        sprites.forEach(s => { s.parentContainer?.remove(s); s.destroy(); });
+        keysToRemove.push(key);
+      }
+    });
+    keysToRemove.forEach(key => this.renderedSideFaces.delete(key));
+  }
+
   private cleanupTiles(tilesToKeep: string[]): void {
     const keepSet = new Set(tilesToKeep);
     const mapLoader = (this.scene as any).mapLoader;
@@ -815,6 +1000,15 @@ export default class LevelRenderer {
       }))
     );
     this.renderedTiles.clear();
+
+    // CARDBOARD 3D: Limpar todas as faces laterais
+    this.renderedSideFaces.forEach((sprites) => {
+      sprites.forEach(s => {
+        s.parentContainer?.remove(s);
+        s.destroy();
+      });
+    });
+    this.renderedSideFaces.clear();
   }
 
   private drawDebugHitboxes(): void {
@@ -1120,6 +1314,12 @@ export default class LevelRenderer {
           tiles.forEach((sprites) => sprites.forEach(s => s.destroy()));
       });
       this.renderedTiles.clear();
+
+      // CARDBOARD 3D: Limpar faces laterais
+      this.renderedSideFaces.forEach((sprites) => {
+          sprites.forEach(s => s.destroy());
+      });
+      this.renderedSideFaces.clear();
       
       this.levelContainers.forEach(c => c.destroy());
       this.levelContainers.clear();
