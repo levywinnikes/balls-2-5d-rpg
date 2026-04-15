@@ -75,14 +75,15 @@ export default class LevelRenderer {
         const levelNum = parseInt(levelKey);
         const levelDiff = levelNum - currentLevelNum;
         
-        // NO SCALE — scaling causes parallax distortion
-        container.setScale(1);
-        
-        // NO Z-SHIFT — tiles stay at grid position on ALL levels.
-        // The 3D effect comes from side faces extending downward,
-        // not from displacing tiles vertically (which creates "staircase" artifacts).
-        container.x = 0;
-        container.y = 0;
+        // THE CLASSIC CARD-BOARD EFEECT (Dynamic Parallax)
+        // Upper layers shift slightly based on player distance to center
+        if (use3D) {
+            container.x = (player.sprite.x - container.x) * levelDiff * 0.05;
+            container.y = (player.sprite.y - container.y) * levelDiff * 0.05 - levelDiff * 28;
+        } else {
+            container.x = 0;
+            container.y = 0;
+        }
 
         // Update CONTAINER DEPTH dynamically based on current level
         container.setDepth(levelDiff * 100000);
@@ -104,6 +105,9 @@ export default class LevelRenderer {
         // Apply tints to children
         container.iterate((child: any) => {
             if (!child.active) return;
+            // SKIP tinting voxel slices so their dark shadow depth is preserved!
+            if (child.getData && child.getData("ss_f") !== undefined) return;
+            
             if (child.setTint) {
                 child.setTint(finalTint);
             }
@@ -893,74 +897,38 @@ export default class LevelRenderer {
         // ONLY: structural tiles generate 3D cubes
         if (!this.isStructuralTile(tileDef.id) && !tileDef.block) continue;
 
+        // CULLING OPTIMIZATION: Only generate Voxel Stacking if the block is exposed to the camera!
+        // We only see South, East, and West faces usually (top down). 
+        const isExposedS = !this.isNeighborStructural(x, y + 1, levelStr, mapData);
+        const isExposedE = !this.isNeighborStructural(x + 1, y, levelStr, mapData);
+        const isExposedW = !this.isNeighborStructural(x - 1, y, levelStr, mapData);
+        
+        // If it's completely surrounded by other walls, we don't need to generate a 3D block for it!
+        if (!isExposedS && !isExposedE && !isExposedW) {
+            continue; 
+        }
+
         const worldX = x * this.tileSize + this.tileSize / 2;
         const worldY = y * this.tileSize + this.tileSize / 2;
-        const faceColor = SideFaceGraphic.getColorForTileId(tileDef.id);
-        const halfTile = this.tileSize / 2;
 
-        // Calculate height multiplier: count how many structural floors above
+        // Calculate how many sequential structural floors are stacked under this tile
         let structuralFloors = 1;
-        for (const lvl of allLevels) {
-          if (lvl <= currentLevelNum) continue;
-          const aboveSym = mapLoader.getTileAt(x, y, lvl.toString());
-          if (aboveSym && aboveSym !== "...") {
-            const aboveDef = mapData.tileDefinitions[aboveSym];
-            if (aboveDef && this.isStructuralTile(aboveDef.id)) {
-              structuralFloors++;
-            } else {
-              break; // Stop at first non-structural level
-            }
-          } else {
-            break;
-          }
+        let checkLevel = parseInt(levelStr) - 1;  // Start tracing down from THIS tile's level!
+        while (checkLevel >= 0) {
+           const mapSym = mapLoader.getTileAt(x, y, checkLevel.toString());
+           if (mapSym && mapSym !== "..." && this.isStructuralTile(mapData.tileDefinitions[mapSym]?.id || "")) {
+               structuralFloors++;
+               checkLevel--;
+           } else {
+               break;
+           }
         }
 
-        const totalFaceHeight = this.sideFaceHeight * structuralFloors;
-
-        // FACE SUL — extends DOWNWARD from tile bottom edge
-        // Only if southern neighbor is NOT structural (exposed edge)
-        if (!this.isNeighborStructural(x, y + 1, levelStr, mapData)) {
-          const key = `sf_s_${currentLevelNum}_${x}_${y}`;
-          sideFaceKeysToKeep.add(key);
-          if (!this.renderedSideFaces.has(key)) {
-            this.createSideFaceSprite(
-              key, "south",
-              worldX - halfTile,           // X: left edge of tile
-              worldY + halfTile,           // Y: bottom edge of tile (extends DOWN)
-              faceColor, currentLevelNum, levelStr, worldX, worldY,
-              totalFaceHeight
-            );
-          }
-        }
-
-        // FACE LESTE — extends DOWNWARD from tile bottom-right corner
-        if (!this.isNeighborStructural(x + 1, y, levelStr, mapData)) {
-          const key = `sf_e_${currentLevelNum}_${x}_${y}`;
-          sideFaceKeysToKeep.add(key);
-          if (!this.renderedSideFaces.has(key)) {
-            this.createSideFaceSprite(
-              key, "east",
-              worldX + halfTile,           // X: right edge of tile
-              worldY + halfTile,           // Y: bottom edge (extends DOWN)
-              faceColor, currentLevelNum, levelStr, worldX, worldY,
-              totalFaceHeight
-            );
-          }
-        }
-
-        // FACE OESTE — extends DOWNWARD from tile bottom-left corner
-        if (!this.isNeighborStructural(x - 1, y, levelStr, mapData)) {
-          const key = `sf_w_${currentLevelNum}_${x}_${y}`;
-          sideFaceKeysToKeep.add(key);
-          if (!this.renderedSideFaces.has(key)) {
-            this.createSideFaceSprite(
-              key, "west",
-              worldX - halfTile - this.sideFaceWidth,  // X: left edge - sideWidth
-              worldY + halfTile,                       // Y: bottom edge (extends DOWN)
-              faceColor, currentLevelNum, levelStr, worldX, worldY,
-              totalFaceHeight
-            );
-          }
+        const key = `vox_${levelStr}_${x}_${y}`;
+        sideFaceKeysToKeep.add(key);
+        
+        if (!this.renderedSideFaces.has(key)) {
+            this.createVoxelSlices(key, parseInt(levelStr), levelStr, tileDef.id, worldX, worldY, structuralFloors);
         }
       }
     }
@@ -970,48 +938,65 @@ export default class LevelRenderer {
   }
 
   /**
-   * Cria um sprite de face lateral que se estende PRA BAIXO do tile.
-   * 
-   * A face é adicionada ao container do nível ATUAL para manter o depth correto.
-   * O depth da face é MENOR que o do tile, garantindo que o tile fica NA FRENTE do cubo.
+   * VOXEL SPRITE STACKING ENGINE
+   * Instead of generating ad-hoc rectangles, we stack 14 slices of the ACTUAL SPRITE per floor.
+   * This gives an absolute realistic 3D volume that uses the exact texture of the walls/roof!
    */
-  private createSideFaceSprite(
-    key: string,
-    direction: "south" | "east" | "west",
-    faceX: number,
-    faceY: number,
-    color: number,
+  private createVoxelSlices(
+    keyPrefix: string,
     level: number,
     levelStr: string,
-    tileWorldX: number,
-    tileWorldY: number,
-    customHeight?: number
+    tileId: string,
+    worldX: number,
+    worldY: number,
+    structuralFloors: number
   ): void {
-    const faceHeight = customHeight || this.sideFaceHeight;
-    const sprite = SideFaceGraphic.createFace(
-      this.scene, faceX, faceY, direction, color,
-      faceHeight, this.sideFaceWidth
-    );
+    // 1. Get the texture string and frame of the actual structural tile.
+    const tileKey = `${levelStr}_${Math.floor(worldX/this.tileSize)}_${Math.floor(worldY/this.tileSize)}`;
+    const mainSprites = this.renderedTiles.get(levelStr)?.get(tileKey);
+    let texture = "gothic-wall-texture"; // fallback
+    let frame: string | number = 0;
 
-    sprite.setOrigin(0, 0);
+    if (mainSprites && mainSprites.length > 0) {
+        texture = mainSprites[0].texture.key;
+        frame = mainSprites[0].frame.name;
+    }
+
+    const slicesPerFloor = 14; 
+    const totalSlices = slicesPerFloor * structuralFloors;
+    const slicesToSave: Phaser.GameObjects.Sprite[] = [];
 
     const currentLevelNum = parseInt(this.currentLevel);
     const levelOffset = this.getDepthForLevel(level, currentLevelNum);
+
+    // We do NOT render i=0 because that's the main sprite itself.
+    for (let i = 1; i <= totalSlices; i++) {
+        const slice = this.scene.add.sprite(worldX, worldY, texture, frame);
+        
+        // Voxel Lighting: Darken the lower slices to form a natural shadow.
+        // Drops from 100% brightness at top to 45% brightness at the very bottom.
+        const t = i / totalSlices; 
+        const c = Math.floor(255 - (255 - 110) * t); 
+        slice.setTint(Phaser.Display.Color.GetColor(c, c, c));
+
+        // Force strictly behind the main tile
+        slice.setDepth(levelOffset + worldY - (0.01 * i));
+
+        this.getLevelContainer(levelStr).add(slice);
+        
+        slice.setData("ss_f", t);
+        slice.setData("ss_tileX", worldX);
+        slice.setData("ss_tileY", worldY);
+        slice.setData("ss_level", levelStr);
+        slice.setData("ss_floors", structuralFloors);
+        
+        slicesToSave.push(slice);
+    }
     
-    // DEPTH: Face renders BEHIND the wall tile (tile in front of cube)
-    // Wall tile depth = levelOffset + worldY + baseDepth (typically +2)
-    // Face depth = levelOffset + worldY + 0.5 (behind wall, in front of floor at Y-5000)
-    sprite.setDepth(levelOffset + tileWorldY + 0.5);
-
-    // Add to current level container
-    this.getLevelContainer(levelStr).add(sprite);
-
-    sprite.setData("sf_direction", direction);
-    sprite.setData("sf_tileX", tileWorldX);
-    sprite.setData("sf_tileY", tileWorldY);
-
-    this.renderedSideFaces.set(key, [sprite]);
+    this.renderedSideFaces.set(keyPrefix, slicesToSave);
   }
+
+
 
   /**
    * Ajusta opacidade das faces baseado na posição do jogador.
@@ -1020,20 +1005,25 @@ export default class LevelRenderer {
    * - East/West: visíveis quando jogador está do lado correspondente
    */
   private updateSideFacePerspective(playerX: number, playerY: number): void {
+    const use3D = this.is3DEnabled();
     this.renderedSideFaces.forEach((sprites) => {
       sprites.forEach(sprite => {
         if (!sprite.active) return;
-        const dir = sprite.getData("sf_direction") as string;
-        const tX = sprite.getData("sf_tileX") as number;
-        const tY = sprite.getData("sf_tileY") as number;
+        
+        if (sprite.getData("ss_f") !== undefined) {
+           const f = sprite.getData("ss_f") as number; 
+           const floors = sprite.getData("ss_floors") as number;
+           
+           if (use3D) {
+              const dx = -(playerX - sprite.getData("ss_tileX")) * 0.05 * floors * f;
+              const dy = -(playerY - sprite.getData("ss_tileY")) * 0.05 * floors * f + 28 * floors * f;
 
-        let alpha = 0;
-        switch (dir) {
-          case "south": alpha = 0.9; break; // South always visible in top-down
-          case "east":  alpha = playerX > tX ? 0.8 : 0.15; break;
-          case "west":  alpha = playerX < tX ? 0.8 : 0.15; break;
+              sprite.setPosition(sprite.getData("ss_tileX") + dx, sprite.getData("ss_tileY") + dy);
+              sprite.setAlpha(1.0);
+           } else {
+               sprite.setAlpha(0.0);
+           }
         }
-        sprite.setAlpha(alpha);
       });
     });
   }
