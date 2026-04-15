@@ -75,8 +75,13 @@ export default class LevelRenderer {
         container.x = playerX * (1 - perspectiveScale);
         container.y = playerY * (1 - perspectiveScale) + zShiftY;
 
-        // 3. Perspectives Gap Math (REMOVED v7.8 for Visual Stability)
-        // Reverting back to standard sprite rendering to restore visual sharpness.
+        // 3. Update CONTAINER DEPTH dynamically based on current level
+        // This ensures that levels below the player have high negative depth, and levels above have high positive depth.
+        container.setDepth(levelDiff * 100000);
+
+        // 3.5 Force DEPTH SORTING within the container
+        // Phaser 3 Containers do NOT sort by depth automatically.
+        container.sort('depth');
 
         // 4. Perspective TINT
         let finalTint = 0xffffff;

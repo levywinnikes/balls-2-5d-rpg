@@ -693,8 +693,7 @@ export class DroppedItem extends Phaser.Physics.Arcade.Sprite {
       // but ABOVE the floor (Layer 0).
       // Assigning a fixed low positive value usually ensures this.
       // E.g. LevelDiff*10K + 2.
-      // This ensures Player (Y > 32) always covers Item (2).
-      const depth = levelDiff * 10000 + 5; 
+      const depth = levelDiff * 100000 + 5; 
       
       this.setDepth(depth);
 

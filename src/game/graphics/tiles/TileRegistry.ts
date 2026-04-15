@@ -716,7 +716,8 @@ export class TileRegistry {
     // ... logic for depth ...
     let depth = (options.levelOffset || 0) + y;
     if (tileDef.baseDepth === 0) {
-        depth = (options.levelOffset || 0) - 1000; 
+        // Floor tiles use Y - 5000 to ensure they are ALWAYS below players/objects at same Y
+        depth = (options.levelOffset || 0) + y - 5000; 
     } else {
         depth += (tileDef.baseDepth || 0);
     }
