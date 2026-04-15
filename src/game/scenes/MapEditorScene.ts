@@ -1,12 +1,12 @@
 import Phaser from "phaser";
-import { DynamicLevelRenderer } from "../maps/DynamicLevelRenderer";
+import LevelRenderer from "../maps/LevelRenderer";
 import { TileRegistry } from "../graphics/tiles/TileRegistry";
 import { EnemyRegistry } from "../entities/EnemyRegistry";
 import { MultiLevelMapData } from "../maps/MapTypes";
 // import { UIContext } from "../../context/UIContext"; // Not used in scene logic directly yet
 
 export class MapEditorScene extends Phaser.Scene {
-  private levelRenderer!: DynamicLevelRenderer; // Renamed from renderer
+  private levelRenderer!: LevelRenderer; // Renamed from renderer
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private controls!: Phaser.Cameras.Controls.FixedKeyControl;
   private currentLevel: string = "0";
@@ -42,7 +42,7 @@ export class MapEditorScene extends Phaser.Scene {
 
     // Initialize Renderer
     this.entitiesGroup = this.add.group();
-    this.levelRenderer = new DynamicLevelRenderer(this, 32, this.currentLevel); // Updated
+    this.levelRenderer = new LevelRenderer(this, 32, this.currentLevel); // Updated
     
     // Camera Controls - Start at Player Start or Center
     let startX = 0;

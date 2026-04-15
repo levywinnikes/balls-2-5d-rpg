@@ -1,10 +1,10 @@
 import Phaser from "phaser";
-import { DynamicLevelRenderer } from "../../game/maps/DynamicLevelRenderer";
+import LevelRenderer from "../../game/maps/LevelRenderer";
 import { MapLoader } from "../../game/maps/MapLoader";
 import { TileRegistry } from "../../game/graphics/tiles/TileRegistry";
 
 export class EditorScene extends Phaser.Scene {
-    private levelRenderer!: DynamicLevelRenderer;
+    private levelRenderer!: LevelRenderer;
     public mapLoader!: MapLoader; // Public so Renderer can access
     private controls: any; // Camera controls
     private spaceKey!: Phaser.Input.Keyboard.Key;
@@ -53,7 +53,7 @@ export class EditorScene extends Phaser.Scene {
         // We loaded 'newmap_data'.
         
         // Create Renderer
-        this.levelRenderer = new DynamicLevelRenderer(this, 32, "0");
+        this.levelRenderer = new LevelRenderer(this, 32, "0");
         this.levelRenderer.renderRadius = 40; // Larger view for editor
 
         // Camera

@@ -1,13 +1,13 @@
 import Phaser from "phaser";
-import { MapLoader } from "./MapLoader";
-import Player from "../entities/Player";
+import type { MapLoader } from "./MapLoader";
+import type Player from "../entities/Player";
 import { TileRegistry } from "../graphics/tiles/TileRegistry";
 import { TilePool } from "../graphics/TilePool";
-import { DroppedItem } from "../entities/DroppedItem";
+import type { DroppedItem } from "../entities/DroppedItem";
 import { PlayerState } from "../entities/Player/PlayerState";
 import { MultiLevelMapData } from "./MapTypes";
 
-export class DynamicLevelRenderer {
+export default class LevelRenderer {
   private scene: Phaser.Scene;
   private tileSize: number;
   private currentLevel: string;
@@ -49,7 +49,7 @@ export class DynamicLevelRenderer {
         }
     });
 
-    (window as any)._dynamicLevelRenderer = this;
+    (window as any)._levelRenderer = this;
   }
 
   private updateAllTileTints(enabled: boolean): void {

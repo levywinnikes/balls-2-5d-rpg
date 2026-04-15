@@ -5,7 +5,7 @@ import Enemy from "./Enemy";
 import BattleSystem from "../systems/BattleSystem";
 import { PlayerState } from "./Player/PlayerState";
 import { XPTable } from "../data/XPTable";
-import GameScene from "../scenes/GameScene";
+import type GameScene from "../scenes/GameScene";
 import { LevelUpAnimation } from "../effects/LevelUpAnimation";
 import { SkillLevelUpAnimation } from "../effects/SkillLevelUpAnimation";
 import { StrengthXpTable } from "../data/StrengthXpTable";

@@ -3,7 +3,7 @@ import Phaser from "phaser";
 import { WeaponRegistry } from "../entities/weapons/WeaponRegistry";
 import { PlayerState } from "../entities/Player/PlayerState";
 import { InventorySystem } from "../systems/InventorySystem";
-import { MultiLevelMapData } from "../mapEditor/editor-ui";
+import { MultiLevelMapData } from "../maps/MapTypes";
 import { MapLoader } from "../maps/MapLoader";
 import { t_game } from "../i18n/translations";
 import { TileRegistry } from "../graphics/tiles/TileRegistry";

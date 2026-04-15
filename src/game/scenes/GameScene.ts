@@ -23,7 +23,7 @@ import { t_game } from "../i18n/translations";
 import Enemy from "../entities/Enemy";
 import { EnemySelectionIndicator } from "../hud/EnemySelectionIndicator";
 import { MapLoader } from "../maps/MapLoader";
-import { DynamicLevelRenderer } from "../maps/DynamicLevelRenderer";
+import LevelRenderer from "../maps/LevelRenderer";
 import BattleSystem from "../systems/BattleSystem";
 import { InventorySystem } from "../systems/InventorySystem";
 import { TransitionSystem } from "../systems/TransitionSystem";
@@ -33,7 +33,7 @@ import { AutoSaveSystem } from "../systems/AutoSaveSystem";
 import { SaveSystem } from "../systems/SaveSystem";
 import { DialogueManager } from "../systems/DialogueManager";
 import { QuestManager } from "../systems/QuestManager";
-import { MultiLevelMapData } from "../maps/MapTypes";
+// // import { MultiLevelMapData } from "../maps/MapTypes"; // Removed unused // Removed unused
 
 export interface DeadEnemy {
   id: string;
@@ -65,7 +65,7 @@ export default class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   public ctrlKey!: Phaser.Input.Keyboard.Key; // Public for Entities to check
   public mapLoader!: MapLoader;
-  private dynamicLevelRenderer!: DynamicLevelRenderer;
+  public levelRenderer!: LevelRenderer;
   battleSystem!: BattleSystem;
   public enemiesByLevel: Map<string, any[]> = new Map();
   private decorationsByLevel: Map<string, any[]> = new Map();
@@ -79,8 +79,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   public getActiveEnemies(): Enemy[] {
-      if (!this.dynamicLevelRenderer) return [];
-      return Array.from(this.dynamicLevelRenderer.activeEnemies.values());
+      if (!this.levelRenderer) return [];
+      return Array.from(this.levelRenderer.activeEnemies.values());
   }
   private deadEnemies: DeadEnemy[] = [];
   private isInitialized: boolean = false;
@@ -294,7 +294,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   public loadDecorations(mapData: any): void {
-    // We NO LONGER create Sprites here. We store the metadata for the DynamicLevelRenderer.
+    // We NO LONGER create Sprites here. We store the metadata for the LevelRenderer.
     this.decorationsByLevel.clear();
 
     for (const level in mapData.levels) {
@@ -758,7 +758,7 @@ export default class GameScene extends Phaser.Scene {
       
       
       this.transitionSystem = new TransitionSystem(this, this.mapLoader);
-      this.dynamicLevelRenderer = new DynamicLevelRenderer(
+      this.levelRenderer = new LevelRenderer(
         this,
         this.mapLoader.getTileSize(),
         this.currentLevel
@@ -937,7 +937,7 @@ export default class GameScene extends Phaser.Scene {
       this.restoreEnemyStates();
       
       // FORCE UPDATE of visibility right now to prevent disappearing enemies
-      this.dynamicLevelRenderer.update(this.player.sprite.x, this.player.sprite.y);
+      this.levelRenderer.update(this.player.sprite.x, this.player.sprite.y);
 
       // --- QUEST SYSTEM ---
       const qm = QuestManager.getInstance();
@@ -2103,7 +2103,7 @@ export default class GameScene extends Phaser.Scene {
     // Update Dynamic Floor Rendering
     const mapStart = performance.now();
     if (diag.enableMapUpdate) {
-        this.dynamicLevelRenderer.update(
+        this.levelRenderer.update(
           this.player.sprite.x,
           this.player.sprite.y
         );
@@ -2112,15 +2112,15 @@ export default class GameScene extends Phaser.Scene {
         if (this.player?.sprite) {
             // Shadow FIRST, then Sprite (Last is on top)
             if ((this.player as any).shadow) {
-                this.dynamicLevelRenderer.syncEntityToContainer((this.player as any).shadow, this.currentLevel);
+                this.levelRenderer.syncEntityToContainer((this.player as any).shadow, this.currentLevel);
             }
-            this.dynamicLevelRenderer.syncEntityToContainer(this.player.sprite, this.currentLevel);
+            this.levelRenderer.syncEntityToContainer(this.player.sprite, this.currentLevel);
         }
     }
     this.perf.mapTime = performance.now() - mapStart;
 
     if (diag.enableClouds) {
-        this.dynamicLevelRenderer.updateClouds(time, delta);
+        this.levelRenderer.updateClouds(time, delta);
     }
 
     const physicsStart = performance.now();
@@ -2159,9 +2159,9 @@ export default class GameScene extends Phaser.Scene {
             
             // Sync to container for perspective (Shadow FIRST)
             if (enemy.shadow) {
-                this.dynamicLevelRenderer.syncEntityToContainer(enemy.shadow, enemy.level);
+                this.levelRenderer.syncEntityToContainer(enemy.shadow, enemy.level);
             }
-            this.dynamicLevelRenderer.syncEntityToContainer(enemy.sprite, enemy.level);
+            this.levelRenderer.syncEntityToContainer(enemy.sprite, enemy.level);
 
             if (diag.enableAI && !hideEnemies) {
                 enemy.update(this.player);
@@ -2172,7 +2172,7 @@ export default class GameScene extends Phaser.Scene {
     // SYNC DROPPED ITEMS
     this.droppedItemsGroup.getChildren().forEach((child: any) => {
         if (child.active) {
-            this.dynamicLevelRenderer.syncEntityToContainer(child, (child as any).level || this.currentLevel);
+            this.levelRenderer.syncEntityToContainer(child, (child as any).level || this.currentLevel);
         }
     });
 
@@ -2206,13 +2206,13 @@ export default class GameScene extends Phaser.Scene {
         this.updateDarkness(time, delta);
     } else {
         // Clear tints if disabled
-        if (this.dynamicLevelRenderer) (this.dynamicLevelRenderer as any).resetLighting?.();
+        if (this.levelRenderer) (this.levelRenderer as any).resetLighting?.();
         this.enemiesByLevel.forEach(list => list.forEach(e => e.sprite?.clearTint()));
         this.droppedItemsGroup.getChildren().forEach((item: any) => item.clearTint());
     }
 
     this.perf.totalUpdateTime = performance.now() - this.perf.startTime;
-    const dna = this.dynamicLevelRenderer.getDNAAnalysis();
+    const dna = this.levelRenderer.getDNAAnalysis();
     this.perf.culprits = dna.culprits;
     this.perf.types = dna.types;
     this.perf.poolSize = dna.poolSize;
@@ -2540,8 +2540,8 @@ export default class GameScene extends Phaser.Scene {
     gridY: number
   ): boolean {
     const tileKey = `${level}_${gridX}_${gridY}_upper`;
-    const tiles = this.dynamicLevelRenderer.getRenderedTiles(level);
-    return tiles.some((tile) => tile.name === tileKey);
+    const tiles = this.levelRenderer.getRenderedTiles(level);
+    return tiles.some((tile: Phaser.GameObjects.Sprite) => tile.name === tileKey);
   }
 
   shutdown(): void {
@@ -2577,7 +2577,7 @@ export default class GameScene extends Phaser.Scene {
       if (this.pickupZone) this.pickupZone.destroy();
       if (this.battleSystem) this.battleSystem.cleanup();
       if (this.mapLoader) this.mapLoader.destroy();
-      if (this.dynamicLevelRenderer) this.dynamicLevelRenderer.destroy();
+      if (this.levelRenderer) this.levelRenderer.destroy();
 
       // Metadata doesn't need destruction, only clearing
       this.enemiesByLevel.clear();
@@ -2618,7 +2618,7 @@ export default class GameScene extends Phaser.Scene {
     this.selectedEnemy = null;
     let clickedEnemy: Enemy | null = null;
 
-    this.dynamicLevelRenderer.activeEnemies.forEach((enemy) => {
+    this.levelRenderer.activeEnemies.forEach((enemy: any) => {
       if (
         !enemy.isDefeated() &&
         enemy.sprite && enemy.sprite.active &&
@@ -2657,7 +2657,7 @@ export default class GameScene extends Phaser.Scene {
       // FIRST: Check if clicking on an enemy (for single-target or AoE)
       let targetEnemy: Enemy | null = null;
       
-      this.dynamicLevelRenderer.activeEnemies.forEach((enemy) => {
+      this.levelRenderer.activeEnemies.forEach((enemy: any) => {
           if (!enemy.sprite || !enemy.sprite.active || enemy.isDefeated()) return;
           const bounds = enemy.sprite.getBounds();
           if (bounds.contains(x, y)) {
@@ -2784,7 +2784,7 @@ export default class GameScene extends Phaser.Scene {
     playerState.setCurrentLevel(level);
     
     // 2. Clear Visual Layout
-    this.dynamicLevelRenderer.setCurrentLevel(level);
+    this.levelRenderer.setCurrentLevel(level);
     this.clearAllSelection();
     
     // 3. Clear OLD Item Sprites (Prevention of Transition Duplication)
@@ -3008,7 +3008,7 @@ export default class GameScene extends Phaser.Scene {
       if (this.darkOverlay) this.darkOverlay.setVisible(false);
       if (this.lightGlowSprite) this.lightGlowSprite.setVisible(false);
 
-      const renderer = this.dynamicLevelRenderer; // Use class property directly
+      const renderer = this.levelRenderer; // Use class property directly
       const enemies = this.enemiesByLevel.get(this.currentLevel) || []; // Use active enemies list
       
       if (!isDarkLevel) {
