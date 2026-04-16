@@ -69,8 +69,8 @@ export default class LevelRenderer {
         const perspectiveScale = 1 + (levelDiff * 0.04 * pFactor);
         
         // 2. Perspective TRANSFORM (Vertical Z-Stacking)
-        // Shift levels UP by 28px per Z-level to keep buildings 'grounded'
-        const zShiftY = levelDiff * -28 * pFactor; 
+        // [RPG SCALE FIX] Shift levels UP by 16px per Z-level to keep buildings 'grounded' and small-scale
+        const zShiftY = levelDiff * -16 * pFactor; 
         
         container.setScale(perspectiveScale);
         container.x = playerX * (1 - perspectiveScale);
@@ -304,28 +304,28 @@ export default class LevelRenderer {
       }
   }
 
-  private drawVolumetricPolygons(): void {
+  private drawVolumetricPolygons(tilesToKeep_Global?: Set<string>): void {
       const factor = this.currentPerspectiveFactor;
       if (factor <= 0) {
           this.volumetricGraphics.forEach(g => g.clear());
           return;
       }
 
+      const mapLoader = (this.scene as any).mapLoader;
+
       this.volumetricGraphics.forEach((graphics, levelStr) => {
           graphics.clear();
           const levelNum = parseInt(levelStr);
-          if (levelNum === 0) return; // Ground doesn't have sides connecting down
 
           const levelTiles = this.renderedTiles.get(levelStr);
           if (!levelTiles) return;
 
-          const containerZ = this.getLevelContainer(levelStr);
-          const containerZ1 = this.getLevelContainer((levelNum - 1).toString());
-          const mapLoader = (this.scene as any).mapLoader;
+          const baseContainer = this.getLevelContainer(levelStr);
 
           levelTiles.forEach((sprites, key) => {
               const sprite = sprites[0];
               if (!sprite || !sprite.active) return;
+              if (key.includes("_side_")) return;
 
               // Parse grid coords from key
               const match = key.match(/(\d+)_(\d+)_(\d+)/);
@@ -334,7 +334,48 @@ export default class LevelRenderer {
               const x = parseInt(xStr);
               const y = parseInt(yStr);
 
-              // 1. Universal Edge Detection
+              // 1. BASE CHECK (Inverted): Only the lowest tile at (x,y) handles the wall.
+              // If there's a tile BELOW us, skip rendering because the base will handle it.
+              if (levelNum > 0) {
+                  const levelBelowStr = (levelNum - 1).toString();
+                  const tileBelow = mapLoader.getTileAt(x, y, levelBelowStr);
+                  if (tileBelow && tileBelow !== "...") return;
+              }
+
+              // 2. SEARCH UP: Find the roof level for this building column
+              let roofLevelNum = levelNum;
+              while (roofLevelNum < 10) { // Safety cap
+                  const nextLevelStr = (roofLevelNum + 1).toString();
+                  const tileAbove = mapLoader.getTileAt(x, y, nextLevelStr);
+                  if (!tileAbove || tileAbove === "...") break;
+                  roofLevelNum++;
+              }
+
+              // If building is only at the current level (e.g. absolute ground level 0), 
+              // we still need a wall if it's elevated. But for simple maps, 
+              // we only draw if roofLevelNum > 0 (building has height).
+              // However, since we anchor to levelNum, if roof === base and levelNum === 0, no wall.
+              if (roofLevelNum === levelNum && levelNum === 0) return;
+
+              // 3. Cross-Container Transform Math (From Roof Level down to CURRENT Base Level)
+              const roofContainer = this.getLevelContainer(roofLevelNum.toString());
+              
+              const worldX = x * this.tileSize;
+              const worldY = y * this.tileSize;
+              const size = this.tileSize;
+
+              // The ROOF's position on screen
+              const screenRoofX = roofContainer.x + (worldX * roofContainer.scaleX);
+              const screenRoofY = roofContainer.y + (worldY * roofContainer.scaleY);
+
+              // Where that roof point falls in our CURRENT level's local space
+              const localRoofX = (screenRoofX - baseContainer.x) / baseContainer.scaleX;
+              const localRoofY = (screenRoofY - baseContainer.y) / baseContainer.scaleY;
+
+              // Delta between the base footprint worldX/Y and the projected roof position
+              const deltaX = localRoofX - worldX;
+              const deltaY = localRoofY - worldY;
+
               const neighbors = [
                   { dx: 0, dy: 1, type: 's' as const },
                   { dx: 0, dy: -1, type: 'n' as const },
@@ -342,56 +383,40 @@ export default class LevelRenderer {
                   { dx: -1, dy: 0, type: 'w' as const }
               ];
 
-              // 2. Cross-Container Transform Math (Z to Z-1)
-              const worldX = x * this.tileSize;
-              const worldY = y * this.tileSize;
-              const size = this.tileSize;
-
-              // Screen Base Mapping
-              const screenBaseX = containerZ1.x + (worldX * containerZ1.scaleX);
-              const screenBaseY = containerZ1.y + (worldY * containerZ1.scaleY);
-
-              // Local to ContainerZ Mapping
-              const localBaseX = (screenBaseX - containerZ.x) / containerZ.scaleX;
-              const localBaseY = (screenBaseY - containerZ.y) / containerZ.scaleY;
-
-              const deltaX = localBaseX - worldX;
-              const deltaY = localBaseY - worldY;
-
-              const textureKey = sprite.texture.key;
-
               neighbors.forEach(n => {
-                  const neighborSymbol = mapLoader.getTileAt(x + n.dx, y + n.dy, levelStr);
-                  if (!neighborSymbol || neighborSymbol === "...") {
-                      // Cliff Edge Found! Draw the wall.
-                      
-                      // Identify vertices for this specific face
+                  // Important: Check neighbors at the ROOF level to see if a wall is needed
+                  const roofNeighbor = mapLoader.getTileAt(x + n.dx, y + n.dy, roofLevelNum.toString());
+                  if (!roofNeighbor || roofNeighbor === "...") {
                       let p1, p2, p3, p4;
 
+                      // Top of wall (Roof) and Bottom of wall (Base)
                       if (n.type === 's') {
-                          p1 = { x: worldX, y: worldY + size };
-                          p2 = { x: worldX + size, y: worldY + size };
-                          p3 = { x: worldX + size + deltaX, y: worldY + size + deltaY };
-                          p4 = { x: worldX + deltaX, y: worldY + size + deltaY };
+                          p1 = { x: worldX + deltaX, y: worldY + size + deltaY }; // Roof Corner
+                          p2 = { x: worldX + size + deltaX, y: worldY + size + deltaY }; // Roof Corner
+                          p3 = { x: worldX + size, y: worldY + size }; // Base Corner
+                          p4 = { x: worldX, y: worldY + size }; // Base Corner
                       } else if (n.type === 'n') {
-                          p1 = { x: worldX, y: worldY };
-                          p2 = { x: worldX + size, y: worldY };
-                          p3 = { x: worldX + size + deltaX, y: worldY + deltaY };
-                          p4 = { x: worldX + deltaX, y: worldY + deltaY };
+                          p1 = { x: worldX + deltaX, y: worldY + deltaY };
+                          p2 = { x: worldX + size + deltaX, y: worldY + deltaY };
+                          p3 = { x: worldX + size, y: worldY };
+                          p4 = { x: worldX, y: worldY };
                       } else if (n.type === 'e') {
-                          p1 = { x: worldX + size, y: worldY };
-                          p2 = { x: worldX + size, y: worldY + size };
-                          p3 = { x: worldX + size + deltaX, y: worldY + size + deltaY };
-                          p4 = { x: worldX + size + deltaX, y: worldY + deltaY };
+                          p1 = { x: worldX + size + deltaX, y: worldY + deltaY };
+                          p2 = { x: worldX + size + deltaX, y: worldY + size + deltaY };
+                          p3 = { x: worldX + size, y: worldY + size };
+                          p4 = { x: worldX + size, y: worldY };
                       } else { // 'w'
-                          p1 = { x: worldX, y: worldY };
-                          p2 = { x: worldX, y: worldY + size };
-                          p3 = { x: worldX + deltaX, y: worldY + size + deltaY };
-                          p4 = { x: worldX + deltaX, y: worldY + deltaY };
+                          p1 = { x: worldX + deltaX, y: worldY + deltaY };
+                          p2 = { x: worldX + deltaX, y: worldY + size + deltaY };
+                          p3 = { x: worldX, y: worldY + size };
+                          p4 = { x: worldX, y: worldY };
                       }
 
-                      // Render Volumetric Polygon (Fallback to solid color while investigating texture fills)
-                      graphics.fillStyle(0x888888, 1.0);
+                      let fillColor = 0x888888;
+                      if (n.type === 's') fillColor = 0xaaaaaa;
+                      if (n.type === 'n') fillColor = 0x555555;
+                      
+                      graphics.fillStyle(fillColor, 1.0);
                       graphics.beginPath();
                       graphics.moveTo(p1.x, p1.y);
                       graphics.lineTo(p2.x, p2.y);
@@ -399,18 +424,6 @@ export default class LevelRenderer {
                       graphics.lineTo(p4.x, p4.y);
                       graphics.closePath();
                       graphics.fill();
-
-                      // Simulated Shading (N, E, W are darker)
-                      if (n.type !== 's') {
-                          graphics.fillStyle(0x000000, 0.4);
-                          graphics.beginPath();
-                          graphics.moveTo(p1.x, p1.y);
-                          graphics.lineTo(p2.x, p2.y);
-                          graphics.lineTo(p3.x, p3.y);
-                          graphics.lineTo(p4.x, p4.y);
-                          graphics.closePath();
-                          graphics.fill();
-                      }
                   }
               });
           });
