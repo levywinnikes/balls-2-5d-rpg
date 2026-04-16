@@ -12,7 +12,7 @@ export default class LevelRenderer {
   private tileSize: number;
   private currentLevel: string;
   private renderedTiles: Map<string, Map<string, Phaser.GameObjects.Sprite[]>> = new Map();
-  private renderedSideFaces: Map<string, Map<string, Phaser.GameObjects.Sprite>> = new Map();
+  private volumetricGraphics: Map<string, Phaser.GameObjects.Graphics> = new Map();
   private renderedDecorations: Map<string, Phaser.GameObjects.Sprite[]> = new Map();
   private levelContainers: Map<string, Phaser.GameObjects.Container> = new Map();
   public activeEnemies: Map<string, any> = new Map();
@@ -230,6 +230,12 @@ export default class LevelRenderer {
           container.setDepth(this.getDepthForLevel(levelNum, parseInt(this.currentLevel)));
           
           this.levelContainers.set(level, container);
+
+          // Initialize Volumetric Graphics for this level
+          const graphics = this.scene.add.graphics();
+          graphics.setDepth(-10); // Sit below the roof tiles
+          container.add(graphics);
+          this.volumetricGraphics.set(level, graphics);
       }
       return container;
   }
@@ -294,36 +300,119 @@ export default class LevelRenderer {
       // To keep side-faces perfectly anchored, we update them here.
       if (player?.sprite && (factorChanged || (Date.now() - this.lastUpdateTime < 100))) {
           this.updateAllTileTints(PlayerState.getInstance().isDebugCollisionEnabled());
-          this.updateSideFaceDeformation(player.sprite.x, player.sprite.y);
+          this.drawVolumetricPolygons();
       }
   }
 
-  private updateSideFaceDeformation(playerX: number, playerY: number): void {
+  private drawVolumetricPolygons(): void {
       const factor = this.currentPerspectiveFactor;
-      if (factor <= 0) return;
-      
-      this.renderedSideFaces.forEach((levelSides, level) => {
-          levelSides.forEach((sprite, key) => {
-              const gapH = 28 * factor;
-              
-              if (key.includes("_side_s")) {
-                  // SOUTH FACE: Vertical stretch (Cardboard style)
-                  sprite.setDisplaySize(this.tileSize, gapH);
-              } 
-              else if (key.includes("_side_e") || key.includes("_side_w")) {
-                  // EAST/WEST FACES: Trignometric Skewing (Voxel style)
-                  // The skew angle matches the vertical parallax shift (gapH / tileSize)
-                  const skewAngle = Math.atan2(gapH, this.tileSize);
-                  const isEast = key.includes("_side_e");
-                  
-                  // Apply skew to match the block's vertical profile
-                  (sprite as any).skewX = 0;
-                  (sprite as any).skewY = isEast ? skewAngle : -skewAngle;
-                  
-                  // Width = thickness (28px scaled), Height = full tile height (32px skewed)
-                  // This creates the solid cubic projection.
-                  sprite.setDisplaySize(28 * factor, this.tileSize);
-              }
+      if (factor <= 0) {
+          this.volumetricGraphics.forEach(g => g.clear());
+          return;
+      }
+
+      this.volumetricGraphics.forEach((graphics, levelStr) => {
+          graphics.clear();
+          const levelNum = parseInt(levelStr);
+          if (levelNum === 0) return; // Ground doesn't have sides connecting down
+
+          const levelTiles = this.renderedTiles.get(levelStr);
+          if (!levelTiles) return;
+
+          const containerZ = this.getLevelContainer(levelStr);
+          const containerZ1 = this.getLevelContainer((levelNum - 1).toString());
+          const mapLoader = (this.scene as any).mapLoader;
+
+          levelTiles.forEach((sprites, key) => {
+              const sprite = sprites[0];
+              if (!sprite || !sprite.active) return;
+
+              // Parse grid coords from key
+              const match = key.match(/(\d+)_(\d+)_(\d+)/);
+              if (!match) return;
+              const [, , xStr, yStr] = match;
+              const x = parseInt(xStr);
+              const y = parseInt(yStr);
+
+              // 1. Universal Edge Detection
+              const neighbors = [
+                  { dx: 0, dy: 1, type: 's' as const },
+                  { dx: 0, dy: -1, type: 'n' as const },
+                  { dx: 1, dy: 0, type: 'e' as const },
+                  { dx: -1, dy: 0, type: 'w' as const }
+              ];
+
+              // 2. Cross-Container Transform Math (Z to Z-1)
+              const worldX = x * this.tileSize;
+              const worldY = y * this.tileSize;
+              const size = this.tileSize;
+
+              // Screen Base Mapping
+              const screenBaseX = containerZ1.x + (worldX * containerZ1.scaleX);
+              const screenBaseY = containerZ1.y + (worldY * containerZ1.scaleY);
+
+              // Local to ContainerZ Mapping
+              const localBaseX = (screenBaseX - containerZ.x) / containerZ.scaleX;
+              const localBaseY = (screenBaseY - containerZ.y) / containerZ.scaleY;
+
+              const deltaX = localBaseX - worldX;
+              const deltaY = localBaseY - worldY;
+
+              const textureKey = sprite.texture.key;
+
+              neighbors.forEach(n => {
+                  const neighborSymbol = mapLoader.getTileAt(x + n.dx, y + n.dy, levelStr);
+                  if (!neighborSymbol || neighborSymbol === "...") {
+                      // Cliff Edge Found! Draw the wall.
+                      
+                      // Identify vertices for this specific face
+                      let p1, p2, p3, p4;
+
+                      if (n.type === 's') {
+                          p1 = { x: worldX, y: worldY + size };
+                          p2 = { x: worldX + size, y: worldY + size };
+                          p3 = { x: worldX + size + deltaX, y: worldY + size + deltaY };
+                          p4 = { x: worldX + deltaX, y: worldY + size + deltaY };
+                      } else if (n.type === 'n') {
+                          p1 = { x: worldX, y: worldY };
+                          p2 = { x: worldX + size, y: worldY };
+                          p3 = { x: worldX + size + deltaX, y: worldY + deltaY };
+                          p4 = { x: worldX + deltaX, y: worldY + deltaY };
+                      } else if (n.type === 'e') {
+                          p1 = { x: worldX + size, y: worldY };
+                          p2 = { x: worldX + size, y: worldY + size };
+                          p3 = { x: worldX + size + deltaX, y: worldY + size + deltaY };
+                          p4 = { x: worldX + size + deltaX, y: worldY + deltaY };
+                      } else { // 'w'
+                          p1 = { x: worldX, y: worldY };
+                          p2 = { x: worldX, y: worldY + size };
+                          p3 = { x: worldX + deltaX, y: worldY + size + deltaY };
+                          p4 = { x: worldX + deltaX, y: worldY + deltaY };
+                      }
+
+                      // Render Volumetric Polygon (Fallback to solid color while investigating texture fills)
+                      graphics.fillStyle(0x888888, 1.0);
+                      graphics.beginPath();
+                      graphics.moveTo(p1.x, p1.y);
+                      graphics.lineTo(p2.x, p2.y);
+                      graphics.lineTo(p3.x, p3.y);
+                      graphics.lineTo(p4.x, p4.y);
+                      graphics.closePath();
+                      graphics.fill();
+
+                      // Simulated Shading (N, E, W are darker)
+                      if (n.type !== 's') {
+                          graphics.fillStyle(0x000000, 0.4);
+                          graphics.beginPath();
+                          graphics.moveTo(p1.x, p1.y);
+                          graphics.lineTo(p2.x, p2.y);
+                          graphics.lineTo(p3.x, p3.y);
+                          graphics.lineTo(p4.x, p4.y);
+                          graphics.closePath();
+                          graphics.fill();
+                      }
+                  }
+              });
           });
       });
   }
@@ -476,8 +565,7 @@ export default class LevelRenderer {
           }
         }
         
-        // --- VOLUMETRIC SIDE-FACES (v4) ---
-        this.checkForStructuralSideFaces(x, y, this.currentLevel, tileDef.id, symbol, mapData, mapLoader, tilesToKeep);
+
 
         const sprList = levelTiles.get(tileKey);
         const isCollidableEffective = TileRegistry.isCollidable(tileDef.id) || (mapData.tileDefinitions[symbol]?.block === true);
@@ -600,10 +688,9 @@ export default class LevelRenderer {
         droppedItem.updateDepth();
         });
     }
-
+    
     // APPLY PERSPECTIVE SHADING/SCALING (v5.8 Premium Visuals)
     this.updateAllTileTints(PlayerState.getInstance().isDebugCollisionEnabled());
-    this.updateSideFaceDeformation(playerX, playerY);
 
     this.cleanupTiles(tilesToKeep);
 
@@ -712,9 +799,6 @@ export default class LevelRenderer {
         sprite.setVisible(!PlayerState.getInstance().getDiagnosticSettings().hideTiles);
         sprite.setActive(true);
         levelTiles.set(tileKey, [sprite, ...additionalSprites]);
-        
-        // --- VOLUMETRIC SIDE-FACES (v4) ---
-        this.checkForStructuralSideFaces(x, y, levelStr, tileDef.id, symbol, mapData, mapLoader, tilesToKeep);
       }
       tilesToKeep.push(tileKey);
       
@@ -818,9 +902,6 @@ export default class LevelRenderer {
           sprite.setVisible(true);
           sprite.setActive(true);
           levelTiles.set(tileKey, [sprite, ...additionalSprites]);
-
-          // --- VOLUMETRIC SIDE-FACES (v4) ---
-          this.checkForStructuralSideFaces(x, y, levelStr, tileDef.id, symbol, mapData, mapLoader, tilesToKeep);
         }
         tilesToKeep.push(tileKey);
         
@@ -1088,104 +1169,6 @@ export default class LevelRenderer {
       });
   }
 
-  private checkForStructuralSideFaces(
-      x: number, 
-      y: number, 
-      level: string, 
-      tileId: string, 
-      symbol: string,
-      mapData: MultiLevelMapData,
-      mapLoader: MapLoader,
-      tilesToKeep: string[]
-  ): void {
-      if (this.currentPerspectiveFactor <= 0) return;
-      
-      const tileDef = mapData.tileDefinitions[symbol];
-      if (tileDef?.block === true) {
-          // SOUTH Face Check
-          const southSymbol = mapLoader.getTileAt(x, y + 1, level);
-          const southTileDef = southSymbol ? mapData.tileDefinitions[southSymbol] : null;
-          if (!southSymbol || southSymbol === "..." || southTileDef?.block !== true) {
-              this.renderSideFace(x, y, level, tileId, 's', tilesToKeep);
-          }
-
-          // EAST Face Check
-          const eastSymbol = mapLoader.getTileAt(x + 1, y, level);
-          const eastTileDef = eastSymbol ? mapData.tileDefinitions[eastSymbol] : null;
-          if (!eastSymbol || eastSymbol === "..." || eastTileDef?.block !== true) {
-              this.renderSideFace(x, y, level, tileId, 'e', tilesToKeep);
-          }
-
-          // WEST Face Check
-          const westSymbol = mapLoader.getTileAt(x - 1, y, level);
-          const westTileDef = westSymbol ? mapData.tileDefinitions[westSymbol] : null;
-          if (!westSymbol || westSymbol === "..." || westTileDef?.block !== true) {
-              this.renderSideFace(x, y, level, tileId, 'w', tilesToKeep);
-          }
-      }
-  }
-
-  private renderSideFace(
-      x: number, 
-      y: number, 
-      level: string, 
-      tileId: string, 
-      direction: 's' | 'e' | 'w',
-      tilesToKeep: string[]
-  ): void {
-      const sideKey = `${level}_${x}_${y}_side_${direction}`;
-      tilesToKeep.push(sideKey);
-      
-      let levelSides = this.renderedSideFaces.get(level);
-      if (!levelSides) {
-          levelSides = new Map();
-          this.renderedSideFaces.set(level, levelSides);
-      }
-
-      if (levelSides.has(sideKey)) return;
-
-      // CORREÇÃO CRÍTICA: Resolve a textura real usando o novo helper do Registry.
-      const textureId = TileRegistry.getTextureId(tileId); 
-      
-      // Se a textura não existir sequer no cache, não renderizamos a face para evitar blocos pretos
-      if (!this.scene.textures.exists(textureId)) {
-          console.warn(`[Renderer] Side-face texture missing: ${textureId}`);
-          return;
-      }
-
-      const worldX = x * this.tileSize + this.tileSize / 2;
-      const worldY = y * this.tileSize + this.tileSize / 2;
-      
-      const reusable = this.tilePool.get() || undefined;
-      if (reusable) this.resetSprite(reusable);
-      
-      const sprite = reusable || this.scene.add.sprite(0, 0, textureId);
-      
-      sprite.setTexture(textureId);
-      sprite.setActive(true);
-      sprite.setVisible(!PlayerState.getInstance().getDiagnosticSettings().hideTiles);
-      
-      // Dynamic Initialization based on direction
-      if (direction === 's') {
-          sprite.setPosition(worldX, worldY + this.tileSize / 2);
-          sprite.setOrigin(0.5, 0);
-          sprite.setTint(0xbbbbbb);
-      } else if (direction === 'e') {
-          sprite.setPosition(worldX + this.tileSize / 2, worldY);
-          sprite.setOrigin(0, 0.5);
-          sprite.setTint(0x888888);
-      } else { // 'w'
-          sprite.setPosition(worldX - this.tileSize / 2, worldY);
-          sprite.setOrigin(1, 0.5);
-          sprite.setTint(0x888888);
-      }
-      
-      sprite.setDepth(worldY - 1); 
-      sprite.setName(sideKey);
-
-      this.getLevelContainer(level).add(sprite);
-      levelSides.set(sideKey, sprite);
-  }
 
   private cleanupTiles(tilesToKeep: string[]): void {
       const activeKeys = new Set(tilesToKeep);
@@ -1203,19 +1186,6 @@ export default class LevelRenderer {
                       if (s.parentContainer) s.parentContainer.remove(s);
                       this.tilePool.release(s);
                   });
-                  levelMap.delete(key);
-              }
-          });
-      });
-
-      // Cleanup Side Faces
-      this.renderedSideFaces.forEach((levelMap, level) => {
-          levelMap.forEach((sprite, key) => {
-              if (!activeKeys.has(key)) {
-                  sprite.setActive(false);
-                  sprite.setVisible(false);
-                  if (sprite.parentContainer) sprite.parentContainer.remove(sprite);
-                  this.tilePool.release(sprite);
                   levelMap.delete(key);
               }
           });
