@@ -773,6 +773,42 @@ export class TileRegistry {
     return tileDef?.blocksRanged ?? false;
   }
 
+  public static getSideTextureID(tileId: string): string {
+      this.initialize();
+      // Heuristic 1: Explicit side texture
+      const sideId = `${tileId}-side`;
+      if (this.tiles.has(sideId)) return sideId;
+
+      const frontId = `${tileId}-front`;
+      if (this.tiles.has(frontId)) return frontId;
+
+      // Heuristic 2: Texture variant side
+      const sideTextureId = `${tileId}-texture-side`;
+      if (this.tiles.has(sideTextureId)) return sideTextureId;
+      
+      // Fallback: Use the same tileId and let the renderer apply tint
+      return tileId;
+  }
+
+  public static getTextureId(tileId: string): string {
+      this.initialize();
+      const tileDef = this.tiles.get(tileId);
+      if (!tileDef) return tileId;
+
+      const graphic = tileDef.graphic;
+      // 1. If it's a GenericWallGraphic instance, it likely has a textureKey
+      if (graphic instanceof GenericWallGraphic) {
+          return (graphic as any).textureKey || tileId;
+      }
+      
+      // 2. If it's a BaseTileGraphic subclass (constructor), it has a static TEXTURE_KEY
+      if (typeof graphic === 'function' && (graphic as any).TEXTURE_KEY) {
+          return (graphic as any).TEXTURE_KEY;
+      }
+
+      return tileId;
+  }
+
   static getRegisteredTiles(): TileDefinition[] {
       this.initialize();
       return Array.from(this.tiles.values());

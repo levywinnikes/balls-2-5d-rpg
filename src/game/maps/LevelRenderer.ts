@@ -12,6 +12,7 @@ export default class LevelRenderer {
   private tileSize: number;
   private currentLevel: string;
   private renderedTiles: Map<string, Map<string, Phaser.GameObjects.Sprite[]>> = new Map();
+  private renderedSideFaces: Map<string, Map<string, Phaser.GameObjects.Sprite>> = new Map();
   private renderedDecorations: Map<string, Phaser.GameObjects.Sprite[]> = new Map();
   private levelContainers: Map<string, Phaser.GameObjects.Container> = new Map();
   public activeEnemies: Map<string, any> = new Map();
@@ -122,6 +123,28 @@ export default class LevelRenderer {
              sprite.clearTint();
           }
       }
+  }
+
+  private resetSprite(sprite: Phaser.GameObjects.Sprite): void {
+      sprite.setScale(1, 1);
+      sprite.setRotation(0);
+      sprite.setAlpha(1.0);
+      sprite.setOrigin(0.5, 0.5);
+      sprite.clearTint();
+      sprite.setDataEnabled();
+      sprite.data.reset();
+      
+      // Property reset for Phaser 3.80+ skewing
+      const s = (sprite as any);
+      if (s.setSkew) {
+          s.setSkew(0, 0);
+      } else {
+          s.skewX = 0;
+          s.skewY = 0;
+      }
+
+      // Reset display size to standard tile unless set otherwise by renderer
+      sprite.setDisplaySize(this.tileSize, this.tileSize);
   }
 
   // --- NEW LIGHTING SYSTEM (Fog of War) ---
@@ -254,21 +277,55 @@ export default class LevelRenderer {
   }
 
   public updatePerspective(delta: number): void {
-      if (this.currentPerspectiveFactor === this.targetPerspectiveFactor) return;
-
-      // Smooth Ease: 0.004 per ms (~250ms transition)
-      const step = delta * 0.004;
-      if (Math.abs(this.currentPerspectiveFactor - this.targetPerspectiveFactor) < step) {
-          this.currentPerspectiveFactor = this.targetPerspectiveFactor;
-      } else {
-          this.currentPerspectiveFactor += (this.targetPerspectiveFactor > this.currentPerspectiveFactor ? step : -step);
-      }
-      
-      // We must update the visual positions every frame of the transition
       const player = (this.scene as any).player as any;
-      if (player?.sprite) {
-          this.updateAllTileTints(PlayerState.getInstance().isDebugCollisionEnabled());
+      const factorChanged = this.currentPerspectiveFactor !== this.targetPerspectiveFactor;
+
+      if (factorChanged) {
+        // Smooth Ease: 0.004 per ms (~250ms transition)
+        const step = delta * 0.004;
+        if (Math.abs(this.currentPerspectiveFactor - this.targetPerspectiveFactor) < step) {
+            this.currentPerspectiveFactor = this.targetPerspectiveFactor;
+        } else {
+            this.currentPerspectiveFactor += (this.targetPerspectiveFactor > this.currentPerspectiveFactor ? step : -step);
+        }
       }
+
+      // We must update the visual positions every frame of the transition OR every frame the player moves
+      // To keep side-faces perfectly anchored, we update them here.
+      if (player?.sprite && (factorChanged || (Date.now() - this.lastUpdateTime < 100))) {
+          this.updateAllTileTints(PlayerState.getInstance().isDebugCollisionEnabled());
+          this.updateSideFaceDeformation(player.sprite.x, player.sprite.y);
+      }
+  }
+
+  private updateSideFaceDeformation(playerX: number, playerY: number): void {
+      const factor = this.currentPerspectiveFactor;
+      if (factor <= 0) return;
+      
+      this.renderedSideFaces.forEach((levelSides, level) => {
+          levelSides.forEach((sprite, key) => {
+              const gapH = 28 * factor;
+              
+              if (key.includes("_side_s")) {
+                  // SOUTH FACE: Vertical stretch (Cardboard style)
+                  sprite.setDisplaySize(this.tileSize, gapH);
+              } 
+              else if (key.includes("_side_e") || key.includes("_side_w")) {
+                  // EAST/WEST FACES: Trignometric Skewing (Voxel style)
+                  // The skew angle matches the vertical parallax shift (gapH / tileSize)
+                  const skewAngle = Math.atan2(gapH, this.tileSize);
+                  const isEast = key.includes("_side_e");
+                  
+                  // Apply skew to match the block's vertical profile
+                  (sprite as any).skewX = 0;
+                  (sprite as any).skewY = isEast ? skewAngle : -skewAngle;
+                  
+                  // Width = thickness (28px scaled), Height = full tile height (32px skewed)
+                  // This creates the solid cubic projection.
+                  sprite.setDisplaySize(28 * factor, this.tileSize);
+              }
+          });
+      });
   }
 
   public update(playerX: number, playerY: number): void {
@@ -328,10 +385,11 @@ export default class LevelRenderer {
     const mapWidthTiles = Math.floor(this.scene.physics.world.bounds.width / this.tileSize);
     const mapHeightTiles = Math.floor(this.scene.physics.world.bounds.height / this.tileSize);
 
-    const minX = Math.max(0, gridX - this.renderRadius);
-    const maxX = Math.min(mapWidthTiles - 1, gridX + this.renderRadius);
-    const minY = Math.max(0, gridY - this.renderRadius);
-    const maxY = Math.min(mapHeightTiles - 1, gridY + this.renderRadius);
+    const padding = this.currentPerspectiveFactor > 0 ? 5 : 2; // Extra padding in 3D to account for perspective shifts
+    const minX = Math.max(0, gridX - (this.renderRadius + padding));
+    const maxX = Math.min(mapWidthTiles - 1, gridX + (this.renderRadius + padding));
+    const minY = Math.max(0, gridY - (this.renderRadius + padding));
+    const maxY = Math.min(mapHeightTiles - 1, gridY + (this.renderRadius + padding));
     const mapLoader = (this.scene as any).mapLoader as MapLoader | undefined;
     const wallsLayer = mapLoader?.getWallsLayer?.();
 
@@ -372,6 +430,8 @@ export default class LevelRenderer {
           );
           
           const reusable = this.tilePool.get() || undefined;
+          if (reusable) this.resetSprite(reusable);
+
           const { sprite, additionalSprites, isCollidable } = TileRegistry.createTile(
             this.scene,
             tileDef.id,
@@ -410,14 +470,15 @@ export default class LevelRenderer {
                     } else if (tileDef.id.includes("side")) {
                         body.setSize(32, 32);
                         body.setOffset((this.tileSize - 32) / 2, this.tileSize - 32); 
-                        body.setSize(this.tileSize, 32);
-                        body.setOffset(0, this.tileSize - 32);
                     }
                 }
             }
           }
         }
         
+        // --- VOLUMETRIC SIDE-FACES (v4) ---
+        this.checkForStructuralSideFaces(x, y, this.currentLevel, tileDef.id, symbol, mapData, mapLoader, tilesToKeep);
+
         const sprList = levelTiles.get(tileKey);
         const isCollidableEffective = TileRegistry.isCollidable(tileDef.id) || (mapData.tileDefinitions[symbol]?.block === true);
         if (levelTiles.has(tileKey)) {
@@ -436,6 +497,8 @@ export default class LevelRenderer {
             if (!levelTiles.has(underTileKey)) {
               try {
                  const reusable = this.tilePool.get() || undefined;
+                 if (reusable) this.resetSprite(reusable);
+                 
                  const { sprite, additionalSprites } = TileRegistry.createTile(
                    this.scene,
                    underTileId,
@@ -540,6 +603,7 @@ export default class LevelRenderer {
 
     // APPLY PERSPECTIVE SHADING/SCALING (v5.8 Premium Visuals)
     this.updateAllTileTints(PlayerState.getInstance().isDebugCollisionEnabled());
+    this.updateSideFaceDeformation(playerX, playerY);
 
     this.cleanupTiles(tilesToKeep);
 
@@ -629,6 +693,8 @@ export default class LevelRenderer {
 
       if (!levelTiles.has(tileKey)) {
         const reusable = this.tilePool.get() || undefined;
+        if (reusable) this.resetSprite(reusable);
+
         const { sprite, additionalSprites } = TileRegistry.createTile(
           this.scene,
           tileDef.id,
@@ -646,6 +712,9 @@ export default class LevelRenderer {
         sprite.setVisible(!PlayerState.getInstance().getDiagnosticSettings().hideTiles);
         sprite.setActive(true);
         levelTiles.set(tileKey, [sprite, ...additionalSprites]);
+        
+        // --- VOLUMETRIC SIDE-FACES (v4) ---
+        this.checkForStructuralSideFaces(x, y, levelStr, tileDef.id, symbol, mapData, mapLoader, tilesToKeep);
       }
       tilesToKeep.push(tileKey);
       
@@ -661,6 +730,8 @@ export default class LevelRenderer {
         if (!levelTiles.has(underTileKey)) {
           try {
             const reusable = this.tilePool.get() || undefined;
+            if (reusable) this.resetSprite(reusable);
+
             const { sprite, additionalSprites } = TileRegistry.createTile(
               this.scene,
               underTileId,
@@ -729,6 +800,8 @@ export default class LevelRenderer {
           const levelOffset = this.getDepthForLevel(level, currentLevelNum);
           
           const reusable = this.tilePool.get() || undefined;
+          if (reusable) this.resetSprite(reusable);
+
           const { sprite, additionalSprites } = TileRegistry.createTile(
             this.scene,
             tileDef.id,
@@ -745,6 +818,9 @@ export default class LevelRenderer {
           sprite.setVisible(true);
           sprite.setActive(true);
           levelTiles.set(tileKey, [sprite, ...additionalSprites]);
+
+          // --- VOLUMETRIC SIDE-FACES (v4) ---
+          this.checkForStructuralSideFaces(x, y, levelStr, tileDef.id, symbol, mapData, mapLoader, tilesToKeep);
         }
         tilesToKeep.push(tileKey);
         
@@ -796,33 +872,6 @@ export default class LevelRenderer {
 
   private getDepthForLevel(targetLevel: number, currentLevel: number): number {
     return (targetLevel - currentLevel) * 100000;
-  }
-
-  private cleanupTiles(tilesToKeep: string[]): void {
-    const keepSet = new Set(tilesToKeep);
-    const mapLoader = (this.scene as any).mapLoader;
-
-    this.renderedTiles.forEach((levelTiles, level) => {
-      const keysToRemove: string[] = [];
-      levelTiles.forEach((sprites, key) => {
-        if (!keepSet.has(key)) {
-          // IMPORTANT: Remove from physics group to prevent internal leak/accumulation
-          const wallsLayer = mapLoader?.getWallsLayer?.(level);
-          sprites.forEach(sprite => {
-              if (wallsLayer) wallsLayer.remove(sprite);
-              // CRITICAL: Remove from container before pooling to prevent zombie movements
-              sprite.parentContainer?.remove(sprite); 
-              this.tilePool.release(sprite);
-          });
-          keysToRemove.push(key);
-        }
-      });
-      keysToRemove.forEach(key => levelTiles.delete(key));
-
-      if (levelTiles.size === 0) {
-        this.renderedTiles.delete(level);
-      }
-    });
   }
 
   private clearRenderedTiles(): void {
@@ -1036,6 +1085,140 @@ export default class LevelRenderer {
               });
               this.renderedDecorations.delete(key);
           }
+      });
+  }
+
+  private checkForStructuralSideFaces(
+      x: number, 
+      y: number, 
+      level: string, 
+      tileId: string, 
+      symbol: string,
+      mapData: MultiLevelMapData,
+      mapLoader: MapLoader,
+      tilesToKeep: string[]
+  ): void {
+      if (this.currentPerspectiveFactor <= 0) return;
+      
+      const tileDef = mapData.tileDefinitions[symbol];
+      if (tileDef?.block === true) {
+          // SOUTH Face Check
+          const southSymbol = mapLoader.getTileAt(x, y + 1, level);
+          const southTileDef = southSymbol ? mapData.tileDefinitions[southSymbol] : null;
+          if (!southSymbol || southSymbol === "..." || southTileDef?.block !== true) {
+              this.renderSideFace(x, y, level, tileId, 's', tilesToKeep);
+          }
+
+          // EAST Face Check
+          const eastSymbol = mapLoader.getTileAt(x + 1, y, level);
+          const eastTileDef = eastSymbol ? mapData.tileDefinitions[eastSymbol] : null;
+          if (!eastSymbol || eastSymbol === "..." || eastTileDef?.block !== true) {
+              this.renderSideFace(x, y, level, tileId, 'e', tilesToKeep);
+          }
+
+          // WEST Face Check
+          const westSymbol = mapLoader.getTileAt(x - 1, y, level);
+          const westTileDef = westSymbol ? mapData.tileDefinitions[westSymbol] : null;
+          if (!westSymbol || westSymbol === "..." || westTileDef?.block !== true) {
+              this.renderSideFace(x, y, level, tileId, 'w', tilesToKeep);
+          }
+      }
+  }
+
+  private renderSideFace(
+      x: number, 
+      y: number, 
+      level: string, 
+      tileId: string, 
+      direction: 's' | 'e' | 'w',
+      tilesToKeep: string[]
+  ): void {
+      const sideKey = `${level}_${x}_${y}_side_${direction}`;
+      tilesToKeep.push(sideKey);
+      
+      let levelSides = this.renderedSideFaces.get(level);
+      if (!levelSides) {
+          levelSides = new Map();
+          this.renderedSideFaces.set(level, levelSides);
+      }
+
+      if (levelSides.has(sideKey)) return;
+
+      // CORREÇÃO CRÍTICA: Resolve a textura real usando o novo helper do Registry.
+      const textureId = TileRegistry.getTextureId(tileId); 
+      
+      // Se a textura não existir sequer no cache, não renderizamos a face para evitar blocos pretos
+      if (!this.scene.textures.exists(textureId)) {
+          console.warn(`[Renderer] Side-face texture missing: ${textureId}`);
+          return;
+      }
+
+      const worldX = x * this.tileSize + this.tileSize / 2;
+      const worldY = y * this.tileSize + this.tileSize / 2;
+      
+      const reusable = this.tilePool.get() || undefined;
+      if (reusable) this.resetSprite(reusable);
+      
+      const sprite = reusable || this.scene.add.sprite(0, 0, textureId);
+      
+      sprite.setTexture(textureId);
+      sprite.setActive(true);
+      sprite.setVisible(!PlayerState.getInstance().getDiagnosticSettings().hideTiles);
+      
+      // Dynamic Initialization based on direction
+      if (direction === 's') {
+          sprite.setPosition(worldX, worldY + this.tileSize / 2);
+          sprite.setOrigin(0.5, 0);
+          sprite.setTint(0xbbbbbb);
+      } else if (direction === 'e') {
+          sprite.setPosition(worldX + this.tileSize / 2, worldY);
+          sprite.setOrigin(0, 0.5);
+          sprite.setTint(0x888888);
+      } else { // 'w'
+          sprite.setPosition(worldX - this.tileSize / 2, worldY);
+          sprite.setOrigin(1, 0.5);
+          sprite.setTint(0x888888);
+      }
+      
+      sprite.setDepth(worldY - 1); 
+      sprite.setName(sideKey);
+
+      this.getLevelContainer(level).add(sprite);
+      levelSides.set(sideKey, sprite);
+  }
+
+  private cleanupTiles(tilesToKeep: string[]): void {
+      const activeKeys = new Set(tilesToKeep);
+      const mapLoader = (this.scene as any).mapLoader;
+
+      // Cleanup Main Tiles
+      this.renderedTiles.forEach((levelMap, level) => {
+          levelMap.forEach((sprites, key) => {
+              if (!activeKeys.has(key)) {
+                  const wallsLayer = mapLoader?.getWallsLayer?.(level);
+                  sprites.forEach(s => {
+                      if (wallsLayer) wallsLayer.remove(s);
+                      s.setActive(false);
+                      s.setVisible(false);
+                      if (s.parentContainer) s.parentContainer.remove(s);
+                      this.tilePool.release(s);
+                  });
+                  levelMap.delete(key);
+              }
+          });
+      });
+
+      // Cleanup Side Faces
+      this.renderedSideFaces.forEach((levelMap, level) => {
+          levelMap.forEach((sprite, key) => {
+              if (!activeKeys.has(key)) {
+                  sprite.setActive(false);
+                  sprite.setVisible(false);
+                  if (sprite.parentContainer) sprite.parentContainer.remove(sprite);
+                  this.tilePool.release(sprite);
+                  levelMap.delete(key);
+              }
+          });
       });
   }
 
