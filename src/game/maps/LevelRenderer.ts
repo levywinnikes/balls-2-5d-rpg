@@ -320,7 +320,10 @@ export default class LevelRenderer {
           const levelTiles = this.renderedTiles.get(levelStr);
           if (!levelTiles) return;
 
-          const baseContainer = this.getLevelContainer(levelStr);
+          // We use the current level's container as the coordinate space for the polygons,
+          // but we project the base down to the ground (Level 0) for the sheer wall look.
+          const currentContainer = this.getLevelContainer(levelStr);
+          const groundContainer = this.getLevelContainer("0");
 
           levelTiles.forEach((sprites, key) => {
               const sprite = sprites[0];
@@ -334,47 +337,27 @@ export default class LevelRenderer {
               const x = parseInt(xStr);
               const y = parseInt(yStr);
 
-              // 1. BASE CHECK (Inverted): Only the lowest tile at (x,y) handles the wall.
-              // If there's a tile BELOW us, skip rendering because the base will handle it.
-              if (levelNum > 0) {
-                  const levelBelowStr = (levelNum - 1).toString();
-                  const tileBelow = mapLoader.getTileAt(x, y, levelBelowStr);
-                  if (tileBelow && tileBelow !== "...") return;
+              // 1. TOPMOST CHECK: Only drawing from the highest tile ensures walls are always visible.
+              const nextLevelStr = (levelNum + 1).toString();
+              const tileAbove = mapLoader.getTileAt(x, y, nextLevelStr);
+              if (tileAbove && tileAbove !== "...") {
+                  return; // Not the topmost tile, skip
               }
 
-              // 2. SEARCH UP: Find the roof level for this building column
-              let roofLevelNum = levelNum;
-              while (roofLevelNum < 10) { // Safety cap
-                  const nextLevelStr = (roofLevelNum + 1).toString();
-                  const tileAbove = mapLoader.getTileAt(x, y, nextLevelStr);
-                  if (!tileAbove || tileAbove === "...") break;
-                  roofLevelNum++;
-              }
-
-              // If building is only at the current level (e.g. absolute ground level 0), 
-              // we still need a wall if it's elevated. But for simple maps, 
-              // we only draw if roofLevelNum > 0 (building has height).
-              // However, since we anchor to levelNum, if roof === base and levelNum === 0, no wall.
-              if (roofLevelNum === levelNum && levelNum === 0) return;
-
-              // 3. Cross-Container Transform Math (From Roof Level down to CURRENT Base Level)
-              const roofContainer = this.getLevelContainer(roofLevelNum.toString());
-              
+              // 2. Cross-Container Transform Math (From current Roof Level down to Level 0 Anchor)
               const worldX = x * this.tileSize;
               const worldY = y * this.tileSize;
               const size = this.tileSize;
 
-              // The ROOF's position on screen
-              const screenRoofX = roofContainer.x + (worldX * roofContainer.scaleX);
-              const screenRoofY = roofContainer.y + (worldY * roofContainer.scaleY);
+              // Project where Level 0's footprint would be relative to our current container
+              const screenGroundX = groundContainer.x + (worldX * groundContainer.scaleX);
+              const screenGroundY = groundContainer.y + (worldY * groundContainer.scaleY);
 
-              // Where that roof point falls in our CURRENT level's local space
-              const localRoofX = (screenRoofX - baseContainer.x) / baseContainer.scaleX;
-              const localRoofY = (screenRoofY - baseContainer.y) / baseContainer.scaleY;
+              const localBaseX = (screenGroundX - currentContainer.x) / currentContainer.scaleX;
+              const localBaseY = (screenGroundY - currentContainer.y) / currentContainer.scaleY;
 
-              // Delta between the base footprint worldX/Y and the projected roof position
-              const deltaX = localRoofX - worldX;
-              const deltaY = localRoofY - worldY;
+              const deltaX = localBaseX - worldX;
+              const deltaY = localBaseY - worldY;
 
               const neighbors = [
                   { dx: 0, dy: 1, type: 's' as const },
@@ -384,32 +367,31 @@ export default class LevelRenderer {
               ];
 
               neighbors.forEach(n => {
-                  // Important: Check neighbors at the ROOF level to see if a wall is needed
-                  const roofNeighbor = mapLoader.getTileAt(x + n.dx, y + n.dy, roofLevelNum.toString());
-                  if (!roofNeighbor || roofNeighbor === "...") {
+                  const neighborSymbol = mapLoader.getTileAt(x + n.dx, y + n.dy, levelStr);
+                  if (!neighborSymbol || neighborSymbol === "...") {
                       let p1, p2, p3, p4;
 
-                      // Top of wall (Roof) and Bottom of wall (Base)
+                      // Wall connects Roof points (worldX/Y) to projected Base points (worldX/Y + delta)
                       if (n.type === 's') {
-                          p1 = { x: worldX + deltaX, y: worldY + size + deltaY }; // Roof Corner
-                          p2 = { x: worldX + size + deltaX, y: worldY + size + deltaY }; // Roof Corner
-                          p3 = { x: worldX + size, y: worldY + size }; // Base Corner
-                          p4 = { x: worldX, y: worldY + size }; // Base Corner
+                          p1 = { x: worldX, y: worldY + size };
+                          p2 = { x: worldX + size, y: worldY + size };
+                          p3 = { x: worldX + size + deltaX, y: worldY + size + deltaY };
+                          p4 = { x: worldX + deltaX, y: worldY + size + deltaY };
                       } else if (n.type === 'n') {
-                          p1 = { x: worldX + deltaX, y: worldY + deltaY };
-                          p2 = { x: worldX + size + deltaX, y: worldY + deltaY };
-                          p3 = { x: worldX + size, y: worldY };
-                          p4 = { x: worldX, y: worldY };
+                          p1 = { x: worldX, y: worldY };
+                          p2 = { x: worldX + size, y: worldY };
+                          p3 = { x: worldX + size + deltaX, y: worldY + deltaY };
+                          p4 = { x: worldX + deltaX, y: worldY + deltaY };
                       } else if (n.type === 'e') {
-                          p1 = { x: worldX + size + deltaX, y: worldY + deltaY };
-                          p2 = { x: worldX + size + deltaX, y: worldY + size + deltaY };
-                          p3 = { x: worldX + size, y: worldY + size };
-                          p4 = { x: worldX + size, y: worldY };
+                          p1 = { x: worldX + size, y: worldY };
+                          p2 = { x: worldX + size, y: worldY + size };
+                          p3 = { x: worldX + size + deltaX, y: worldY + size + deltaY };
+                          p4 = { x: worldX + size + deltaX, y: worldY + deltaY };
                       } else { // 'w'
-                          p1 = { x: worldX + deltaX, y: worldY + deltaY };
-                          p2 = { x: worldX + deltaX, y: worldY + size + deltaY };
-                          p3 = { x: worldX, y: worldY + size };
-                          p4 = { x: worldX, y: worldY };
+                          p1 = { x: worldX, y: worldY };
+                          p2 = { x: worldX, y: worldY + size };
+                          p3 = { x: worldX + deltaX, y: worldY + size + deltaY };
+                          p4 = { x: worldX + deltaX, y: worldY + deltaY };
                       }
 
                       let fillColor = 0x888888;
