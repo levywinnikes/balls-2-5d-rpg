@@ -489,6 +489,18 @@ export class PlayerState extends EventEmitter {
       this.emit("requestZJump", delta);
   }
 
+  private _perspectiveMode: "2D" | "3D" = "3D";
+
+  public getPerspectiveMode() {
+      return this._perspectiveMode;
+  }
+
+  public togglePerspectiveMode() {
+      this._perspectiveMode = this._perspectiveMode === "3D" ? "2D" : "3D";
+      this.emit("perspectiveModeChanged", this._perspectiveMode);
+      return this._perspectiveMode;
+  }
+
 
 
   public static getInstance(): PlayerState {

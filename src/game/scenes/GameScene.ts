@@ -1971,6 +1971,10 @@ export default class GameScene extends Phaser.Scene {
     
     this.perf.startTime = performance.now();
     
+    if (this.levelRenderer) {
+        this.levelRenderer.updatePerspective(delta);
+    }
+    
     const diag = PlayerState.getInstance().getDiagnosticSettings();
 
     // Update PlayerState (Hunger, Regen, etc)

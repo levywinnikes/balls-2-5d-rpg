@@ -24,6 +24,8 @@ export default class LevelRenderer {
   private updateThreshold: number = 4;    // Only update map every 4 pixels (Super Smooth)
   private lastUpdateTime: number = 0;      // Time-based throttle
   private updateThrottleMs: number = 60;   // 60ms limit (Fast refresh)
+  private currentPerspectiveFactor: number = 1.0;
+  private targetPerspectiveFactor: number = 1.0;
 
   constructor(scene: Phaser.Scene, tileSize: number, currentLevel: string) {
     this.scene = scene;
@@ -40,13 +42,9 @@ export default class LevelRenderer {
         if (!enabled) this.debugGraphics?.clear();
     });
 
-    // CLOUD SHADOWS LISTENER
-    PlayerState.getInstance().on("cloudShadowsChanged", (enabled: boolean) => {
-        if (enabled) {
-            this.initClouds();
-        } else {
-            this.cleanupClouds();
-        }
+    // PERSPECTIVE MODE LISTENER
+    PlayerState.getInstance().on("perspectiveModeChanged", (mode: "2D" | "3D") => {
+        this.targetPerspectiveFactor = mode === "3D" ? 1.0 : 0.0;
     });
 
     (window as any)._levelRenderer = this;
@@ -64,12 +62,14 @@ export default class LevelRenderer {
         const levelNum = parseInt(levelKey);
         const levelDiff = levelNum - currentLevelNum;
         
+        const pFactor = this.currentPerspectiveFactor;
+
         // 1. Perspective SCALE (Subtle 4% per level for stability)
-        const perspectiveScale = 1 + (levelDiff * 0.04);
+        const perspectiveScale = 1 + (levelDiff * 0.04 * pFactor);
         
         // 2. Perspective TRANSFORM (Vertical Z-Stacking)
         // Shift levels UP by 28px per Z-level to keep buildings 'grounded'
-        const zShiftY = levelDiff * -28; 
+        const zShiftY = levelDiff * -28 * pFactor; 
         
         container.setScale(perspectiveScale);
         container.x = playerX * (1 - perspectiveScale);
@@ -251,6 +251,24 @@ export default class LevelRenderer {
       this.clearRenderedTiles();
       this.renderedTiles.clear();
       // Force update will happen in next game loop
+  }
+
+  public updatePerspective(delta: number): void {
+      if (this.currentPerspectiveFactor === this.targetPerspectiveFactor) return;
+
+      // Smooth Ease: 0.004 per ms (~250ms transition)
+      const step = delta * 0.004;
+      if (Math.abs(this.currentPerspectiveFactor - this.targetPerspectiveFactor) < step) {
+          this.currentPerspectiveFactor = this.targetPerspectiveFactor;
+      } else {
+          this.currentPerspectiveFactor += (this.targetPerspectiveFactor > this.currentPerspectiveFactor ? step : -step);
+      }
+      
+      // We must update the visual positions every frame of the transition
+      const player = (this.scene as any).player as any;
+      if (player?.sprite) {
+          this.updateAllTileTints(PlayerState.getInstance().isDebugCollisionEnabled());
+      }
   }
 
   public update(playerX: number, playerY: number): void {

@@ -7,13 +7,12 @@ import {
   BookOpen, 
   Settings, 
   Menu,
-  Zap
+  Zap,
+  Box
 } from "lucide-react";
 import { SkillProgressHUD } from "./components/SkillProgressHUD";
 import { StatusWidget } from "./components/StatusWidget";
-
-// No change needed here, just a check.
-// StatBar helper removed.
+import { PlayerState } from "../game/entities/Player/PlayerState";
 
 // --- Subcomponent: Minimap Container (Top Right) ---
 const MinimapWidget: React.FC = () => {
@@ -33,6 +32,7 @@ const MinimapWidget: React.FC = () => {
 const ActionToolbar: React.FC = () => {
     const { toggleWindow, windows } = useUI();
     const [hovered, setHovered] = useState<string | null>(null);
+    const [perspectiveMode, setPerspectiveMode] = useState<"2D" | "3D">(PlayerState.getInstance().getPerspectiveMode());
 
     const tools = [
         { id: "heroMenu", icon: User, label: "Hero Menu" },
@@ -40,6 +40,11 @@ const ActionToolbar: React.FC = () => {
         { id: "settings", icon: Settings, label: "Settings" },
         { id: "cheats", icon: Zap, label: "Cheats" },
     ];
+
+    const handleTogglePerspective = () => {
+        const newMode = PlayerState.getInstance().togglePerspectiveMode();
+        setPerspectiveMode(newMode);
+    };
 
     return (
         <div className="flex gap-4 p-3 bg-black/60 hover:bg-black/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl transition-all duration-300 pointer-events-auto mb-2">
@@ -70,7 +75,29 @@ const ActionToolbar: React.FC = () => {
                     </button>
                 );
             })}
-             {/* System Menu Button separate? Or merged? */}
+
+             {/* Perspective Toggle Button */}
+             <div className="w-px bg-white/10 mx-1" />
+             <button 
+                onClick={handleTogglePerspective}
+                onMouseEnter={() => setHovered("perspective")}
+                onMouseLeave={() => setHovered(null)}
+                className={`
+                    relative p-2 rounded-xl transition-all duration-200 ease-out
+                    ${perspectiveMode === "2D" ? "text-cyan-400 bg-cyan-500/10" : "text-gray-400 hover:text-white hover:bg-white/10"}
+                    hover:scale-110 active:scale-95
+                `}
+                title="Toggle 2.5D / 2D"
+            >
+                 <Box size={24} strokeWidth={perspectiveMode === "2D" ? 2.5 : 2} />
+                 {hovered === "perspective" && (
+                      <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black text-white text-xs px-2 py-1 rounded border border-gray-700 shadow-lg animate-in fade-in slide-in-from-bottom-2">
+                         {perspectiveMode === "3D" ? "View: 2.5D (Perspective)" : "View: 2D (Flat)"}
+                      </div>
+                 )}
+             </button>
+
+             {/* System Menu Button */}
              <div className="w-px bg-white/10 mx-1" />
              <button 
                 onClick={() => toggleWindow("systemMenu")}
