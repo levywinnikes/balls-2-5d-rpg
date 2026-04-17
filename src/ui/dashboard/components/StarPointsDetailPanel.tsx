@@ -51,11 +51,11 @@ export const StarPointsDetailPanel: React.FC = () => {
   const getTierLabel = (tier: string) => {
     switch (tier) {
       case "bronze":
-        return t("star_points_bronze" as any) || "Bronze";
+        return t("star_points_bronze" as any);
       case "silver":
-        return t("star_points_silver" as any) || "Silver";
+        return t("star_points_silver" as any);
       case "gold":
-        return t("star_points_gold" as any) || "Gold";
+        return t("star_points_gold" as any);
       default:
         return tier;
     }
@@ -66,11 +66,11 @@ export const StarPointsDetailPanel: React.FC = () => {
       {/* Header */}
       <div className="border-b border-white/10 pb-3 mb-4">
         <div className="text-xs text-white/40 uppercase tracking-widest">
-          {t("character_overview" as any) || "Character Overview"}
+          {t("character_overview" as any)}
         </div>
         <div className="text-lg font-bold text-yellow-300 mt-1 flex items-center gap-2">
           <Star size={18} className="text-yellow-400 fill-yellow-400" />
-          {t("star_points" as any) || "Star Points"}
+          {t("star_points" as any)}
         </div>
       </div>
 
@@ -92,7 +92,7 @@ export const StarPointsDetailPanel: React.FC = () => {
         {/* Level Contribution */}
         <div className="space-y-2">
           <div className="text-[10px] text-white/30 uppercase tracking-widest pl-1">
-            {t("star_points_from_level" as any) || "Level Bonus"}
+            {t("star_points_from_level" as any)}
           </div>
           <div className="flex justify-between items-center text-sm p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
             <div className="flex flex-col">
@@ -113,7 +113,7 @@ export const StarPointsDetailPanel: React.FC = () => {
         {data.equipmentBreakdown.length > 0 && (
           <div className="space-y-2 mt-3">
             <div className="text-[10px] text-white/30 uppercase tracking-widest pl-1">
-              {t("star_points_from_equipment" as any) || "Equipment Stars"}
+              {t("star_points_from_equipment" as any)}
             </div>
             {data.equipmentBreakdown.map((item, i) => (
               <div
@@ -152,7 +152,7 @@ export const StarPointsDetailPanel: React.FC = () => {
 
         {data.equipmentBreakdown.length === 0 && (
           <div className="text-center text-sm text-white/20 italic py-4">
-            {t("star_points_from_equipment" as any) || "Equipment Stars"}: 0
+            {t("star_points_from_equipment" as any)}: 0
           </div>
         )}
 
@@ -160,7 +160,7 @@ export const StarPointsDetailPanel: React.FC = () => {
         {data.willpowerTier > 0 && (
           <div className="space-y-2 mt-3">
             <div className="text-[10px] text-purple-400/50 uppercase tracking-widest pl-1">
-              {t("willpower" as any) || "Willpower"}
+              {t("willpower" as any)}
             </div>
             <div className="flex justify-between items-center text-sm p-3 bg-purple-500/10 rounded-lg border border-purple-500/20">
               <div className="flex flex-col">
@@ -182,8 +182,7 @@ export const StarPointsDetailPanel: React.FC = () => {
         <div className="mt-4 p-3 bg-purple-500/5 rounded-lg border border-purple-500/15">
           <p className="text-[10px] text-purple-300/60 italic leading-relaxed">
             ✨{" "}
-            {t("star_points_desc" as any) ||
-              "An ancient force resonates through your stars..."}
+            {t("star_points_desc" as any)}
           </p>
         </div>
       </div>

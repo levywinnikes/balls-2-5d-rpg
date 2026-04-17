@@ -37,7 +37,7 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
       }
     > = {
       strength: {
-        title: t("strength") || "Força",
+        title: t("strength"),
         description: "Aumenta o dano de armas físicas e o dano crítico",
         affects: ["Ataque Físico +5%/nível", "Dano Crítico +1%/nível"],
         icon: (
@@ -67,7 +67,7 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
         ],
       },
       dexterity: {
-        title: t("dexterity") || "Destreza",
+        title: t("dexterity"),
         description: "Aumenta o ataque com armas de destreza e chance crítica",
         affects: [
           "Ataque (Armas de Destreza) +5%/nível",
@@ -105,7 +105,7 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
         ],
       },
       intelligence: {
-        title: t("intelligence") || "Inteligência",
+        title: t("intelligence"),
         description: "Aumenta dano de armas mágicas e memória de feitiços",
         affects: ["Ataque Mágico +5%/nível", "Memória +5/nível"],
         icon: (
@@ -131,7 +131,7 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
         ],
       },
       reflex: {
-        title: t("reflex") || "Reflexo",
+        title: t("reflex"),
         description: "Aumenta a capacidade defensiva do personagem",
         affects: ["Defesa +5%/nível"],
         icon: (
@@ -254,7 +254,7 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
           <div
             className={`text-xs ${colors.textLight} opacity-60 uppercase tracking-widest`}
           >
-            {t("character_overview" as any) || "Atributo"}
+            {t("character_overview" as any)}
           </div>
           <div
             className={`text-lg font-bold ${colors.text} mt-1 flex items-center gap-2`}
@@ -389,7 +389,7 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
         {/* Header */}
         <div className="border-b border-yellow-500/20 pb-3 mb-4">
           <div className="text-xs text-yellow-400/60 uppercase tracking-widest">
-            {t("character_overview" as any) || "Resumo do Personagem"}
+            {t("character_overview" as any)}
           </div>
           <div className="text-lg font-bold text-yellow-300 mt-1 flex items-center gap-2">
             <span className="text-2xl">⭐</span>
@@ -491,11 +491,11 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
         {/* Header */}
         <div className="border-b border-purple-500/20 pb-3 mb-4">
           <div className="text-xs text-purple-400/60 uppercase tracking-widest">
-            {t("character_overview" as any) || "Character Overview"}
+            {t("character_overview" as any)}
           </div>
           <div className="text-lg font-bold text-purple-300 mt-1 flex items-center gap-2">
             <Sparkles size={20} className="text-purple-400" />
-            {t("willpower") || "Força de Vontade"}
+            {t("willpower")}
           </div>
         </div>
 
@@ -534,8 +534,7 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
                 O que é Força de Vontade?
               </div>
               <div className="text-sm text-white/70 leading-relaxed">
-                {t("willpower_desc") ||
-                  "Aumenta PV, Velocidade, Dano, Defesa e Armadura. Bônus de Sobrevivência: +1% no Total (após outros bônus) por Nível"}
+                {t("willpower_desc")}
               </div>
             </div>
 
@@ -615,11 +614,11 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
       {/* Header */}
       <div className="border-b border-orange-500/20 pb-3 mb-4">
         <div className="text-xs text-orange-400/60 uppercase tracking-widest">
-          {t("character_overview" as any) || "Character Overview"}
+          {t("character_overview" as any)}
         </div>
         <div className="text-lg font-bold text-orange-300 mt-1 flex items-center gap-2">
           <Beef size={20} className="text-orange-400" />
-          {t("hunger") || "Fome"}
+          {t("hunger")}
         </div>
       </div>
 
@@ -658,7 +657,7 @@ export const ConditionDetailPanel: React.FC<ConditionDetailPanelProps> = ({
               O que é Fome?
             </div>
             <div className="text-sm text-white/70 leading-relaxed">
-              {t("hunger_desc") || "Fome determina regeneração."}
+              {t("hunger_desc")}
             </div>
           </div>
 

@@ -45,8 +45,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
   if (!item) {
     return (
       <div className="h-full flex items-center justify-center text-white/20 italic text-sm p-8 text-center border-2 border-dashed border-white/10 rounded-xl">
-        {t("dashboard.select_item_hint" as any) ||
-          "Selecione um item para ver detalhes"}
+        {t("dashboard_select_item" as any)}
       </div>
     );
   }
@@ -167,7 +166,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
         {attributesList.length > 0 && (
           <div className="space-y-1">
             <div className="text-[10px] text-yellow-500/80 font-bold uppercase tracking-wider mb-1">
-              {t("item_attributes" as any) || "Bônus de Atributos"}
+              {t("ITEM_ATTRIBUTES" as any)}
             </div>
             {attributesList.map((attr: any, idx: number) => {
               const rawKey = attr.source || attr.type || attr.name; // Fallback to name if source/type missing
@@ -222,7 +221,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
               <span className="text-blue-400 group-hover:text-blue-300 font-bold uppercase tracking-widest text-xs shadow-black drop-shadow-md">
-                🍖 {t("common_use" as any) || "Usar"}
+                🍖 {t("common_use" as any)}
               </span>
             </div>
             <div className="absolute inset-0 bg-blue-400/5 opacity-0 group-hover:opacity-100 transition-opacity blur-md" />
@@ -238,7 +237,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
               <span className="text-orange-400 group-hover:text-orange-300 font-bold uppercase tracking-widest text-xs shadow-black drop-shadow-md">
-                🔥 {t("common_light" as any) || "Acender"}
+                🔥 {t("common_light" as any)}
               </span>
             </div>
             <div className="absolute inset-0 bg-orange-400/5 opacity-0 group-hover:opacity-100 transition-opacity blur-md" />
@@ -254,7 +253,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
               <span className="text-gray-400 group-hover:text-gray-300 font-bold uppercase tracking-widest text-xs shadow-black drop-shadow-md">
-                💨 {t("common_extinguish" as any) || "Apagar"}
+                💨 {t("common_extinguish" as any)}
               </span>
             </div>
             <div className="absolute inset-0 bg-gray-400/5 opacity-0 group-hover:opacity-100 transition-opacity blur-md" />
@@ -270,7 +269,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
               <span className="text-green-400 group-hover:text-green-300 font-bold uppercase tracking-widest text-xs shadow-black drop-shadow-md">
-                ⚡ {t("common.equip" as any) || "Equipar"}
+                ⚡ {t("common.equip" as any)}
               </span>
             </div>
             {/* Hover Glow */}
@@ -287,7 +286,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
               <span className="text-yellow-400 group-hover:text-yellow-300 font-bold uppercase tracking-widest text-xs shadow-black drop-shadow-md">
-                ⬅️ {t("common_unequip" as any) || "Desequipar"}
+                ⬅️ {t("common_unequip" as any)}
               </span>
             </div>
             <div className="absolute inset-0 bg-yellow-400/5 opacity-0 group-hover:opacity-100 transition-opacity blur-md" />
@@ -303,7 +302,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
               <span className="text-red-400 group-hover:text-red-300 font-bold uppercase tracking-widest text-xs shadow-black drop-shadow-md">
-                🗑️ {t("common.drop" as any) || "Largar"}
+                🗑️ {t("common.drop" as any)}
               </span>
             </div>
             {/* Hover Glow */}
