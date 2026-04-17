@@ -97,7 +97,7 @@ const EquipSlot: React.FC<{
                  else if (expectedType === "shield") ps.equipShield(draggedItem.itemId);
                  else ps.equipItem(draggedItem.itemId, expectedType as any); 
              } else {
-                 PlayerState.getInstance().emit("uiNotification", { type: "error", message: t("msg_cap_full") || "Full Cap" });
+                 PlayerState.getInstance().emit("uiNotification", { type: "error", message: t("msg_cap_full") });
              }
              setDraggedItem(null);
              PlayerState.getInstance().emit("uiDragEnd");
@@ -238,7 +238,7 @@ export const EquipmentWidget: React.FC<{ customSlotSize?: number }> = ({ customS
         else success = playerState.unequipItem(slot as any);
 
         if (!success) {
-            playerState.emit("uiNotification", { type: "error", message: t("msg_cap_full") || "Full Cap" });
+            playerState.emit("uiNotification", { type: "error", message: t("msg_cap_full") });
         }
     };
 

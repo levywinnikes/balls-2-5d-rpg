@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { PlayerState } from "./Player/PlayerState";
 import { DialogueManager } from "../systems/DialogueManager";
+import { t_game } from "../i18n/translations";
 
 export interface NPCData {
     id: string;
@@ -72,7 +73,7 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
         } else {
             console.log("[NPC] Too far to interact.");
              if((this.scene as any).showFloatingText) {
-                 (this.scene as any).showFloatingText(this.x, this.y - 60, "Too far!", 0xff0000);
+                 (this.scene as any).showFloatingText(this.x, this.y - 60, t_game("msg_too_far"), 0xff0000);
              }
         }
     }

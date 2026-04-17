@@ -114,13 +114,13 @@ export const AltarContent: React.FC = () => {
         if (transferRequest.direction === "store") {
              if (ps.removeEnchantedRune(transferRequest.itemId, transferQty)) {
                 ps.addRuneToAltar(altarId, transferRequest.itemId, transferQty);
-                ps.emit("message", t_game("msg_rune_stored") || "Rune stored.");
+                 ps.emit("message", t_game("msg_rune_stored"));
              }
         } else {
              if (ps.withdrawRuneFromAltar(altarId, transferRequest.itemId, transferQty)) {
                  const def = RuneRegistry.getRune(transferRequest.itemId);
                  ps.addEnchantedRune(transferRequest.itemId, transferQty, def?.memoryCost || 0);
-                 ps.emit("message", t_game("msg_rune_withdrawn") || "Rune withdrawn.");
+                  ps.emit("message", t_game("msg_rune_withdrawn"));
              }
         }
         

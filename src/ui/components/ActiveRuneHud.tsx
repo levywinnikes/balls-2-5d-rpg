@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
+import { t_game } from "../../game/i18n/translations";
 import { useUI } from "../../context/UIContext";
 import { formatItemTooltip } from "../../game/utils/TooltipUtils";
 
@@ -83,7 +84,7 @@ export const ActiveRuneHud: React.FC = () => {
 
     const handleCast = (runeId: string) => {
         if (isOnCooldown) {
-            PlayerState.getInstance().emit("message", "Cooldown active!");
+            PlayerState.getInstance().emit("message", t_game("msg_rune_cooldown_active"));
             return;
         }
         
@@ -123,7 +124,7 @@ export const ActiveRuneHud: React.FC = () => {
                 const runeDef = RuneRegistry.getRune(runeId);
                 const memCost = runeDef ? runeDef.memoryCost : 0;
                 PlayerState.getInstance().addEnchantedRune(runeId, 1, memCost);
-                PlayerState.getInstance().emit("message", "Rune equipped.");
+                PlayerState.getInstance().emit("message", t_game("msg_rune_equipped"));
             }
         }
         

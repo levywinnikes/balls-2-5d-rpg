@@ -511,7 +511,7 @@ export default class BattleSystem {
       const hasLos = gameScene.mapLoader.checkLineOfSight(startX, startY, x, y, currentLevel);
 
       if (!hasLos) {
-          ps.emit("message", t_game("msg_target_obstructed" as any) || "Alvo obstruído!");
+          ps.emit("message", t_game("msg_target_obstructed" as any));
           new FloatingText(this.scene, this.player.sprite.x, this.player.sprite.y - 40, "🚫", true, "#ff0000");
           
           // REFUND CHARGE ("Não perder o gatilho/item")
@@ -560,7 +560,7 @@ export default class BattleSystem {
               targetPos = { x: (closest as Enemy).sprite.x, y: (closest as Enemy).sprite.y };
           } else {
               // No target for Star Rune -> Refund
-              ps.emit("message", t_game("msg_star_rune_no_target" as any) || "Precisa de um alvo!");
+              ps.emit("message", t_game("msg_star_rune_no_target" as any));
               const existingRune = ps.enchantedRunes.find(r => r.runeId === runeId);
               if (existingRune) existingRune.count++;
               else ps.enchantedRunes.push({ runeId, count: 1 });

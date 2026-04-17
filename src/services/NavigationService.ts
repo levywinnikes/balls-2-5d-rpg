@@ -5,6 +5,7 @@
  * AI GUIDANCE: See /docs/AI_READ_FIRST.md and /docs/SYSTEM_BMS.md
  */
 import { PlayerState } from "../game/entities/Player/PlayerState";
+import { t_game } from "../game/i18n/translations";
 
 export class NavigationService {
     private static worker: Worker | null = null;
@@ -31,7 +32,7 @@ export class NavigationService {
                 console.warn("[NavigationService] Path calculation failed: location unreachable.");
                 const playerState = PlayerState.getInstance();
                 playerState.setActiveRoute(null);
-                playerState.emit("uiNotification", { type: "warning", message: "Destination unreachable!" });
+                playerState.emit("uiNotification", { type: "warning", message: t_game("msg_destination_unreachable") });
             }
         };
 

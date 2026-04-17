@@ -576,7 +576,7 @@ export default class GameScene extends Phaser.Scene {
     // Validate Drop Target (if explicit coords provided)
     if (data.x !== undefined && data.y !== undefined) {
       if (!this.validateItemDrop(x, y)) {
-        this.showFloatingText(x, y, "Blocked!", 0xff0000);
+        this.showFloatingText(x, y, t_game("msg_blocked"), 0xff0000);
         // Fallback to feet
         x = this.player.sprite.x;
         y = this.player.sprite.y;
@@ -646,7 +646,7 @@ export default class GameScene extends Phaser.Scene {
       this.showFloatingText(
         this.player.sprite.x,
         this.player.sprite.y - 40,
-        "Level Not Found",
+        t_game("msg_level_not_found"),
         0xff0000,
       );
     }
@@ -1448,7 +1448,7 @@ export default class GameScene extends Phaser.Scene {
 
       await this.transitionSystem.tryManualTransition(gridX, gridY, tileSize);
     } else {
-      this.showFloatingText(worldX, worldY, "Too far", 0xffffff);
+      this.showFloatingText(worldX, worldY, t_game("msg_too_far"), 0xffffff);
     }
   }
 
@@ -1672,12 +1672,12 @@ export default class GameScene extends Phaser.Scene {
       );
       if (distance > 600) {
         console.warn("[GameScene] Drop blocked: Too far away.");
-        this.showFloatingText(worldX, worldY, "Too far!", 0xffa500);
+        this.showFloatingText(worldX, worldY, t_game("msg_too_far"), 0xffa500);
         return false;
       }
       if (!this.player.checkLineOfSight(worldX, worldY)) {
         console.warn("[GameScene] Drop blocked: No line of sight.");
-        this.showFloatingText(worldX, worldY, "No line of sight", 0xffa500);
+        this.showFloatingText(worldX, worldY, t_game("msg_no_line_of_sight"), 0xffa500);
         return false;
       }
     }
@@ -1688,7 +1688,7 @@ export default class GameScene extends Phaser.Scene {
       console.warn(
         `[GameScene] Drop blocked: Wall collision at (${gridX},${gridY})`,
       );
-      this.showFloatingText(worldX, worldY, "Blocked", 0xff0000);
+      this.showFloatingText(worldX, worldY, t_game("msg_blocked"), 0xff0000);
       return false;
     }
 
@@ -1778,7 +1778,7 @@ export default class GameScene extends Phaser.Scene {
         `[GameScene] Failed to spawn dropped item ${weaponId}:`,
         err,
       );
-      this.showFloatingText(worldX, worldY, "Drop Error", 0xff0000);
+      this.showFloatingText(worldX, worldY, t_game("msg_drop_error"), 0xff0000);
       // Refund item if spawn failed?
       // Ideally yes, but complexity risks dupe.
       // For now, logging prevents crash loop.

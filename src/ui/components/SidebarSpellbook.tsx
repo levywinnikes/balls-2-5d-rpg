@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
+import { t_game } from "../../game/i18n/translations";
 import { useLanguage } from "../../context/LanguageContext";
 import { useUI } from "../../context/UIContext";
 import { formatItemTooltip } from "../../game/utils/TooltipUtils";
@@ -63,7 +64,7 @@ export const SidebarSpellbook: React.FC = () => {
         
         if (ps.withdrawRuneFromAltar(containerId, runeId, transferQty)) { 
             ps.addEnchantedRune(runeId, transferQty, memCost);
-            ps.emit("message", "Rune added to Spellbook.");
+            ps.emit("message", t_game("msg_rune_added_spellbook"));
         }
         
         setTransferRequest(null);
