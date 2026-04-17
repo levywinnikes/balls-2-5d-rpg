@@ -1124,9 +1124,11 @@ export default class GameScene extends Phaser.Scene {
           pickupNearbyItem: () => this.pickupNearbyItem(),
           clickFirstMatchingButton: (titles: string[]) => {
             for (const title of titles) {
-              const button = Array.from(document.querySelectorAll("button")).find(
-                (element) => element.getAttribute("title") === title,
-              ) as HTMLButtonElement | undefined;
+              const button = Array.from(
+                document.querySelectorAll("button"),
+              ).find((element) => element.getAttribute("title") === title) as
+                | HTMLButtonElement
+                | undefined;
 
               if (button) {
                 button.click();

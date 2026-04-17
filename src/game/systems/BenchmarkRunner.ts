@@ -556,7 +556,8 @@ export class BenchmarkRunner {
           );
           await this.benchmarkDelay(150);
           const closed = (window as any).__uiWindows?.heroMenu ?? false;
-          const sceneResumedAfterClose = !this.scene.scene.isPaused("GameScene");
+          const sceneResumedAfterClose =
+            !this.scene.scene.isPaused("GameScene");
 
           return (
             !before &&
