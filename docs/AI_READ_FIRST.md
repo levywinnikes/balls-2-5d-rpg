@@ -46,6 +46,12 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 - Browser runtime uses session fallback only (in-memory), which is not durable storage.
 - When validating save/load behavior, use `npm run electron-dev`.
 
+## 7. CONTRACT MAINTENANCE (MANDATORY)
+
+- Every feature task must update affected files in `docs/contracts/` as part of Definition of Done.
+- Benchmark-related changes must update `docs/contracts/BENCHMARK_CONTRACT.md` in the same task.
+- Do not wait for explicit user reminder to keep contracts aligned with code.
+
 ---
 
 _Reference current implementation plan for full context._
