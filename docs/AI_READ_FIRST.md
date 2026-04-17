@@ -61,6 +61,7 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 ## 9. EXECUTION RUNBOOK (MANDATORY)
 
 - Before implementing any task, follow [AI_RUNBOOK.md](./AI_RUNBOOK.md).
+- Map impacted modules using [ARCHITECTURE_MAP.md](./ARCHITECTURE_MAP.md) before code edits.
 - Determine required validations using [VALIDATION_MATRIX.md](./VALIDATION_MATRIX.md).
 - Do not mark a task as complete without reporting executed validations and outcomes.
 

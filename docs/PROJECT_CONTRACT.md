@@ -29,6 +29,7 @@
 ## Operational Guides
 
 - [AI_RUNBOOK.md](./AI_RUNBOOK.md) defines the mandatory AI task flow.
+- [ARCHITECTURE_MAP.md](./ARCHITECTURE_MAP.md) maps modules, entry points, and boundaries.
 - [VALIDATION_MATRIX.md](./VALIDATION_MATRIX.md) defines required commands by impact area.
 
 ## Maintenance Protocol
@@ -54,6 +55,7 @@ Every feature or bugfix task MUST pass this checklist before merge:
 7. Task summary includes: scope, files touched, validation results, and residual risks.
 8. UI text changes were added through translation keys for all supported languages; no hardcoded player-facing interface strings were introduced.
 9. Validation commands were selected and executed according to `docs/VALIDATION_MATRIX.md`.
+10. Module impact was documented using `docs/ARCHITECTURE_MAP.md` and included in the task summary.
 
 If any item is not satisfied, the task is considered incomplete.
 
