@@ -1,0 +1,170 @@
+{
+  "mapName": "smoke_test",
+  "tileSize": 32,
+  "width": 32,
+  "height": 32,
+  "config": {
+    "startLevel": "0",
+    "mapName": "Smoke Test Arena",
+    "smokeTests": [
+      {
+        "id": "spawn-point",
+        "type": "spawn",
+        "level": "0"
+      },
+      {
+        "id": "transition-down",
+        "type": "tile",
+        "level": "0",
+        "x": 8,
+        "y": 8,
+        "symbol": "sdn"
+      },
+      {
+        "id": "hole-transition",
+        "type": "tile",
+        "level": "0",
+        "x": 9,
+        "y": 8,
+        "symbol": "hol"
+      },
+      {
+        "id": "transition-up",
+        "type": "tile",
+        "level": "-1",
+        "x": 8,
+        "y": 8,
+        "symbol": "sup"
+      },
+      {
+        "id": "enemy-checkpoint",
+        "type": "entity",
+        "level": "0",
+        "symbol": "gob",
+        "x": 6,
+        "y": 3
+      },
+      {
+        "id": "loot-checkpoint",
+        "type": "entity",
+        "level": "0",
+        "symbol": "chs",
+        "x": 10,
+        "y": 3
+      },
+      {
+        "id": "decor-checkpoint",
+        "type": "entity",
+        "level": "0",
+        "symbol": "tre",
+        "x": 12,
+        "y": 3
+      }
+    ]
+  },
+  "tileAtlas": [
+    "...",
+    "grs",
+    "wal",
+    "sup",
+    "sdn",
+    "hol",
+    "plr",
+    "gob",
+    "chs",
+    "tre"
+  ],
+  "tileDefinitions": {
+    "grs": {
+      "id": "grass",
+      "color": "#4ade80"
+    },
+    "wal": {
+      "id": "wall",
+      "block": true,
+      "color": "#525252"
+    },
+    "sup": {
+      "id": "stair_up",
+      "transition": "up",
+      "color": "#f97316"
+    },
+    "sdn": {
+      "id": "stair_down",
+      "transition": "down",
+      "color": "#0ea5e9"
+    },
+    "hol": {
+      "id": "hole",
+      "color": "#111827"
+    }
+  },
+  "entityTemplates": {
+    "plr": {
+      "type": "player",
+      "id": "player_spawn"
+    },
+    "gob": {
+      "type": "enemy",
+      "id": "goblin"
+    },
+    "chs": {
+      "type": "item",
+      "id": "chest",
+      "contents": [
+        {
+          "id": "wooden_sword",
+          "count": 1
+        },
+        {
+          "id": "light_torch",
+          "count": 2
+        }
+      ]
+    },
+    "tre": {
+      "type": "decoration",
+      "id": "tree"
+    }
+  },
+  "levels": {
+    "0": {
+      "binFile": "smoke_test_0.bin",
+      "playerPos": {
+        "x": 96,
+        "y": 96
+      },
+      "entities": [
+        {
+          "x": 6,
+          "y": 3,
+          "symbol": "gob"
+        },
+        {
+          "x": 10,
+          "y": 3,
+          "symbol": "chs"
+        },
+        {
+          "x": 12,
+          "y": 3,
+          "symbol": "tre"
+        }
+      ]
+    },
+    "-1": {
+      "binFile": "smoke_test_-1.bin",
+      "playerPos": {
+        "x": 96,
+        "y": 96
+      },
+      "entities": [
+        {
+          "x": 4,
+          "y": 4,
+          "symbol": "gob"
+        }
+      ]
+    }
+  }
+}
