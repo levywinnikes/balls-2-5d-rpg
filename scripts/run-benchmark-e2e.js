@@ -10,7 +10,9 @@ const timeoutMs = Number(process.env.BENCHMARK_TIMEOUT_MS || defaultTimeoutMs);
 
 const buildIndexPath = path.join(rootDir, "build", "index.html");
 if (!fs.existsSync(buildIndexPath)) {
-  console.error("[benchmark:e2e] build/index.html not found. Run npm run build first.");
+  console.error(
+    "[benchmark:e2e] build/index.html not found. Run npm run build first.",
+  );
   process.exit(2);
 }
 
@@ -25,10 +27,7 @@ try {
 const reportsDir = path.join(rootDir, "artifacts", "benchmark");
 fs.mkdirSync(reportsDir, { recursive: true });
 
-const reportPath = path.join(
-  reportsDir,
-  `benchmark-report-${Date.now()}.json`,
-);
+const reportPath = path.join(reportsDir, `benchmark-report-${Date.now()}.json`);
 
 console.log("[benchmark:e2e] Launching Electron benchmark run...");
 console.log(`[benchmark:e2e] Report path: ${reportPath}`);

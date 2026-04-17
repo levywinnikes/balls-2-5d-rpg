@@ -90,15 +90,18 @@ const GameLayout: React.FC = () => {
     [toggleEditorMode],
   );
 
-  const handleStartGame = React.useCallback((data: any) => {
-    setIsInGame(true);
-    if (!gameRef.current) {
-      pendingStartDataRef.current = data;
-      return;
-    }
+  const handleStartGame = React.useCallback(
+    (data: any) => {
+      setIsInGame(true);
+      if (!gameRef.current) {
+        pendingStartDataRef.current = data;
+        return;
+      }
 
-    startGameWithInstance(gameRef.current, data);
-  }, [startGameWithInstance]);
+      startGameWithInstance(gameRef.current, data);
+    },
+    [startGameWithInstance],
+  );
 
   useEffect(() => {
     RuntimeErrorMonitor.install();

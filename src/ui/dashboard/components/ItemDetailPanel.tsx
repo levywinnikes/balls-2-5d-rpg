@@ -217,6 +217,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
         {isConsumable && onUse && (
           <button
             onClick={onUse}
+            title="Use Item"
             className="group w-full py-2.5 relative overflow-hidden rounded border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 active:bg-blue-500/30 transition-all duration-300"
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
@@ -232,6 +233,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
         {onLight && (
           <button
             onClick={onLight}
+            title="Light Item"
             className="group w-full py-2.5 relative overflow-hidden rounded border border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 active:bg-orange-500/30 transition-all duration-300"
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
@@ -247,6 +249,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
         {onExtinguish && (
           <button
             onClick={onExtinguish}
+            title="Extinguish Item"
             className="group w-full py-2.5 relative overflow-hidden rounded border border-gray-500/30 bg-gray-500/10 hover:bg-gray-500/20 active:bg-gray-500/30 transition-all duration-300"
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
@@ -262,6 +265,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
         {!isConsumable && !isEquipped && onEquip && isEquippable && (
           <button
             onClick={onEquip}
+            title="Equip Item"
             className="group w-full py-2.5 relative overflow-hidden rounded border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 active:bg-green-500/30 transition-all duration-300"
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
@@ -278,6 +282,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
         {isEquipped && onUnequip && (
           <button
             onClick={onUnequip}
+            title="Unequip Item"
             className="group w-full py-2.5 relative overflow-hidden rounded border border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 active:bg-yellow-500/30 transition-all duration-300"
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">
@@ -293,6 +298,7 @@ export const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({
         {onDrop && (
           <button
             onClick={onDrop}
+            title="Drop Item"
             className="group w-full py-2.5 relative overflow-hidden rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 transition-all duration-300"
           >
             <div className="absolute inset-0 flex items-center justify-center gap-2 z-10">

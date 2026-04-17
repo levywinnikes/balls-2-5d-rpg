@@ -81,6 +81,7 @@ const DashboardSlot: React.FC<{
           e.stopPropagation();
           onClick(slotEnum);
         }}
+        title={`Equipment Slot: ${slotEnum}`}
       >
         {/* Rarity BG Glow */}
         {item && (

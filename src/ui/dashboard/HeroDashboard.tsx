@@ -462,11 +462,13 @@ export const HeroDashboard: React.FC = () => {
                     }}
                     onDrop={() => {
                       if (!targetItem) return;
-                      // Drop using item UID
-                      PlayerState.getInstance().dropItem(
-                        targetItem.uid,
-                        targetItem.count || 1,
+                      const globalIndex = inventory.findIndex(
+                        (i: any) => i.uid === targetItem.uid,
                       );
+
+                      if (globalIndex !== -1) {
+                        PlayerState.getInstance().dropItem(globalIndex);
+                      }
                     }}
                     isEquippable={true}
                   />
@@ -528,6 +530,7 @@ export const HeroDashboard: React.FC = () => {
               <button
                 onClick={() => closeWindow("hero_menu")}
                 className="absolute right-6 p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                title="Close Hero Menu"
               >
                 <X size={20} />
               </button>

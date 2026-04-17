@@ -48,8 +48,14 @@ function main() {
     ["wal", 10, 8],
   ]);
 
-  fs.writeFileSync(path.join(ROOT_DIR, "public", "maps", "smoke_test_0.bin"), level0);
-  fs.writeFileSync(path.join(ROOT_DIR, "public", "maps", "smoke_test_-1.bin"), levelMinus1);
+  fs.writeFileSync(
+    path.join(ROOT_DIR, "public", "maps", "smoke_test_0.bin"),
+    level0,
+  );
+  fs.writeFileSync(
+    path.join(ROOT_DIR, "public", "maps", "smoke_test_-1.bin"),
+    levelMinus1,
+  );
 
   console.log("[SMOKE] Generated smoke_test_0.bin and smoke_test_-1.bin");
 }

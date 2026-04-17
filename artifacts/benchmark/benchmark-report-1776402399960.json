@@ -1,0 +1,71 @@
+{
+  "benchmarkName": "Smoke Test Benchmark",
+  "map": "smoke_test",
+  "level": "0",
+  "passed": true,
+  "totalMs": 8446.70000000298,
+  "completedAtIso": "2026-04-17T05:07:03.712Z",
+  "steps": [
+    {
+      "label": "spawn ready",
+      "ok": true,
+      "durationMs": 362.40000000596046
+    },
+    {
+      "label": "pickup loot",
+      "ok": true,
+      "durationMs": 384.59999999403954
+    },
+    {
+      "label": "transition down",
+      "ok": true,
+      "durationMs": 822.2999999970198
+    },
+    {
+      "label": "transition up",
+      "ok": true,
+      "durationMs": 786.5
+    },
+    {
+      "label": "quest log sync",
+      "ok": true,
+      "durationMs": 384.80000001192093
+    },
+    {
+      "label": "quest log window",
+      "ok": true,
+      "durationMs": 579
+    },
+    {
+      "label": "hero menu window",
+      "ok": true,
+      "durationMs": 562.5999999940395
+    },
+    {
+      "label": "system menu mouse pause",
+      "ok": true,
+      "durationMs": 659.5
+    },
+    {
+      "label": "settings mouse pause",
+      "ok": true,
+      "durationMs": 683.1999999880791
+    },
+    {
+      "label": "equipment roundtrip",
+      "ok": true,
+      "durationMs": 1922.7999999970198
+    },
+    {
+      "label": "torch light roundtrip",
+      "ok": true,
+      "durationMs": 1000
+    },
+    {
+      "label": "save/load roundtrip",
+      "ok": true,
+      "durationMs": 292
+    }
+  ],
+  "runtimeErrors": []
+}

@@ -1,0 +1,68 @@
+{
+  "benchmarkName": "Smoke Test Benchmark",
+  "map": "smoke_test",
+  "level": "0",
+  "passed": false,
+  "totalMs": 5465.29999999702,
+  "completedAtIso": "2026-04-17T04:32:30.595Z",
+  "steps": [
+    {
+      "label": "spawn ready",
+      "ok": true,
+      "durationMs": 361.29999999701977
+    },
+    {
+      "label": "pickup loot",
+      "ok": true,
+      "durationMs": 381.3999999985099
+    },
+    {
+      "label": "transition down",
+      "ok": true,
+      "durationMs": 793.2999999970198
+    },
+    {
+      "label": "transition up",
+      "ok": true,
+      "durationMs": 784.3999999985099
+    },
+    {
+      "label": "quest log sync",
+      "ok": true,
+      "durationMs": 384.69999999552965
+    },
+    {
+      "label": "quest log window",
+      "ok": true,
+      "durationMs": 583.0999999940395
+    },
+    {
+      "label": "hero menu window",
+      "ok": true,
+      "durationMs": 569.6000000014901
+    },
+    {
+      "label": "system menu mouse pause",
+      "ok": true,
+      "durationMs": 667.1999999955297
+    },
+    {
+      "label": "settings mouse pause",
+      "ok": true,
+      "durationMs": 681
+    },
+    {
+      "label": "inventory mouse action",
+      "ok": false,
+      "durationMs": 255.70000000298023,
+      "error": "hero menu HUD button not found"
+    }
+  ],
+  "runtimeErrors": [
+    {
+      "source": "console.error",
+      "message": "[Benchmark] FAIL inventory mouse action: hero menu HUD button not found",
+      "timestamp": 1776400350595
+    }
+  ]
+}

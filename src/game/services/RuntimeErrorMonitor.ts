@@ -1,4 +1,7 @@
-type RuntimeErrorSource = "window.error" | "window.unhandledrejection" | "console.error";
+type RuntimeErrorSource =
+  | "window.error"
+  | "window.unhandledrejection"
+  | "console.error";
 
 export interface RuntimeErrorEntry {
   source: RuntimeErrorSource;

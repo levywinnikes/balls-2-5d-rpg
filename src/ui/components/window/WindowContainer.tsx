@@ -216,7 +216,7 @@ export const WindowContainer: React.FC<WindowContainerProps> = ({
             onClick={() =>
               updateWindow(instance.id, { pinned: !instance.pinned })
             }
-            title={instance.pinned ? "Unpin" : "Pin"}
+            title={instance.pinned ? "Unpin Window" : "Pin Window"}
           >
             {instance.pinned ? (
               <Lock size={12 * scale} color="#fbbf24" />
@@ -229,12 +229,14 @@ export const WindowContainer: React.FC<WindowContainerProps> = ({
             onClick={() =>
               updateWindow(instance.id, { minimized: !instance.minimized })
             }
+            title="Minimize Window"
           >
             <Minus size={14 * scale} color="#d1d5db" />
           </button>
           <button
             className="hover:text-red-400 transition-colors p-[2px]"
             onClick={() => closeWindow(instance.id)}
+            title="Close Window"
           >
             <X size={14 * scale} color="#f87171" />
           </button>

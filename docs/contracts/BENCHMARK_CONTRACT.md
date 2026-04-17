@@ -33,6 +33,7 @@ Current benchmark assets:
 6. In E2E mode, benchmark run must write a JSON report and close the app with status code `0` (PASS) or `1` (FAIL).
 7. Benchmark must capture runtime errors (`window.error`, `unhandledrejection`, and `console.error`) and fail the run if any are detected.
 8. Runtime error capture exists specifically to catch silent failures such as black screens, missing assets, invalid transitions, and worker crashes that only appear in the console.
+9. Each benchmark step must fail fast if the interaction does not complete within the step timeout; a stuck UI or paused flow is a failure, not a hang.
 
 ## 4.1 Execution Commands
 
@@ -64,17 +65,31 @@ Required updates when impact exists:
 
 ## 5. Feature Coverage Matrix
 
-| Feature Area | Covered | Validation Type | Source |
-| :--- | :---: | :--- | :--- |
-| Spawn initialization | Yes | Auto-run step + fixture check | `GameScene.runBenchmark` / `smoke_test.json` |
-| Item pickup | Yes | Auto-run step + fixture entity check | `GameScene.runBenchmark` / `smoke_test.json` |
-| Down transition | Yes | Auto-run step + tile checkpoint | `GameScene.runBenchmark` / `smoke_test.json` |
-| Up transition | Yes | Auto-run step + tile checkpoint | `GameScene.runBenchmark` / `smoke_test.json` |
-| Save/Load behavior | Yes | Auto-run save/load roundtrip | `GameScene.runBenchmark` / `SaveSystem` |
-| Quest log flow | Yes | Auto-run quest activation + persistence check | `GameScene.runBenchmark` / `QuestManager` |
-| Window/UI interactions | Yes | Auto-run quest log window toggle | `GameScene.runBenchmark` / `UIContext` |
+| Feature Area           | Covered | Validation Type                               | Source                                       |
+| :--------------------- | :-----: | :-------------------------------------------- | :------------------------------------------- |
+| Spawn initialization   |   Yes   | Auto-run step + fixture check                 | `GameScene.runBenchmark` / `smoke_test.json` |
+| Item pickup            |   Yes   | Auto-run step + fixture entity check          | `GameScene.runBenchmark` / `smoke_test.json` |
+| Down transition        |   Yes   | Auto-run step + tile checkpoint               | `GameScene.runBenchmark` / `smoke_test.json` |
+| Up transition          |   Yes   | Auto-run step + tile checkpoint               | `GameScene.runBenchmark` / `smoke_test.json` |
+| Save/Load behavior     |   Yes   | Auto-run save/load roundtrip                  | `GameScene.runBenchmark` / `SaveSystem`      |
+| Quest log flow         |   Yes   | Auto-run quest activation + persistence check | `GameScene.runBenchmark` / `QuestManager`    |
+| Window/UI interactions |   Yes   | Auto-run quest log + hero menu window toggle  | `GameScene.runBenchmark` / `UIContext`       |
+| Modal pause flow       |   Yes   | Auto-run HUD click + system menu resume check | `GameScene.runBenchmark` / `UIContext`       |
+| Settings pause flow    |   Yes   | Auto-run HUD click + settings close check     | `GameScene.runBenchmark` / `UIContext`       |
+| Navigation/pathfinding |   Yes   | Auto-run worker route request + route result  | `GameScene.runBenchmark` / `Pathfinding API` |
+| Inventory/equipment UI |   Yes   | Auto-run main-hand equip/unequip roundtrip    | `GameScene.runBenchmark` / `UIContext`       |
+| Item drop flow         |   Yes   | Auto-run inventory drop + nearby pickup check | `GameScene.runBenchmark` / `PlayerState`     |
 
-## 6. Definition of Done Addendum
+## 6. Remaining Coverage Targets
+
+The following benchmark candidates are still not covered and should be added when their related systems change:
+
+- Battle/combat loop: deterministic enemy encounter, damage application, critical hits, and loot/XP validation.
+- Generator/map integrity: stair pairing, foundation support, and level normalization checks.
+- Editor save flow: brush/erase/save roundtrip through the map server.
+- World/minimap render: sanity check for world map buffers and minimap rendering on larger maps.
+
+## 7. Definition of Done Addendum
 
 A feature is NOT done unless:
 
@@ -84,6 +99,6 @@ A feature is NOT done unless:
 4. `npm run smoke:test` passes.
 5. When benchmark runtime path changed, `npm run benchmark:e2e` passes.
 
-## 7. Documentation Language
+## 8. Documentation Language
 
 All benchmark contract updates must be in English.

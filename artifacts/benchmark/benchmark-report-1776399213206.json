@@ -1,0 +1,51 @@
+{
+  "benchmarkName": "Smoke Test Benchmark",
+  "map": "smoke_test",
+  "level": "0",
+  "passed": true,
+  "totalMs": 4216.5,
+  "completedAtIso": "2026-04-17T04:13:53.264Z",
+  "steps": [
+    {
+      "label": "spawn ready",
+      "ok": true,
+      "durationMs": 360.70000000298023
+    },
+    {
+      "label": "pickup loot",
+      "ok": true,
+      "durationMs": 390.8999999985099
+    },
+    {
+      "label": "transition down",
+      "ok": true,
+      "durationMs": 821.7000000029802
+    },
+    {
+      "label": "transition up",
+      "ok": true,
+      "durationMs": 774.3000000044703
+    },
+    {
+      "label": "quest log sync",
+      "ok": true,
+      "durationMs": 392.5
+    },
+    {
+      "label": "quest log window",
+      "ok": true,
+      "durationMs": 607.7999999970198
+    },
+    {
+      "label": "hero menu window",
+      "ok": true,
+      "durationMs": 579.6000000014901
+    },
+    {
+      "label": "save/load roundtrip",
+      "ok": true,
+      "durationMs": 286.09999999403954
+    }
+  ],
+  "runtimeErrors": []
+}

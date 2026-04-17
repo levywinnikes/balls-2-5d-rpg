@@ -1,0 +1,68 @@
+{
+  "benchmarkName": "Smoke Test Benchmark",
+  "map": "smoke_test",
+  "level": "0",
+  "passed": false,
+  "totalMs": 5777.89999999851,
+  "completedAtIso": "2026-04-17T04:51:35.802Z",
+  "steps": [
+    {
+      "label": "spawn ready",
+      "ok": true,
+      "durationMs": 358.40000000596046
+    },
+    {
+      "label": "pickup loot",
+      "ok": true,
+      "durationMs": 380
+    },
+    {
+      "label": "transition down",
+      "ok": true,
+      "durationMs": 823.2999999970198
+    },
+    {
+      "label": "transition up",
+      "ok": true,
+      "durationMs": 798.7999999970198
+    },
+    {
+      "label": "quest log sync",
+      "ok": true,
+      "durationMs": 384.20000000298023
+    },
+    {
+      "label": "quest log window",
+      "ok": true,
+      "durationMs": 589.1999999955297
+    },
+    {
+      "label": "hero menu window",
+      "ok": true,
+      "durationMs": 579.1000000014901
+    },
+    {
+      "label": "system menu mouse pause",
+      "ok": true,
+      "durationMs": 696.5
+    },
+    {
+      "label": "settings mouse pause",
+      "ok": true,
+      "durationMs": 701.6000000014901
+    },
+    {
+      "label": "equipment roundtrip",
+      "ok": false,
+      "durationMs": 462.5,
+      "error": "main hand equipment slot not found"
+    }
+  ],
+  "runtimeErrors": [
+    {
+      "source": "console.error",
+      "message": "[Benchmark] FAIL equipment roundtrip: main hand equipment slot not found",
+      "timestamp": 1776401495802
+    }
+  ]
+}

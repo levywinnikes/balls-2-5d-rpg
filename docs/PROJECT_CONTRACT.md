@@ -15,16 +15,16 @@
 
 ## Sub-Contract Directory
 
-| Contract | Purpose | Path |
-| :--- | :--- | :--- |
-| **Technical Stack** | Framework versions, folder structure, and runtime rules. | [TECHNICAL_STACK.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/TECHNICAL_STACK.md) |
-| **Battle System** | Damage formulas, turn order, and combat events. | [BATTLE_SYSTEM_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/BATTLE_SYSTEM_CONTRACT.md) |
-| **Player State** | How to handle the Singleton, emitted events, and saving/loading. | [PLAYER_STATE_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/PLAYER_STATE_CONTRACT.md) |
-| **UI Design** | Styling rules, glassmorphism, and React component standards. | [UI_DESIGN_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/UI_DESIGN_CONTRACT.md) |
-| **Map & 2.5D** | Z-Levels, Dynamic Rendering, and Line of Sight. | [MAP_SYSTEM_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/MAP_SYSTEM_CONTRACT.md) |
-| **Editor** | Level Editor interactivity and Map Server serialization. | [EDITOR_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/EDITOR_CONTRACT.md) |
-| **Generator** | Procedural generation algorithms (Cellular Automata). | [GENERATOR_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/GENERATOR_CONTRACT.md) |
-| **Benchmark** | Automated benchmark/smoke execution, required checkpoints, and result reporting. | [BENCHMARK_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/BENCHMARK_CONTRACT.md) |
+| Contract            | Purpose                                                                          | Path                                                                                                                                    |
+| :------------------ | :------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------- |
+| **Technical Stack** | Framework versions, folder structure, and runtime rules.                         | [TECHNICAL_STACK.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/TECHNICAL_STACK.md)               |
+| **Battle System**   | Damage formulas, turn order, and combat events.                                  | [BATTLE_SYSTEM_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/BATTLE_SYSTEM_CONTRACT.md) |
+| **Player State**    | How to handle the Singleton, emitted events, and saving/loading.                 | [PLAYER_STATE_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/PLAYER_STATE_CONTRACT.md)   |
+| **UI Design**       | Styling rules, glassmorphism, and React component standards.                     | [UI_DESIGN_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/UI_DESIGN_CONTRACT.md)         |
+| **Map & 2.5D**      | Z-Levels, Dynamic Rendering, and Line of Sight.                                  | [MAP_SYSTEM_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/MAP_SYSTEM_CONTRACT.md)       |
+| **Editor**          | Level Editor interactivity and Map Server serialization.                         | [EDITOR_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/EDITOR_CONTRACT.md)               |
+| **Generator**       | Procedural generation algorithms (Cellular Automata).                            | [GENERATOR_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/GENERATOR_CONTRACT.md)         |
+| **Benchmark**       | Automated benchmark/smoke execution, required checkpoints, and result reporting. | [BENCHMARK_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/BENCHMARK_CONTRACT.md)         |
 
 ## Maintenance Protocol
 

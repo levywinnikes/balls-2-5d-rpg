@@ -1,0 +1,68 @@
+{
+  "benchmarkName": "Smoke Test Benchmark",
+  "map": "smoke_test",
+  "level": "0",
+  "passed": false,
+  "totalMs": 5680.4000000059605,
+  "completedAtIso": "2026-04-17T05:02:31.949Z",
+  "steps": [
+    {
+      "label": "spawn ready",
+      "ok": true,
+      "durationMs": 358.09999999403954
+    },
+    {
+      "label": "pickup loot",
+      "ok": true,
+      "durationMs": 393.90000000596046
+    },
+    {
+      "label": "transition down",
+      "ok": true,
+      "durationMs": 806
+    },
+    {
+      "label": "transition up",
+      "ok": true,
+      "durationMs": 772.2000000029802
+    },
+    {
+      "label": "quest log sync",
+      "ok": true,
+      "durationMs": 391.20000000298023
+    },
+    {
+      "label": "quest log window",
+      "ok": true,
+      "durationMs": 568.7999999970198
+    },
+    {
+      "label": "hero menu window",
+      "ok": true,
+      "durationMs": 563.9000000059605
+    },
+    {
+      "label": "system menu mouse pause",
+      "ok": true,
+      "durationMs": 672.2000000029802
+    },
+    {
+      "label": "settings mouse pause",
+      "ok": true,
+      "durationMs": 672.5
+    },
+    {
+      "label": "equipment roundtrip",
+      "ok": false,
+      "durationMs": 477,
+      "error": "starting weapon inventory slot not found"
+    }
+  ],
+  "runtimeErrors": [
+    {
+      "source": "console.error",
+      "message": "[Benchmark] FAIL equipment roundtrip: starting weapon inventory slot not found",
+      "timestamp": 1776402151949
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "benchmarkName": "Smoke Test Benchmark",
+  "map": "smoke_test",
+  "level": "0",
+  "passed": false,
+  "totalMs": 8384.20000000298,
+  "completedAtIso": "2026-04-17T05:00:08.467Z",
+  "steps": [
+    {
+      "label": "spawn ready",
+      "ok": true,
+      "durationMs": 372.8999999985099
+    },
+    {
+      "label": "pickup loot",
+      "ok": true,
+      "durationMs": 391.5
+    },
+    {
+      "label": "transition down",
+      "ok": true,
+      "durationMs": 813.3000000044703
+    },
+    {
+      "label": "transition up",
+      "ok": true,
+      "durationMs": 790.4000000059605
+    },
+    {
+      "label": "quest log sync",
+      "ok": true,
+      "durationMs": 384.8999999985099
+    },
+    {
+      "label": "quest log window",
+      "ok": true,
+      "durationMs": 572.5
+    },
+    {
+      "label": "hero menu window",
+      "ok": true,
+      "durationMs": 567.1999999955297
+    },
+    {
+      "label": "system menu mouse pause",
+      "ok": true,
+      "durationMs": 681.7999999970198
+    },
+    {
+      "label": "settings mouse pause",
+      "ok": true,
+      "durationMs": 673.5
+    },
+    {
+      "label": "equipment roundtrip",
+      "ok": false,
+      "durationMs": 3129.5,
+      "error": "unequip action button not found"
+    }
+  ],
+  "runtimeErrors": [
+    {
+      "source": "console.error",
+      "message": "[Benchmark] FAIL equipment roundtrip: unequip action button not found",
+      "timestamp": 1776402008466
+    }
+  ]
+}

@@ -1108,12 +1108,17 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private benchmarkDelay(ms: number): Promise<void> {
-    return new Promise((resolve) => this.time.delayedCall(ms, resolve));
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
   private showBenchmarkSummary(
     passed: boolean,
-    steps: Array<{ label: string; ok: boolean; durationMs: number; error?: string }>,
+    steps: Array<{
+      label: string;
+      ok: boolean;
+      durationMs: number;
+      error?: string;
+    }>,
     totalMs: number,
   ): void {
     const width = this.cameras.main.width;
@@ -1165,7 +1170,12 @@ export default class GameScene extends Phaser.Scene {
   private async publishBenchmarkResult(payload: {
     passed: boolean;
     totalMs: number;
-    steps: Array<{ label: string; ok: boolean; durationMs: number; error?: string }>;
+    steps: Array<{
+      label: string;
+      ok: boolean;
+      durationMs: number;
+      error?: string;
+    }>;
   }): Promise<void> {
     const runtimeErrors = RuntimeErrorMonitor.getErrors();
     const report = {
@@ -1215,6 +1225,70 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private clickButtonByTitle(title: string): boolean {
+    const button = Array.from(document.querySelectorAll("button")).find(
+      (element) => element.getAttribute("title") === title,
+    ) as HTMLButtonElement | undefined;
+
+    if (!button) return false;
+    button.click();
+    return true;
+  }
+
+  private clickButtonByText(text: string): boolean {
+    const button = Array.from(document.querySelectorAll("button")).find(
+      (element) => element.textContent?.includes(text),
+    ) as HTMLButtonElement | undefined;
+
+    if (!button) return false;
+    button.click();
+    return true;
+  }
+
+  private clickElementByTitlePrefix(prefix: string): string | null {
+    const element = Array.from(document.querySelectorAll("[title]")).find(
+      (target) => target.getAttribute("title")?.startsWith(prefix),
+    ) as HTMLElement | undefined;
+
+    if (!element) return null;
+
+    const title = element.getAttribute("title");
+    element.click();
+    return title;
+  }
+
+  private clickFirstMatchingButton(titles: string[]): string | null {
+    for (const title of titles) {
+      if (this.clickButtonByTitle(title)) {
+        return title;
+      }
+    }
+
+    return null;
+  }
+
+  private async waitForButtonByTitle(
+    title: string,
+    timeoutMs: number = 1500,
+    intervalMs: number = 50,
+  ): Promise<boolean> {
+    const startedAt = performance.now();
+
+    while (performance.now() - startedAt < timeoutMs) {
+      if (
+        Array.from(document.querySelectorAll("button")).some(
+          (element) => element.getAttribute("title") === title,
+        )
+      ) {
+        return true;
+      }
+
+      await this.benchmarkDelay(intervalMs);
+    }
+
+    return false;
+  }
+
   private async runBenchmark(): Promise<void> {
     if (this.benchmarkStarted || !this.player || !this.transitionSystem) return;
     this.benchmarkStarted = true;
@@ -1227,7 +1301,8 @@ export default class GameScene extends Phaser.Scene {
     questManager.loadSaveData({ active: [], completed: [] });
 
     const playerState = PlayerState.getInstance();
-    const startedAt = this.time.now;
+    const startedAt = performance.now();
+    const stepTimeoutMs = 8000;
     const stepResults: Array<{
       label: string;
       ok: boolean;
@@ -1239,23 +1314,33 @@ export default class GameScene extends Phaser.Scene {
       playerState.emit("uiNotification", { type: "error", message });
     };
 
-    const step = async (label: string, action: () => Promise<boolean> | boolean) => {
+    const step = async (
+      label: string,
+      action: () => Promise<boolean> | boolean,
+    ) => {
       console.log(`[Benchmark] STEP ${label}`);
       playerState.emit("uiNotification", {
         type: "info",
         message: `${this.benchmarkName}: ${label}`,
       });
-      const t0 = this.time.now;
+      const t0 = performance.now();
       await this.benchmarkDelay(250);
       let ok = false;
       let errorMsg: string | undefined;
       try {
-        ok = await action();
+        ok = await Promise.race([
+          Promise.resolve().then(action),
+          new Promise<boolean>((_, reject) => {
+            window.setTimeout(() => {
+              reject(new Error(`step timeout after ${stepTimeoutMs}ms`));
+            }, stepTimeoutMs);
+          }),
+        ]);
       } catch (error) {
         errorMsg = error instanceof Error ? error.message : String(error);
       }
 
-      const durationMs = this.time.now - t0;
+      const durationMs = performance.now() - t0;
       stepResults.push({
         label,
         ok,
@@ -1324,6 +1409,41 @@ export default class GameScene extends Phaser.Scene {
         return this.currentLevel === "0";
       });
 
+      await step("pathfinding route", async () => {
+        if (!this.player || !this.player.sprite || !this.isPathfindingReady) {
+          throw new Error("pathfinding not ready");
+        }
+
+        const tileSize = this.mapLoader.getTileSize();
+        const startGrid = {
+          x: Math.floor(this.player.sprite.x / tileSize),
+          y: Math.floor(this.player.sprite.y / tileSize),
+          level: this.currentLevel,
+        };
+
+        const candidateTargets = [
+          { x: 10, y: 3 },
+          { x: 9, y: 3 },
+          { x: 7, y: 3 },
+          { x: 4, y: 4 },
+        ];
+
+        for (const target of candidateTargets) {
+          const path = await this.pathfindingManager.requestPath(
+            startGrid.x,
+            startGrid.y,
+            target.x,
+            target.y,
+          );
+
+          if (path && path.length > 1) {
+            return true;
+          }
+        }
+
+        throw new Error("pathfinding route not found");
+      });
+
       await step("quest log sync", async () => {
         const started = questManager.startQuest("rat_plague");
         await this.benchmarkDelay(120);
@@ -1351,6 +1471,332 @@ export default class GameScene extends Phaser.Scene {
         return !before && opened && !closed;
       });
 
+      await step("hero menu window", async () => {
+        const before = (window as any).__uiWindows?.heroMenu ?? false;
+        const sceneWasPausedBefore = this.scene.isPaused("GameScene");
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "i", bubbles: true }),
+        );
+        await this.benchmarkDelay(150);
+        const opened = (window as any).__uiWindows?.heroMenu ?? false;
+        const scenePausedAfterOpen = this.scene.isPaused("GameScene");
+
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "i", bubbles: true }),
+        );
+        await this.benchmarkDelay(150);
+        const closed = (window as any).__uiWindows?.heroMenu ?? false;
+        const sceneResumedAfterClose = !this.scene.isPaused("GameScene");
+
+        return (
+          !before &&
+          opened &&
+          !closed &&
+          !sceneWasPausedBefore &&
+          scenePausedAfterOpen &&
+          sceneResumedAfterClose
+        );
+      });
+
+      await step("system menu mouse pause", async () => {
+        const before = (window as any).__uiWindows?.systemMenu ?? false;
+        const sceneWasPausedBefore = this.scene.isPaused("GameScene");
+
+        if (!this.clickButtonByTitle("System Menu")) {
+          throw new Error("system menu HUD button not found");
+        }
+
+        await this.benchmarkDelay(200);
+        const opened = (window as any).__uiWindows?.systemMenu ?? false;
+        const scenePausedAfterOpen = this.scene.isPaused("GameScene");
+
+        if (!this.clickButtonByText("Resume Game")) {
+          throw new Error("system menu resume button not found");
+        }
+
+        await this.benchmarkDelay(200);
+        const closed = (window as any).__uiWindows?.systemMenu ?? false;
+        const sceneResumedAfterClose = !this.scene.isPaused("GameScene");
+
+        return (
+          !before &&
+          opened &&
+          !closed &&
+          !sceneWasPausedBefore &&
+          scenePausedAfterOpen &&
+          sceneResumedAfterClose
+        );
+      });
+
+      await step("settings mouse pause", async () => {
+        const before = (window as any).__uiWindows?.settings ?? false;
+        const sceneWasPausedBefore = this.scene.isPaused("GameScene");
+
+        if (!this.clickButtonByTitle("Settings")) {
+          throw new Error("settings HUD button not found");
+        }
+
+        await this.benchmarkDelay(200);
+        const opened = (window as any).__uiWindows?.settings ?? false;
+        const scenePausedAfterOpen = this.scene.isPaused("GameScene");
+
+        if (!this.clickButtonByTitle("Close Window")) {
+          throw new Error("settings close button not found");
+        }
+
+        await this.benchmarkDelay(200);
+        const closed = (window as any).__uiWindows?.settings ?? false;
+        const sceneResumedAfterClose = !this.scene.isPaused("GameScene");
+
+        return (
+          !before &&
+          opened &&
+          !closed &&
+          !sceneWasPausedBefore &&
+          scenePausedAfterOpen &&
+          sceneResumedAfterClose
+        );
+      });
+
+      await step("equipment roundtrip", async () => {
+        const ps = PlayerState.getInstance();
+        const targetItemId = "torch";
+
+        if (!this.clickButtonByTitle("Hero Menu")) {
+          throw new Error("hero menu HUD button not found");
+        }
+
+        await this.benchmarkDelay(200);
+        const opened = (window as any).__uiWindows?.heroMenu ?? false;
+        if (!opened) {
+          throw new Error("hero menu did not open for inventory test");
+        }
+
+        const swordSlot = this.clickElementByTitlePrefix(
+          `Inventory Item: ${targetItemId}`,
+        );
+
+        if (!swordSlot) {
+          throw new Error("starting weapon inventory slot not found");
+        }
+
+        await this.benchmarkDelay(150);
+
+        if (!(await this.waitForButtonByTitle("Equip Item", 2500))) {
+          throw new Error("equip action button not found");
+        }
+
+        if (!this.clickButtonByTitle("Equip Item")) {
+          throw new Error("equip action button not found");
+        }
+
+        await this.benchmarkDelay(250);
+
+        if (ps.getEquipment().mainHand?.itemId !== targetItemId) {
+          throw new Error("main hand slot did not equip starting weapon");
+        }
+
+        if (!this.clickElementByTitlePrefix("Equipment Slot: mainHand")) {
+          throw new Error("main hand equipment slot not found");
+        }
+
+        await this.benchmarkDelay(150);
+
+        if (!(await this.waitForButtonByTitle("Unequip Item", 2500))) {
+          throw new Error("unequip action button not found");
+        }
+
+        if (!this.clickButtonByTitle("Unequip Item")) {
+          throw new Error("unequip action button not found");
+        }
+
+        await this.benchmarkDelay(250);
+
+        const equipmentAfterUnequip = ps.getEquipment();
+        const inventoryAfterUnequip = ps.getInventory();
+        const weaponReturned = inventoryAfterUnequip.some(
+          (item) => item.itemId === targetItemId,
+        );
+
+        if (equipmentAfterUnequip.mainHand !== null) {
+          throw new Error("main hand slot did not unequip");
+        }
+
+        if (!weaponReturned) {
+          throw new Error("unequipped weapon did not return to inventory");
+        }
+
+        const returnedWeaponSlot = this.clickElementByTitlePrefix(
+          `Inventory Item: ${targetItemId}`,
+        );
+
+        if (!returnedWeaponSlot) {
+          throw new Error("returned weapon inventory slot not found");
+        }
+
+        await this.benchmarkDelay(150);
+
+        if (!(await this.waitForButtonByTitle("Equip Item", 2500))) {
+          throw new Error("equip action button not found");
+        }
+
+        if (!this.clickButtonByTitle("Equip Item")) {
+          throw new Error("equip action button not found");
+        }
+
+        await this.benchmarkDelay(250);
+
+        const equipmentAfterEquip = ps.getEquipment();
+        if (equipmentAfterEquip.mainHand?.itemId !== targetItemId) {
+          throw new Error("main hand slot did not re-equip");
+        }
+
+        if (!this.clickButtonByTitle("Close Hero Menu")) {
+          throw new Error("hero menu close button not found");
+        }
+
+        await this.benchmarkDelay(200);
+
+        return (
+          !(window as any).__uiWindows?.heroMenu &&
+          !this.scene.isPaused("GameScene")
+        );
+      });
+
+      await step("item drop roundtrip", async () => {
+        const ps = PlayerState.getInstance();
+        const inventoryBeforeDrop = ps.getInventory();
+        const targetItem =
+          inventoryBeforeDrop.find((item) => item.itemId === "light_torch") ||
+          inventoryBeforeDrop.find((item) => item.itemId === "torch");
+
+        if (!targetItem) {
+          throw new Error("drop test item not found in inventory");
+        }
+
+        if (!this.clickButtonByTitle("Hero Menu")) {
+          throw new Error("hero menu HUD button not found");
+        }
+
+        await this.benchmarkDelay(200);
+        if (!(window as any).__uiWindows?.heroMenu) {
+          throw new Error("hero menu did not open for drop test");
+        }
+
+        const selectedInventoryItem = this.clickElementByTitlePrefix(
+          `Inventory Item: ${targetItem.itemId}`,
+        );
+
+        if (!selectedInventoryItem) {
+          throw new Error("drop test inventory slot not found");
+        }
+
+        await this.benchmarkDelay(150);
+
+        if (!(await this.waitForButtonByTitle("Drop Item", 2500))) {
+          throw new Error("drop action button not found");
+        }
+
+        if (!this.clickButtonByTitle("Drop Item")) {
+          throw new Error("drop action button not found");
+        }
+
+        await this.benchmarkDelay(250);
+
+        const removedFromInventory = !ps
+          .getInventory()
+          .some((item) => item.uid === targetItem.uid);
+
+        if (!removedFromInventory) {
+          throw new Error("item was not removed from inventory after drop");
+        }
+
+        if (!this.clickButtonByTitle("Close Hero Menu")) {
+          throw new Error("hero menu close button not found");
+        }
+
+        await this.benchmarkDelay(200);
+
+        if (
+          (window as any).__uiWindows?.heroMenu ||
+          this.scene.isPaused("GameScene")
+        ) {
+          throw new Error("hero menu did not close after drop test");
+        }
+
+        const droppedNearby = this.getNearbyItems(160).some(
+          (item) => item.weaponId === targetItem.itemId,
+        );
+
+        if (!droppedNearby) {
+          throw new Error("dropped item not found on ground");
+        }
+
+        const pickupAttempts = 3;
+        for (let attempt = 0; attempt < pickupAttempts; attempt += 1) {
+          this.pickupNearbyItem();
+          await this.benchmarkDelay(120);
+
+          const recoveredInInventory = ps
+            .getInventory()
+            .some((item) => item.itemId === targetItem.itemId);
+
+          if (recoveredInInventory) {
+            return true;
+          }
+        }
+
+        throw new Error(
+          "dropped item did not return to inventory after pickup",
+        );
+      });
+
+      await step("torch light roundtrip", async () => {
+        const ps = PlayerState.getInstance();
+
+        if (!this.clickButtonByTitle("Hero Menu")) {
+          throw new Error("hero menu HUD button not found");
+        }
+
+        await this.benchmarkDelay(200);
+        if (!(window as any).__uiWindows?.heroMenu) {
+          throw new Error("hero menu did not open for torch test");
+        }
+
+        const torchTitle =
+          this.clickElementByTitlePrefix("Inventory Item: light_torch") ||
+          this.clickElementByTitlePrefix("Inventory Item: torch");
+
+        if (!torchTitle) {
+          throw new Error("light_torch inventory slot not found");
+        }
+
+        await this.benchmarkDelay(150);
+
+        const firstAction = this.clickFirstMatchingButton([
+          "Light Item",
+          "Extinguish Item",
+        ]);
+
+        if (!firstAction) {
+          throw new Error("torch action button not found");
+        }
+
+        await this.benchmarkDelay(150);
+
+        const stateOk =
+          firstAction === "Light Item" ? ps.isTorchLit() : !ps.isTorchLit();
+
+        if (!this.clickButtonByTitle("Hero Menu")) {
+          throw new Error("hero menu close button not found");
+        }
+
+        await this.benchmarkDelay(200);
+        const closed = !(window as any).__uiWindows?.heroMenu;
+
+        return stateOk && closed && !this.scene.isPaused("GameScene");
+      });
+
       await step("save/load roundtrip", async () => {
         const saved = await this.saveSystem.saveGame(benchmarkSaveName);
         if (!saved) {
@@ -1370,7 +1816,9 @@ export default class GameScene extends Phaser.Scene {
           (item) => item.itemId === "light_torch",
         );
         const loadedQuestIds = Array.isArray(loaded.playerState.quests?.active)
-          ? loaded.playerState.quests.active.map(([questId]: [string, any]) => questId)
+          ? loaded.playerState.quests.active.map(
+              ([questId]: [string, any]) => questId,
+            )
           : [];
 
         const isMatch =
@@ -1414,7 +1862,7 @@ export default class GameScene extends Phaser.Scene {
       await this.publishBenchmarkResult({
         passed,
         steps: stepResults,
-        totalMs: this.time.now - startedAt,
+        totalMs: performance.now() - startedAt,
       });
 
       try {

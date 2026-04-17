@@ -28,7 +28,15 @@ function main() {
   const relMap = path.relative(ROOT_DIR, MAP_PATH).replace(/\\/g, "/");
   console.log(`[SMOKE] Map: ${relMap}`);
 
-  const requiredFields = ["tileSize", "width", "height", "tileAtlas", "tileDefinitions", "entityTemplates", "levels"];
+  const requiredFields = [
+    "tileSize",
+    "width",
+    "height",
+    "tileAtlas",
+    "tileDefinitions",
+    "entityTemplates",
+    "levels",
+  ];
   for (const field of requiredFields) {
     if (mapData[field] === undefined || mapData[field] === null) {
       fail(`Missing required field '${field}'`);
@@ -41,7 +49,9 @@ function main() {
     return;
   }
 
-  const smokeTests = Array.isArray(mapData.config?.smokeTests) ? mapData.config.smokeTests : [];
+  const smokeTests = Array.isArray(mapData.config?.smokeTests)
+    ? mapData.config.smokeTests
+    : [];
   if (smokeTests.length === 0) {
     fail("config.smokeTests is missing or empty");
     return;
@@ -54,7 +64,12 @@ function main() {
 
   const levelEntries = Object.entries(mapData.levels);
   for (const [level, levelData] of levelEntries) {
-    const binPath = path.join(ROOT_DIR, "public", "maps", levelData.binFile || "");
+    const binPath = path.join(
+      ROOT_DIR,
+      "public",
+      "maps",
+      levelData.binFile || "",
+    );
     const relBin = path.relative(ROOT_DIR, binPath).replace(/\\/g, "/");
 
     if (!fs.existsSync(binPath)) {
@@ -66,7 +81,9 @@ function main() {
     const size = fs.statSync(binPath).size;
     if (size !== expectedBytes) {
       failureCount += 1;
-      fail(`Binary size mismatch for level ${level}: expected ${expectedBytes}, got ${size}`);
+      fail(
+        `Binary size mismatch for level ${level}: expected ${expectedBytes}, got ${size}`,
+      );
     } else {
       pass(`Binary size OK for level ${level} (${size} bytes)`);
     }
@@ -83,7 +100,11 @@ function main() {
     }
 
     if (testCase.type === "spawn") {
-      if (levelData.playerPos && typeof levelData.playerPos.x === "number" && typeof levelData.playerPos.y === "number") {
+      if (
+        levelData.playerPos &&
+        typeof levelData.playerPos.x === "number" &&
+        typeof levelData.playerPos.y === "number"
+      ) {
         pass(`Spawn checkpoint OK: ${label}`);
       } else {
         failureCount += 1;
@@ -96,8 +117,10 @@ function main() {
       const matches = Array.isArray(levelData.entities)
         ? levelData.entities.filter((entity) => {
             if (entity.symbol !== testCase.symbol) return false;
-            if (testCase.x !== undefined && entity.x !== testCase.x) return false;
-            if (testCase.y !== undefined && entity.y !== testCase.y) return false;
+            if (testCase.x !== undefined && entity.x !== testCase.x)
+              return false;
+            if (testCase.y !== undefined && entity.y !== testCase.y)
+              return false;
             return true;
           })
         : [];
@@ -112,7 +135,12 @@ function main() {
     }
 
     if (testCase.type === "tile") {
-      const binPath = path.join(ROOT_DIR, "public", "maps", levelData.binFile || "");
+      const binPath = path.join(
+        ROOT_DIR,
+        "public",
+        "maps",
+        levelData.binFile || "",
+      );
       const bytes = fs.readFileSync(binPath);
       const index = testCase.y * width + testCase.x;
       const symbolIndex = bytes[index];
@@ -122,7 +150,9 @@ function main() {
         pass(`Tile checkpoint OK: ${label}`);
       } else {
         failureCount += 1;
-        fail(`Tile checkpoint mismatch for ${label}: expected '${testCase.symbol}', got '${symbol || "<missing>"}'`);
+        fail(
+          `Tile checkpoint mismatch for ${label}: expected '${testCase.symbol}', got '${symbol || "<missing>"}'`,
+        );
       }
       continue;
     }
@@ -132,7 +162,9 @@ function main() {
   }
 
   if (failureCount === 0) {
-    console.log(`[SMOKE] OK - ${smokeTests.length} checkpoints validated successfully.`);
+    console.log(
+      `[SMOKE] OK - ${smokeTests.length} checkpoints validated successfully.`,
+    );
   } else {
     console.error(`[SMOKE] Completed with ${failureCount} failure(s).`);
     process.exitCode = 1;

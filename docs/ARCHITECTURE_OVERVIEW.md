@@ -24,6 +24,26 @@ Communication between the Phaser Engine and React UI is handled strictly via the
 - **Phaser -> UI**: Phaser emits events on `PlayerState` (e.g., `inventoryUpdated`). React hooks (`usePlayerState`) subscribe to these events to force re-renders.
 - **UI -> Phaser**: React calls methods on `PlayerState`, which may emit events that `GameScene` listens for (e.g., `spawnDroppedItem`).
 
+## Hero Menu / Window Pause Flow
+
+- The **Hero Menu** is a UI window managed by the React window system, not by Phaser scene routing.
+- Opening the Hero Menu pauses `GameScene` through the overlay pause bridge; closing it resumes gameplay.
+- The window is interaction-driven and can be opened by mouse click or keyboard shortcut, then manipulated through the window chrome (drag, minimize, close).
+- Benchmark automation treats the Hero Menu as a critical UI pause state and verifies both the window state and the paused scene state.
+
+## System Menu / Modal Pause Flow
+
+- The **System Menu** is a modal UI overlay opened from the HUD.
+- It pauses `GameScene` while open and resumes the scene when closed.
+- The primary path is mouse-driven through the HUD system button, with in-panel buttons for save, quest log, exit, and resume.
+- Benchmark automation uses the real HUD click path and verifies that the modal both opens and restores gameplay correctly.
+
+## Settings / Pause Flow
+
+- The **Settings** window is a standard window launched from the HUD.
+- It also pauses `GameScene` while open, so benchmark coverage must verify both the UI state and the resumed state after close.
+- Because it is a draggable window, the benchmark should interact with the real HUD button and the generic window close control instead of calling internal window APIs.
+
 ## Persistence System
 
 Persistence is handled in `src/game/systems/SaveSystem.ts`:
