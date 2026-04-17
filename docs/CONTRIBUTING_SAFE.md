@@ -11,6 +11,7 @@ This project is an isometric RPG with a Phaser engine, React UI, and a BMS-based
 5. If your change adds or modifies player-facing UI text, update translation keys in `src/game/i18n/translations.ts` for all supported languages.
 6. Follow [AI_RUNBOOK.md](./AI_RUNBOOK.md) and select required validations from [VALIDATION_MATRIX.md](./VALIDATION_MATRIX.md).
 7. Use [ARCHITECTURE_MAP.md](./ARCHITECTURE_MAP.md) to map impacted modules before editing.
+8. If your change touches items, quests, or dialogues, apply [LOCALIZATION_CONTRACT.md](./contracts/LOCALIZATION_CONTRACT.md).
 
 ## Safe Workflow
 

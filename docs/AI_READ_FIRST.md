@@ -58,7 +58,14 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 - Do not introduce hardcoded interface strings.
 - For UI changes, read and follow `docs/contracts/UI_DESIGN_CONTRACT.md` before editing code.
 
-## 9. EXECUTION RUNBOOK (MANDATORY)
+## 9. LOCALIZATION DOMAIN RULE (MANDATORY)
+
+- Item names and descriptions must always use translation keys.
+- Quest titles, quest descriptions, and quest objective text must always use translation keys.
+- NPC dialogue text (including future conversation systems) must always use translation keys.
+- For these domains, read and follow `docs/contracts/LOCALIZATION_CONTRACT.md` before editing code.
+
+## 10. EXECUTION RUNBOOK (MANDATORY)
 
 - Before implementing any task, follow [AI_RUNBOOK.md](./AI_RUNBOOK.md).
 - Map impacted modules using [ARCHITECTURE_MAP.md](./ARCHITECTURE_MAP.md) before code edits.

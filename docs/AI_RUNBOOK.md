@@ -30,6 +30,7 @@ Use the highest-impact classification when in doubt.
 ## Non-Negotiable Rules
 
 - Do not introduce hardcoded player-facing UI text; use translation keys.
+- Treat item text, quest text, and NPC dialogue as localization-required domains.
 - Update affected contracts in the same task when behavior or rules change.
 - Preserve architecture boundaries defined in contracts.
 - Keep changes minimal and scoped.
