@@ -1134,6 +1134,57 @@ export default class GameScene extends Phaser.Scene {
     return new Promise((resolve) => this.time.delayedCall(ms, resolve));
   }
 
+  private showBenchmarkSummary(
+    passed: boolean,
+    steps: Array<{ label: string; ok: boolean; durationMs: number; error?: string }>,
+    totalMs: number,
+  ): void {
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+    const panelWidth = Math.min(760, width - 48);
+    const lines = [
+      `${this.benchmarkName} ${passed ? "PASS" : "FAIL"}`,
+      `Total: ${(totalMs / 1000).toFixed(2)}s`,
+      "",
+      ...steps.map((step, i) => {
+        const status = step.ok ? "PASS" : "FAIL";
+        const timing = `${(step.durationMs / 1000).toFixed(2)}s`;
+        const extra = step.error ? ` (${step.error})` : "";
+        return `${i + 1}. ${status} ${step.label} - ${timing}${extra}`;
+      }),
+    ];
+
+    const panelHeight = Math.min(height - 56, 132 + steps.length * 24);
+
+    const panelBg = this.add
+      .rectangle(width / 2, height / 2, panelWidth, panelHeight, 0x000000, 0.88)
+      .setStrokeStyle(2, passed ? 0x22c55e : 0xef4444, 0.9)
+      .setScrollFactor(0)
+      .setDepth(500000);
+
+    const panelText = this.add
+      .text(
+        width / 2 - panelWidth / 2 + 18,
+        height / 2 - panelHeight / 2 + 16,
+        lines.join("\n"),
+        {
+          fontFamily: "monospace",
+          fontSize: "16px",
+          color: "#f8fafc",
+          wordWrap: { width: panelWidth - 36, useAdvancedWrap: true },
+          lineSpacing: 4,
+        },
+      )
+      .setScrollFactor(0)
+      .setDepth(500001);
+
+    this.time.delayedCall(3600, () => {
+      panelText.destroy();
+      panelBg.destroy();
+      window.dispatchEvent(new Event("returnToTitle"));
+    });
+  }
+
   private moveBenchmarkPlayer(x: number, y: number): void {
     if (!this.player || !this.player.sprite) return;
     this.player.sprite.setPosition(x, y);
@@ -1148,7 +1199,13 @@ export default class GameScene extends Phaser.Scene {
     this.benchmarkStarted = true;
 
     const playerState = PlayerState.getInstance();
-    const report: string[] = [];
+    const startedAt = this.time.now;
+    const stepResults: Array<{
+      label: string;
+      ok: boolean;
+      durationMs: number;
+      error?: string;
+    }> = [];
     const fail = (message: string) => {
       console.error(`[Benchmark] FAIL ${message}`);
       playerState.emit("uiNotification", { type: "error", message });
@@ -1160,14 +1217,30 @@ export default class GameScene extends Phaser.Scene {
         type: "info",
         message: `${this.benchmarkName}: ${label}`,
       });
+      const t0 = this.time.now;
       await this.benchmarkDelay(250);
-      const ok = await action();
-      if (!ok) {
-        throw new Error(label);
+      let ok = false;
+      let errorMsg: string | undefined;
+      try {
+        ok = await action();
+      } catch (error) {
+        errorMsg = error instanceof Error ? error.message : String(error);
       }
-      report.push(label);
+
+      const durationMs = this.time.now - t0;
+      stepResults.push({
+        label,
+        ok,
+        durationMs,
+        error: ok ? undefined : errorMsg,
+      });
+
+      if (!ok) {
+        throw new Error(errorMsg ? `${label}: ${errorMsg}` : label);
+      }
     };
 
+    let passed = false;
     try {
       await step("spawn ready", async () => {
         this.moveBenchmarkPlayer(96, 96);
@@ -1196,17 +1269,22 @@ export default class GameScene extends Phaser.Scene {
         return this.currentLevel === "0";
       });
 
-      console.log(`[Benchmark] PASS ${report.length}/${report.length} steps`);
+      passed = true;
+      console.log(
+        `[Benchmark] PASS ${stepResults.length}/${stepResults.length} steps`,
+      );
       playerState.emit("uiNotification", {
         type: "success",
-        message: `${this.benchmarkName} OK (${report.length} steps)`,
+        message: `${this.benchmarkName} OK (${stepResults.length} steps)`,
       });
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error));
     } finally {
-      this.time.delayedCall(800, () => {
-        window.dispatchEvent(new Event("returnToTitle"));
-      });
+      this.showBenchmarkSummary(
+        passed,
+        stepResults,
+        this.time.now - startedAt,
+      );
     }
   }
 
