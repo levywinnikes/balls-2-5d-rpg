@@ -474,14 +474,13 @@ export const HeroDashboard: React.FC = () => {
                   />
                 ) : (
                   <div className="h-full flex items-center justify-center text-white/20 text-xs uppercase tracking-widest">
-                    {t("select_item" as any) || "Select an item"}
+                    {t("dashboard_select_item" as any)}
                   </div>
                 );
               })()
             ) : (
               <div className="h-full flex items-center justify-center text-white/20 text-xs uppercase tracking-widest p-8 text-center">
-                {t("character_overview" as any) ||
-                  "Clique em um atributo para ver detalhes"}
+                {t("character_overview" as any)}
               </div>
             )}
           </div>
@@ -498,7 +497,7 @@ export const HeroDashboard: React.FC = () => {
                                     <div className={`p-1.5 rounded ${activeTab === 'overview' ? 'bg-yellow-400/10' : 'bg-white/5'}`}>
                                         <Ghost size={16} />
                                     </div>
-                                    {t("overview" as any) || "Overview"}
+                                    {t("overview" as any)}
                                 </button>
                                 */}
 
@@ -511,7 +510,7 @@ export const HeroDashboard: React.FC = () => {
                 >
                   <Sword size={16} />
                 </div>
-                {t("equipment" as any) || "Equipment"}
+                {t("equipment" as any)}
               </button>
 
               <button
@@ -523,7 +522,7 @@ export const HeroDashboard: React.FC = () => {
                 >
                   <Shield size={16} />
                 </div>
-                {t("attributes" as any) || "Attributes"}
+                {t("attributes" as any)}
               </button>
 
               {/* Close Button */}
@@ -585,19 +584,19 @@ export const HeroDashboard: React.FC = () => {
             <div className="h-10 border-t border-white/10 bg-black/40 flex items-center justify-center gap-6 text-[10px] text-white/40 uppercase tracking-widest shrink-0">
               <span className="flex items-center gap-1">
                 <kbd className="bg-white/10 px-1 rounded">TAB</kbd>{" "}
-                {t("dashboard.hint_switch_tab" as any) || "Switch Tab"}
+                {t("dashboard.hint_switch_tab" as any)}
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="bg-white/10 px-1 rounded">Arrows</kbd>{" "}
-                {t("dashboard.hint_nav" as any) || "Navigate"}
+                {t("dashboard.hint_nav" as any)}
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="bg-white/10 px-1 rounded">Enter</kbd>{" "}
-                {t("dashboard.hint_select" as any) || "Select"}
+                {t("dashboard.hint_select" as any)}
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="bg-white/10 px-1 rounded">Esc</kbd>{" "}
-                {t("dashboard.hint_back" as any) || "Back"}
+                {t("dashboard.hint_back" as any)}
               </span>
             </div>
           </div>

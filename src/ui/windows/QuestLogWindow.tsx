@@ -81,13 +81,13 @@ export const QuestLogContent: React.FC = () => {
             className={`flex-1 py-1 text-center rounded ${activeTab === "active" ? "bg-amber-600/50 text-white" : "bg-black/30 text-gray-400 hover:bg-white/10"}`}
             onClick={() => setActiveTab("active")}
           >
-            {t("active") || "Active"}
+            {t("active")}
           </button>
           <button
             className={`flex-1 py-1 text-center rounded ${activeTab === "completed" ? "bg-green-700/50 text-white" : "bg-black/30 text-gray-400 hover:bg-white/10"}`}
             onClick={() => setActiveTab("completed")}
           >
-            {t("completed") || "Completed"}
+            {t("completed")}
           </button>
         </div>
 
@@ -122,7 +122,7 @@ export const QuestLogContent: React.FC = () => {
           })}
           {getCurrentList().length === 0 && (
             <div className="text-center text-gray-500 italic mt-4">
-              {t("no_quests") || "No quests found."}
+              {t("no_quests")}
             </div>
           )}
         </div>
@@ -146,7 +146,7 @@ export const QuestLogContent: React.FC = () => {
             {activeTab === "active" && selectedQuestState && (
               <div className="space-y-3">
                 <h3 className="text-amber-200 font-semibold uppercase text-xs tracking-wider">
-                  {t("objectives") || "Current Objectives"}
+                  {t("objectives")}
                 </h3>
 
                 <div className="bg-black/30 p-3 rounded border border-white/5 space-y-2">
@@ -212,7 +212,7 @@ export const QuestLogContent: React.FC = () => {
                   className="mx-auto text-green-500 mb-2"
                 />
                 <h3 className="text-green-400 font-bold">
-                  {t("quest_completed") || "Quest Completed"}
+                  {t("quest_completed")}
                 </h3>
               </div>
             )}
@@ -220,7 +220,7 @@ export const QuestLogContent: React.FC = () => {
             {/* Rewards Preview (Static for now or pulled from def) */}
             <div className="pt-4 border-t border-white/10">
               <h3 className="flex items-center gap-2 text-amber-200 font-semibold uppercase text-xs tracking-wider mb-2">
-                <Gift size={14} /> {t("rewards") || "Rewards"}
+                <Gift size={14} /> {t("rewards")}
               </h3>
               <div className="text-gray-400 text-sm">
                 {/* We could list total rewards here if defined in JSON root, currently per stage */}
@@ -230,7 +230,7 @@ export const QuestLogContent: React.FC = () => {
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-600">
-            {t("select_quest") || "Select a quest to view details."}
+            {t("select_quest")}
           </div>
         )}
       </div>

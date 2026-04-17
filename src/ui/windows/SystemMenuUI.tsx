@@ -166,22 +166,22 @@ export const SystemMenuUI: React.FC<{ isOpen: boolean; onClose: () => void }> = 
           backdropFilter: 'blur(12px)'
       }}>
             <h2 style={{ color: '#fbbf24', textAlign: 'center', margin: 0, fontSize: '1.5em', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                {t("hud_system") || "System"}
+                {t("hud_system")}
             </h2>
             <div style={{ height: '1px', background: '#444', marginBottom: '10px' }} />
 
             <button className="system-btn-large" onClick={handleSaveToFile} style={btnStyle(s)}>
                 <Save size={24} /> 
                 <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start'}}>
-                    <span style={{fontSize:'1.1em'}}>{t("save_game") || "Save Game"}</span>
-                    <span style={{fontSize:'0.7em', color:'#aaa'}}>{t("sys_save_desc") || "Save current progress"}</span>
+                    <span style={{fontSize:'1.1em'}}>{t("save_game")}</span>
+                    <span style={{fontSize:'0.7em', color:'#aaa'}}>{t("sys_save_desc")}</span>
                 </div>
             </button>
             
             <button className="system-btn-large" onClick={() => { onClose(); toggleWindow("questLog"); }} style={btnStyle(s)}>
                 <Book size={24} /> 
                 <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start'}}>
-                    <span style={{fontSize:'1.1em'}}>{t("hud_quest_log") || "Quest Log"}</span>
+                    <span style={{fontSize:'1.1em'}}>{t("hud_quest_log")}</span>
                     <span style={{fontSize:'0.7em', color:'#aaa'}}>{t("active") + " / " + t("completed")}</span>
                 </div>
             </button>
@@ -190,13 +190,13 @@ export const SystemMenuUI: React.FC<{ isOpen: boolean; onClose: () => void }> = 
                 <LogOut size={24} /> 
                  <div style={{display:'flex', flexDirection:'column', alignItems:'flex-start'}}>
                     <span style={{fontSize:'1.1em'}}>{t("menu_save_and_exit")}</span>
-                    <span style={{fontSize:'0.7em', color:'#faa'}}>{t("sys_exit_desc") || "Return to Title"}</span>
+                    <span style={{fontSize:'0.7em', color:'#faa'}}>{t("sys_exit_desc")}</span>
                 </div>
             </button>
 
              <button className="system-btn-large" onClick={onClose} style={{...btnStyle(s), background: '#333', marginTop:'10px'}}>
                 <Play size={24} /> 
-                <span>{t("sys_resume") || "Resume Game"}</span>
+                <span>{t("sys_resume")}</span>
             </button>
 
       </div>
