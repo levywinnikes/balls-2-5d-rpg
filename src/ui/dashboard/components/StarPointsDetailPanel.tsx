@@ -181,8 +181,7 @@ export const StarPointsDetailPanel: React.FC = () => {
         {/* Mysterious Description */}
         <div className="mt-4 p-3 bg-purple-500/5 rounded-lg border border-purple-500/15">
           <p className="text-[10px] text-purple-300/60 italic leading-relaxed">
-            ✨{" "}
-            {t("star_points_desc" as any)}
+            ✨ {t("star_points_desc" as any)}
           </p>
         </div>
       </div>

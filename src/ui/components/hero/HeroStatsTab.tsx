@@ -328,7 +328,8 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
           />
           <div className="absolute inset-0 flex items-center justify-between px-3 z-10">
             <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-red-100 shadow-black drop-shadow-md">
-              <Heart size={10} className="fill-red-500 text-red-500" /> {t("health")}
+              <Heart size={10} className="fill-red-500 text-red-500" />{" "}
+              {t("health")}
             </span>
             <span className="text-xs font-bold text-white shadow-black drop-shadow-md">
               {Math.floor(hp)} / {maxHp}
@@ -410,7 +411,9 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
             <span>
               XP: {Math.floor(wpExp)} / {wpTarget}
             </span>
-            <span className="text-purple-300 font-bold">+{wpBonus}% {t("panel_all_stats" as any)}</span>
+            <span className="text-purple-300 font-bold">
+              +{wpBonus}% {t("panel_all_stats" as any)}
+            </span>
           </div>
 
           <ProgressBar

@@ -25,7 +25,8 @@ const RULES = [
   {
     id: "I18N003",
     description: "Hardcoded accessibility/UI attribute",
-    regex: /\b(title|placeholder|aria-label|label|alt)\s*=\s*["'][^"'{][^"']*["']/,
+    regex:
+      /\b(title|placeholder|aria-label|label|alt)\s*=\s*["'][^"'{][^"']*["']/,
   },
 ];
 
@@ -162,7 +163,9 @@ function main() {
   const violations = findViolations(addedLines);
 
   if (violations.length === 0) {
-    console.log("[I18N Guard] OK - no new hardcoded UI text found in changed lines.");
+    console.log(
+      "[I18N Guard] OK - no new hardcoded UI text found in changed lines.",
+    );
     process.exit(0);
   }
 
