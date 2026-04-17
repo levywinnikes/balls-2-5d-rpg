@@ -13,9 +13,9 @@ This project is built using a hybrid **React + Phaser 3** architecture.
 
 ## Scene Management (`src/game/scenes/`)
 
-1.  **`MainMenuScene`**: Landing page and save file selection.
-2.  **`LoadingScene`**: Handles asynchronous downloading of BMS metadata and binary chunks.
-3.  **`GameScene`**: The main game loop. Manages entities, physics, and world interaction.
+1. **`MainMenuScene`**: Landing page and save file selection.
+2. **`LoadingScene`**: Handles asynchronous downloading of BMS metadata and binary chunks.
+3. **`GameScene`**: The main game loop. Manages entities, physics, and world interaction.
 
 ## State Communication
 
