@@ -246,7 +246,7 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
           {/* XP Text */}
           <div className="text-[9px] text-white/30 font-mono mt-1 text-right">
             {data.nextLevelXP === Infinity
-              ? "Max Level"
+              ? t("max_level" as any)
               : `${Math.floor(xpInLevel)} / ${displayTarget} XP`}
           </div>
         </div>
@@ -290,7 +290,7 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
             <span className="text-2xl">⭐</span>
             <div>
               <div className="text-[10px] text-yellow-400/60 uppercase tracking-widest">
-                Nível do Personagem
+                {t("character_overview" as any)}
               </div>
               <div className="text-xl font-bold text-yellow-300">
                 {ps.getLevel()}
@@ -328,7 +328,7 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
           />
           <div className="absolute inset-0 flex items-center justify-between px-3 z-10">
             <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-red-100 shadow-black drop-shadow-md">
-              <Heart size={10} className="fill-red-500 text-red-500" /> Health
+              <Heart size={10} className="fill-red-500 text-red-500" /> {t("health")}
             </span>
             <span className="text-xs font-bold text-white shadow-black drop-shadow-md">
               {Math.floor(hp)} / {maxHp}
@@ -348,7 +348,7 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
           <div className="absolute inset-0 flex items-center justify-between px-3 z-10">
             <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-orange-100 shadow-black drop-shadow-md">
               <Beef size={10} className="fill-orange-500 text-orange-500" />{" "}
-              Hunger
+              {t("hunger")}
             </span>
             <span className="text-xs font-bold text-white shadow-black drop-shadow-md">
               {Math.floor(hunger)}
@@ -399,7 +399,7 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
           <div className="flex justify-between items-center bg-black/20 p-1 rounded">
             <span className="flex items-center gap-2 text-[11px] font-bold uppercase text-purple-200 tracking-widest pl-1">
               <Sparkles size={12} className="text-purple-400" />{" "}
-              {t("willpower") || "Willpower"}
+              {t("willpower")}
             </span>
             <span className="text-[10px] font-bold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded border border-purple-500/20">
               Tier {wpTier}
@@ -427,13 +427,13 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
       <div className="mt-4 grid grid-cols-2 gap-2">
         {renderDetailRow(
           "dps",
-          t("stats.dps" as any) || "DPS",
+          t("stats.dps" as any),
           dpsData.totalDPS,
           <Sword className="text-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />,
         )}
         {renderDetailRow(
           "cooldown",
-          t("stats.cooldown" as any) || "Attack Speed",
+          t("stats.cooldown" as any),
           `${dpsData.aps} APS`,
           <Zap className="text-yellow-400" />,
         )}
@@ -481,7 +481,7 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
         )}
         {renderDetailRow(
           "starPoints",
-          t("star_points" as any) || "Star Points",
+          t("star_points" as any),
           starPoints,
           <Star className="text-yellow-400 fill-yellow-400" />,
         )}

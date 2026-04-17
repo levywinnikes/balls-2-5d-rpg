@@ -66,7 +66,7 @@ export const LevelRow = React.memo(() => {
       progress={getProgress(xp, XPTable, level)}
       type="skill"
       customTooltip={{
-        text: `${t("level") || "Level"} ${level}`,
+        text: `${t("level")} ${level}`,
         subtext: (
           <>
             <div className="mb-1">{t("tooltip_level_info")}</div>
@@ -170,7 +170,7 @@ export const CapRow = React.memo(() => {
       color="#9ca3af"
       progress={((capacity - currentWeight) / capacity) * 100}
       customTooltip={{
-        text: t("capacity") || "Capacity",
+        text: t("capacity"),
         subtext: (
           <>
             <div className="mb-1">{t("tooltip_cap_info")}</div>
