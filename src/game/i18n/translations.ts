@@ -274,6 +274,9 @@ export const translations = {
     msg_blocked: "Blocked by obstacle.",
     msg_cannot_pickup: "You cannot pickup this object.",
     msg_quest_level_req: "Quest Requires Level",
+    msg_select_target: "Select target...",
+    msg_action_canceled: "Canceled.",
+    msg_memory_overload_runes_inactive: "Memory Overload! Runes inactive.",
     
     // Actions (Context Menu)
     action_pickup: "Pick Up",
@@ -911,6 +914,10 @@ export const translations = {
     msg_blocked: "Bloqueado.",
     msg_cannot_pickup: "Você não pode pegar este objeto.",
     msg_quest_level_req: "Missão requer Nível",
+    msg_select_target: "Selecione o alvo...",
+    msg_action_canceled: "Cancelado.",
+    msg_memory_overload_runes_inactive:
+      "Sobrecarga de Memória! Runas inativas.",
 
     // Actions (Context Menu)
     action_pickup: "Pegar",

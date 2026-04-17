@@ -552,7 +552,7 @@ export default class GameScene extends Phaser.Scene {
       }
       PlayerState.getInstance().emit("uiNotification", {
         type: "info",
-        message: "Select target...",
+        message: t_game("msg_select_target"),
       });
     } catch (e) {
       console.warn("[GameScene] onPrepareRuneCast cursor error:", e);
@@ -1230,7 +1230,7 @@ export default class GameScene extends Phaser.Scene {
       this.input.setDefaultCursor("default");
       PlayerState.getInstance().emit("uiNotification", {
         type: "info",
-        message: "Canceled.",
+        message: t_game("msg_action_canceled"),
       });
       return;
     }
@@ -2999,7 +2999,7 @@ export default class GameScene extends Phaser.Scene {
         if (currentMem > maxMem) {
           ps.emit("uiNotification", {
             type: "error",
-            message: "Memory Overload! Runes inactive.",
+            message: t_game("msg_memory_overload_runes_inactive"),
           });
           return;
         }
