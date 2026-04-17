@@ -1223,6 +1223,8 @@ export default class GameScene extends Phaser.Scene {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_|_$/g, "")}_${Date.now()}`;
+    const questManager = QuestManager.getInstance();
+    questManager.loadSaveData({ active: [], completed: [] });
 
     const playerState = PlayerState.getInstance();
     const startedAt = this.time.now;
@@ -1322,6 +1324,16 @@ export default class GameScene extends Phaser.Scene {
         return this.currentLevel === "0";
       });
 
+      await step("quest log sync", async () => {
+        const started = questManager.startQuest("rat_plague");
+        await this.benchmarkDelay(120);
+
+        const saveData = questManager.getSaveData();
+        const activeQuestIds = saveData.active.map(([questId]) => questId);
+
+        return started && activeQuestIds.includes("rat_plague");
+      });
+
       await step("save/load roundtrip", async () => {
         const saved = await this.saveSystem.saveGame(benchmarkSaveName);
         if (!saved) {
@@ -1340,16 +1352,20 @@ export default class GameScene extends Phaser.Scene {
         const loadedInventory = loaded.playerState.inventory?.some(
           (item) => item.itemId === "light_torch",
         );
+        const loadedQuestIds = Array.isArray(loaded.playerState.quests?.active)
+          ? loaded.playerState.quests.active.map(([questId]: [string, any]) => questId)
+          : [];
 
         const isMatch =
           loaded.map === "smoke_test" &&
           loaded.currentLevel === this.currentLevel &&
           loaded.playerState.characterName === snapshot.characterName &&
-          expectedInventory === loadedInventory;
+          expectedInventory === loadedInventory &&
+          loadedQuestIds.includes("rat_plague");
 
         if (!isMatch) {
           throw new Error(
-            `loaded save mismatch | map=${loaded.map} level=${loaded.currentLevel} name=${loaded.playerState.characterName} inventoryMatch=${expectedInventory === loadedInventory}`,
+            `loaded save mismatch | map=${loaded.map} level=${loaded.currentLevel} name=${loaded.playerState.characterName} inventoryMatch=${expectedInventory === loadedInventory} questMatch=${loadedQuestIds.includes("rat_plague")}`,
           );
         }
 
