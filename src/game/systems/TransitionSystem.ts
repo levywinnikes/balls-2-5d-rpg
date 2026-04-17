@@ -15,7 +15,7 @@ export class TransitionSystem {
 
   public async checkTileTransition(
     playerSprite: Phaser.GameObjects.Sprite,
-    tileSize: number
+    tileSize: number,
   ): Promise<void> {
     // Se já estiver mudando de andar, ignora
     if (this.isTransitioning) return;
@@ -24,7 +24,7 @@ export class TransitionSystem {
     const gridY = Math.floor(playerSprite.y / tileSize);
 
     const mapData = this.scene.cache.json.get(
-      `${this.scene.registry.get("currentMap")}_data`
+      `${this.scene.registry.get("currentMap")}_data`,
     );
 
     if (!mapData) return;
@@ -55,92 +55,107 @@ export class TransitionSystem {
     if (tileDef && tileDef.transition) {
       // FIX: Ignora transição "up" automática. Agora exige interação manual (Right Click)
       if (tileDef.transition === "up") {
-          return;
+        return;
       }
-
-      let nextLevelInt: number;
-      const currentLevelInt = parseInt(currentLevel);
-      let targetGridY = gridY;
 
       // ALL automatic vertical transitions are now disabled based on USER REQUEST (v7.5)
       // Transitions must be triggered manually via tryManualTransition (Click).
       return;
-
-      const nextLevelStr = nextLevelInt.toString();
-
-      // Verifica se o próximo nível existe
-      if (mapData.levels[nextLevelStr]) {
-        await this.performTransition(
-          nextLevelStr,
-          gridX,
-          targetGridY,
-          tileSize,
-          mapData
-        );
-      } else {
-        console.warn(`Level ${nextLevelStr} does not exist in map data.`);
-      }
     }
   }
 
   public async tryManualTransition(
-      gridX: number,
-      gridY: number,
-      tileSize: number
-  ): Promise<void> { 
-      if (this.isTransitioning) return;
+    gridX: number,
+    gridY: number,
+    tileSize: number,
+  ): Promise<void> {
+    if (this.isTransitioning) return;
 
-      const mapData = this.scene.cache.json.get(
-        `${this.scene.registry.get("currentMap")}_data`
-      );
-      if (!mapData) return;
+    const mapData = this.scene.cache.json.get(
+      `${this.scene.registry.get("currentMap")}_data`,
+    );
+    if (!mapData) return;
 
-      const currentLevel = this.scene.registry.get("currentLevel");
-      const levelData = mapData.levels[currentLevel];
-      if (!levelData) return;
+    const currentLevel = this.scene.registry.get("currentLevel");
+    const levelData = mapData.levels[currentLevel];
+    if (!levelData) return;
 
-      // Validate bounds
-      if (gridY < 0 || gridY >= mapData.height || gridX < 0 || gridX >= mapData.width) return;
+    // Validate bounds
+    if (
+      gridY < 0 ||
+      gridY >= mapData.height ||
+      gridX < 0 ||
+      gridX >= mapData.width
+    )
+      return;
 
-      const tileSymbol = this.mapLoader.getTileAt(gridX, gridY, currentLevel);
-      const tileDef = mapData.tileDefinitions[tileSymbol || ""];
+    const tileSymbol = this.mapLoader.getTileAt(gridX, gridY, currentLevel);
+    const tileDef = mapData.tileDefinitions[tileSymbol || ""];
 
-      // MANUAL TRANSITIONS (UP or DOWN) via Click
-      if (tileDef && tileDef.transition) {
-          const currentLevelInt = parseInt(currentLevel);
-          const type = tileDef.transition;
+    // MANUAL TRANSITIONS (UP or DOWN) via Click
+    if (tileDef && tileDef.transition) {
+      const currentLevelInt = parseInt(currentLevel);
+      const type = tileDef.transition;
 
-          if (type === "up") {
-              const nextLevelInt = currentLevelInt + 1;
-              const nextLevelStr = nextLevelInt.toString();
+      if (type === "up") {
+        const nextLevelInt = currentLevelInt + 1;
+        const nextLevelStr = nextLevelInt.toString();
 
-              if (mapData.levels[nextLevelStr]) {
-                // To land safely ABOVE the stair down, we need to land at Y - 2.
-                await this.performTransition(nextLevelStr, gridX, gridY - 2, tileSize, mapData);
-              } else {
-                 this.scene.showFloatingText(gridX * tileSize, gridY * tileSize, "Blocked", 0xff0000);
-              }
-          } else if (type === "down" || type === "dwn") {
-              const nextLevelInt = currentLevelInt - 1;
-              const nextLevelStr = nextLevelInt.toString();
+        if (mapData.levels[nextLevelStr]) {
+          // To land safely ABOVE the stair down, we need to land at Y - 2.
+          await this.performTransition(
+            nextLevelStr,
+            gridX,
+            gridY - 2,
+            tileSize,
+            mapData,
+          );
+        } else {
+          this.scene.showFloatingText(
+            gridX * tileSize,
+            gridY * tileSize,
+            "Blocked",
+            0xff0000,
+          );
+        }
+      } else if (type === "down" || type === "dwn") {
+        const nextLevelInt = currentLevelInt - 1;
+        const nextLevelStr = nextLevelInt.toString();
 
-              if (mapData.levels[nextLevelStr]) {
-                // To land safely BELOW the stair up, we need to land at Y + 2.
-                await this.performTransition(nextLevelStr, gridX, gridY + 2, tileSize, mapData);
-              } else {
-                 this.scene.showFloatingText(gridX * tileSize, gridY * tileSize, "Blocked", 0xff0000);
-              }
-          }
-      } else if (tileDef && tileDef.id === "hole") {
-          // Special case for holes/manholes also requiring click
-          const currentLevelInt = parseInt(currentLevel);
-          const nextLevelInt = currentLevelInt - 1;
-          const nextLevelStr = nextLevelInt.toString();
-
-          if (mapData.levels[nextLevelStr]) {
-              await this.performTransition(nextLevelStr, gridX, gridY + 2, tileSize, mapData);
-          }
+        if (mapData.levels[nextLevelStr]) {
+          // To land safely BELOW the stair up, we need to land at Y + 2.
+          await this.performTransition(
+            nextLevelStr,
+            gridX,
+            gridY + 2,
+            tileSize,
+            mapData,
+          );
+        } else {
+          this.scene.showFloatingText(
+            gridX * tileSize,
+            gridY * tileSize,
+            "Blocked",
+            0xff0000,
+          );
+        }
       }
+    } else if (tileDef && tileDef.id === "hole") {
+      // Special case for holes/manholes also requiring click
+      const currentLevelInt = parseInt(currentLevel);
+      const nextLevelInt = currentLevelInt - 1;
+      const nextLevelStr = nextLevelInt.toString();
+
+      if (mapData.levels[nextLevelStr]) {
+        await this.performTransition(
+          nextLevelStr,
+          gridX,
+          gridY + 2,
+          tileSize,
+          mapData,
+        );
+      }
+    }
   }
 
   public async performTransition(
@@ -148,7 +163,7 @@ export class TransitionSystem {
     gridX: number,
     gridY: number,
     tileSize: number,
-    mapData: any
+    mapData: any,
   ): Promise<void> {
     this.isTransitioning = true;
 
@@ -175,7 +190,7 @@ export class TransitionSystem {
 
       if (newTileDef && newTileDef.block) {
         console.warn(
-          `Transition blocked at destination ${newLevel} [${gridX}, ${gridY}]`
+          `Transition blocked at destination ${newLevel} [${gridX}, ${gridY}]`,
         );
         // Aqui você poderia implementar uma lógica para procurar um tile vizinho livre
         // Por enquanto, mantemos a posição, pois assumimos que o mapa foi bem desenhado (escada leva a escada)
