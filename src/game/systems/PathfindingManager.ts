@@ -1,5 +1,3 @@
-import { EventEmitter } from "events";
-
 interface PathfindingCallbacks {
   resolve: (path: { x: number; y: number }[] | null) => void;
   // reject? (optional)
@@ -14,8 +12,10 @@ export class PathfindingManager {
   private constructor() {
     // Initialize Worker
     // Note: CRA/Webpack 5 requires this syntax for workers
-    this.worker = new Worker(new URL("../../workers/pathfinding.worker.ts", import.meta.url));
-    
+    this.worker = new Worker(
+      new URL("../../workers/pathfinding.worker.ts", import.meta.url),
+    );
+
     this.worker.onmessage = (event) => {
       const { type, payload } = event.data;
       if (type === "PATH_FOUND") {
@@ -27,7 +27,7 @@ export class PathfindingManager {
         }
       }
     };
-    
+
     this.worker.onerror = (err) => {
       console.error("Pathfinding Worker Error:", err);
     };
@@ -48,15 +48,15 @@ export class PathfindingManager {
   }
 
   public requestPath(
-    startX: number, 
-    startY: number, 
-    endX: number, 
-    endY: number
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
   ): Promise<{ x: number; y: number }[] | null> {
     return new Promise((resolve) => {
       const id = this.nextRequestId++;
       this.pendingRequests.set(id, { resolve });
-      
+
       this.worker.postMessage({
         type: "FIND_PATH",
         payload: {
@@ -64,8 +64,8 @@ export class PathfindingManager {
           startX,
           startY,
           endX,
-          endY
-        }
+          endY,
+        },
       });
     });
   }

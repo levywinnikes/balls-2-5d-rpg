@@ -17,69 +17,80 @@ import { UIProvider, useUI } from "./context/UIContext";
 import { WindowProvider } from "./ui/components/window/WindowContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { MainMenuUI } from "./ui/screens/MainMenuUI";
-import { PlayerState } from "./game/entities/Player/PlayerState";
 
 const GameLayout: React.FC = () => {
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { 
-    draggedItem, 
-    setDraggedItem, 
-    openSplitStack, 
+  const {
+    draggedItem,
+    setDraggedItem,
+    openSplitStack,
     graphicsQuality,
-    toggleEditorMode // ADDED
+    toggleEditorMode, // ADDED
   } = useUI();
-  
+
   // Use a ref to access latest quality inside the ResizeObserver loop
   const qualityRef = useRef(graphicsQuality);
   useEffect(() => {
-      qualityRef.current = graphicsQuality;
-      
-      // Force trigger resize when quality changes
-      if(gameRef.current && containerRef.current) {
-         const { width, height } = containerRef.current.getBoundingClientRect();
-         // Manually trigger the resize logic
-         const multiplier = graphicsQuality === "low" ? 0.5 : (graphicsQuality === "mid" ? 0.75 : 1.0);
-         const newWidth = Math.ceil(width * multiplier);
-         const newHeight = Math.ceil(height * multiplier);
-         
-         console.log(`[App] Quality Changed: ${graphicsQuality} -> Resizing to ${newWidth}x${newHeight} (Screen: ${width}x${height})`);
-         
-         gameRef.current.scale.resize(newWidth, newHeight);
-         if(gameRef.current.canvas) {
-             gameRef.current.canvas.style.width = "100%";
-             gameRef.current.canvas.style.height = "100%";
-             // Force pixelated rendering so low res looks retro, not blurry
-             gameRef.current.canvas.style.imageRendering = "pixelated"; 
-         }
+    qualityRef.current = graphicsQuality;
+
+    // Force trigger resize when quality changes
+    if (gameRef.current && containerRef.current) {
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      // Manually trigger the resize logic
+      const multiplier =
+        graphicsQuality === "low"
+          ? 0.5
+          : graphicsQuality === "mid"
+            ? 0.75
+            : 1.0;
+      const newWidth = Math.ceil(width * multiplier);
+      const newHeight = Math.ceil(height * multiplier);
+
+      console.log(
+        `[App] Quality Changed: ${graphicsQuality} -> Resizing to ${newWidth}x${newHeight} (Screen: ${width}x${height})`,
+      );
+
+      gameRef.current.scale.resize(newWidth, newHeight);
+      if (gameRef.current.canvas) {
+        gameRef.current.canvas.style.width = "100%";
+        gameRef.current.canvas.style.height = "100%";
+        // Force pixelated rendering so low res looks retro, not blurry
+        gameRef.current.canvas.style.imageRendering = "pixelated";
       }
+    }
   }, [graphicsQuality]);
 
   // Controls if we are in menu or game
   const [isInGame, setIsInGame] = useState(false);
 
   const handleStartGame = (data: any) => {
-      setIsInGame(true);
-      if (gameRef.current) {
-          // Check if Editor or Game
-          if (data === "editor") {
-             toggleEditorMode(true);
-             gameRef.current.scene.start("MapEditorScene");
-             gameRef.current.scene.stop("TitleScene");
-          } else {
-             // Normal Game
-             toggleEditorMode(false);
-             // Start Loading which starts GameScene
-             gameRef.current.scene.start("LoadingScene", data); // Pass data!
-             gameRef.current.scene.stop("TitleScene"); // Stop title if running
-          }
+    setIsInGame(true);
+    if (gameRef.current) {
+      // Check if Editor or Game
+      if (data === "editor") {
+        toggleEditorMode(true);
+        gameRef.current.scene.start("MapEditorScene");
+        gameRef.current.scene.stop("TitleScene");
+      } else {
+        // Normal Game
+        toggleEditorMode(false);
+        // Start Loading which starts GameScene
+        gameRef.current.scene.start("LoadingScene", data); // Pass data!
+        gameRef.current.scene.stop("TitleScene"); // Stop title if running
       }
+    }
   };
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const initialMultiplier = qualityRef.current === "low" ? 0.5 : (qualityRef.current === "mid" ? 0.75 : 1.0);
+    const initialMultiplier =
+      qualityRef.current === "low"
+        ? 0.5
+        : qualityRef.current === "mid"
+          ? 0.75
+          : 1.0;
 
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
@@ -105,37 +116,37 @@ const GameLayout: React.FC = () => {
       gameRef.current = new Phaser.Game(config);
       (window as any).game = gameRef.current;
       (window as any).phaserGame = gameRef.current;
-      
+
       // Force style immediately
-      if(gameRef.current.canvas) {
-         gameRef.current.canvas.style.width = "100%";
-         gameRef.current.canvas.style.height = "100%";
+      if (gameRef.current.canvas) {
+        gameRef.current.canvas.style.width = "100%";
+        gameRef.current.canvas.style.height = "100%";
       }
     }
 
     const resizeObserver = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-             if (gameRef.current) {
-                 const { width, height } = entry.contentRect;
-                 if(width > 0 && height > 0) {
-                    const q = qualityRef.current;
-                    const multiplier = q === "low" ? 0.5 : (q === "mid" ? 0.75 : 1.0);
-                    
-                    const newWidth = Math.ceil(width * multiplier);
-                    const newHeight = Math.ceil(height * multiplier);
+      for (const entry of entries) {
+        if (gameRef.current) {
+          const { width, height } = entry.contentRect;
+          if (width > 0 && height > 0) {
+            const q = qualityRef.current;
+            const multiplier = q === "low" ? 0.5 : q === "mid" ? 0.75 : 1.0;
 
-                    // console.log(`[App] ResizeObserver: ${newWidth}x${newHeight}`);
-                    
-                    gameRef.current.scale.resize(newWidth, newHeight);
-                    
-                    if(gameRef.current.canvas) {
-                        gameRef.current.canvas.style.width = "100%";
-                        gameRef.current.canvas.style.height = "100%";
-                        gameRef.current.canvas.style.imageRendering = "pixelated"; 
-                    }
-                 }
-             }
+            const newWidth = Math.ceil(width * multiplier);
+            const newHeight = Math.ceil(height * multiplier);
+
+            // console.log(`[App] ResizeObserver: ${newWidth}x${newHeight}`);
+
+            gameRef.current.scale.resize(newWidth, newHeight);
+
+            if (gameRef.current.canvas) {
+              gameRef.current.canvas.style.width = "100%";
+              gameRef.current.canvas.style.height = "100%";
+              gameRef.current.canvas.style.imageRendering = "pixelated";
+            }
+          }
         }
+      }
     });
 
     if (containerRef.current) {
@@ -150,24 +161,20 @@ const GameLayout: React.FC = () => {
     };
   }, []); // Run once
 
-
-
-
-  
   // Listen for "Return to Title" event from SystemMenu
   useEffect(() => {
-      const handleReturnEvent = () => {
-          handleReturnToMenu();
-      };
-      window.addEventListener("returnToTitle", handleReturnEvent);
-      return () => window.removeEventListener("returnToTitle", handleReturnEvent);
+    const handleReturnEvent = () => {
+      handleReturnToMenu();
+    };
+    window.addEventListener("returnToTitle", handleReturnEvent);
+    return () => window.removeEventListener("returnToTitle", handleReturnEvent);
   }, []);
 
   const handleReturnToMenu = () => {
-      if(!gameRef.current) return;
-      gameRef.current.scene.stop("GameScene");
-      gameRef.current.scene.start("TitleScene");
-      setIsInGame(false);
+    if (!gameRef.current) return;
+    gameRef.current.scene.stop("GameScene");
+    gameRef.current.scene.start("TitleScene");
+    setIsInGame(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -177,47 +184,43 @@ const GameLayout: React.FC = () => {
     const scene = gameRef.current.scene.getScene("GameScene") as GameScene;
     if (scene && scene.player && draggedItem.uid) {
       const worldPoint = scene.cameras.main.getWorldPoint(e.clientX, e.clientY);
-      
+
       if (draggedItem.source === "container" && draggedItem.containerId) {
-           scene.dropItemFromContainer(
-             draggedItem.containerId,
-             draggedItem.uid,
-             draggedItem.itemId,
-             draggedItem.count,
-             worldPoint.x,
-             worldPoint.y
-           );
+        scene.dropItemFromContainer(
+          draggedItem.containerId,
+          draggedItem.uid,
+          draggedItem.itemId,
+          draggedItem.count,
+          worldPoint.x,
+          worldPoint.y,
+        );
       } else {
-       if (draggedItem.count > 1) {
-             openSplitStack(draggedItem, draggedItem.count, (count) => {
-                 scene.dropItemFromInventory(
-                     draggedItem.uid,
-                     worldPoint.x,
-                     worldPoint.y,
-                     count
-                 );
-             });
-       } else {
-             scene.dropItemFromInventory(
-                 draggedItem.uid,
-                 worldPoint.x,
-                 worldPoint.y,
-                 1
-             );
-       }
-     }
-  }
-  setDraggedItem(null);
-};
-
-
+        if (draggedItem.count > 1) {
+          openSplitStack(draggedItem, draggedItem.count, (count) => {
+            scene.dropItemFromInventory(
+              draggedItem.uid,
+              worldPoint.x,
+              worldPoint.y,
+              count,
+            );
+          });
+        } else {
+          scene.dropItemFromInventory(
+            draggedItem.uid,
+            worldPoint.x,
+            worldPoint.y,
+            1,
+          );
+        }
+      }
+    }
+    setDraggedItem(null);
+  };
 
   return (
     <div className="relative w-screen h-screen bg-[#050505] overflow-hidden font-sans text-white">
       {/* MENU OVERLAY */}
-      {!isInGame && (
-          <MainMenuUI onStart={handleStartGame} />
-      )}
+      {!isInGame && <MainMenuUI onStart={handleStartGame} />}
 
       <div className="flex w-full h-full z-0">
         {/* GAME VIEWPORT */}
@@ -241,11 +244,11 @@ const GameLayout: React.FC = () => {
   );
 };
 
-
-
 function App() {
   // Check for Editor Mode (Env Var or URL Param)
-  const isEditor = process.env.REACT_APP_EDITOR === "true" || new URLSearchParams(window.location.search).get("editor") === "true";
+  const isEditor =
+    process.env.REACT_APP_EDITOR === "true" ||
+    new URLSearchParams(window.location.search).get("editor") === "true";
 
   return (
     <LanguageProvider>

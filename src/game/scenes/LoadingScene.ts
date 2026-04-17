@@ -6,7 +6,6 @@
 import Phaser from "phaser";
 import { MapLoader } from "../maps/MapLoader";
 import { WorldMapService } from "../../services/WorldMapService";
-import { MapProcessingService } from "../services/MapProcessingService";
 
 export default class LoadingScene extends Phaser.Scene {
   private targetData: any = null;
@@ -47,20 +46,25 @@ export default class LoadingScene extends Phaser.Scene {
     this.statusText.setOrigin(0.5, 0.5);
 
     // 2. Standard Phaser Progress Handling
-    this.load.on('progress', (value: number) => {
-        this.progressBar.clear();
-        this.progressBar.fillStyle(0x00ff00, 1);
-        this.progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300 * value, 30);
+    this.load.on("progress", (value: number) => {
+      this.progressBar.clear();
+      this.progressBar.fillStyle(0x00ff00, 1);
+      this.progressBar.fillRect(
+        width / 2 - 150,
+        height / 2 - 15,
+        300 * value,
+        30,
+      );
     });
 
-    this.load.on('complete', () => {
-        this.statusText.setText("Initializing World...");
+    this.load.on("complete", () => {
+      this.statusText.setText("Initializing World...");
     });
-    
+
     // 3. Trigger BMS Metadata Download
     const mapName = this.targetData?.mapName || "newmap";
     this.load.json("map_raw_data", `maps/${mapName}.json`);
-    
+
     // (Optional) Add dummy load if cache is hot to show bar briefly
     // this.load.image('dummy', 'data:image/png;base64,...');
   }
@@ -74,9 +78,9 @@ export default class LoadingScene extends Phaser.Scene {
     this.statusText.setText("Downloading World Data...");
     const mapMetadata = this.cache.json.get("map_raw_data");
     if (!mapMetadata) {
-        console.error("Critical Error: BMS Metadata missing!");
-        this.scene.start("GameScene", this.targetData);
-        return;
+      console.error("Critical Error: BMS Metadata missing!");
+      this.scene.start("GameScene", this.targetData);
+      return;
     }
 
     await this.yieldToBrowser();
@@ -92,7 +96,7 @@ export default class LoadingScene extends Phaser.Scene {
     const levels = Object.keys(mapMetadata.levels);
     const pathfindingGrids: Record<string, number[][]> = {};
     for (const lvl of levels) {
-        pathfindingGrids[lvl] = []; // BMS-ready stub (Dynamic calculation recommended for 1024x1024)
+      pathfindingGrids[lvl] = []; // BMS-ready stub (Dynamic calculation recommended for 1024x1024)
     }
 
     // 4. World Map Buffers (Binary-powered)
@@ -107,21 +111,25 @@ export default class LoadingScene extends Phaser.Scene {
 
     // 5. Start GameScene
     const finalData = {
-        ...this.targetData,
-        processedData: {
-            spawnInfo: { x: mapMetadata.width * 16, y: mapMetadata.height * 16, level: mapMetadata.config?.startLevel || "1" },
-            pathfindingGrids,
-            normalizedMapData: mapMetadata
-        }
+      ...this.targetData,
+      processedData: {
+        spawnInfo: {
+          x: mapMetadata.width * 16,
+          y: mapMetadata.height * 16,
+          level: mapMetadata.config?.startLevel || "1",
+        },
+        pathfindingGrids,
+        normalizedMapData: mapMetadata,
+      },
     };
 
     this.time.delayedCall(200, () => {
-         this.scene.start("GameScene", finalData);
+      this.scene.start("GameScene", finalData);
     });
   }
 
   /** Helper to allow the browser to paint/refresh UI between heavy tasks */
   private yieldToBrowser(): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, 10));
+    return new Promise((resolve) => setTimeout(resolve, 10));
   }
 }

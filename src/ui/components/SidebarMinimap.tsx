@@ -7,7 +7,6 @@ import React, { useRef, useEffect, useState } from "react";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { usePlayerState } from "../../hooks/usePlayerState";
 import { useUI } from "../../context/UIContext";
-import { TERRAIN_COLORS } from "../../constants/TerrainColors";
 import {
   ChevronUp,
   ChevronDown,
@@ -35,7 +34,7 @@ export const SidebarMinimap: React.FC = () => {
   const playerLevel = usePlayerState(
     "minimapUpdated",
     () => playerState.getCurrentLevel(),
-    "0"
+    "0",
   );
 
   useEffect(() => {
@@ -50,64 +49,19 @@ export const SidebarMinimap: React.FC = () => {
     // 2. Listen for Updates
     const onData = (data: any) => setMapData(data);
     const onBuffers = () => {
-        // Force a re-render and ensure mapData is fresh
-        const freshData = WorldMapService.getMapData();
-        if (freshData) setMapData({ ...freshData });
+      // Force a re-render and ensure mapData is fresh
+      const freshData = WorldMapService.getMapData();
+      if (freshData) setMapData({ ...freshData });
     };
 
     WorldMapService.emitter.on("mapDataUpdated", onData);
     WorldMapService.emitter.on("buffersReady", onBuffers);
 
     return () => {
-        WorldMapService.emitter.off("mapDataUpdated", onData);
-        WorldMapService.emitter.off("buffersReady", onBuffers);
+      WorldMapService.emitter.off("mapDataUpdated", onData);
+      WorldMapService.emitter.off("buffersReady", onBuffers);
     };
   }, []);
-
-  const colorCache = useRef<Record<string, string>>({});
-  
-  const getTileColor = (symbol: string, mapData: any): string => {
-    if (colorCache.current[symbol]) return colorCache.current[symbol];
-
-    const definitions = { ...mapData.tileDefinitions, ...mapData.entityTemplates };
-    const tileDef = definitions[symbol];
-
-    if (!tileDef || symbol === "...") return "transparent";
-
-    // 1. Try TerrainColors by ID or Pattern
-    if (TERRAIN_COLORS[tileDef.id]) {
-        const c = TERRAIN_COLORS[tileDef.id];
-        colorCache.current[symbol] = c;
-        return c;
-    }
-
-    // Pattern matching for transitions (e.g., grs_wat_n -> grass)
-    if (tileDef.id && tileDef.id.startsWith("grs_")) return TERRAIN_COLORS.grass;
-    if (tileDef.id && tileDef.id.startsWith("snd_")) return TERRAIN_COLORS.sand;
-    if (tileDef.id && tileDef.id.startsWith("snw_")) return TERRAIN_COLORS.snow;
-
-    // 2. Try explicit color in tile mapping
-    if (tileDef.color) {
-      colorCache.current[symbol] = tileDef.color;
-      return tileDef.color;
-    }
-
-    // 3. Try fallback to category
-    if (tileDef.category && TERRAIN_COLORS[tileDef.category]) {
-        const c = TERRAIN_COLORS[tileDef.category];
-        colorCache.current[symbol] = c;
-        return c;
-    }
-
-    // 4. Try recursively looking under
-    if (tileDef.under) {
-      const c = getTileColor(tileDef.under, mapData);
-      colorCache.current[symbol] = c;
-      return c;
-    }
-
-    return TERRAIN_COLORS.default || "#222";
-  };
 
   const handleLevelUp = () =>
     mapData?.levels[(parseInt(viewLevel) + 1).toString()] &&
@@ -153,43 +107,49 @@ export const SidebarMinimap: React.FC = () => {
       const centerY = height / 2;
 
       if (buffer) {
-          // Calculate the camera view in world-map-pixels
-          const visibleRange = VIEW_RANGE / zoom;
-          const sX = pGridX - visibleRange;
-          const sY = pGridY - visibleRange;
-          const sW = visibleRange * 2;
-          const sH = visibleRange * 2;
+        // Calculate the camera view in world-map-pixels
+        const visibleRange = VIEW_RANGE / zoom;
+        const sX = pGridX - visibleRange;
+        const sY = pGridY - visibleRange;
+        const sW = visibleRange * 2;
+        const sH = visibleRange * 2;
 
-          // Target dimensions on the minimap canvas
-          const dW = sW * currentTileSize;
-          const dH = sH * currentTileSize;
-          const dX = centerX - dW / 2;
-          const dY = centerY - dH / 2;
+        // Target dimensions on the minimap canvas
+        const dW = sW * currentTileSize;
+        const dH = sH * currentTileSize;
+        const dX = centerX - dW / 2;
+        const dY = centerY - dH / 2;
 
-          // Create a temporary canvas for Fog of War masking if needed
-          // Or just draw directly if no fog logic is required at this zoom level
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(buffer, sX, sY, sW, sH, dX, dY, dW, dH);
-          
-          // Apply Fog of War mask (Iterate local grid to clear un-explored tiles)
-          if (explored) {
-              const startX = Math.floor(sX);
-              const endX = Math.ceil(sX + sW);
-              const startY = Math.floor(sY);
-              const endY = Math.ceil(sY + sH);
+        // Create a temporary canvas for Fog of War masking if needed
+        // Or just draw directly if no fog logic is required at this zoom level
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(buffer, sX, sY, sW, sH, dX, dY, dW, dH);
 
-              ctx.fillStyle = "#000000";
-              for (let y = startY; y <= endY; y++) {
-                  for (let x = startX; x <= endX; x++) {
-                      if (y < 0 || y >= mapData.height || x < 0 || x >= mapData.width) continue;
-                      if (!explored[y] || !explored[y][x]) {
-                          const drawX = centerX + (x - pGridX) * currentTileSize;
-                          const drawY = centerY + (y - pGridY) * currentTileSize;
-                          ctx.fillRect(drawX, drawY, currentTileSize + 0.5, currentTileSize + 0.5);
-                      }
-                  }
+        // Apply Fog of War mask (Iterate local grid to clear un-explored tiles)
+        if (explored) {
+          const startX = Math.floor(sX);
+          const endX = Math.ceil(sX + sW);
+          const startY = Math.floor(sY);
+          const endY = Math.ceil(sY + sH);
+
+          ctx.fillStyle = "#000000";
+          for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+              if (y < 0 || y >= mapData.height || x < 0 || x >= mapData.width)
+                continue;
+              if (!explored[y] || !explored[y][x]) {
+                const drawX = centerX + (x - pGridX) * currentTileSize;
+                const drawY = centerY + (y - pGridY) * currentTileSize;
+                ctx.fillRect(
+                  drawX,
+                  drawY,
+                  currentTileSize + 0.5,
+                  currentTileSize + 0.5,
+                );
               }
+            }
           }
+        }
       }
 
       // 3. Cruz do Jogador (Só se o andar bater)
@@ -201,28 +161,30 @@ export const SidebarMinimap: React.FC = () => {
           centerX - crossSize / 2,
           centerY - length / 2,
           crossSize,
-          length
+          length,
         );
         ctx.fillRect(
           centerX - length / 2,
           centerY - crossSize / 2,
           length,
-          crossSize
+          crossSize,
         );
       }
 
       // 4. Marcações do Usuário
       const markers = playerState.getMarkers();
-      markers.forEach(m => {
+      markers.forEach((m) => {
         if (String(m.level) === String(viewLevel)) {
           // Precisão Pixel-at-Center (considerando Zoom)
-          const mx = centerX + (m.x - pPos.x) / tileSizeGame * currentTileSize;
-          const my = centerY + (m.y - pPos.y) / tileSizeGame * currentTileSize;
-          
+          const mx =
+            centerX + ((m.x - pPos.x) / tileSizeGame) * currentTileSize;
+          const my =
+            centerY + ((m.y - pPos.y) / tileSizeGame) * currentTileSize;
+
           const dotSize = 4 * zoom;
           ctx.fillStyle = m.color || "#ff0000";
           ctx.fillRect(mx - dotSize / 2, my - dotSize / 2, dotSize, dotSize);
-          
+
           ctx.strokeStyle = "#000000";
           ctx.lineWidth = 0.5 * zoom;
           ctx.strokeRect(mx - dotSize / 2, my - dotSize / 2, dotSize, dotSize);
@@ -234,7 +196,7 @@ export const SidebarMinimap: React.FC = () => {
 
     render();
     return () => cancelAnimationFrame(animationFrameId);
-  }, [mapData, viewLevel, zoom]);
+  }, [mapData, viewLevel, zoom, playerState]);
 
   const btnClass =
     "w-5 h-5 bg-[#222] border border-[#444] text-gray-300 flex items-center justify-center hover:bg-[#444] cursor-pointer rounded shadow-md active:bg-[#111]";
@@ -281,24 +243,31 @@ export const SidebarMinimap: React.FC = () => {
           // centerX is 100
           const gridOffsetX = (mouseX - 100) / currentTileSize;
           const gridOffsetY = (mouseY - 100) / currentTileSize;
-          
-          const targetWorldX = (pPos.x / tileSizeGame + gridOffsetX) * tileSizeGame;
-          const targetWorldY = (pPos.y / tileSizeGame + gridOffsetY) * tileSizeGame;
+
+          const targetWorldX =
+            (pPos.x / tileSizeGame + gridOffsetX) * tileSizeGame;
+          const targetWorldY =
+            (pPos.y / tileSizeGame + gridOffsetY) * tileSizeGame;
 
           // EXEC COMPATIBILITY: Avoid window.prompt for executable support.
           // Using a default name for now; the user can rename it in the Expanded Map.
           const label = `Mark ${playerState.getMarkers().length + 1}`;
-          
+
           playerState.addMarker({
-              id: `mm_${Date.now()}`,
-              x: targetWorldX,
-              y: targetWorldY,
-              level: viewLevel,
-              label: label,
-              color: "#ff0000"
+            id: `mm_${Date.now()}`,
+            x: targetWorldX,
+            y: targetWorldY,
+            level: viewLevel,
+            label: label,
+            color: "#ff0000",
           });
         }}
-        style={{ width: "100%", height: "100%", imageRendering: "pixelated", cursor: "crosshair" }}
+        style={{
+          width: "100%",
+          height: "100%",
+          imageRendering: "pixelated",
+          cursor: "crosshair",
+        }}
       />
 
       <div className="absolute top-1 right-1 flex flex-col gap-1 z-10">

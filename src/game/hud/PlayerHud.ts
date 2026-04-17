@@ -90,12 +90,8 @@ export default class PlayerHud {
     const targetHealth = Math.max(0, player.getHealth());
     const maxHealth = player.getMaxHealth();
 
-    let needsRedraw = false;
-
     // Detecta mudança na vida para animar
     if (targetHealth !== this.displayedHealth) {
-      needsRedraw = true;
-
       // Tween Rápido (Barra Colorida)
       this.scene.tweens.addCounter({
         from: this.displayedHealth,
@@ -155,7 +151,7 @@ export default class PlayerHud {
       this.hpText.setText(hpString);
       this.hpText.setPosition(
         startX + totalWidth - this.hpText.width,
-        this.config.y + 10
+        this.config.y + 10,
       );
       this.lastDisplayedHPString = hpString;
     }
@@ -191,7 +187,7 @@ export default class PlayerHud {
         startY,
         c.segmentWidth,
         c.segmentHeight,
-        c.segmentSkew
+        c.segmentSkew,
       );
       this.staticGraphics.fillPath();
     }
@@ -213,7 +209,7 @@ export default class PlayerHud {
         c.x,
         c.y,
         c.hexSize,
-        xpInfo.progress
+        xpInfo.progress,
       );
       this.dynamicGraphics.strokePath();
     }
@@ -245,7 +241,7 @@ export default class PlayerHud {
           startY,
           ghostW,
           c.segmentHeight,
-          c.segmentSkew
+          c.segmentSkew,
         );
         this.dynamicGraphics.fillPath();
       }
@@ -264,7 +260,7 @@ export default class PlayerHud {
           startY,
           realW,
           c.segmentHeight,
-          c.segmentSkew
+          c.segmentSkew,
         );
         this.dynamicGraphics.fillPath();
 
@@ -276,7 +272,7 @@ export default class PlayerHud {
           startY,
           realW,
           c.segmentHeight / 2,
-          c.segmentSkew
+          c.segmentSkew,
         );
         this.dynamicGraphics.fillPath();
       }
@@ -291,7 +287,7 @@ export default class PlayerHud {
     g: Phaser.GameObjects.Graphics,
     x: number,
     y: number,
-    radius: number
+    radius: number,
   ) {
     g.beginPath();
     const startAngle = -90;
@@ -311,7 +307,7 @@ export default class PlayerHud {
     x: number,
     y: number,
     radius: number,
-    percent: number
+    percent: number,
   ) {
     const totalSides = 6;
     const progressTotal = percent * totalSides;
@@ -350,7 +346,7 @@ export default class PlayerHud {
     y: number,
     w: number,
     h: number,
-    skew: number
+    skew: number,
   ) {
     g.beginPath();
     g.moveTo(x + skew, y);
