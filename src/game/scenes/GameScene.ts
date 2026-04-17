@@ -31,6 +31,7 @@ import { AutoSaveSystem } from "../systems/AutoSaveSystem";
 import { SaveSystem } from "../systems/SaveSystem";
 import { DialogueManager } from "../systems/DialogueManager";
 import { QuestManager } from "../systems/QuestManager";
+import { RuntimeErrorMonitor } from "../services/RuntimeErrorMonitor";
 // // import { MultiLevelMapData } from "../maps/MapTypes"; // Removed unused // Removed unused
 
 export interface DeadEnemy {
@@ -103,6 +104,8 @@ export default class GameScene extends Phaser.Scene {
   private benchmarkMode: boolean = false;
   private benchmarkStarted: boolean = false;
   private benchmarkName: string = "Benchmark";
+  private benchmarkAutoClose: boolean = false;
+  private benchmarkReportPath: string | null = null;
 
   private darkOverlay!: Phaser.GameObjects.RenderTexture;
   private darknessLayer!: Phaser.GameObjects.Graphics;
@@ -158,6 +161,11 @@ export default class GameScene extends Phaser.Scene {
     this.enemiesByLevel.clear(); // FIX: Clear stale enemies from previous run
     this.benchmarkMode = !!data.benchmarkMode;
     this.benchmarkName = data.benchmarkName || this.benchmarkName;
+    this.benchmarkAutoClose = !!data.benchmarkAutoClose;
+    this.benchmarkReportPath =
+      typeof data.benchmarkReportPath === "string"
+        ? data.benchmarkReportPath
+        : null;
 
     // START: Handle New Game - Clear Stale Registry Data
     if (data.isNewGame) {
@@ -310,7 +318,8 @@ export default class GameScene extends Phaser.Scene {
 
       result.decorations.forEach((data: any) => {
         const tileDefInMap = mapData.tileDefinitions[data.symbol];
-        const tileId = tileDefInMap ? tileDefInMap.id : data.symbol;
+        const entityDefInMap = mapData.entityTemplates?.[data.symbol];
+        const tileId = tileDefInMap?.id || entityDefInMap?.id || data.symbol;
 
         levelDecorations.push({
           tileId,
@@ -417,40 +426,8 @@ export default class GameScene extends Phaser.Scene {
     const nearby = this.getNearbyItems();
     if (nearby.length > 0) {
       const target = nearby[0];
-      // Logic from DroppedItem interaction
-      // We can reuse the logic that happens on click?
-      // DroppedItem typically emits event or calls PlayerState
-
       console.log(`[Loot 2.0] Picking up ${target.itemId}`);
-
-      // We call the method directly on the item if possible, or replicate logic
-      // DroppedItem usually has a `pickup()` method?
-      // If not, we do:
-      // 1. Add to Inventory
-      if (
-        PlayerState.getInstance().addItem(
-          target.itemId,
-          target.count,
-          undefined, // explicitUid - generate new? Or preserve? usually preserve if set
-          target.stars,
-          target.attributes,
-        )
-      ) {
-        // 2. Destroy from world
-        target.destroy();
-        // 3. Remove from persistence
-        PlayerState.getInstance().removePersistentDroppedItem(
-          this.currentLevel,
-          target.itemId,
-        ); // This might need UID if persisted by UID
-        // Wait, `removePersistentDroppedItem` uses ID?
-        // DroppedItem.ts needs to be checked.
-        // Assuming destroy() handles cleanup or we need to sync.
-
-        // Reuse the logic from PlayerState.pickupDroppedItem if exists?
-        // Or simpler:
-        // target.destroy(); // But we need to ensure it's removed from `this.droppedItems` map if synced.
-      }
+      target.pickup();
     }
   }
 
@@ -1185,6 +1162,50 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  private async publishBenchmarkResult(payload: {
+    passed: boolean;
+    totalMs: number;
+    steps: Array<{ label: string; ok: boolean; durationMs: number; error?: string }>;
+  }): Promise<void> {
+    const runtimeErrors = RuntimeErrorMonitor.getErrors();
+    const report = {
+      benchmarkName: this.benchmarkName,
+      map: this.registry.get("currentMap") || "unknown",
+      level: this.currentLevel,
+      passed: payload.passed,
+      totalMs: payload.totalMs,
+      completedAtIso: new Date().toISOString(),
+      steps: payload.steps,
+      runtimeErrors,
+    };
+
+    const electronAPI = (window as any).electronAPI;
+
+    if (electronAPI?.writeBenchmarkReport && this.benchmarkReportPath) {
+      const result = await electronAPI.writeBenchmarkReport(
+        this.benchmarkReportPath,
+        report,
+      );
+      if (!result?.success) {
+        console.error(
+          `[Benchmark] Failed to write report: ${result?.error || "unknown"}`,
+        );
+      } else {
+        console.log(`[Benchmark] Report written to ${result.path}`);
+      }
+    } else {
+      (window as any).__LAST_BENCHMARK_RESULT__ = report;
+    }
+
+    if (this.benchmarkAutoClose && electronAPI?.exitBenchmarkRun) {
+      await this.benchmarkDelay(200);
+      await electronAPI.exitBenchmarkRun(payload.passed ? 0 : 1);
+      return;
+    }
+
+    this.showBenchmarkSummary(payload.passed, payload.steps, payload.totalMs);
+  }
+
   private moveBenchmarkPlayer(x: number, y: number): void {
     if (!this.player || !this.player.sprite) return;
     this.player.sprite.setPosition(x, y);
@@ -1197,6 +1218,7 @@ export default class GameScene extends Phaser.Scene {
   private async runBenchmark(): Promise<void> {
     if (this.benchmarkStarted || !this.player || !this.transitionSystem) return;
     this.benchmarkStarted = true;
+    RuntimeErrorMonitor.clear();
 
     const playerState = PlayerState.getInstance();
     const startedAt = this.time.now;
@@ -1248,11 +1270,38 @@ export default class GameScene extends Phaser.Scene {
         return this.currentLevel === "0";
       });
 
-      await step("pickup chest", async () => {
+      await step("pickup loot", async () => {
         this.moveBenchmarkPlayer(336, 112);
-        this.pickupNearbyItem();
-        await this.benchmarkDelay(150);
-        return playerState.getInventory().some((item) => item.itemId === "chest");
+        const maxAttempts = 5;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          this.pickupNearbyItem();
+          await this.benchmarkDelay(120);
+
+          const hasTorch = playerState
+            .getInventory()
+            .some((item) => item.itemId === "light_torch");
+
+          if (hasTorch) {
+            return true;
+          }
+        }
+
+        const nearby = this.getNearbyItems(160).map((item) => ({
+          weaponId: item.weaponId,
+          level: item.level,
+          x: item.x,
+          y: item.y,
+          count: item.count,
+        }));
+        const inventoryIds = playerState
+          .getInventory()
+          .map((item) => item.itemId)
+          .slice(0, 12);
+
+        throw new Error(
+          `missing light_torch after pickup attempts | nearby=${JSON.stringify(nearby)} | inventory=${JSON.stringify(inventoryIds)}`,
+        );
       });
 
       await step("transition down", async () => {
@@ -1280,11 +1329,22 @@ export default class GameScene extends Phaser.Scene {
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error));
     } finally {
-      this.showBenchmarkSummary(
+      const runtimeErrors = RuntimeErrorMonitor.getErrors();
+      if (passed && runtimeErrors.length > 0) {
+        passed = false;
+        stepResults.push({
+          label: "runtime error check",
+          ok: false,
+          durationMs: 0,
+          error: `${runtimeErrors.length} runtime error(s) captured`,
+        });
+      }
+
+      await this.publishBenchmarkResult({
         passed,
-        stepResults,
-        this.time.now - startedAt,
-      );
+        steps: stepResults,
+        totalMs: this.time.now - startedAt,
+      });
     }
   }
 
@@ -2249,13 +2309,19 @@ export default class GameScene extends Phaser.Scene {
     const gridWidth = Math.ceil(mapWidth / tileSize);
     const gridHeight = Math.ceil(mapHeight / tileSize);
 
-    // Check if we have pre-calculated grid
-    if (this.processedData?.pathfindingGrids?.[this.currentLevel]) {
+    // Check if we have a valid pre-calculated grid
+    const preGrid = this.processedData?.pathfindingGrids?.[this.currentLevel];
+    const hasValidPreGrid =
+      Array.isArray(preGrid) &&
+      preGrid.length > 0 &&
+      Array.isArray(preGrid[0]) &&
+      preGrid[0].length > 0;
+
+    if (hasValidPreGrid) {
       console.log(
         `[Pathfinding] Using pre-calculated grid for Level ${this.currentLevel}`,
       );
-      this.pathfindingGrid =
-        this.processedData.pathfindingGrids[this.currentLevel];
+      this.pathfindingGrid = preGrid as number[][];
       this.pathfindingManager.updateGrid(this.pathfindingGrid);
       return;
     }
@@ -3287,13 +3353,8 @@ export default class GameScene extends Phaser.Scene {
     this.updatePathfindingGrid();
 
     // 6. Visuals
-    this.decorationsByLevel.forEach((decorations, lvl) => {
-      const isVisible = lvl === level;
-      decorations.forEach((d) => {
-        d.setVisible(isVisible);
-        d.setActive(isVisible);
-      });
-    });
+    // Decorations are stored as metadata and rendered lazily by LevelRenderer.
+    // Visibility is controlled by `levelRenderer.setCurrentLevel(level)` above.
 
     // 7. Load Items
     this.loadPersistentItems();

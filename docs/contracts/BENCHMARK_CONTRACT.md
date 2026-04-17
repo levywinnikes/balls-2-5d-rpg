@@ -14,8 +14,11 @@ Current benchmark assets:
 - Fixture binaries: `public/maps/smoke_test_0.bin`, `public/maps/smoke_test_-1.bin`
 - Generator: `scripts/generate-smoke-map.js`
 - Validator: `scripts/smoke-test-map.js`
+- E2E launcher: `scripts/run-benchmark-e2e.js`
 - Main menu entrypoint: `BENCHMARK` button in `src/ui/screens/MainMenuUI.tsx`
 - In-game auto-runner/report: `src/game/scenes/GameScene.ts`
+- Electron report/exit bridge: `public/electron.js` + `public/preload.js`
+- Runtime error monitor: `src/game/services/RuntimeErrorMonitor.ts`
 
 ## 3. Mandatory Execution Rules
 
@@ -27,6 +30,16 @@ Current benchmark assets:
    - total runtime
    - per-step status/timing
 5. Benchmark run must return to title/menu after completion.
+6. In E2E mode, benchmark run must write a JSON report and close the app with status code `0` (PASS) or `1` (FAIL).
+7. Benchmark must capture runtime errors (`window.error`, `unhandledrejection`, and `console.error`) and fail the run if any are detected.
+8. Runtime error capture exists specifically to catch silent failures such as black screens, missing assets, invalid transitions, and worker crashes that only appear in the console.
+
+## 4.1 Execution Commands
+
+- Fast static validation: `npm run smoke:test`
+- Full benchmark automation (open app, auto-run, export JSON, enforce exit code): `npm run benchmark:e2e`
+- Combined flow: `npm run smoke:full`
+- E2E report must include `runtimeErrors` with source/message/timestamp.
 
 ## 4. Feature Update Policy (Mandatory)
 
@@ -46,7 +59,7 @@ Required updates when impact exists:
 
 1. Update benchmark checkpoints (`smokeTests` metadata and/or in-game benchmark steps).
 2. Update this contract section `"Feature Coverage Matrix"`.
-3. Run benchmark validation (`npm run smoke:test`).
+3. Run benchmark validation (`npm run smoke:test` and/or `npm run benchmark:e2e` depending on impact).
 4. Include benchmark outcome in task/PR summary.
 
 ## 5. Feature Coverage Matrix
@@ -69,6 +82,7 @@ A feature is NOT done unless:
 2. Benchmark impact was assessed.
 3. Benchmark was updated when required.
 4. `npm run smoke:test` passes.
+5. When benchmark runtime path changed, `npm run benchmark:e2e` passes.
 
 ## 7. Documentation Language
 

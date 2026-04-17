@@ -17,10 +17,12 @@ import { UIProvider, useUI } from "./context/UIContext";
 import { WindowProvider } from "./ui/components/window/WindowContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { MainMenuUI } from "./ui/screens/MainMenuUI";
+import { RuntimeErrorMonitor } from "./game/services/RuntimeErrorMonitor";
 
 const GameLayout: React.FC = () => {
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const pendingStartDataRef = useRef<any | null>(null);
   const {
     draggedItem,
     setDraggedItem,
@@ -63,26 +65,44 @@ const GameLayout: React.FC = () => {
 
   // Controls if we are in menu or game
   const [isInGame, setIsInGame] = useState(false);
+  const autoBenchmarkStartedRef = useRef(false);
 
-  const handleStartGame = (data: any) => {
-    setIsInGame(true);
-    if (gameRef.current) {
-      // Check if Editor or Game
+  const searchParams = new URLSearchParams(window.location.search);
+  const shouldAutoBenchmark = searchParams.get("autobenchmark") === "1";
+  const benchmarkAutoClose = searchParams.get("autoclose") === "1";
+  const benchmarkName =
+    searchParams.get("benchmarkName") || "Smoke Test Benchmark";
+  const benchmarkReportPath = searchParams.get("reportPath") || undefined;
+
+  const startGameWithInstance = React.useCallback(
+    (game: Phaser.Game, data: any) => {
       if (data === "editor") {
         toggleEditorMode(true);
-        gameRef.current.scene.start("MapEditorScene");
-        gameRef.current.scene.stop("TitleScene");
-      } else {
-        // Normal Game
-        toggleEditorMode(false);
-        // Start Loading which starts GameScene
-        gameRef.current.scene.start("LoadingScene", data); // Pass data!
-        gameRef.current.scene.stop("TitleScene"); // Stop title if running
+        game.scene.start("MapEditorScene");
+        game.scene.stop("TitleScene");
+        return;
       }
+
+      toggleEditorMode(false);
+      game.scene.start("LoadingScene", data);
+      game.scene.stop("TitleScene");
+    },
+    [toggleEditorMode],
+  );
+
+  const handleStartGame = React.useCallback((data: any) => {
+    setIsInGame(true);
+    if (!gameRef.current) {
+      pendingStartDataRef.current = data;
+      return;
     }
-  };
+
+    startGameWithInstance(gameRef.current, data);
+  }, [startGameWithInstance]);
 
   useEffect(() => {
+    RuntimeErrorMonitor.install();
+
     if (!containerRef.current) return;
 
     const initialMultiplier =
@@ -122,6 +142,12 @@ const GameLayout: React.FC = () => {
         gameRef.current.canvas.style.width = "100%";
         gameRef.current.canvas.style.height = "100%";
       }
+
+      if (pendingStartDataRef.current) {
+        const pendingData = pendingStartDataRef.current;
+        pendingStartDataRef.current = null;
+        startGameWithInstance(gameRef.current, pendingData);
+      }
     }
 
     const resizeObserver = new ResizeObserver((entries) => {
@@ -159,7 +185,34 @@ const GameLayout: React.FC = () => {
       gameRef.current = null;
       (window as any).phaserGame = null;
     };
-  }, []); // Run once
+  }, [startGameWithInstance]);
+
+  useEffect(() => {
+    if (!shouldAutoBenchmark || autoBenchmarkStartedRef.current) return;
+    autoBenchmarkStartedRef.current = true;
+    RuntimeErrorMonitor.clear();
+
+    const timer = window.setTimeout(() => {
+      handleStartGame({
+        isNewGame: true,
+        map: "smoke_test",
+        benchmarkMode: true,
+        benchmarkName,
+        benchmarkAutoClose,
+        benchmarkReportPath,
+        charName: "Benchmark",
+        spawnInfo: { x: 96, y: 96, level: "0" },
+      });
+    }, 200);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    shouldAutoBenchmark,
+    benchmarkName,
+    benchmarkAutoClose,
+    benchmarkReportPath,
+    handleStartGame,
+  ]);
 
   // Listen for "Return to Title" event from SystemMenu
   useEffect(() => {

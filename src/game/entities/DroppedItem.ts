@@ -104,20 +104,29 @@ export class DroppedItem extends Phaser.Physics.Arcade.Sprite {
 
     // --- ANIMATION SUPPORT ---
     if (this.weaponId === "light_torch") {
-        if (!scene.anims.exists("light_torch_anim")) {
-            scene.anims.create({
+        const torchFrames = [
+          "light_torch_1",
+          "light_torch_2",
+          "light_torch_3",
+          "light_torch_4",
+        ];
+        const hasTorchFrames = torchFrames.every((key) => scene.textures.exists(key));
+
+        if (hasTorchFrames) {
+          try {
+            if (!scene.anims.exists("light_torch_anim")) {
+              scene.anims.create({
                 key: "light_torch_anim",
-                frames: [
-                    { key: "light_torch_1" },
-                    { key: "light_torch_2" },
-                    { key: "light_torch_3" },
-                    { key: "light_torch_4" }
-                ],
+                frames: torchFrames.map((key) => ({ key })),
                 frameRate: 5,
-                repeat: -1
-            });
+                repeat: -1,
+              });
+            }
+            this.play("light_torch_anim");
+          } catch (error) {
+            console.error("[DroppedItem] Failed to initialize light_torch animation", error);
+          }
         }
-        this.play("light_torch_anim");
     }
   }
 

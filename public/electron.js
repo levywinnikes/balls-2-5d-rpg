@@ -17,7 +17,15 @@ function createWindow() {
     icon: path.join(__dirname, 'assets/items/iron_shield.png')
   });
 
-  const startUrl = process.env.ELECTRON_START_URL || `file://${path.join(__dirname, '../build/index.html')}`;
+    const baseStartUrl = process.env.ELECTRON_START_URL || `file://${path.join(__dirname, '../build/index.html')}`;
+    let startUrl = baseStartUrl;
+
+    if (process.env.BENCHMARK_E2E === '1') {
+        const separator = startUrl.includes('?') ? '&' : '?';
+        const reportPath = process.env.BENCHMARK_REPORT_PATH || '';
+        startUrl = `${startUrl}${separator}autobenchmark=1&autoclose=1&benchmarkName=${encodeURIComponent('Smoke Test Benchmark')}&reportPath=${encodeURIComponent(reportPath)}`;
+    }
+
   mainWindow.loadURL(startUrl);
 
   // Open the DevTools only in dev mode
@@ -108,4 +116,28 @@ ipcMain.handle('delete-game', async (event, name) => {
     } catch (error) {
         return { success: false, error: error.message };
     }
+});
+
+ipcMain.handle('benchmark-write-report', async (event, { reportPath, data }) => {
+    try {
+        if (!reportPath || typeof reportPath !== 'string') {
+            return { success: false, error: 'Invalid reportPath' };
+        }
+
+        const dir = path.dirname(reportPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        fs.writeFileSync(reportPath, JSON.stringify(data, null, 2), 'utf-8');
+        return { success: true, path: reportPath };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('benchmark-exit', async (event, { exitCode }) => {
+    const code = Number.isInteger(exitCode) ? exitCode : 0;
+    setTimeout(() => app.exit(code), 50);
+    return { success: true };
 });

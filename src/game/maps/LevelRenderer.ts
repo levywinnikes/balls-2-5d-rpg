@@ -1317,17 +1317,31 @@ export default class LevelRenderer {
 
         if (!this.renderedDecorations.has(key)) {
           const reusable = this.tilePool.get() || undefined;
-          const { sprite, additionalSprites } = TileRegistry.createTile(
-            this.scene,
-            meta.tileId,
-            meta.worldX,
-            meta.worldY,
-            {
-              levelOffset: parseInt(this.currentLevel) * 10000,
-              isUnderTile: false,
-              reusableSprite: reusable,
-            },
-          );
+          let sprite: Phaser.GameObjects.Sprite;
+          let additionalSprites: Phaser.GameObjects.Sprite[] = [];
+
+          try {
+            const created = TileRegistry.createTile(
+              this.scene,
+              meta.tileId,
+              meta.worldX,
+              meta.worldY,
+              {
+                levelOffset: parseInt(this.currentLevel) * 10000,
+                isUnderTile: false,
+                reusableSprite: reusable,
+              },
+            );
+            sprite = created.sprite;
+            additionalSprites = created.additionalSprites;
+          } catch (error) {
+            console.error(
+              `[LevelRenderer] Failed to render decoration tile '${meta.tileId}' at (${meta.worldX}, ${meta.worldY})`,
+              error,
+            );
+            if (reusable) this.tilePool.release(reusable);
+            return;
+          }
 
           if (meta.scale) sprite.setScale(meta.scale);
           if (meta.rotation) sprite.setRotation(meta.rotation);

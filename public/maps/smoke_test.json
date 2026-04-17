@@ -110,7 +110,7 @@
     },
     "chs": {
       "type": "item",
-      "id": "chest",
+      "id": "light_torch",
       "contents": [
         {
           "id": "wooden_sword",

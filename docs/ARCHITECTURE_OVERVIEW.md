@@ -39,6 +39,11 @@ Persistence is handled in `src/game/systems/SaveSystem.ts`:
 - **`WorldMapService`**: Pre-renders whole world segments for UI map components.
 - **`NavigationService`**: High-level API for multi-floor pathfinding using web workers.
 - **`StatManager`**: Centralized logic for all RPG attribute calculations (Defense, Damage, etc.).
+- **`RuntimeErrorMonitor`**: Global runtime observability layer that captures `window.error`, `unhandledrejection`, and `console.error` for benchmark validation.
+
+## Runtime Observability
+
+Benchmark and autoplay flows rely on `RuntimeErrorMonitor` to detect silent failures that do not immediately crash the scene. It records runtime errors, exposes them to the benchmark report, and allows E2E runs to fail fast when the game logs an unexpected error.
 
 ---
 
