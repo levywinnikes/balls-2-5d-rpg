@@ -16,11 +16,20 @@ import { StatManager } from "../../systems/StatManager";
 import { ShieldDefinition, ShieldRegistry } from "../Shields/ShieldRegistry";
 import { RuneRegistry } from "../../magic/RuneRegistry";
 import { QuestManager } from "../../systems/QuestManager";
+import { PlayerSnapshot } from "../../types/PlayerSnapshot";
 
 import { t_game } from "../../i18n/translations";
 import { ConsumableManager } from "../../managers/ConsumableManager";
 
-export type NotificationType = "success" | "warning" | "error" | "info" | "exp" | "pickup" | "willpower" | "heal";
+export type NotificationType =
+  | "success"
+  | "warning"
+  | "error"
+  | "info"
+  | "exp"
+  | "pickup"
+  | "willpower"
+  | "heal";
 
 // Interfaces
 export interface InventoryItem {
@@ -61,36 +70,36 @@ export interface DroppedItemData {
 }
 
 export interface Buff {
-    id: string; // e.g. "potion_strength"
-    attr: string; // e.g. "strength"
-    value: number; // e.g. 5
-    duration: number; // ms remaining
-    isPercent?: boolean;
+  id: string; // e.g. "potion_strength"
+  attr: string; // e.g. "strength"
+  value: number; // e.g. 5
+  duration: number; // ms remaining
+  isPercent?: boolean;
 }
 
 export interface SkillState {
-    level: number;
-    experience: number;
+  level: number;
+  experience: number;
 }
 
 export interface MapMarker {
-    id: string;
-    x: number;
-    y: number;
-    level: string;
-    label: string;
-    color: string;
+  id: string;
+  x: number;
+  y: number;
+  level: string;
+  label: string;
+  color: string;
 }
 
 export interface PathPoint {
-    x: number;
-    y: number;
-    level: string;
+  x: number;
+  y: number;
+  level: string;
 }
 
 export class PlayerState extends EventEmitter {
   private static instance: PlayerState;
-  
+
   private consumableManager: ConsumableManager;
 
   // Posição
@@ -103,7 +112,7 @@ export class PlayerState extends EventEmitter {
   private fallSafetyEnabled: boolean = true; // Default ON
 
   public getZLevel(): string {
-      return this.currentLevel;
+    return this.currentLevel;
   }
 
   // Status
@@ -132,32 +141,53 @@ export class PlayerState extends EventEmitter {
   private intelligence: SkillState = { level: 1, experience: 0 };
 
   // --- Skill Getters with XP ---
-  public getStrengthData() { return this.strength; }
-  public getStrengthNextLevelExp() { return StrengthXpTable.getLevelInfo(this.strength.experience).nextLevelXP; }
+  public getStrengthData() {
+    return this.strength;
+  }
+  public getStrengthNextLevelExp() {
+    return StrengthXpTable.getLevelInfo(this.strength.experience).nextLevelXP;
+  }
 
-  public getDexterityData() { return this.dexterity; }
-  public getDexterityNextLevelExp() { return DexterityXpTable.getLevelInfo(this.dexterity.experience).nextLevelXP; }
+  public getDexterityData() {
+    return this.dexterity;
+  }
+  public getDexterityNextLevelExp() {
+    return DexterityXpTable.getLevelInfo(this.dexterity.experience).nextLevelXP;
+  }
 
-  public getReflexData() { return this.reflex; }
-  public getReflexNextLevelExp() { return ReflexXpTable.getLevelInfo(this.reflex.experience).nextLevelXP; }
+  public getReflexData() {
+    return this.reflex;
+  }
+  public getReflexNextLevelExp() {
+    return ReflexXpTable.getLevelInfo(this.reflex.experience).nextLevelXP;
+  }
 
-  public getIntelligenceData() { return this.intelligence; }
-  public getIntelligenceNextLevelExp() { return IntelligenceXpTable.getLevelInfo(this.intelligence.experience).nextLevelXP; }
+  public getIntelligenceData() {
+    return this.intelligence;
+  }
+  public getIntelligenceNextLevelExp() {
+    return IntelligenceXpTable.getLevelInfo(this.intelligence.experience)
+      .nextLevelXP;
+  }
 
   // --- Skill Experience Handling ---
   // (Methods are defined at the bottom of the file: gainStrengthExperience, etc.)
 
-  public getMana(): number { return this.mana; }
-  public setMana(val: number) { 
-      this.mana = Math.min(Math.max(0, val), this.maxMana);
-      this.emit("manaChanged", this.mana);
+  public getMana(): number {
+    return this.mana;
   }
-  public getMaxMana(): number { return this.maxMana; }
-  public setMaxMana(val: number) { 
-      this.maxMana = val; 
-      // Ensure current mana respects new max? Or just let it be.
-      if (this.mana > this.maxMana) this.mana = this.maxMana;
-      this.emit("manaChanged", this.mana);
+  public setMana(val: number) {
+    this.mana = Math.min(Math.max(0, val), this.maxMana);
+    this.emit("manaChanged", this.mana);
+  }
+  public getMaxMana(): number {
+    return this.maxMana;
+  }
+  public setMaxMana(val: number) {
+    this.maxMana = val;
+    // Ensure current mana respects new max? Or just let it be.
+    if (this.mana > this.maxMana) this.mana = this.maxMana;
+    this.emit("manaChanged", this.mana);
   }
   private attackDamage: number = 10;
   private baseSpeed: number = 400;
@@ -171,14 +201,26 @@ export class PlayerState extends EventEmitter {
   }
 
   // --- UI PERSISTENCE ---
-  private windowConfigs: Record<string, { x: number; y: number; width: number; height: number; minimized?: boolean }> = {};
+  private windowConfigs: Record<
+    string,
+    { x: number; y: number; width: number; height: number; minimized?: boolean }
+  > = {};
 
   public getWindowConfig(id: string) {
-      return this.windowConfigs[id];
+    return this.windowConfigs[id];
   }
 
-  public setWindowConfig(id: string, config: { x: number; y: number; width: number; height: number; minimized?: boolean }) {
-      this.windowConfigs[id] = { ...config };
+  public setWindowConfig(
+    id: string,
+    config: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      minimized?: boolean;
+    },
+  ) {
+    this.windowConfigs[id] = { ...config };
   }
 
   // --- GPS & MARKERS ---
@@ -187,48 +229,53 @@ export class PlayerState extends EventEmitter {
   private _debugGPS: boolean = false;
 
   public getMarkers(): MapMarker[] {
-      return this._markers;
+    return this._markers;
   }
 
   public addMarker(marker: MapMarker) {
-      // Evitar duplicatas exatas na mesma posição e nível
-      const exists = this._markers.some(m => Math.floor(m.x/32) === Math.floor(marker.x/32) && Math.floor(m.y/32) === Math.floor(marker.y/32) && m.level === marker.level);
-      if (exists) return;
+    // Evitar duplicatas exatas na mesma posição e nível
+    const exists = this._markers.some(
+      (m) =>
+        Math.floor(m.x / 32) === Math.floor(marker.x / 32) &&
+        Math.floor(m.y / 32) === Math.floor(marker.y / 32) &&
+        m.level === marker.level,
+    );
+    if (exists) return;
 
-      this._markers.push(marker);
-      this.emit("markersChanged", this._markers);
+    this._markers.push(marker);
+    this.emit("markersChanged", this._markers);
   }
 
   public removeMarker(id: string) {
-      this._markers = this._markers.filter(m => m.id !== id);
-      this.emit("markersChanged", this._markers);
+    this._markers = this._markers.filter((m) => m.id !== id);
+    this.emit("markersChanged", this._markers);
   }
 
   public updateMarkerLabel(id: string, newLabel: string) {
-      const marker = this._markers.find(m => m.id === id);
-      if (marker) {
-          marker.label = newLabel;
-          this.emit("markersChanged", this._markers);
-      }
+    const marker = this._markers.find((m) => m.id === id);
+    if (marker) {
+      marker.label = newLabel;
+      this.emit("markersChanged", this._markers);
+    }
   }
 
   public getActiveRoute(): PathPoint[] | null {
-      return this._activeRoute;
+    return this._activeRoute;
   }
 
   public setActiveRoute(path: PathPoint[] | null) {
-      this._activeRoute = path;
-      this.emit("routeChanged", this._activeRoute);
+    this._activeRoute = path;
+    this.emit("routeChanged", this._activeRoute);
   }
 
   public isDebugGPSEnabled(): boolean {
-      return this._debugGPS;
+    return this._debugGPS;
   }
 
   public toggleDebugGPS(): boolean {
-      this._debugGPS = !this._debugGPS;
-      this.emit("debugGPSChanged", this._debugGPS);
-      return this._debugGPS;
+    this._debugGPS = !this._debugGPS;
+    this.emit("debugGPSChanged", this._debugGPS);
+    return this._debugGPS;
   }
 
   /**
@@ -236,18 +283,18 @@ export class PlayerState extends EventEmitter {
    */
   public pauseGame() {
     try {
-      if (typeof window !== 'undefined' && (window as any).phaserGame) {
+      if (typeof window !== "undefined" && (window as any).phaserGame) {
         const game = (window as any).phaserGame;
         if (!game || !game.scene) return;
-        
+
         // Direct SceneManager usage is more reliable
         // Check if scene is running before pausing
-        if (game.scene.isActive('GameScene')) {
-            game.scene.pause('GameScene');
+        if (game.scene.isActive("GameScene")) {
+          game.scene.pause("GameScene");
         }
       }
     } catch (error) {
-      console.warn('[PlayerState] Failed to pause game:', error);
+      console.warn("[PlayerState] Failed to pause game:", error);
     }
   }
 
@@ -256,28 +303,28 @@ export class PlayerState extends EventEmitter {
    */
   public resumeGame() {
     try {
-      if (typeof window !== 'undefined' && (window as any).phaserGame) {
+      if (typeof window !== "undefined" && (window as any).phaserGame) {
         const game = (window as any).phaserGame;
         if (!game || !game.scene) return;
-        
+
         // Direct SceneManager usage
-        if (game.scene.isPaused('GameScene')) {
-            game.scene.resume('GameScene');
+        if (game.scene.isPaused("GameScene")) {
+          game.scene.resume("GameScene");
         }
       }
     } catch (error) {
-      console.warn('[PlayerState] Failed to resume game:', error);
+      console.warn("[PlayerState] Failed to resume game:", error);
     }
   }
 
   public getInputBlocked(): boolean {
-      return this.isInputBlocked;
+    return this.isInputBlocked;
   }
-  
+
   // Willpower System (Survival Bonus)
   private willpowerExp: number = 0;
   private willpowerTarget: number = 300; // Base target for Level 1
-  
+
   // Hunger System
   private hunger: number = 1000;
   private maxHunger: number = 1000;
@@ -287,7 +334,7 @@ export class PlayerState extends EventEmitter {
 
   // Buff System (Centralized)
   private activeBuffs: Map<string, Buff> = new Map();
-  
+
   // Interaction
   public pickupRange: number = 200; // ~1.5 tiles
 
@@ -310,51 +357,51 @@ export class PlayerState extends EventEmitter {
   // (getEquipment moved to bottom)
 
   public requestEquip(itemUid: string, targetSlot?: string): boolean {
-      const item = this.getInventoryItem(itemUid);
-      if (!item) return false;
-      
-      const def = WeaponRegistry.getWeaponDefinition(item.itemId);
-      if (!def) return false;
+    const item = this.getInventoryItem(itemUid);
+    if (!item) return false;
 
-      const type = def.type;
-      
-      // Map ItemType to PlayerState internal slot keys if needed, or calling specific methods
-      
-      if (
-          type === ItemType.SWORD || 
-          type === ItemType.AXE || 
-          type === ItemType.CLUB || 
-          type === ItemType.WAND || 
-          type === ItemType.ROD || 
-          type === ItemType.DISTANCE ||
-          type === ItemType.MELEE || // Legacy fallback
-          type === ItemType.RANGED // Legacy fallback
-      ) {
-           // Main Hand
-           return this.equipWeapon(itemUid);
-      } else if (type === ItemType.SHIELD) {
-           return this.equipShield(itemUid);
-      } else if (type === ItemType.HELMET) {
-           return this.equipItem(itemUid, "helmet");
-      } else if (type === ItemType.BODY_ARMOR) {
-           return this.equipItem(itemUid, "armor");
-      } else if (type === ItemType.LEGS) {
-           return this.equipItem(itemUid, "legs");
-      } else if (type === ItemType.BOOTS) {
-           return this.equipItem(itemUid, "boots");
-      } else if (type === ItemType.AMULET) {
-           // Implement equipAmulet if exists, or generic equipItem
-           // console.warn("Amulet equipping not fully implemented in PlayerState yet");
-           return false; 
-      } else if (type === ItemType.RING) {
-           // Implement equipRing
-           return false;
-      } else if (type === ItemType.AMMUNITION) {
-           // Implement equipAmmo
-           return false;
-      }
-      
+    const def = WeaponRegistry.getWeaponDefinition(item.itemId);
+    if (!def) return false;
+
+    const type = def.type;
+
+    // Map ItemType to PlayerState internal slot keys if needed, or calling specific methods
+
+    if (
+      type === ItemType.SWORD ||
+      type === ItemType.AXE ||
+      type === ItemType.CLUB ||
+      type === ItemType.WAND ||
+      type === ItemType.ROD ||
+      type === ItemType.DISTANCE ||
+      type === ItemType.MELEE || // Legacy fallback
+      type === ItemType.RANGED // Legacy fallback
+    ) {
+      // Main Hand
+      return this.equipWeapon(itemUid);
+    } else if (type === ItemType.SHIELD) {
+      return this.equipShield(itemUid);
+    } else if (type === ItemType.HELMET) {
+      return this.equipItem(itemUid, "helmet");
+    } else if (type === ItemType.BODY_ARMOR) {
+      return this.equipItem(itemUid, "armor");
+    } else if (type === ItemType.LEGS) {
+      return this.equipItem(itemUid, "legs");
+    } else if (type === ItemType.BOOTS) {
+      return this.equipItem(itemUid, "boots");
+    } else if (type === ItemType.AMULET) {
+      // Implement equipAmulet if exists, or generic equipItem
+      // console.warn("Amulet equipping not fully implemented in PlayerState yet");
       return false;
+    } else if (type === ItemType.RING) {
+      // Implement equipRing
+      return false;
+    } else if (type === ItemType.AMMUNITION) {
+      // Implement equipAmmo
+      return false;
+    }
+
+    return false;
   }
 
   // Item Objects (for Attributes/Stars persistence)
@@ -374,48 +421,53 @@ export class PlayerState extends EventEmitter {
   // Persistência
   private exploredAreas: Map<string, boolean[][]> = new Map();
   private droppedItems: Map<string, DroppedItemData[]> = new Map();
-  
+
   // Container System
   // Map<ContainerUUID, InventoryItem[]>
   // Map<ContainerUUID, InventoryItem[]>
   private containers: Map<string, InventoryItem[]> = new Map();
 
   // --- MAGIC & MEMORY SYSTEM ---
-  public enchantedRunes: Array<{ runeId: string, count: number }> = [];
-  public baseMemory: number = 10; 
+  public enchantedRunes: Array<{ runeId: string; count: number }> = [];
+  public baseMemory: number = 10;
   // Map<AltarID, Array<{ runeId: string, count: number }>>
-  private altarStorage: Map<string, Array<{ runeId: string, count: number }>> = new Map();
+  private altarStorage: Map<string, Array<{ runeId: string; count: number }>> =
+    new Map();
 
   public getAltarRunes(altarId: string) {
-      return this.altarStorage.get(altarId) || [];
+    return this.altarStorage.get(altarId) || [];
   }
 
   public addRuneToAltar(altarId: string, runeId: string, count: number) {
-      const runes = this.getAltarRunes(altarId);
-      const existing = runes.find(r => r.runeId === runeId);
-      if (existing) {
-          existing.count += count;
-      } else {
-          runes.push({ runeId, count });
-      }
-      this.altarStorage.set(altarId, runes);
-      this.emit("altarUpdated", altarId);
+    const runes = this.getAltarRunes(altarId);
+    const existing = runes.find((r) => r.runeId === runeId);
+    if (existing) {
+      existing.count += count;
+    } else {
+      runes.push({ runeId, count });
+    }
+    this.altarStorage.set(altarId, runes);
+    this.emit("altarUpdated", altarId);
   }
 
-  public withdrawRuneFromAltar(altarId: string, runeId: string, count: number): boolean {
-      const runes = this.getAltarRunes(altarId);
-      const index = runes.findIndex(r => r.runeId === runeId);
-      if (index === -1) return false;
+  public withdrawRuneFromAltar(
+    altarId: string,
+    runeId: string,
+    count: number,
+  ): boolean {
+    const runes = this.getAltarRunes(altarId);
+    const index = runes.findIndex((r) => r.runeId === runeId);
+    if (index === -1) return false;
 
-      const rune = runes[index];
-      if (rune.count >= count) {
-          rune.count -= count;
-          if (rune.count <= 0) runes.splice(index, 1);
-          this.altarStorage.set(altarId, runes);
-          this.emit("altarUpdated", altarId);
-          return true;
-      }
-      return false;
+    const rune = runes[index];
+    if (rune.count >= count) {
+      rune.count -= count;
+      if (rune.count <= 0) runes.splice(index, 1);
+      this.altarStorage.set(altarId, runes);
+      this.emit("altarUpdated", altarId);
+      return true;
+    }
+    return false;
   }
 
   private groundDragData: GroundDragData | null = null;
@@ -438,70 +490,71 @@ export class PlayerState extends EventEmitter {
 
   // --- PERFORMANCE TRACKING ---
   private _perfData = {
-      fps: 0,
-      enemyTime: 0,
-      mapTime: 0,
-      physicsTime: 0,
-      totalUpdateTime: 0,
-      activeEnemies: 0,
-      renderedTiles: 0,
-      totalObjects: 0,
-      poolSize: 0,
-      types: {} as Record<string, number>,
-      culprits: [] as [string, number][]
+    fps: 0,
+    enemyTime: 0,
+    mapTime: 0,
+    physicsTime: 0,
+    totalUpdateTime: 0,
+    activeEnemies: 0,
+    renderedTiles: 0,
+    totalObjects: 0,
+    poolSize: 0,
+    types: {} as Record<string, number>,
+    culprits: [] as [string, number][],
   };
 
   private _diagnosticSettings = {
-      enableAI: true,
-      enableMapUpdate: true,
-      enableClouds: true,
-      enableLighting: true,
-      enableItemDepth: true,
-      enablePhysics: true,
-      enablePlayerState: true,
-      hideTiles: false,
-      hideEnemies: false,
-      hideItems: false,
-      enableNoClip: false,
-      enableSuperSpeed: false,
-      enableDebugKeys: false
+    enableAI: true,
+    enableMapUpdate: true,
+    enableClouds: true,
+    enableLighting: true,
+    enableItemDepth: true,
+    enablePhysics: true,
+    enablePlayerState: true,
+    hideTiles: false,
+    hideEnemies: false,
+    hideItems: false,
+    enableNoClip: false,
+    enableSuperSpeed: false,
+    enableDebugKeys: false,
   };
 
   public updatePerfMetrics(metrics: any) {
-      this._perfData = { ...this._perfData, ...metrics };
-      this.emit("perfUpdated", this._perfData);
+    this._perfData = { ...this._perfData, ...metrics };
+    this.emit("perfUpdated", this._perfData);
   }
 
   public getPerfData() {
-      return this._perfData;
+    return this._perfData;
   }
 
   public getDiagnosticSettings() {
-      return this._diagnosticSettings;
+    return this._diagnosticSettings;
   }
 
-  public updateDiagnosticSetting(key: keyof typeof PlayerState.prototype._diagnosticSettings, value: boolean) {
-      (this._diagnosticSettings as any)[key] = value;
-      this.emit("diagnosticUpdated", this._diagnosticSettings);
+  public updateDiagnosticSetting(
+    key: keyof typeof PlayerState.prototype._diagnosticSettings,
+    value: boolean,
+  ) {
+    (this._diagnosticSettings as any)[key] = value;
+    this.emit("diagnosticUpdated", this._diagnosticSettings);
   }
 
   public requestZJump(delta: number) {
-      this.emit("requestZJump", delta);
+    this.emit("requestZJump", delta);
   }
 
   private _perspectiveMode: "2D" | "3D" = "3D";
 
   public getPerspectiveMode() {
-      return this._perspectiveMode;
+    return this._perspectiveMode;
   }
 
   public togglePerspectiveMode() {
-      this._perspectiveMode = this._perspectiveMode === "3D" ? "2D" : "3D";
-      this.emit("perspectiveModeChanged", this._perspectiveMode);
-      return this._perspectiveMode;
+    this._perspectiveMode = this._perspectiveMode === "3D" ? "2D" : "3D";
+    this.emit("perspectiveModeChanged", this._perspectiveMode);
+    return this._perspectiveMode;
   }
-
-
 
   public static getInstance(): PlayerState {
     const win = window as any;
@@ -509,259 +562,291 @@ export class PlayerState extends EventEmitter {
       win._playerStateInstance = new PlayerState();
       win._playerStateInstance.setMaxListeners(50); // Increase limit for UI hooks
     } else {
-        // HMR PROTECTION: If new methods are missing on a stale instance (surviving HMR),
-        // we re-patch the prototype to keep the singleton functional without a full refresh.
-        if (!win._playerStateInstance.requestZJump) {
-            Object.setPrototypeOf(win._playerStateInstance, PlayerState.prototype);
-        }
+      // HMR PROTECTION: If new methods are missing on a stale instance (surviving HMR),
+      // we re-patch the prototype to keep the singleton functional without a full refresh.
+      if (!win._playerStateInstance.requestZJump) {
+        Object.setPrototypeOf(win._playerStateInstance, PlayerState.prototype);
+      }
     }
     return win._playerStateInstance;
   }
-  
+
   // --- CONTAINER LOGIC ---
   public getContainerItems(containerId: string): InventoryItem[] {
-      return this.containers.get(containerId) || [];
+    return this.containers.get(containerId) || [];
   }
 
-  public registerContainer(containerId: string, initialItems: InventoryItem[] = []) {
-      if(!this.containers.has(containerId)) {
-          this.containers.set(containerId, initialItems);
-      }
+  public registerContainer(
+    containerId: string,
+    initialItems: InventoryItem[] = [],
+  ) {
+    if (!this.containers.has(containerId)) {
+      this.containers.set(containerId, initialItems);
+    }
   }
-
-
 
   // Removed redundant closeContainer method
   // See implementation around line 242
 
-  public addItemToContainer(containerId: string, itemId: string, count: number, explicitUid?: string, stars: number = 0, attributes: any[] = []): boolean {
-      if (!this.containers.has(containerId)) {
-          // Auto-init container (e.g. for MapLoader seeding)
-          this.containers.set(containerId, []);
+  public addItemToContainer(
+    containerId: string,
+    itemId: string,
+    count: number,
+    explicitUid?: string,
+    stars: number = 0,
+    attributes: any[] = [],
+  ): boolean {
+    if (!this.containers.has(containerId)) {
+      // Auto-init container (e.g. for MapLoader seeding)
+      this.containers.set(containerId, []);
+    }
+
+    const items = this.containers.get(containerId)!;
+    // Check Capacity? (Optional: 1000 oz limit?)
+    // For now, infinite or standard slot limit (e.g. 20 slots)
+    if (items.length >= 20) {
+      this.emit("message", t_game("container_full"));
+      return false;
+    }
+
+    items.push({
+      uid: explicitUid || this.generateUID(),
+      itemId,
+      count,
+      stars,
+      attributes,
+    });
+    this.containers.set(containerId, items);
+    this.emit("containerUpdated", containerId);
+    return true;
+  }
+
+  public removeItemFromContainer(
+    containerId: string,
+    itemUid: string,
+    count: number = 1,
+  ): boolean {
+    if (!this.containers.has(containerId)) return false;
+    const items = this.containers.get(containerId)!;
+
+    const index = items.findIndex((i) => i.uid === itemUid);
+    if (index === -1) return false;
+
+    const item = items[index];
+    if (item.count > count) {
+      item.count -= count;
+    } else {
+      items.splice(index, 1);
+    }
+
+    this.containers.set(containerId, items);
+    this.emit("containerUpdated", containerId);
+    this.emit("inventoryUpdated");
+    return true;
+  }
+
+  public unequipItemToContainer(
+    slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon",
+    containerId: string,
+  ): boolean {
+    let slotKey: keyof PlayerState = "equippedHelmetId";
+    if (slot === "weapon") slotKey = "equippedWeaponId";
+    else if (slot === "shield") slotKey = "equippedShieldId";
+    else if (slot === "helmet") slotKey = "equippedHelmetId";
+    else if (slot === "armor") slotKey = "equippedArmorId";
+    else if (slot === "legs") slotKey = "equippedLegsId";
+    else if (slot === "boots") slotKey = "equippedBootsId";
+
+    const itemId = (this as any)[slotKey] as string | null;
+
+    if (itemId) {
+      // 1. Try Add to Container FIRST (Prevent Limbo if full)
+      // Equipment items are count 1.
+      if (this.addItemToContainer(containerId, itemId, 1)) {
+        // 2. Remove from slot ONLY if successful
+        (this as any)[slotKey] = null;
+        this.emit("equipmentChanged");
+        this.emit("weaponEquipped", null);
+
+        // 3. Update Weight/Stats
+        this.emit("inventoryUpdated");
+        return true;
       }
-      
-      const items = this.containers.get(containerId)!;
-      // Check Capacity? (Optional: 1000 oz limit?)
-      // For now, infinite or standard slot limit (e.g. 20 slots)
-      if (items.length >= 20) {
-          this.emit("message", t_game("container_full"));
-          return false;
-      }
-      
-      
-      items.push({
-          uid: explicitUid || this.generateUID(),
-          itemId,
-          count,
-          stars,
-          attributes
+      // Else: Container full. Item stays equipped.
+      return false;
+    }
+    return false;
+  }
+
+  public dropEquippedItem(
+    slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon",
+    dropX?: number,
+    dropY?: number,
+  ): void {
+    let itemId: string | null = null;
+    let slotKey: keyof PlayerState = "equippedHelmetId";
+
+    if (slot === "weapon") slotKey = "equippedWeaponId";
+    else if (slot === "shield") slotKey = "equippedShieldId";
+    else if (slot === "helmet") slotKey = "equippedHelmetId";
+    else if (slot === "armor") slotKey = "equippedArmorId";
+    else if (slot === "legs") slotKey = "equippedLegsId";
+    else if (slot === "boots") slotKey = "equippedBootsId";
+
+    itemId = this[slotKey] as string | null;
+
+    if (itemId) {
+      // Remove from slot
+      // Capture stats BEFORE removing
+      const itemObj = (this as any)[
+        slotKey.replace("Id", "Item")
+      ] as InventoryItem | null;
+      const stars = itemObj?.stars || 0;
+      const attributes = itemObj?.attributes || [];
+
+      (this as any)[slotKey] = null;
+      (this as any)[slotKey.replace("Id", "Item")] = null;
+
+      // Emit UI updates
+      this.emit("equipmentChanged");
+      this.emit("inventoryUpdated"); // for weight
+      this.emit("weaponEquipped", null); // safe to emit null even if not weapon
+
+      // Request Spawn on Ground (via GameScene)
+      // We need a specific event for "Spawn Dropped Item" that doesn't check inventory
+      // Passing count=1 as eq items are 1.
+      // WeaponDefinition needed to know if stackable? Usually eq not stackable.
+      this.emit("spawnDroppedItem", {
+        itemId: itemId,
+        weaponId: itemId,
+        count: 1,
+        x: dropX,
+        y: dropY,
+        stars: stars,
+        attributes: attributes,
       });
-      this.containers.set(containerId, items);
-      this.emit("containerUpdated", containerId);
-      return true;
-  }
-  
-  public removeItemFromContainer(containerId: string, itemUid: string, count: number = 1): boolean {
-      if (!this.containers.has(containerId)) return false;
-      const items = this.containers.get(containerId)!;
-      
-      const index = items.findIndex(i => i.uid === itemUid);
-      if (index === -1) return false;
-
-      const item = items[index];
-      if (item.count > count) {
-          item.count -= count;
-      } else {
-          items.splice(index, 1);
-      }
-
-      this.containers.set(containerId, items);
-      this.emit("containerUpdated", containerId);
-      this.emit("inventoryUpdated");
-      return true;
-  }
-
-  public unequipItemToContainer(slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon", containerId: string): boolean {
-       let slotKey: keyof PlayerState = "equippedHelmetId";
-       if (slot === "weapon") slotKey = "equippedWeaponId";
-       else if (slot === "shield") slotKey = "equippedShieldId";
-       else if (slot === "helmet") slotKey = "equippedHelmetId";
-       else if (slot === "armor") slotKey = "equippedArmorId";
-       else if (slot === "legs") slotKey = "equippedLegsId";
-       else if (slot === "boots") slotKey = "equippedBootsId";
-
-       const itemId = (this as any)[slotKey] as string | null;
-
-       if (itemId) {
-           // 1. Try Add to Container FIRST (Prevent Limbo if full)
-           // Equipment items are count 1.
-           if (this.addItemToContainer(containerId, itemId, 1)) {
-               // 2. Remove from slot ONLY if successful
-               (this as any)[slotKey] = null;
-               this.emit("equipmentChanged");
-               this.emit("weaponEquipped", null); 
-               
-               // 3. Update Weight/Stats
-               this.emit("inventoryUpdated");
-               return true;
-           }
-           // Else: Container full. Item stays equipped.
-           return false;
-       }
-       return false;
-   }
-
-  public dropEquippedItem(slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon", dropX?: number, dropY?: number): void {
-      let itemId: string | null = null;
-      let slotKey: keyof PlayerState = "equippedHelmetId";
-      
-      if (slot === "weapon") slotKey = "equippedWeaponId";
-      else if (slot === "shield") slotKey = "equippedShieldId";
-      else if (slot === "helmet") slotKey = "equippedHelmetId";
-      else if (slot === "armor") slotKey = "equippedArmorId";
-      else if (slot === "legs") slotKey = "equippedLegsId";
-      else if (slot === "boots") slotKey = "equippedBootsId";
-
-      itemId = this[slotKey] as string | null;
-
-      if (itemId) {
-          // Remove from slot
-          // Capture stats BEFORE removing
-          const itemObj = (this as any)[slotKey.replace('Id', 'Item')] as InventoryItem | null;
-          const stars = itemObj?.stars || 0;
-          const attributes = itemObj?.attributes || [];
-
-          (this as any)[slotKey] = null;
-          (this as any)[slotKey.replace('Id', 'Item')] = null;
-
-          
-          // Emit UI updates
-          this.emit("equipmentChanged");
-          this.emit("inventoryUpdated"); // for weight
-          this.emit("weaponEquipped", null); // safe to emit null even if not weapon
-
-          // Request Spawn on Ground (via GameScene)
-          // We need a specific event for "Spawn Dropped Item" that doesn't check inventory
-          // Passing count=1 as eq items are 1.
-          // WeaponDefinition needed to know if stackable? Usually eq not stackable.
-          this.emit("spawnDroppedItem", { 
-              itemId: itemId, 
-              weaponId: itemId, 
-              count: 1, 
-              x: dropX, 
-              y: dropY,
-              stars: stars,
-              attributes: attributes
-          });
-      }
+    }
   }
 
   public getOpenWindows() {
-      return this.openWindows;
+    return this.openWindows;
   }
 
-  public openContainer(uid: string, containerTypeId: string, name: string, worldPos?: { x: number; y: number; level: string }): void {
-      // Single Container Policy REMOVED to allow Altar + Chest
-      // We no longer auto-close other containers.
+  public openContainer(
+    uid: string,
+    containerTypeId: string,
+    name: string,
+    worldPos?: { x: number; y: number; level: string },
+  ): void {
+    // Single Container Policy REMOVED to allow Altar + Chest
+    // We no longer auto-close other containers.
 
-      // Check if already open
-      // if (this.openWindows[uid]) return; // REMOVED: Allow re-emitting event to focus/bring to front
+    // Check if already open
+    // if (this.openWindows[uid]) return; // REMOVED: Allow re-emitting event to focus/bring to front
 
-      // Initialize if new
-      if (!this.containers.has(uid)) {
-          this.containers.set(uid, []);
-      }
+    // Initialize if new
+    if (!this.containers.has(uid)) {
+      this.containers.set(uid, []);
+    }
 
-      // Track as open window
-      this.openWindows[uid] = {
-          type: "container",
-          id: uid, 
-          title: name,
-          x: 400, // Default Pos
-          y: 200,
-          worldPos // Store world position for distance checks
-      };
+    // Track as open window
+    this.openWindows[uid] = {
+      type: "container",
+      id: uid,
+      title: name,
+      x: 400, // Default Pos
+      y: 200,
+      worldPos, // Store world position for distance checks
+    };
 
-      this.currentOpenedContainerId = uid;
-      this.currentOpenedContainerDefId = containerTypeId;
-      
-      this.emit("windowOpened", {
-          id: uid,
-          type: "container",
-          title: name,
-          data: { containerId: uid, containerDefId: containerTypeId }
-      });
+    this.currentOpenedContainerId = uid;
+    this.currentOpenedContainerDefId = containerTypeId;
+
+    this.emit("windowOpened", {
+      id: uid,
+      type: "container",
+      title: name,
+      data: { containerId: uid, containerDefId: containerTypeId },
+    });
   }
 
   public closeContainer(targetId?: string): void {
-      const id = targetId || this.currentOpenedContainerId;
-      if (!id) return;
-      
-      // If closing the "current", handle pointers
-      if (this.currentOpenedContainerId === id) {
-          this.currentOpenedContainerId = null;
-          this.currentOpenedContainerDefId = null;
-      }
-      
-      if (this.openWindows[id]) {
-          delete this.openWindows[id];
-      }
-      
-      this.emit("containerClosed", id);
-      this.emit("windowClosed", { id, type: "container" });
+    const id = targetId || this.currentOpenedContainerId;
+    if (!id) return;
+
+    // If closing the "current", handle pointers
+    if (this.currentOpenedContainerId === id) {
+      this.currentOpenedContainerId = null;
+      this.currentOpenedContainerDefId = null;
+    }
+
+    if (this.openWindows[id]) {
+      delete this.openWindows[id];
+    }
+
+    this.emit("containerClosed", id);
+    this.emit("windowClosed", { id, type: "container" });
   }
 
   public getContainersMap() {
     return this.containers;
   }
 
-  public getOpenContainerWorldPos(id: string): { x: number; y: number; level: string } | undefined {
-      if (this.openWindows[id] && this.openWindows[id].worldPos) {
-          return this.openWindows[id].worldPos;
-      }
-      return undefined;
+  public getOpenContainerWorldPos(
+    id: string,
+  ): { x: number; y: number; level: string } | undefined {
+    if (this.openWindows[id] && this.openWindows[id].worldPos) {
+      return this.openWindows[id].worldPos;
+    }
+    return undefined;
   }
 
   public getInventoryItem(uid: string): InventoryItem | undefined {
-      return this.inventory.find(i => i.uid === uid);
+    return this.inventory.find((i) => i.uid === uid);
   }
 
   // --- INVENTORY HELPERS ---
   public removeInventoryItem(uid: string): void {
-      this.inventory = this.inventory.filter(i => i.uid !== uid);
-      this.emit("inventoryUpdated");
+    this.inventory = this.inventory.filter((i) => i.uid !== uid);
+    this.emit("inventoryUpdated");
   }
 
-  public addInventoryItem(itemId: string, count: number, explicitUid?: string, stars: number = 0, attributes: any[] = []): boolean {
-      if (this.inventory.length >= 20) return false;
-      this.inventory.push({
-          uid: explicitUid || this.generateUID(),
-          itemId,
-          count,
-          stars,
-          attributes
-      });
-      this.emit("inventoryUpdated");
-      return true;
+  public addInventoryItem(
+    itemId: string,
+    count: number,
+    explicitUid?: string,
+    stars: number = 0,
+    attributes: any[] = [],
+  ): boolean {
+    if (this.inventory.length >= 20) return false;
+    this.inventory.push({
+      uid: explicitUid || this.generateUID(),
+      itemId,
+      count,
+      stars,
+      attributes,
+    });
+    this.emit("inventoryUpdated");
+    return true;
   }
 
   public getInventory(): InventoryItem[] {
-      return this.inventory;
+    return this.inventory;
   }
 
   public decreaseInventoryItem(uid: string, amount: number = 1): boolean {
-      const item = this.inventory.find(i => i.uid === uid);
-      if (!item) return false;
+    const item = this.inventory.find((i) => i.uid === uid);
+    if (!item) return false;
 
-      if (item.count > amount) {
-          item.count -= amount;
-          this.emit("inventoryUpdated");
-          return true;
-      } else if (item.count === amount) {
-          this.removeInventoryItem(uid);
-          return true;
-      }
-      return false;
+    if (item.count > amount) {
+      item.count -= amount;
+      this.emit("inventoryUpdated");
+      return true;
+    } else if (item.count === amount) {
+      this.removeInventoryItem(uid);
+      return true;
+    }
+    return false;
   }
 
   // =================================================================
@@ -771,63 +856,63 @@ export class PlayerState extends EventEmitter {
   // NOTE: Logic moved to "WEIGHT & CAPACITY SYSTEM" section below.
   // Keeping hasCapacity as a wrapper for now if needed, or removing if duplicate.
   // Actually, I will remove these duplicates entirely to rely on the new implementation below.
-  
+
   public hasCapacity(weight: number): boolean {
-      return this.getCurrentWeight() + weight <= this.getCapacity() + 0.01;
+    return this.getCurrentWeight() + weight <= this.getCapacity() + 0.01;
   }
 
   public getCurrentWeight(): number {
-      return this.getInventoryWeight();
+    return this.getInventoryWeight();
   }
 
   public getContainerTotalWeight(containerId: string): number {
-      const items = this.containers.get(containerId);
-      if (!items) return 0;
-      
-      let weight = 0;
-      items.forEach(item => {
-          const def = WeaponRegistry.getWeaponDefinition(item.itemId);
-          if (def) {
-              weight += def.weight * item.count;
-               if (def.type === "container") {
-                  weight += this.getContainerTotalWeight(item.uid);
-              }
-          }
-      });
-      return weight;
+    const items = this.containers.get(containerId);
+    if (!items) return 0;
+
+    let weight = 0;
+    items.forEach((item) => {
+      const def = WeaponRegistry.getWeaponDefinition(item.itemId);
+      if (def) {
+        weight += def.weight * item.count;
+        if (def.type === "container") {
+          weight += this.getContainerTotalWeight(item.uid);
+        }
+      }
+    });
+    return weight;
   }
-    public dropItem(index: number, x?: number, y?: number) {
-      if (index < 0 || index >= this.inventory.length) return;
-      
-      const item = this.inventory[index];
-      // Define explicit UID if missing
-      if (!item.uid) item.uid = this.generateUID();
-      
-      // Remove from inventory
-      this.inventory.splice(index, 1);
-      
-      this.emit("inventoryUpdated", this.inventory);
-      
-      // Emit event for GameScene to spawn the entity
-      // Data matches onSpawnDroppedItem signature in GameScene
-      this.emit("spawnDroppedItem", {
-          itemId: item.uid, // Use UID as the dropped item ID to persist uniqueness
-          weaponId: item.itemId, // The actual definition ID
-          count: item.count,
-          x: x || this._currentPosition.x,
-          y: y || this._currentPosition.y,
-          attributes: item.attributes, // Pass attributes to persist
-          stars: item.stars
-      });
-      
-      console.log(`[PlayerState] Dropped item index ${index}: ${item.itemId}`);
-  } 
+  public dropItem(index: number, x?: number, y?: number) {
+    if (index < 0 || index >= this.inventory.length) return;
+
+    const item = this.inventory[index];
+    // Define explicit UID if missing
+    if (!item.uid) item.uid = this.generateUID();
+
+    // Remove from inventory
+    this.inventory.splice(index, 1);
+
+    this.emit("inventoryUpdated", this.inventory);
+
+    // Emit event for GameScene to spawn the entity
+    // Data matches onSpawnDroppedItem signature in GameScene
+    this.emit("spawnDroppedItem", {
+      itemId: item.uid, // Use UID as the dropped item ID to persist uniqueness
+      weaponId: item.itemId, // The actual definition ID
+      count: item.count,
+      x: x || this._currentPosition.x,
+      y: y || this._currentPosition.y,
+      attributes: item.attributes, // Pass attributes to persist
+      stars: item.stars,
+    });
+
+    console.log(`[PlayerState] Dropped item index ${index}: ${item.itemId}`);
+  }
   public addItem(
-    itemId: string, 
-    count: number = 1, 
-    explicitUid?: string, 
-    stars: number = 0, 
-    attributes: any[] = []
+    itemId: string,
+    count: number = 1,
+    explicitUid?: string,
+    stars: number = 0,
+    attributes: any[] = [],
   ): boolean {
     console.log(`[DEBUG] PlayerState.addItem: ${itemId} Stars=${stars}`);
     const def = WeaponRegistry.getWeaponDefinition(itemId);
@@ -835,8 +920,8 @@ export class PlayerState extends EventEmitter {
 
     // CHECK PICKUPABLE STATUS
     if (def.pickupable === false) {
-        this.emit("message", t_game("msg_cannot_pickup"));
-        return false;
+      this.emit("message", t_game("msg_cannot_pickup"));
+      return false;
     }
 
     // 1. VERIFICAÇÃO DE PESO
@@ -844,11 +929,11 @@ export class PlayerState extends EventEmitter {
     // But calculateInventoryWeight will calc it AFTER it is added.
     // If we pick up a heavy chest, we should check its weight NOW.
     let weightToAdd = def.weight * count;
-    
+
     // If explicitly preserving UID (picking up container), check its contents weight too
     // Note: getContainerContentWeight sums the items inside.
     if (explicitUid && def.type === "container") {
-        weightToAdd += this.getContainerContentWeight(explicitUid);
+      weightToAdd += this.getContainerContentWeight(explicitUid);
     }
 
     const currentWeight = this.getCurrentWeight();
@@ -859,43 +944,45 @@ export class PlayerState extends EventEmitter {
       console.warn(
         `PlayerState: Capacidade excedida (${
           currentWeight + weightToAdd
-        } / ${maxCapacity}) - Overburdened!`
+        } / ${maxCapacity}) - Overburdened!`,
       );
       this.emit("message", t_game("msg_too_heavy")); // "Too heavy" matches logic
       // OVERBURDEN SYSTEM: Do NOT return false. Allow pickup.
-      // return false; 
+      // return false;
     }
 
     // 2. Adiciona o item
     // If item has stars, it should NOT stack (unless we implement "stack compatible" check, which is complex)
     // For now, assume starred items are weapons/equipment and thus unstackable.
-    // Even if stackable=true in registry, if stars > 0, treat as unique? 
+    // Even if stackable=true in registry, if stars > 0, treat as unique?
     // Let's rely on standard logic: if stackable, search existing.
-    
+
     if (def.stackable && stars === 0) {
-      const existingSlot = this.inventory.find((i) => i.itemId === itemId && (!i.stars || i.stars === 0));
+      const existingSlot = this.inventory.find(
+        (i) => i.itemId === itemId && (!i.stars || i.stars === 0),
+      );
       if (existingSlot) {
         existingSlot.count += count;
       } else {
-        this.inventory.push({ 
-            uid: explicitUid || this.generateUID(), 
-            itemId, 
-            count,
-            stars, // 0
-            attributes // []
+        this.inventory.push({
+          uid: explicitUid || this.generateUID(),
+          itemId,
+          count,
+          stars, // 0
+          attributes, // []
         });
       }
     } else {
       for (let i = 0; i < count; i++) {
         // If count > 1 and explicitUid provided, it only applies to FIRST?
         // Usually non-stackable pickup is count=1.
-        const uid = (i === 0 && explicitUid) ? explicitUid : this.generateUID();
-        this.inventory.push({ 
-            uid, 
-            itemId, 
-            count: 1,
-            stars,
-            attributes
+        const uid = i === 0 && explicitUid ? explicitUid : this.generateUID();
+        this.inventory.push({
+          uid,
+          itemId,
+          count: 1,
+          stars,
+          attributes,
         });
       }
     }
@@ -918,144 +1005,156 @@ export class PlayerState extends EventEmitter {
     return true;
   }
 
-    // =================================================================
-    // WEIGHT & CAPACITY SYSTEM
-    // =================================================================
+  // =================================================================
+  // WEIGHT & CAPACITY SYSTEM
+  // =================================================================
 
-    public getItemWeight(itemId: string, count: number = 1, uid?: string): number {
-        const def = WeaponRegistry.getWeaponDefinition(itemId);
-        if (!def) return 0;
-        
-        let total = (def.weight || 0) * count;
-        
-        // If it's a container and has a UID, recursively add contents weight
-        if (uid && this.containers.has(uid)) {
-            total += this.getContainerContentWeight(uid);
-        }
-        
-        return total;
+  public getItemWeight(
+    itemId: string,
+    count: number = 1,
+    uid?: string,
+  ): number {
+    const def = WeaponRegistry.getWeaponDefinition(itemId);
+    if (!def) return 0;
+
+    let total = (def.weight || 0) * count;
+
+    // If it's a container and has a UID, recursively add contents weight
+    if (uid && this.containers.has(uid)) {
+      total += this.getContainerContentWeight(uid);
     }
 
-    public getContainerContentWeight(containerUid: string): number {
-        const items = this.containers.get(containerUid);
-        if (!items) return 0;
-        
-        let weight = 0;
-        for (const item of items) {
-             weight += this.getItemWeight(item.itemId, item.count, item.uid);
-        }
-        return weight;
+    return total;
+  }
+
+  public getContainerContentWeight(containerUid: string): number {
+    const items = this.containers.get(containerUid);
+    if (!items) return 0;
+
+    let weight = 0;
+    for (const item of items) {
+      weight += this.getItemWeight(item.itemId, item.count, item.uid);
+    }
+    return weight;
+  }
+
+  public getInventoryWeight(): number {
+    let weight = 0;
+
+    // Inventory items
+    for (const item of this.inventory) {
+      weight += this.getItemWeight(item.itemId, item.count, item.uid);
     }
 
-    public getInventoryWeight(): number {
-        let weight = 0;
-        
-        // Inventory items
-        for (const item of this.inventory) {
-             weight += this.getItemWeight(item.itemId, item.count, item.uid);
-        }
-        
-        // Equipment (optional, usually equipped items count differently or same?)
-        // Tibia usually counts equipped items towards capacity.
-        if (this.equippedHelmetId) weight += this.getItemWeight(this.equippedHelmetId);
-        if (this.equippedArmorId) weight += this.getItemWeight(this.equippedArmorId);
-        if (this.equippedLegsId) weight += this.getItemWeight(this.equippedLegsId);
-        if (this.equippedBootsId) weight += this.getItemWeight(this.equippedBootsId);
-        if (this.equippedWeaponId) weight += this.getItemWeight(this.equippedWeaponId);
-        if (this.equippedShieldId) weight += this.getItemWeight(this.equippedShieldId);
+    // Equipment (optional, usually equipped items count differently or same?)
+    // Tibia usually counts equipped items towards capacity.
+    if (this.equippedHelmetId)
+      weight += this.getItemWeight(this.equippedHelmetId);
+    if (this.equippedArmorId)
+      weight += this.getItemWeight(this.equippedArmorId);
+    if (this.equippedLegsId) weight += this.getItemWeight(this.equippedLegsId);
+    if (this.equippedBootsId)
+      weight += this.getItemWeight(this.equippedBootsId);
+    if (this.equippedWeaponId)
+      weight += this.getItemWeight(this.equippedWeaponId);
+    if (this.equippedShieldId)
+      weight += this.getItemWeight(this.equippedShieldId);
 
-        return parseFloat(weight.toFixed(2));
-    }
-    
-    public getCapacity(): number {
-        return StatManager.getInstance().calculateStat("capacity", this).finalValue;
-    }
+    return parseFloat(weight.toFixed(2));
+  }
 
-    // =================================================================
-    // MAGIC MEMORY SYSTEM
-    // =================================================================
+  public getCapacity(): number {
+    return StatManager.getInstance().calculateStat("capacity", this).finalValue;
+  }
 
-    public removeEnchantedRune(runeId: string, count: number): boolean {
-      const idx = this.enchantedRunes.findIndex(r => r.runeId === runeId);
-      if (idx !== -1) {
-          const removed = this.enchantedRunes[idx];
-          if (removed.count > count) {
-              removed.count -= count;
-              this.emit("runesUpdated");
-              return true;
-          } else if (removed.count === count) {
-              this.enchantedRunes.splice(idx, 1);
-              this.emit("runesUpdated");
-              return true;
-          }
+  // =================================================================
+  // MAGIC MEMORY SYSTEM
+  // =================================================================
+
+  public removeEnchantedRune(runeId: string, count: number): boolean {
+    const idx = this.enchantedRunes.findIndex((r) => r.runeId === runeId);
+    if (idx !== -1) {
+      const removed = this.enchantedRunes[idx];
+      if (removed.count > count) {
+        removed.count -= count;
+        this.emit("runesUpdated");
+        return true;
+      } else if (removed.count === count) {
+        this.enchantedRunes.splice(idx, 1);
+        this.emit("runesUpdated");
+        return true;
       }
-      return false;
+    }
+    return false;
   }
 
   public getEnchantedRunes() {
-        return this.enchantedRunes;
+    return this.enchantedRunes;
+  }
+
+  public getMemoryCapacity(): number {
+    return StatManager.getInstance().calculateStat("memory", this).finalValue;
+  }
+
+  public getCurrentMemoryUsage(): number {
+    return this.enchantedRunes.reduce((total, rune) => {
+      const def = RuneRegistry.getRune(rune.runeId);
+      const cost = def ? def.memoryCost : 0;
+      return total + cost * rune.count;
+    }, 0);
+  }
+
+  /**
+   * Used by RuneRegistry import or injected logic
+   */
+  public recalculateMemoryUsage(
+    runeRegistryGetter: (id: string) => number,
+  ): number {
+    return this.enchantedRunes.reduce((total, rune) => {
+      return total + runeRegistryGetter(rune.runeId) * rune.count;
+    }, 0);
+  }
+
+  public addEnchantedRune(
+    runeId: string,
+    charges: number,
+    memoryCostPerCharge: number,
+  ): boolean {
+    // const memoryNeeded = charges * memoryCostPerCharge;
+    // Check Capacity (Allow overfill? User said: "pode carregar mais... só que não funcionam")
+    // User said: "Entretanto vc pode carregar mais runas do que sua capacidade de memória, só que elas não vão funcionar..."
+    // So we ALWAYS allow adding, but usage checks capacity.
+
+    const existing = this.enchantedRunes.find((r) => r.runeId === runeId);
+    if (existing) {
+      existing.count += charges;
+    } else {
+      this.enchantedRunes.push({ runeId, count: charges });
     }
 
-    public getMemoryCapacity(): number {
-        return StatManager.getInstance().calculateStat("memory", this).finalValue;
-    }
+    this.emit("runesUpdated"); // For Spellbook UI
+    return true;
+  }
 
-    public getCurrentMemoryUsage(): number {
-        return this.enchantedRunes.reduce((total, rune) => {
-             const def = RuneRegistry.getRune(rune.runeId);
-             const cost = def ? def.memoryCost : 0;
-             return total + (cost * rune.count);
-        }, 0);
-    }
+  public consumeRuneCharge(runeId: string, amount: number = 1): boolean {
+    const index = this.enchantedRunes.findIndex((r) => r.runeId === runeId);
+    if (index === -1) return false;
 
-    /**
-     * Used by RuneRegistry import or injected logic
-     */
-    public recalculateMemoryUsage(runeRegistryGetter: (id: string) => number): number {
-         return this.enchantedRunes.reduce((total, rune) => {
-             return total + (runeRegistryGetter(rune.runeId) * rune.count);
-        }, 0);
+    const rune = this.enchantedRunes[index];
+    if (rune.count >= amount) {
+      rune.count -= amount;
+      if (rune.count <= 0) {
+        this.enchantedRunes.splice(index, 1);
+      }
+      this.emit("runesUpdated");
+      return true;
     }
-
-    public addEnchantedRune(runeId: string, charges: number, memoryCostPerCharge: number): boolean {
-        // const memoryNeeded = charges * memoryCostPerCharge;
-        // Check Capacity (Allow overfill? User said: "pode carregar mais... só que não funcionam")
-        // User said: "Entretanto vc pode carregar mais runas do que sua capacidade de memória, só que elas não vão funcionar..."
-        // So we ALWAYS allow adding, but usage checks capacity.
-        
-        const existing = this.enchantedRunes.find(r => r.runeId === runeId);
-        if (existing) {
-            existing.count += charges;
-        } else {
-            this.enchantedRunes.push({ runeId, count: charges });
-        }
-        
-        this.emit("runesUpdated"); // For Spellbook UI
-        return true;
-    }
-
-    public consumeRuneCharge(runeId: string, amount: number = 1): boolean {
-        const index = this.enchantedRunes.findIndex(r => r.runeId === runeId);
-        if (index === -1) return false;
-
-        const rune = this.enchantedRunes[index];
-        if (rune.count >= amount) {
-            rune.count -= amount;
-            if (rune.count <= 0) {
-                this.enchantedRunes.splice(index, 1);
-            }
-            this.emit("runesUpdated");
-            return true;
-        }
-        return false;
-    }
+    return false;
+  }
 
   // =================================================================
   // OUTROS MÉTODOS
   // =================================================================
-
-
-
 
   // Compatibilidade
   public get inventoryWeaponIds(): string[] {
@@ -1084,19 +1183,26 @@ export class PlayerState extends EventEmitter {
   public getInventoryItems(): (InventoryItem & { def: WeaponDefinition })[] {
     // AGGRESSIVE DEBUG
     // console.warn("[DEBUG] Full Inventory Dump:", JSON.parse(JSON.stringify(this.inventory)));
-    
+
     return this.inventory
       .map((slot) => {
         const def = WeaponRegistry.getWeaponDefinition(slot.itemId);
-        if ((slot.stars && slot.stars > 0) || (slot.attributes && slot.attributes.length > 0)) {
-             console.warn(`[DEBUG WRN] Item ${slot.itemId} Stars=${slot.stars} Attrs=${JSON.stringify(slot.attributes)}`);
+        if (
+          (slot.stars && slot.stars > 0) ||
+          (slot.attributes && slot.attributes.length > 0)
+        ) {
+          console.warn(
+            `[DEBUG WRN] Item ${slot.itemId} Stars=${slot.stars} Attrs=${JSON.stringify(slot.attributes)}`,
+          );
         }
-        return def ? { 
-            ...slot, 
-            def,
-            stars: slot.stars,
-            attributes: slot.attributes
-        } : null;
+        return def
+          ? {
+              ...slot,
+              def,
+              stars: slot.stars,
+              attributes: slot.attributes,
+            }
+          : null;
       })
       .filter(Boolean) as any;
   }
@@ -1118,113 +1224,120 @@ export class PlayerState extends EventEmitter {
   }
 
   public calculateAttackBreakdown(
-      weapon: WeaponDefinition, 
-      attributes?: any[],
-      overrideLevel?: number,
-      overrideSkill?: number
+    weapon: WeaponDefinition,
+    attributes?: any[],
+    overrideLevel?: number,
+    overrideSkill?: number,
   ) {
-      // Delegate to Single Source of Truth
-      return StatManager.getInstance().calculateWeaponAttack(
-          weapon, 
-          attributes || [], // Ensure array
-          this, 
-          overrideLevel, 
-          overrideSkill
-      );
+    // Delegate to Single Source of Truth
+    return StatManager.getInstance().calculateWeaponAttack(
+      weapon,
+      attributes || [], // Ensure array
+      this,
+      overrideLevel,
+      overrideSkill,
+    );
   }
 
   public getTotalAttack(): number {
-      return StatManager.getInstance().calculateStat("attack", this).finalValue;
+    return StatManager.getInstance().calculateStat("attack", this).finalValue;
   }
 
   public getExpPerHit(): number {
-      return StatManager.getInstance().calculateStat("expPerHit", this).finalValue;
+    return StatManager.getInstance().calculateStat("expPerHit", this)
+      .finalValue;
   }
 
   public getExpDamagePercent(): number {
-      return StatManager.getInstance().calculateStat("expDamagePercent", this).finalValue;
+    return StatManager.getInstance().calculateStat("expDamagePercent", this)
+      .finalValue;
   }
 
-
-
   public calculateDefenseBreakdown(
-      weapon: WeaponDefinition | null,
-      shield: WeaponDefinition | null,
-      weaponAttributes: any[] = [],
-      shieldAttributes: any[] = [],
-      overrideLevel?: number,
-      overrideSkill?: number
+    weapon: WeaponDefinition | null,
+    shield: WeaponDefinition | null,
+    weaponAttributes: any[] = [],
+    shieldAttributes: any[] = [],
+    overrideLevel?: number,
+    overrideSkill?: number,
   ) {
-      const weaponDef = weapon?.defense || 0;
-      const shieldDef = shield?.defense || 0;
-      const baseDefense = weaponDef + shieldDef;
-      
-      const level = overrideLevel ?? this.level;
-      const skill = overrideSkill ?? this.reflex.level;
+    const weaponDef = weapon?.defense || 0;
+    const shieldDef = shield?.defense || 0;
+    const baseDefense = weaponDef + shieldDef;
 
-      const levelBonusPct = level * 1; // 1% per level (based on 0.01 mult)
-      const skillBonusPct = skill * 5; // 5% per skill level
+    const level = overrideLevel ?? this.level;
+    const skill = overrideSkill ?? this.reflex.level;
 
-      // Attributes (Placeholder for future defense attributes)
-      let attrBonusPct = 0;
-      // ... iterate attributes if we add defense codes
+    const levelBonusPct = level * 1; // 1% per level (based on 0.01 mult)
+    const skillBonusPct = skill * 5; // 5% per skill level
 
-      const totalBonusPct = levelBonusPct + skillBonusPct + attrBonusPct;
-      
-      // Additive Stacking
-      const subtotal = baseDefense * (1 + (totalBonusPct / 100));
+    // Attributes (Placeholder for future defense attributes)
+    let attrBonusPct = 0;
+    // ... iterate attributes if we add defense codes
 
-      const wpBonusPct = this.getWillpowerBonusPercent();
-      const wpMultiplier = 1 + (wpBonusPct / 100);
-      
-      const finalTotal = Math.floor(subtotal * wpMultiplier);
-      // const valFromWp = finalTotal - Math.floor(subtotal);
+    const totalBonusPct = levelBonusPct + skillBonusPct + attrBonusPct;
 
-      return {
-          base: baseDefense,
-          levelBonusPct,
-          skillBonusPct,
-          wpBonusPct,
-          finalTotal
-      };
+    // Additive Stacking
+    const subtotal = baseDefense * (1 + totalBonusPct / 100);
+
+    const wpBonusPct = this.getWillpowerBonusPercent();
+    const wpMultiplier = 1 + wpBonusPct / 100;
+
+    const finalTotal = Math.floor(subtotal * wpMultiplier);
+    // const valFromWp = finalTotal - Math.floor(subtotal);
+
+    return {
+      base: baseDefense,
+      levelBonusPct,
+      skillBonusPct,
+      wpBonusPct,
+      finalTotal,
+    };
   }
 
   public getTotalDefense(): number {
-      return StatManager.getInstance().calculateStat("defense", this).finalValue;
+    return StatManager.getInstance().calculateStat("defense", this).finalValue;
   }
 
   public calculateArmorBreakdown() {
-      // Sum base armor from all slots
-      let totalBaseArmor = 0;
-      const slots = ["helmet", "armor", "legs", "boots", "shield", "weapon"] as const;
-      
-      slots.forEach(slot => {
-      slots.forEach(slot => {
-          const item = this.getEquippedItemObject(slot);
-          if (item) {
-              const def = WeaponRegistry.getWeaponDefinition(item.itemId);
-              if (def && def.armor) totalBaseArmor += def.armor;
-          }
-      });
-      });
+    // Sum base armor from all slots
+    let totalBaseArmor = 0;
+    const slots = [
+      "helmet",
+      "armor",
+      "legs",
+      "boots",
+      "shield",
+      "weapon",
+    ] as const;
 
-      // Attributes? (e.g. +Armor on ring)
-      // let attrBonus = 0;
+    slots.forEach((slot) => {
+      slots.forEach((slot) => {
+        const item = this.getEquippedItemObject(slot);
+        if (item) {
+          const def = WeaponRegistry.getWeaponDefinition(item.itemId);
+          if (def && def.armor) totalBaseArmor += def.armor;
+        }
+      });
+    });
 
-      const wpBonusPct = this.getWillpowerBonusPercent();
-      const wpMultiplier = 1 + (wpBonusPct / 100);
-      
-      const finalTotal = Math.floor(totalBaseArmor * wpMultiplier);
-      
-      return {
-          base: totalBaseArmor,
-          wpBonusPct,
-          finalTotal
-      };
+    // Attributes? (e.g. +Armor on ring)
+    // let attrBonus = 0;
+
+    const wpBonusPct = this.getWillpowerBonusPercent();
+    const wpMultiplier = 1 + wpBonusPct / 100;
+
+    const finalTotal = Math.floor(totalBaseArmor * wpMultiplier);
+
+    return {
+      base: totalBaseArmor,
+      wpBonusPct,
+      finalTotal,
+    };
   }
 
   public getTotalArmor(): number {
-      return StatManager.getInstance().calculateStat("armor", this).finalValue;
+    return StatManager.getInstance().calculateStat("armor", this).finalValue;
   }
 
   public reconstructWorldState(): any {
@@ -1233,47 +1346,70 @@ export class PlayerState extends EventEmitter {
 
   // --- TOOLTIP EVENTS ---
   public requestItemTooltip(item: DroppedItemData): void {
-      this.emit("requestItemTooltip", item);
+    this.emit("requestItemTooltip", item);
   }
 
   public clearItemTooltip(): void {
-      this.emit("clearItemTooltip");
+    this.emit("clearItemTooltip");
   }
 
-  public requestItemDrop(itemId: string, count?: number, x?: number, y?: number) {
-      this.emit("dropItem", itemId, count, x, y);
+  public requestItemDrop(
+    itemId: string,
+    count?: number,
+    x?: number,
+    y?: number,
+  ) {
+    this.emit("dropItem", itemId, count, x, y);
   }
 
   public requestPickup(itemUid: string, count?: number) {
-      this.emit("requestPickup", { uid: itemUid, count });
+    this.emit("requestPickup", { uid: itemUid, count });
   }
 
-  public requestContainerItemDrop(containerId: string, itemUid: string, itemId: string, count: number) {
-      this.emit("dropContainerItem", { containerId, itemUid, itemId, count });
+  public requestContainerItemDrop(
+    containerId: string,
+    itemUid: string,
+    itemId: string,
+    count: number,
+  ) {
+    this.emit("dropContainerItem", { containerId, itemUid, itemId, count });
   }
 
   // --- DRAG & DROP ---
-  private dragOrigin: { x: number, y: number, level: string } | null = null;
-  
+  private dragOrigin: { x: number; y: number; level: string } | null = null;
+
   public startGroundDrag(data: GroundDragData): void {
     this.groundDragData = data;
-    this.dragOrigin = { x: data.item.x, y: data.item.y, level: data.item.level || this.currentLevel };
+    this.dragOrigin = {
+      x: data.item.x,
+      y: data.item.y,
+      level: data.item.level || this.currentLevel,
+    };
     this.emit("startGroundDrag", data);
   }
 
-  public validateDragDistance(playerX: number, playerY: number, level: string): boolean {
-      if (!this.dragOrigin) return true; // No drag active or no origin tracked
-      if (level !== this.dragOrigin.level) return false;
+  public validateDragDistance(
+    playerX: number,
+    playerY: number,
+    level: string,
+  ): boolean {
+    if (!this.dragOrigin) return true; // No drag active or no origin tracked
+    if (level !== this.dragOrigin.level) return false;
 
-      const dist = Phaser.Math.Distance.Between(playerX, playerY, this.dragOrigin.x, this.dragOrigin.y);
-      return dist <= (this.pickupRange * 1.5) + 32; // Allow slightly more than pickup range (buffer)
-      // Standard pickup range is ~150. Buffer prevents flickering if right on edge.
+    const dist = Phaser.Math.Distance.Between(
+      playerX,
+      playerY,
+      this.dragOrigin.x,
+      this.dragOrigin.y,
+    );
+    return dist <= this.pickupRange * 1.5 + 32; // Allow slightly more than pickup range (buffer)
+    // Standard pickup range is ~150. Buffer prevents flickering if right on edge.
   }
 
   public cancelGroundDrag(): void {
-      if (!this.groundDragData) return;
-      this.resetGroundDrag(); // Reuses existing reset logic
-      this.emit("cancelDrag"); // Specific event for UI/Ghost cleanup
+    if (!this.groundDragData) return;
+    this.resetGroundDrag(); // Reuses existing reset logic
+    this.emit("cancelDrag"); // Specific event for UI/Ghost cleanup
   }
 
   public endGroundDrag(success: boolean = false): void {
@@ -1286,7 +1422,7 @@ export class PlayerState extends EventEmitter {
       }
       this.removePersistentDroppedItem(
         this.groundDragData.item.level,
-        this.groundDragData.item.itemId
+        this.groundDragData.item.itemId,
       );
     } else {
       // Se falhou (ex: peso excedido), torna visível novamente
@@ -1302,93 +1438,97 @@ export class PlayerState extends EventEmitter {
     this.emit("endGroundDrag", success);
   }
 
-
-
   // --- WILLPOWER SYSTEM ---
-  
-  public getWillpowerExp() { return this.willpowerExp; }
-  public getWillpowerTarget() { return this.willpowerTarget; }
+
+  public getWillpowerExp() {
+    return this.willpowerExp;
+  }
+  public getWillpowerTarget() {
+    return this.willpowerTarget;
+  }
 
   public getWillpowerTier(): number {
-      if (this.willpowerTarget <= 0) return 0;
-      const pct = this.willpowerExp / this.willpowerTarget;
-      // Cap at 10 (100%)
-      return Math.min(10, Math.floor(pct * 10));
+    if (this.willpowerTarget <= 0) return 0;
+    const pct = this.willpowerExp / this.willpowerTarget;
+    // Cap at 10 (100%)
+    return Math.min(10, Math.floor(pct * 10));
   }
 
   public getWillpowerBonusPercent(): number {
-      const tier = this.getWillpowerTier();
-      if (tier === 10) return 15; // Mastery Bonus
-      return tier; // 1% per tier
+    const tier = this.getWillpowerTier();
+    if (tier === 10) return 15; // Mastery Bonus
+    return tier; // 1% per tier
   }
 
   private updateWillpower(gainedXp: number) {
-      // System active on Level 2+
-      if (this.level < 2) {
-          this.willpowerExp = 0;
-          this.willpowerTarget = 0;
-          return;
+    // System active on Level 2+
+    if (this.level < 2) {
+      this.willpowerExp = 0;
+      this.willpowerTarget = 0;
+      return;
+    }
+
+    // Initialize Target if missing (First time hitting Lvl 2 or loading old save)
+    if (this.willpowerTarget <= 0) {
+      // Default Target for current level: XP(Lvl) - XP(Lvl-1)
+      const currentBase = XPTable.getXPRequiredForLevel(this.level);
+      const prevBase = XPTable.getXPRequiredForLevel(this.level - 1);
+      this.willpowerTarget = Math.max(1, currentBase - prevBase);
+    }
+
+    // Add XP (Cap at Target)
+    if (this.willpowerExp < this.willpowerTarget) {
+      const oldTier = this.getWillpowerTier();
+      this.willpowerExp = Math.min(
+        this.willpowerTarget,
+        this.willpowerExp + gainedXp,
+      );
+      const newTier = this.getWillpowerTier();
+
+      this.emit("willpowerUpdated", {
+        current: this.willpowerExp,
+        max: this.willpowerTarget,
+        tier: newTier,
+      });
+
+      if (newTier > oldTier) {
+        // Log only (no red pop-up)
+        this.log("msg_willpower_tier_up", { tier: newTier }, "#c084fc");
+        // Specific event for UI effects
+        this.emit("willpowerTierUp", newTier);
+        // CRITICAL: Max Health changes with Willpower Tier
+        this.emit("maxHealthChanged", this.getMaxHealth());
       }
-
-      // Initialize Target if missing (First time hitting Lvl 2 or loading old save)
-      if (this.willpowerTarget <= 0) {
-          // Default Target for current level: XP(Lvl) - XP(Lvl-1)
-          const currentBase = XPTable.getXPRequiredForLevel(this.level);
-          const prevBase = XPTable.getXPRequiredForLevel(this.level - 1);
-          this.willpowerTarget = Math.max(1, currentBase - prevBase);
-      }
-
-      // Add XP (Cap at Target)
-      if (this.willpowerExp < this.willpowerTarget) {
-          const oldTier = this.getWillpowerTier();
-          this.willpowerExp = Math.min(this.willpowerTarget, this.willpowerExp + gainedXp);
-          const newTier = this.getWillpowerTier();
-          
-          this.emit("willpowerUpdated", { 
-              current: this.willpowerExp, 
-              max: this.willpowerTarget, 
-              tier: newTier 
-          });
-
-
-          if (newTier > oldTier) {
-             // Log only (no red pop-up)
-             this.log("msg_willpower_tier_up", { tier: newTier }, "#c084fc");
-             // Specific event for UI effects
-             this.emit("willpowerTierUp", newTier);
-             // CRITICAL: Max Health changes with Willpower Tier
-             this.emit("maxHealthChanged", this.getMaxHealth()); 
-          }
-      }
+    }
   }
 
   // Called on Death
   public resetWillpower() {
-      if (this.level < 2) return;
-      
-      this.willpowerExp = 0;
-      // Recalc Target based on CURRENT level difficulty
-      // XP(Level) - XP(Level-1)
-      const currentBase = XPTable.getXPRequiredForLevel(this.level);
-      const prevBase = XPTable.getXPRequiredForLevel(this.level - 1);
-      this.willpowerTarget = Math.max(1, currentBase - prevBase);
-      
-      this.emit("willpowerUpdated", { 
-          current: this.willpowerExp, 
-          max: this.willpowerTarget, 
-          tier: 0
-      });
-      // Maybe emit a lost message?
-      // Log only
-      this.log("msg_willpower_lost", undefined, "#c084fc");
-      // CRITICAL: Update Max Health HUD as tier drops to 0
-      this.emit("maxHealthChanged", this.getMaxHealth());
+    if (this.level < 2) return;
+
+    this.willpowerExp = 0;
+    // Recalc Target based on CURRENT level difficulty
+    // XP(Level) - XP(Level-1)
+    const currentBase = XPTable.getXPRequiredForLevel(this.level);
+    const prevBase = XPTable.getXPRequiredForLevel(this.level - 1);
+    this.willpowerTarget = Math.max(1, currentBase - prevBase);
+
+    this.emit("willpowerUpdated", {
+      current: this.willpowerExp,
+      max: this.willpowerTarget,
+      tier: 0,
+    });
+    // Maybe emit a lost message?
+    // Log only
+    this.log("msg_willpower_lost", undefined, "#c084fc");
+    // CRITICAL: Update Max Health HUD as tier drops to 0
+    this.emit("maxHealthChanged", this.getMaxHealth());
   }
 
   public resetGroundDrag(): void {
-      if (!this.groundDragData) return;
-      this.emit("resetGroundDrag"); // Signal to DroppedItem to snap back
-      this.endGroundDrag(false); // Cleanup state
+    if (!this.groundDragData) return;
+    this.emit("resetGroundDrag"); // Signal to DroppedItem to snap back
+    this.endGroundDrag(false); // Cleanup state
   }
 
   // --- EQUIPAMENTOS ---
@@ -1398,15 +1538,27 @@ export class PlayerState extends EventEmitter {
    * Main entry point for equipping any item.
    * Resolves the item and slot, then delegates to the internal handler.
    */
-  public equipItem(itemIdOrUid: string, targetSlot?: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon" | "neck" | "ring" | "ammo"): boolean {
+  public equipItem(
+    itemIdOrUid: string,
+    targetSlot?:
+      | "helmet"
+      | "armor"
+      | "legs"
+      | "boots"
+      | "shield"
+      | "weapon"
+      | "neck"
+      | "ring"
+      | "ammo",
+  ): boolean {
     const currentState = PlayerState.getInstance();
-    let index = currentState.inventory.findIndex(i => i.uid === itemIdOrUid);
+    let index = currentState.inventory.findIndex((i) => i.uid === itemIdOrUid);
     if (index === -1) {
-       index = currentState.inventory.findIndex(i => i.itemId === itemIdOrUid);
+      index = currentState.inventory.findIndex((i) => i.itemId === itemIdOrUid);
     }
-    
+
     if (index === -1) return false;
-    
+
     const item = currentState.inventory[index];
     const def = WeaponRegistry.getWeaponDefinition(item.itemId);
     if (!def) return false;
@@ -1415,49 +1567,75 @@ export class PlayerState extends EventEmitter {
     const isTorch = item.itemId === "torch" || item.itemId === "light_torch";
 
     // Map item type to slot
-    let slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon" | "neck" | "ring" | "ammo" | null = null;
-    
+    let slot:
+      | "helmet"
+      | "armor"
+      | "legs"
+      | "boots"
+      | "shield"
+      | "weapon"
+      | "neck"
+      | "ring"
+      | "ammo"
+      | null = null;
+
     // Weapon Types List
     const WEAPON_TYPES = [
-        ItemType.SWORD, ItemType.AXE, ItemType.CLUB, 
-        ItemType.WAND, ItemType.ROD, ItemType.DISTANCE,
-        ItemType.MELEE, ItemType.RANGED
+      ItemType.SWORD,
+      ItemType.AXE,
+      ItemType.CLUB,
+      ItemType.WAND,
+      ItemType.ROD,
+      ItemType.DISTANCE,
+      ItemType.MELEE,
+      ItemType.RANGED,
     ];
 
     // 1. Explicit Target Slot (Drag & Drop)
     if (targetSlot) {
-        // Validate if item matches target slot
-        if (targetSlot === "weapon" && WEAPON_TYPES.includes(def.type)) slot = "weapon";
-        else if (targetSlot === "weapon" && isTorch) slot = "weapon";
-        else if (targetSlot === "shield" && (def.type === ItemType.SHIELD || isTorch)) slot = "shield";
-        else if (targetSlot === "helmet" && def.type === ItemType.HELMET) slot = "helmet";
-        else if (targetSlot === "armor" && def.type === ItemType.BODY_ARMOR) slot = "armor";
-        else if (targetSlot === "legs" && def.type === ItemType.LEGS) slot = "legs";
-        else if (targetSlot === "boots" && def.type === ItemType.BOOTS) slot = "boots";
-        else if (targetSlot === "neck" && def.type === ItemType.AMULET) slot = "neck";
-        else if (targetSlot === "ring" && def.type === ItemType.RING) slot = "ring";
-        else if (targetSlot === "ammo" && def.type === ItemType.AMMUNITION) slot = "ammo";
-        else {
-            // Invalid slot for this item
-            return false;
-        }
+      // Validate if item matches target slot
+      if (targetSlot === "weapon" && WEAPON_TYPES.includes(def.type))
+        slot = "weapon";
+      else if (targetSlot === "weapon" && isTorch) slot = "weapon";
+      else if (
+        targetSlot === "shield" &&
+        (def.type === ItemType.SHIELD || isTorch)
+      )
+        slot = "shield";
+      else if (targetSlot === "helmet" && def.type === ItemType.HELMET)
+        slot = "helmet";
+      else if (targetSlot === "armor" && def.type === ItemType.BODY_ARMOR)
+        slot = "armor";
+      else if (targetSlot === "legs" && def.type === ItemType.LEGS)
+        slot = "legs";
+      else if (targetSlot === "boots" && def.type === ItemType.BOOTS)
+        slot = "boots";
+      else if (targetSlot === "neck" && def.type === ItemType.AMULET)
+        slot = "neck";
+      else if (targetSlot === "ring" && def.type === ItemType.RING)
+        slot = "ring";
+      else if (targetSlot === "ammo" && def.type === ItemType.AMMUNITION)
+        slot = "ammo";
+      else {
+        // Invalid slot for this item
+        return false;
+      }
     } else {
-        // 2. Auto-Detect Slot (Double Click)
-        if (isTorch) {
-            // Smart Torch: Put in Weapon if empty, else Shield if empty, else Weapon (Swap)
-            if (!this.equippedWeaponId) slot = "weapon";
-            else if (!this.equippedShieldId) slot = "shield";
-            else slot = "weapon";
-        }
-        else if (WEAPON_TYPES.includes(def.type)) slot = "weapon";
-        else if (def.type === ItemType.SHIELD) slot = "shield";
-        else if (def.type === ItemType.HELMET) slot = "helmet";
-        else if (def.type === ItemType.BODY_ARMOR) slot = "armor";
-        else if (def.type === ItemType.LEGS) slot = "legs";
-        else if (def.type === ItemType.BOOTS) slot = "boots";
-        else if (def.type === ItemType.AMULET) slot = "neck";
-        else if (def.type === ItemType.RING) slot = "ring";
-        else if (def.type === ItemType.AMMUNITION) slot = "ammo";
+      // 2. Auto-Detect Slot (Double Click)
+      if (isTorch) {
+        // Smart Torch: Put in Weapon if empty, else Shield if empty, else Weapon (Swap)
+        if (!this.equippedWeaponId) slot = "weapon";
+        else if (!this.equippedShieldId) slot = "shield";
+        else slot = "weapon";
+      } else if (WEAPON_TYPES.includes(def.type)) slot = "weapon";
+      else if (def.type === ItemType.SHIELD) slot = "shield";
+      else if (def.type === ItemType.HELMET) slot = "helmet";
+      else if (def.type === ItemType.BODY_ARMOR) slot = "armor";
+      else if (def.type === ItemType.LEGS) slot = "legs";
+      else if (def.type === ItemType.BOOTS) slot = "boots";
+      else if (def.type === ItemType.AMULET) slot = "neck";
+      else if (def.type === ItemType.RING) slot = "ring";
+      else if (def.type === ItemType.AMMUNITION) slot = "ammo";
     }
 
     if (!slot) return false;
@@ -1469,169 +1647,301 @@ export class PlayerState extends EventEmitter {
    * Internal method to handle the actual swap of items.
    * Handles object persistence (stars/attributes) for ALL slots.
    */
-  private equipInternal(inventoryIndex: number, slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon" | "neck" | "ring" | "ammo", def: WeaponDefinition): boolean {
-      const itemToEquip = this.inventory[inventoryIndex];
-      
-      // Determine state keys based on slot
-      let idKey: keyof PlayerState;
-      let itemKey: keyof PlayerState;
-      
-      switch(slot) {
-          case "weapon": idKey = "equippedWeaponId"; itemKey = "equippedWeaponItem"; break;
-          case "shield": idKey = "equippedShieldId"; itemKey = "equippedShieldItem"; break;
-          case "helmet": idKey = "equippedHelmetId"; itemKey = "equippedHelmetItem"; break;
-          case "armor":  idKey = "equippedArmorId";  itemKey = "equippedArmorItem"; break;
-          case "legs":   idKey = "equippedLegsId";   itemKey = "equippedLegsItem"; break;
-          case "boots":  idKey = "equippedBootsId";  itemKey = "equippedBootsItem"; break;
-          case "neck":   idKey = "equippedNeckId";   itemKey = "equippedNeckItem"; break;
-          case "ring":   idKey = "equippedRingId";   itemKey = "equippedRingItem"; break;
-          case "ammo":   idKey = "equippedAmmoId";   itemKey = "equippedAmmoItem"; break;
-          default: return false;
-      }
+  private equipInternal(
+    inventoryIndex: number,
+    slot:
+      | "helmet"
+      | "armor"
+      | "legs"
+      | "boots"
+      | "shield"
+      | "weapon"
+      | "neck"
+      | "ring"
+      | "ammo",
+    def: WeaponDefinition,
+  ): boolean {
+    const itemToEquip = this.inventory[inventoryIndex];
 
-      // 1. Get currently equipped item (if any) to swap back
-      const oldEquippedItem = (this as any)[itemKey] as InventoryItem | null;
+    // Determine state keys based on slot
+    let idKey: keyof PlayerState;
+    let itemKey: keyof PlayerState;
 
-      // 2. Remove new item from inventory
-      this.inventory.splice(inventoryIndex, 1);
+    switch (slot) {
+      case "weapon":
+        idKey = "equippedWeaponId";
+        itemKey = "equippedWeaponItem";
+        break;
+      case "shield":
+        idKey = "equippedShieldId";
+        itemKey = "equippedShieldItem";
+        break;
+      case "helmet":
+        idKey = "equippedHelmetId";
+        itemKey = "equippedHelmetItem";
+        break;
+      case "armor":
+        idKey = "equippedArmorId";
+        itemKey = "equippedArmorItem";
+        break;
+      case "legs":
+        idKey = "equippedLegsId";
+        itemKey = "equippedLegsItem";
+        break;
+      case "boots":
+        idKey = "equippedBootsId";
+        itemKey = "equippedBootsItem";
+        break;
+      case "neck":
+        idKey = "equippedNeckId";
+        itemKey = "equippedNeckItem";
+        break;
+      case "ring":
+        idKey = "equippedRingId";
+        itemKey = "equippedRingItem";
+        break;
+      case "ammo":
+        idKey = "equippedAmmoId";
+        itemKey = "equippedAmmoItem";
+        break;
+      default:
+        return false;
+    }
 
-      // 3. Unequip current (clear keys)
-      (this as any)[idKey] = null;
-      (this as any)[itemKey] = null;
+    // 1. Get currently equipped item (if any) to swap back
+    const oldEquippedItem = (this as any)[itemKey] as InventoryItem | null;
 
-      // 4. Return old item to inventory (if exists)
-      if (oldEquippedItem) {
-          this.inventory.push(oldEquippedItem);
-      }
+    // 2. Remove new item from inventory
+    this.inventory.splice(inventoryIndex, 1);
 
-      // 5. Equip new item
-      (this as any)[idKey] = itemToEquip.itemId;
-      (this as any)[itemKey] = itemToEquip;
+    // 3. Unequip current (clear keys)
+    (this as any)[idKey] = null;
+    (this as any)[itemKey] = null;
 
-      // 6. Emit events
-      this.emit("inventoryUpdated");
-      this.emit("equipmentChanged"); // Generic update for all slots
-      
-      // Legacy/Specific events for UI compat
-      if (slot === "weapon") this.emit("weaponEquipped", def);
-      if (slot === "shield") this.emit("shieldEquipped", def);
+    // 4. Return old item to inventory (if exists)
+    if (oldEquippedItem) {
+      this.inventory.push(oldEquippedItem);
+    }
 
-      this.recalculateMaxHealth();
-      return true;
+    // 5. Equip new item
+    (this as any)[idKey] = itemToEquip.itemId;
+    (this as any)[itemKey] = itemToEquip;
+
+    // 6. Emit events
+    this.emit("inventoryUpdated");
+    this.emit("equipmentChanged"); // Generic update for all slots
+
+    // Legacy/Specific events for UI compat
+    if (slot === "weapon") this.emit("weaponEquipped", def);
+    if (slot === "shield") this.emit("shieldEquipped", def);
+
+    this.recalculateMaxHealth();
+    return true;
   }
 
   // Wrapper for backward compatibility or direct usage
-  public equipWeapon(id: string) { return this.equipItem(id, "weapon"); }
-  public equipShield(id: string) { return this.equipItem(id, "shield"); }
-  public equipGear(id: string, s: any) { return this.equipItem(id); } // Legacy
+  public equipWeapon(id: string) {
+    return this.equipItem(id, "weapon");
+  }
+  public equipShield(id: string) {
+    return this.equipItem(id, "shield");
+  }
+  public equipGear(id: string, s: any) {
+    return this.equipItem(id);
+  } // Legacy
 
   /**
    * Recalculates Max Health based on StatManager (Level + Equipment + Buffs)
    * and clamps current health if necessary.
    */
   public recalculateMaxHealth(): void {
-      const result = StatManager.getInstance().calculateStat("maxHealth", this);
-      const newMax = result.finalValue;
+    const result = StatManager.getInstance().calculateStat("maxHealth", this);
+    const newMax = result.finalValue;
 
-      if (this.maxHealth !== newMax) {
+    if (this.maxHealth !== newMax) {
+      this.maxHealth = newMax;
+      this.emit("maxHealthChanged", this.maxHealth);
 
-          this.maxHealth = newMax;
-          this.emit("maxHealthChanged", this.maxHealth);
-          
-          // Clamp Current HP
-          if (this.health > this.maxHealth) {
-              this.health = this.maxHealth;
-              this.emit("healthChanged", this.health);
-          }
+      // Clamp Current HP
+      if (this.health > this.maxHealth) {
+        this.health = this.maxHealth;
+        this.emit("healthChanged", this.health);
       }
+    }
   }
 
-  public unequipItem(slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon" | "neck" | "ring" | "ammo"): boolean {
-     // Determine keys
-     let idKey: keyof PlayerState;
-     let itemKey: keyof PlayerState;
+  public unequipItem(
+    slot:
+      | "helmet"
+      | "armor"
+      | "legs"
+      | "boots"
+      | "shield"
+      | "weapon"
+      | "neck"
+      | "ring"
+      | "ammo",
+  ): boolean {
+    // Determine keys
+    let idKey: keyof PlayerState;
+    let itemKey: keyof PlayerState;
 
-     switch(slot) {
-         case "weapon": idKey = "equippedWeaponId"; itemKey = "equippedWeaponItem"; break;
-         case "shield": idKey = "equippedShieldId"; itemKey = "equippedShieldItem"; break;
-         case "helmet": idKey = "equippedHelmetId"; itemKey = "equippedHelmetItem"; break;
-         case "armor":  idKey = "equippedArmorId";  itemKey = "equippedArmorItem"; break;
-         case "legs":   idKey = "equippedLegsId";   itemKey = "equippedLegsItem"; break;
-         case "boots":  idKey = "equippedBootsId";  itemKey = "equippedBootsItem"; break;
-         case "neck":   idKey = "equippedNeckId";   itemKey = "equippedNeckItem"; break;
-         case "ring":   idKey = "equippedRingId";   itemKey = "equippedRingItem"; break;
-         case "ammo":   idKey = "equippedAmmoId";   itemKey = "equippedAmmoItem"; break;
-         default: return false;
-     }
+    switch (slot) {
+      case "weapon":
+        idKey = "equippedWeaponId";
+        itemKey = "equippedWeaponItem";
+        break;
+      case "shield":
+        idKey = "equippedShieldId";
+        itemKey = "equippedShieldItem";
+        break;
+      case "helmet":
+        idKey = "equippedHelmetId";
+        itemKey = "equippedHelmetItem";
+        break;
+      case "armor":
+        idKey = "equippedArmorId";
+        itemKey = "equippedArmorItem";
+        break;
+      case "legs":
+        idKey = "equippedLegsId";
+        itemKey = "equippedLegsItem";
+        break;
+      case "boots":
+        idKey = "equippedBootsId";
+        itemKey = "equippedBootsItem";
+        break;
+      case "neck":
+        idKey = "equippedNeckId";
+        itemKey = "equippedNeckItem";
+        break;
+      case "ring":
+        idKey = "equippedRingId";
+        itemKey = "equippedRingItem";
+        break;
+      case "ammo":
+        idKey = "equippedAmmoId";
+        itemKey = "equippedAmmoItem";
+        break;
+      default:
+        return false;
+    }
 
-     const currentItem = (this as any)[itemKey] as InventoryItem | null;
-     const currentId = (this as any)[idKey] as string | null;
-     
-     if (!currentId) return false;
+    const currentItem = (this as any)[itemKey] as InventoryItem | null;
+    const currentId = (this as any)[idKey] as string | null;
 
-     // STRICT VALIDATION: Try to add back to inventory
-     let success = false;
-     
-     if (currentItem) {
-         // Using addItem to enforce weight/cap check even for existing object
-         // We pass null UID? No, we want to keep properties.
-         // addItem(id, count, uid, stars, attrs)
-         success = this.addItem(currentId, currentItem.count, currentItem.uid, currentItem.stars, currentItem.attributes);
-     } else {
-         success = this.addItem(currentId, 1);
-     }
+    if (!currentId) return false;
 
-     if (!success) return false;
+    // STRICT VALIDATION: Try to add back to inventory
+    let success = false;
 
-     // Clear slot
-     (this as any)[idKey] = null;
-     (this as any)[itemKey] = null;
-     
-     this.emit("inventoryUpdated");
-     this.emit("equipmentChanged");
+    if (currentItem) {
+      // Using addItem to enforce weight/cap check even for existing object
+      // We pass null UID? No, we want to keep properties.
+      // addItem(id, count, uid, stars, attrs)
+      success = this.addItem(
+        currentId,
+        currentItem.count,
+        currentItem.uid,
+        currentItem.stars,
+        currentItem.attributes,
+      );
+    } else {
+      success = this.addItem(currentId, 1);
+    }
 
-     if (slot === "weapon") this.emit("weaponEquipped", null);
-     if (slot === "shield") this.emit("shieldEquipped", null);
+    if (!success) return false;
 
-     this.recalculateMaxHealth();
+    // Clear slot
+    (this as any)[idKey] = null;
+    (this as any)[itemKey] = null;
 
-     return true;
+    this.emit("inventoryUpdated");
+    this.emit("equipmentChanged");
+
+    if (slot === "weapon") this.emit("weaponEquipped", null);
+    if (slot === "shield") this.emit("shieldEquipped", null);
+
+    this.recalculateMaxHealth();
+
+    return true;
   }
 
   // Specific unequip wrappers (can keep for now or deprecate)
-  public unequipWeapon(): boolean { return this.unequipItem("weapon"); }
-  public unequipShield(): boolean { return this.unequipItem("shield"); }
-
-  public getEquippedItem(slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon"): WeaponDefinition | null {
-     if(slot === "weapon") return this.getEquippedWeapon();
-     if(slot === "shield") return this.getEquippedShield();
-     
-     let id: string | null = null;
-     if(slot === "helmet") id = this.equippedHelmetId;
-     if(slot === "armor") id = this.equippedArmorId;
-     if(slot === "legs") id = this.equippedLegsId;
-     if(slot === "boots") id = this.equippedBootsId;
-
-     if(id) return WeaponRegistry.getWeaponDefinition(id) || null;
-     return null;
+  public unequipWeapon(): boolean {
+    return this.unequipItem("weapon");
+  }
+  public unequipShield(): boolean {
+    return this.unequipItem("shield");
   }
 
-  public getEquippedItemObject(slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon"): InventoryItem | null {
-      if(slot === "weapon") return this.equippedWeaponItem || (this.equippedWeaponId ? { itemId: this.equippedWeaponId, count: 1, uid: "equipped_weapon" } as InventoryItem : null);
-      if(slot === "shield") return this.equippedShieldItem || (this.equippedShieldId ? { itemId: this.equippedShieldId, count: 1, uid: "equipped_shield" } as InventoryItem : null);
-      
-      let id: string | null = null;
-      let item: InventoryItem | null = null;
+  public getEquippedItem(
+    slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon",
+  ): WeaponDefinition | null {
+    if (slot === "weapon") return this.getEquippedWeapon();
+    if (slot === "shield") return this.getEquippedShield();
 
-      if(slot === "helmet") { id = this.equippedHelmetId; item = this.equippedHelmetItem; }
-      if(slot === "armor") { id = this.equippedArmorId; item = this.equippedArmorItem; }
-      if(slot === "legs") { id = this.equippedLegsId; item = this.equippedLegsItem; }
-      if(slot === "boots") { id = this.equippedBootsId; item = this.equippedBootsItem; }
+    let id: string | null = null;
+    if (slot === "helmet") id = this.equippedHelmetId;
+    if (slot === "armor") id = this.equippedArmorId;
+    if (slot === "legs") id = this.equippedLegsId;
+    if (slot === "boots") id = this.equippedBootsId;
 
-      if(item) return item;
-      if(id) return { itemId: id, count: 1, uid: `equipped_${slot}` } as InventoryItem;
-      
-      return null;
+    if (id) return WeaponRegistry.getWeaponDefinition(id) || null;
+    return null;
+  }
+
+  public getEquippedItemObject(
+    slot: "helmet" | "armor" | "legs" | "boots" | "shield" | "weapon",
+  ): InventoryItem | null {
+    if (slot === "weapon")
+      return (
+        this.equippedWeaponItem ||
+        (this.equippedWeaponId
+          ? ({
+              itemId: this.equippedWeaponId,
+              count: 1,
+              uid: "equipped_weapon",
+            } as InventoryItem)
+          : null)
+      );
+    if (slot === "shield")
+      return (
+        this.equippedShieldItem ||
+        (this.equippedShieldId
+          ? ({
+              itemId: this.equippedShieldId,
+              count: 1,
+              uid: "equipped_shield",
+            } as InventoryItem)
+          : null)
+      );
+
+    let id: string | null = null;
+    let item: InventoryItem | null = null;
+
+    if (slot === "helmet") {
+      id = this.equippedHelmetId;
+      item = this.equippedHelmetItem;
+    }
+    if (slot === "armor") {
+      id = this.equippedArmorId;
+      item = this.equippedArmorItem;
+    }
+    if (slot === "legs") {
+      id = this.equippedLegsId;
+      item = this.equippedLegsItem;
+    }
+    if (slot === "boots") {
+      id = this.equippedBootsId;
+      item = this.equippedBootsItem;
+    }
+
+    if (item) return item;
+    if (id)
+      return { itemId: id, count: 1, uid: `equipped_${slot}` } as InventoryItem;
+
+    return null;
   }
 
   public getEquippedWeapon(): WeaponDefinition | null {
@@ -1640,9 +1950,9 @@ export class PlayerState extends EventEmitter {
   }
 
   public getEquippedBoots(): WeaponDefinition | null {
-      return this.equippedBootsId
-        ? (WeaponRegistry.getWeaponDefinition(this.equippedBootsId) || null)
-        : null;
+    return this.equippedBootsId
+      ? WeaponRegistry.getWeaponDefinition(this.equippedBootsId) || null
+      : null;
   }
 
   /**
@@ -1650,34 +1960,48 @@ export class PlayerState extends EventEmitter {
    * Dictionary-style access or switch-case.
    */
   public getEquippedItemInSlot(slot: string): InventoryItem | null {
-      switch(slot) {
-          case "head": return this.equippedHelmetItem;
-          case "neck": return this.equippedNeckItem;
-          case "body": return this.equippedArmorItem;
-          case "legs": return this.equippedLegsItem;
-          case "boots": return this.equippedBootsItem;
-          case "mainHand": return this.equippedWeaponItem;
-          case "offHand": return this.equippedShieldItem;
-          case "ring": return this.equippedRingItem;
-          case "ammo": return this.equippedAmmoItem;
-          
-          // Compat with older keys if necessary (though we try to move to Enum)
-          case "weapon": return this.equippedWeaponItem;
-          case "shield": return this.equippedShieldItem;
-          case "armor": return this.equippedArmorItem; // ambiguous with body?
-          case "helmet": return this.equippedHelmetItem;
-          
-          default: return null;
-      }
+    switch (slot) {
+      case "head":
+        return this.equippedHelmetItem;
+      case "neck":
+        return this.equippedNeckItem;
+      case "body":
+        return this.equippedArmorItem;
+      case "legs":
+        return this.equippedLegsItem;
+      case "boots":
+        return this.equippedBootsItem;
+      case "mainHand":
+        return this.equippedWeaponItem;
+      case "offHand":
+        return this.equippedShieldItem;
+      case "ring":
+        return this.equippedRingItem;
+      case "ammo":
+        return this.equippedAmmoItem;
+
+      // Compat with older keys if necessary (though we try to move to Enum)
+      case "weapon":
+        return this.equippedWeaponItem;
+      case "shield":
+        return this.equippedShieldItem;
+      case "armor":
+        return this.equippedArmorItem; // ambiguous with body?
+      case "helmet":
+        return this.equippedHelmetItem;
+
+      default:
+        return null;
+    }
   }
 
-
-  
-
-
   // Deprecating special shield inventory ops for standard item ops
-  public addShieldToInventory(id: string) { this.addItem(id); }
-  public removeShieldFromInventory(id: string) { this.removeItem(id); }
+  public addShieldToInventory(id: string) {
+    this.addItem(id);
+  }
+  public removeShieldFromInventory(id: string) {
+    this.removeItem(id);
+  }
 
   public getEquippedShield(): WeaponDefinition | null {
     if (!this.equippedShieldId) return null;
@@ -1690,61 +2014,64 @@ export class PlayerState extends EventEmitter {
   }
 
   public toggleEquippedTorch(): boolean {
-      let toggled = false;
+    let toggled = false;
 
-      // Check Weapon Slot
-      if (this.equippedWeaponId === "torch") {
-          this.equippedWeaponId = "light_torch";
-          toggled = true;
-      } else if (this.equippedWeaponId === "light_torch") {
-          this.equippedWeaponId = "torch";
-          toggled = true;
-      }
+    // Check Weapon Slot
+    if (this.equippedWeaponId === "torch") {
+      this.equippedWeaponId = "light_torch";
+      toggled = true;
+    } else if (this.equippedWeaponId === "light_torch") {
+      this.equippedWeaponId = "torch";
+      toggled = true;
+    }
 
-      // Check Shield Slot
-      if (this.equippedShieldId === "torch") {
-          this.equippedShieldId = "light_torch";
-          toggled = true;
-      } else if (this.equippedShieldId === "light_torch") {
-          this.equippedShieldId = "torch";
-          toggled = true;
-      }
+    // Check Shield Slot
+    if (this.equippedShieldId === "torch") {
+      this.equippedShieldId = "light_torch";
+      toggled = true;
+    } else if (this.equippedShieldId === "light_torch") {
+      this.equippedShieldId = "torch";
+      toggled = true;
+    }
 
-      if (toggled) {
-          this.emit("equipmentChanged");
-          this.emit("inventoryUpdated");
-          this.emit("weaponEquipped", this.getEquippedWeapon());
-          this.emit("torchToggled");
-          return true;
-      }
+    if (toggled) {
+      this.emit("equipmentChanged");
+      this.emit("inventoryUpdated");
+      this.emit("weaponEquipped", this.getEquippedWeapon());
+      this.emit("torchToggled");
+      return true;
+    }
 
-      return false;
+    return false;
   }
 
   public isTorchLit(): boolean {
-      return this.equippedWeaponId === "light_torch" || this.equippedShieldId === "light_torch";
+    return (
+      this.equippedWeaponId === "light_torch" ||
+      this.equippedShieldId === "light_torch"
+    );
   }
 
   public lightTorch(): boolean {
-      // Only toggle if we have an unlit torch equipped and no lit torch (or simpler: just try to toggle unlit ones)
-      // Actually toggleEquippedTorch toggles ALL. 
-      // We want to ensure we result in LIT state.
-      // If toggleEquippedTorch flips everything, we might extinguish one while lighting another?
-      // Let's rely on toggleEquippedTorch logic which swaps explicitly.
-      
-      // If currently unlit, toggle will make it lit.
-      if (!this.isTorchLit()) {
-          return this.toggleEquippedTorch();
-      }
-      return false;
+    // Only toggle if we have an unlit torch equipped and no lit torch (or simpler: just try to toggle unlit ones)
+    // Actually toggleEquippedTorch toggles ALL.
+    // We want to ensure we result in LIT state.
+    // If toggleEquippedTorch flips everything, we might extinguish one while lighting another?
+    // Let's rely on toggleEquippedTorch logic which swaps explicitly.
+
+    // If currently unlit, toggle will make it lit.
+    if (!this.isTorchLit()) {
+      return this.toggleEquippedTorch();
+    }
+    return false;
   }
 
   public extinguishTorch(): boolean {
-      // If currently lit, toggle will make it unlit.
-      if (this.isTorchLit()) {
-          return this.toggleEquippedTorch();
-      }
-      return false;
+    // If currently lit, toggle will make it unlit.
+    if (this.isTorchLit()) {
+      return this.toggleEquippedTorch();
+    }
+    return false;
   }
 
   /**
@@ -1753,116 +2080,116 @@ export class PlayerState extends EventEmitter {
    * If Equippable -> Equip it.
    */
   public useInventoryItem(index: number): boolean {
-      const item = this.inventory[index];
-      if (!item) return false;
+    const item = this.inventory[index];
+    if (!item) return false;
 
-      const def = WeaponRegistry.getWeaponDefinition(item.itemId);
-      if (!def) return false;
+    const def = WeaponRegistry.getWeaponDefinition(item.itemId);
+    if (!def) return false;
 
-      // 1. Try as Consumable
-      const consumable = this.consumableManager.adaptToConsumable(def);
-      if (consumable) {
-          const success = this.consumableManager.useItem(consumable);
-          if (success && consumable.consumesOnUse) {
-              this.removeItemAtIndex(index, 1);
-          }
-          return success;
+    // 1. Try as Consumable
+    const consumable = this.consumableManager.adaptToConsumable(def);
+    if (consumable) {
+      const success = this.consumableManager.useItem(consumable);
+      if (success && consumable.consumesOnUse) {
+        this.removeItemAtIndex(index, 1);
       }
+      return success;
+    }
 
-      // 2. Try as Equippable (Smart Equip Logic)
-      return this.requestEquip(item.uid);
+    // 2. Try as Equippable (Smart Equip Logic)
+    return this.requestEquip(item.uid);
   }
 
   public removeItemAtIndex(index: number, count: number = 1) {
-      if (index < 0 || index >= this.inventory.length) return;
+    if (index < 0 || index >= this.inventory.length) return;
 
-      const item = this.inventory[index];
-      if (item.count > count) {
-          item.count -= count;
-          this.emit("itemQuantityChanged", item.uid, item.count);
-      } else {
-          this.inventory.splice(index, 1);
-          this.emit("itemRemoved", item.uid);
-      }
-      this.emit("inventoryUpdated");
+    const item = this.inventory[index];
+    if (item.count > count) {
+      item.count -= count;
+      this.emit("itemQuantityChanged", item.uid, item.count);
+    } else {
+      this.inventory.splice(index, 1);
+      this.emit("itemRemoved", item.uid);
+    }
+    this.emit("inventoryUpdated");
   }
 
   public toggleInventoryItem(uid: string): boolean {
-      const item = this.inventory.find(i => i.uid === uid);
-      if (!item) return false;
+    const item = this.inventory.find((i) => i.uid === uid);
+    if (!item) return false;
 
-      let toggled = false;
-      if (item.itemId === "torch") {
-          item.itemId = "light_torch";
-          toggled = true;
-      } else if (item.itemId === "light_torch") {
-          item.itemId = "torch";
-          toggled = true;
-      }
+    let toggled = false;
+    if (item.itemId === "torch") {
+      item.itemId = "light_torch";
+      toggled = true;
+    } else if (item.itemId === "light_torch") {
+      item.itemId = "torch";
+      toggled = true;
+    }
 
-      if (toggled) {
-          this.emit("inventoryUpdated");
-      }
-      return toggled;
+    if (toggled) {
+      this.emit("inventoryUpdated");
+    }
+    return toggled;
   }
 
   public toggleContainerItem(containerId: string, itemUid: string): boolean {
-      const items = this.containers.get(containerId);
-      if (!items) return false;
+    const items = this.containers.get(containerId);
+    if (!items) return false;
 
-      const item = items.find(i => i.uid === itemUid);
-      if (!item) return false;
+    const item = items.find((i) => i.uid === itemUid);
+    if (!item) return false;
 
-      let toggled = false;
-      if (item.itemId === "torch") {
-          item.itemId = "light_torch";
-          toggled = true;
-      } else if (item.itemId === "light_torch") {
-          item.itemId = "torch";
-          toggled = true;
-      }
+    let toggled = false;
+    if (item.itemId === "torch") {
+      item.itemId = "light_torch";
+      toggled = true;
+    } else if (item.itemId === "light_torch") {
+      item.itemId = "torch";
+      toggled = true;
+    }
 
-      if (toggled) {
-          this.emit("containerUpdated", containerId);
-          this.emit("inventoryUpdated"); // For weight/visual sync if needed
-      }
-      return toggled;
+    if (toggled) {
+      this.emit("containerUpdated", containerId);
+      this.emit("inventoryUpdated"); // For weight/visual sync if needed
+    }
+    return toggled;
   }
 
   public toggleGroundItem(itemUid: string): boolean {
-      let found = false;
-      this.droppedItems.forEach((items, level) => {
-          const item = items.find(i => i.itemId === itemUid);
-          if (item) {
-              if (item.weaponId === "torch") {
-                  item.weaponId = "light_torch";
-                  found = true;
-              } else if (item.weaponId === "light_torch") {
-                  item.weaponId = "torch";
-                  found = true;
-              }
-          }
-      });
-      
-      if (found) {
-          this.emit("torchToggled"); // Notify GameScene to refresh sprites
+    let found = false;
+    this.droppedItems.forEach((items, level) => {
+      const item = items.find((i) => i.itemId === itemUid);
+      if (item) {
+        if (item.weaponId === "torch") {
+          item.weaponId = "light_torch";
+          found = true;
+        } else if (item.weaponId === "light_torch") {
+          item.weaponId = "torch";
+          found = true;
+        }
       }
-      return found;
+    });
+
+    if (found) {
+      this.emit("torchToggled"); // Notify GameScene to refresh sprites
+    }
+    return found;
   }
 
   // --- OVERBURDEN SYSTEM ---
   public getSpeedPenaltyMultiplier(): number {
-      const currentWeight = this.getCurrentWeight();
-      const capacity = this.getCapacity();
-      
-      if (currentWeight <= capacity) return 1.0;
-      
-      const excess = currentWeight - capacity;
-      const ratio = excess / capacity;
-      
-      // New Formula: 50% Excess = 100% Penalty (Immobile)
-      // 10% Excess = ? -> 1 - (0.1 * 2) = 0.8 (20% Penalty)
-      return Math.max(0, 1.0 - (ratio * 2));
+    const currentWeight = this.getCurrentWeight();
+    const capacity = this.getCapacity();
+
+    if (currentWeight <= capacity) return 1.0;
+
+    const excess = currentWeight - capacity;
+    const ratio = excess / capacity;
+
+    // New Formula: 50% Excess = 100% Penalty (Immobile)
+    // 10% Excess = ? -> 1 - (0.1 * 2) = 0.8 (20% Penalty)
+    return Math.max(0, 1.0 - ratio * 2);
   }
 
   public generateUID(): string {
@@ -1881,13 +2208,13 @@ export class PlayerState extends EventEmitter {
   }
 
   public isFallSafetyEnabled(): boolean {
-      return this.fallSafetyEnabled;
+    return this.fallSafetyEnabled;
   }
 
   public toggleFallSafety(): boolean {
-      this.fallSafetyEnabled = !this.fallSafetyEnabled;
-      this.emit("fallSafetyChanged", this.fallSafetyEnabled);
-      return this.fallSafetyEnabled;
+    this.fallSafetyEnabled = !this.fallSafetyEnabled;
+    this.emit("fallSafetyChanged", this.fallSafetyEnabled);
+    return this.fallSafetyEnabled;
   }
 
   public isDebugCollisionEnabled(): boolean {
@@ -1916,30 +2243,31 @@ export class PlayerState extends EventEmitter {
     return this.health;
   }
   public getDisplayedHealth() {
-      return Math.floor(this.health);
+    return Math.floor(this.health);
   }
   public isDead(): boolean {
-      return Math.floor(this.health) <= 0;
+    return Math.floor(this.health) <= 0;
   }
   public getMaxHealth() {
-    return StatManager.getInstance().calculateStat("maxHealth", this).finalValue;
+    return StatManager.getInstance().calculateStat("maxHealth", this)
+      .finalValue;
   }
   public getBaseMaxHealth() {
-      return this.maxHealth;
+    return this.maxHealth;
   }
 
   public gainHealth(amount: number) {
-      if (this.isDead()) return;
-      const max = this.getMaxHealth();
-      this.health = Math.min(max, this.health + amount);
-      this.emit("healthChanged", this.health, max);
-      
-      // Visual Feedback
-      this.emit("uiNotification", {
-          type: "heal",
-          message: `+${amount}`,
-          color: "#4ade80" // Green
-      });
+    if (this.isDead()) return;
+    const max = this.getMaxHealth();
+    this.health = Math.min(max, this.health + amount);
+    this.emit("healthChanged", this.health, max);
+
+    // Visual Feedback
+    this.emit("uiNotification", {
+      type: "heal",
+      message: `+${amount}`,
+      color: "#4ade80", // Green
+    });
   }
   public getLevel() {
     return this.level;
@@ -1948,28 +2276,30 @@ export class PlayerState extends EventEmitter {
     return this.experience;
   }
   public getPlayTime(): number {
-    return this.playTime + Math.floor((Date.now() - this.sessionStartTime) / 1000);
+    return (
+      this.playTime + Math.floor((Date.now() - this.sessionStartTime) / 1000)
+    );
   }
 
   // --- CURRENCY (GC) ---
   public getBalance(): number {
-      return this.balance;
+    return this.balance;
   }
-  
+
   public addBalance(amount: number): void {
-      this.balance += Math.floor(Math.max(0, amount));
-      this.emit("balanceChanged", this.balance);
-      this.log("currency_gain", { amount, total: this.balance }, "#ffd700");
-      this.emit("message", `+${amount} GC`);
+    this.balance += Math.floor(Math.max(0, amount));
+    this.emit("balanceChanged", this.balance);
+    this.log("currency_gain", { amount, total: this.balance }, "#ffd700");
+    this.emit("message", `+${amount} GC`);
   }
-  
+
   public removeBalance(amount: number): boolean {
-      if (this.balance >= amount) {
-          this.balance -= Math.floor(Math.max(0, amount));
-          this.emit("balanceChanged", this.balance);
-          return true;
-      }
-      return false;
+    if (this.balance >= amount) {
+      this.balance -= Math.floor(Math.max(0, amount));
+      this.emit("balanceChanged", this.balance);
+      return true;
+    }
+    return false;
   }
 
   public setHealth(v: number) {
@@ -1986,18 +2316,16 @@ export class PlayerState extends EventEmitter {
   public setExperience(v: number) {
     this.experience = v;
     this.emit("experienceChanged", v);
-    
-    // Check Level Up handled elsewhere? 
+
+    // Check Level Up handled elsewhere?
     // Usually addExperience calls setExperience.
     // Wait, addExperience logic is separate? Let's check hooks.
     // Assuming addExperience triggers this.
   }
-  
 
   public setAttackDamage(v: number) {
     this.attackDamage = v;
   }
-
 
   public getStrengthExperience() {
     return this.strength.experience;
@@ -2007,7 +2335,6 @@ export class PlayerState extends EventEmitter {
     this.strength.experience = v;
   }
 
-
   public getDexterityExperience() {
     return this.dexterity.experience;
   }
@@ -2016,7 +2343,6 @@ export class PlayerState extends EventEmitter {
     this.dexterity.experience = v;
   }
 
-
   public getReflexExperience() {
     return this.reflex.experience;
   }
@@ -2024,7 +2350,6 @@ export class PlayerState extends EventEmitter {
   public setReflexExperience(v: number) {
     this.reflex.experience = v;
   }
-
 
   public getIntelligenceExperience() {
     return this.intelligence.experience;
@@ -2037,30 +2362,30 @@ export class PlayerState extends EventEmitter {
   public gainExperience(amount: number) {
     const oldLevel = this.level;
     const oldXP = this.experience;
-    
+
     this.experience += amount;
     this.updateWillpower(amount);
 
     const oldInfo = XPTable.getLevelInfo(oldXP);
     const info = XPTable.getLevelInfo(this.experience);
-    
+
     // Calculate progress for UI
     let startProgress = oldInfo.progress;
     let endProgress = info.progress;
 
-    // If level up, we start the bar from 0 in the new level 
+    // If level up, we start the bar from 0 in the new level
     // (matches user's request: "vai encher já a partir do nivel 30")
     if (info.level > oldInfo.level) {
-        startProgress = 0;
+      startProgress = 0;
     }
 
     // Emit Notification
     this.emit("uiNotification", {
-        type: "exp",
-        message: t_game("notif_exp").replace("{xp}", amount.toString()),
-        value: amount,
-        startProgress,
-        endProgress
+      type: "exp",
+      message: t_game("notif_exp").replace("{xp}", amount.toString()),
+      value: amount,
+      startProgress,
+      endProgress,
     });
 
     this.emit("experienceChanged", this.experience);
@@ -2069,54 +2394,58 @@ export class PlayerState extends EventEmitter {
 
       // Calculate Levels Gained
       const levelsGained = this.level - oldLevel;
-      
+
       // FIX: Enforce Minimum Max Health based on Level Formula
       // Base (100) + (Level-1)*5
       const expectedMaxHP = 100 + (this.level - 1) * 5;
-      
+
       if (this.maxHealth < expectedMaxHP) {
-          // If current max is less than formula, snap to formula!
-          this.maxHealth = expectedMaxHP;
+        // If current max is less than formula, snap to formula!
+        this.maxHealth = expectedMaxHP;
       } else {
-          // Otherwise just add +5 per level
-          this.maxHealth += (5 * levelsGained);
+        // Otherwise just add +5 per level
+        this.maxHealth += 5 * levelsGained;
       }
 
       // Same for Base Speed
-      this.baseSpeed += (4 * levelsGained); 
-      
+      this.baseSpeed += 4 * levelsGained;
+
       // --- WILLPOWER SCALING ---
-      // Update Target for new level, but PRESERVE the current percentage (Tier) 
+      // Update Target for new level, but PRESERVE the current percentage (Tier)
       const oldTarget = this.willpowerTarget;
       const oldExp = this.willpowerExp;
 
       if (oldTarget > 0) {
-          const currentXpReq = XPTable.getXPRequiredForLevel(this.level);
-          const prevXpReq = XPTable.getXPRequiredForLevel(this.level - 1);
-          const newTarget = Math.max(1, currentXpReq - prevXpReq);
-          
-          // Scale Exp to match new Target
-          const ratio = oldExp / oldTarget;
-          this.willpowerTarget = newTarget;
-          // Use round to prevent precision loss dropping a Tier
-          this.willpowerExp = Math.round(newTarget * ratio);
+        const currentXpReq = XPTable.getXPRequiredForLevel(this.level);
+        const prevXpReq = XPTable.getXPRequiredForLevel(this.level - 1);
+        const newTarget = Math.max(1, currentXpReq - prevXpReq);
 
-          this.emit("willpowerUpdated", { 
-              current: this.willpowerExp, 
-              max: this.willpowerTarget, 
-              tier: this.getWillpowerTier() 
-          });
+        // Scale Exp to match new Target
+        const ratio = oldExp / oldTarget;
+        this.willpowerTarget = newTarget;
+        // Use round to prevent precision loss dropping a Tier
+        this.willpowerExp = Math.round(newTarget * ratio);
+
+        this.emit("willpowerUpdated", {
+          current: this.willpowerExp,
+          max: this.willpowerTarget,
+          tier: this.getWillpowerTier(),
+        });
       }
 
       // Heal to FULL EFFECTIVE health
       this.health = this.getMaxHealth();
-      
+
       // Emit updates for UI
       this.emit("maxHealthChanged", this.getMaxHealth());
       this.emit("healthChanged", this.health);
 
       this.emit("levelUp", { newLevel: this.level, oldLevel: oldLevel });
-      this.log("combat_level_up", { old: oldLevel, new: this.level }, "#fbbf24");
+      this.log(
+        "combat_level_up",
+        { old: oldLevel, new: this.level },
+        "#fbbf24",
+      );
       this.emit("skyrimSkillUp", { type: "level", level: this.level });
     }
   }
@@ -2131,7 +2460,11 @@ export class PlayerState extends EventEmitter {
         level: info.level,
         experience: this.strength.experience,
       });
-      this.log("combat_skill_up", { skill: "Strength", level: info.level }, "#fbbf24");
+      this.log(
+        "combat_skill_up",
+        { skill: "Strength", level: info.level },
+        "#fbbf24",
+      );
       this.emit("skyrimSkillUp", { type: "strength", level: info.level });
       return true;
     }
@@ -2152,7 +2485,11 @@ export class PlayerState extends EventEmitter {
         level: info.level,
         experience: this.dexterity.experience,
       });
-      this.log("combat_skill_up", { skill: "Dexterity", level: info.level }, "#fbbf24");
+      this.log(
+        "combat_skill_up",
+        { skill: "Dexterity", level: info.level },
+        "#fbbf24",
+      );
       this.emit("skyrimSkillUp", { type: "dexterity", level: info.level });
       return true;
     }
@@ -2173,7 +2510,11 @@ export class PlayerState extends EventEmitter {
         level: info.level,
         experience: this.reflex.experience,
       });
-      this.log("combat_skill_up", { skill: "Reflex", level: info.level }, "#fbbf24");
+      this.log(
+        "combat_skill_up",
+        { skill: "Reflex", level: info.level },
+        "#fbbf24",
+      );
       this.emit("skyrimSkillUp", { type: "reflex", level: info.level });
       return true;
     }
@@ -2194,7 +2535,11 @@ export class PlayerState extends EventEmitter {
         level: info.level,
         experience: this.intelligence.experience,
       });
-      this.log("combat_skill_up", { skill: "Intelligence", level: info.level }, "#fbbf24");
+      this.log(
+        "combat_skill_up",
+        { skill: "Intelligence", level: info.level },
+        "#fbbf24",
+      );
       this.emit("skyrimSkillUp", { type: "intelligence", level: info.level });
       return true;
     }
@@ -2207,69 +2552,80 @@ export class PlayerState extends EventEmitter {
 
   // --- ATTRIBUTE SETTERS (CHEATS/DEBUG) ---
   public setStrengthLevel(level: number): void {
-      this.strength.level = level;
-      this.strength.experience = StrengthXpTable.getXPRequiredForLevel(level);
-      
-      this.emit("strengthExperienceChanged", {
-          level: this.strength.level,
-          experience: this.strength.experience
-      });
-      this.recalculateMaxHealth();
-      this.emit("statsUpdated");
+    this.strength.level = level;
+    this.strength.experience = StrengthXpTable.getXPRequiredForLevel(level);
+
+    this.emit("strengthExperienceChanged", {
+      level: this.strength.level,
+      experience: this.strength.experience,
+    });
+    this.recalculateMaxHealth();
+    this.emit("statsUpdated");
   }
 
   public setDexterityLevel(level: number): void {
-      this.dexterity.level = level;
-      this.dexterity.experience = DexterityXpTable.getXPRequiredForLevel(level);
+    this.dexterity.level = level;
+    this.dexterity.experience = DexterityXpTable.getXPRequiredForLevel(level);
 
-      this.emit("dexterityExperienceChanged", {
-          level: this.dexterity.level,
-          experience: this.dexterity.experience
-      });
-      // Speed update?
-      this.emit("statsUpdated");
+    this.emit("dexterityExperienceChanged", {
+      level: this.dexterity.level,
+      experience: this.dexterity.experience,
+    });
+    // Speed update?
+    this.emit("statsUpdated");
   }
 
   public setReflexLevel(level: number): void {
-      this.reflex.level = level;
-      this.reflex.experience = ReflexXpTable.getXPRequiredForLevel(level);
+    this.reflex.level = level;
+    this.reflex.experience = ReflexXpTable.getXPRequiredForLevel(level);
 
-      this.emit("reflexExperienceChanged", {
-          level: this.reflex.level,
-          experience: this.reflex.experience
-      });
-      this.emit("statsUpdated");
+    this.emit("reflexExperienceChanged", {
+      level: this.reflex.level,
+      experience: this.reflex.experience,
+    });
+    this.emit("statsUpdated");
   }
 
   public setIntelligenceLevel(level: number): void {
-      this.intelligence.level = level;
-      this.intelligence.experience = IntelligenceXpTable.getXPRequiredForLevel(level);
+    this.intelligence.level = level;
+    this.intelligence.experience =
+      IntelligenceXpTable.getXPRequiredForLevel(level);
 
-      this.emit("intelligenceExperienceChanged", {
-          level: this.intelligence.level,
-          experience: this.intelligence.experience
-      });
-      this.setMaxMana(this.intelligence.level * 10); // Example mana scaling
-      this.emit("statsUpdated");
+    this.emit("intelligenceExperienceChanged", {
+      level: this.intelligence.level,
+      experience: this.intelligence.experience,
+    });
+    this.setMaxMana(this.intelligence.level * 10); // Example mana scaling
+    this.emit("statsUpdated");
   }
 
-  public getBaseStrengthLevel(): number { return this.strength.level; }
-  public getBaseDexterityLevel(): number { return this.dexterity.level; }
-  public getBaseReflexLevel(): number { return this.reflex.level; }
-  public getBaseIntelligenceLevel(): number { return this.intelligence.level; }
+  public getBaseStrengthLevel(): number {
+    return this.strength.level;
+  }
+  public getBaseDexterityLevel(): number {
+    return this.dexterity.level;
+  }
+  public getBaseReflexLevel(): number {
+    return this.reflex.level;
+  }
+  public getBaseIntelligenceLevel(): number {
+    return this.intelligence.level;
+  }
 
   // --- TOTAL STAT GETTERS (Base + Modifiers) ---
   public getStrengthLevel(): number {
-      return StatManager.getInstance().calculateStat("strength", this).finalValue;
+    return StatManager.getInstance().calculateStat("strength", this).finalValue;
   }
   public getDexterityLevel(): number {
-      return StatManager.getInstance().calculateStat("dexterity", this).finalValue;
+    return StatManager.getInstance().calculateStat("dexterity", this)
+      .finalValue;
   }
   public getReflexLevel(): number {
-      return StatManager.getInstance().calculateStat("reflex", this).finalValue;
+    return StatManager.getInstance().calculateStat("reflex", this).finalValue;
   }
   public getIntelligenceLevel(): number {
-      return StatManager.getInstance().calculateStat("intelligence", this).finalValue;
+    return StatManager.getInstance().calculateStat("intelligence", this)
+      .finalValue;
   }
 
   public takeDamage(amount: number): boolean {
@@ -2284,7 +2640,7 @@ export class PlayerState extends EventEmitter {
     centerY: number,
     radius: number,
     mapWidth: number,
-    mapHeight: number
+    mapHeight: number,
   ): void {
     if (!this.exploredAreas.has(level)) {
       const grid = Array(mapHeight)
@@ -2314,18 +2670,18 @@ export class PlayerState extends EventEmitter {
   }
 
   public addPersistentDroppedItem(level: string, item: DroppedItemData): void {
-      const items = this.droppedItems.get(level) || [];
-      // Prevent duplicates based on unique ID
-      if (!items.some(i => i.itemId === item.itemId)) {
-          // Normalize count
-          if (!item.count) item.count = 1;
-          
-          items.push(item);
-          this.droppedItems.set(level, items);
-          // console.log(`[PlayerState] Added persistent item: ${item.itemId} (Total: ${items.length})`);
-      } else {
-          // console.warn(`[PlayerState] Duplicate persistent item ignored: ${item.itemId}`);
-      }
+    const items = this.droppedItems.get(level) || [];
+    // Prevent duplicates based on unique ID
+    if (!items.some((i) => i.itemId === item.itemId)) {
+      // Normalize count
+      if (!item.count) item.count = 1;
+
+      items.push(item);
+      this.droppedItems.set(level, items);
+      // console.log(`[PlayerState] Added persistent item: ${item.itemId} (Total: ${items.length})`);
+    } else {
+      // console.warn(`[PlayerState] Duplicate persistent item ignored: ${item.itemId}`);
+    }
   }
   public getPersistentDroppedItems(level: string) {
     return this.droppedItems.get(level) || [];
@@ -2334,7 +2690,7 @@ export class PlayerState extends EventEmitter {
     const items = this.droppedItems.get(level) || [];
     this.droppedItems.set(
       level,
-      items.filter((i) => i.itemId !== itemId)
+      items.filter((i) => i.itemId !== itemId),
     );
   }
 
@@ -2346,33 +2702,46 @@ export class PlayerState extends EventEmitter {
   }
 
   public log(key: string, params?: any, color?: string) {
-      this.emit("log", key, params, color);
+    this.emit("log", key, params, color);
   }
 
   // --- ATTRIBUTE SCALING ---
   public getEquippedItems(): InventoryItem[] {
-      const items: InventoryItem[] = [];
-      const slots = ["weapon", "shield", "helmet", "armor", "legs", "boots", "ring", "amulet"] as const;
-      
-      for(const slot of slots) {
-          const item = this.getEquippedItemInSlot(slot === "weapon" ? "main_hand" : (slot === "shield" ? "off_hand" : slot) as any);
-          if (item) items.push(item);
-      }
-      return items;
+    const items: InventoryItem[] = [];
+    const slots = [
+      "weapon",
+      "shield",
+      "helmet",
+      "armor",
+      "legs",
+      "boots",
+      "ring",
+      "amulet",
+    ] as const;
+
+    for (const slot of slots) {
+      const item = this.getEquippedItemInSlot(
+        slot === "weapon"
+          ? "main_hand"
+          : ((slot === "shield" ? "off_hand" : slot) as any),
+      );
+      if (item) items.push(item);
+    }
+    return items;
   }
 
-
-
   public getCriticalChance(): number {
-      return StatManager.getInstance().getCriticalChance(this).finalValue;
+    return StatManager.getInstance().getCriticalChance(this).finalValue;
   }
 
   public getCriticalDamageMultiplier(): number {
-      return StatManager.getInstance().calculateStat("melee_crit_damage", this).finalValue;
+    return StatManager.getInstance().calculateStat("melee_crit_damage", this)
+      .finalValue;
   }
 
   public getAttackBonusPercentage(): number {
-      return StatManager.getInstance().calculateStat("melee_max_damage", this).finalValue;
+    return StatManager.getInstance().calculateStat("melee_max_damage", this)
+      .finalValue;
   }
 
   public reset(): void {
@@ -2396,7 +2765,7 @@ export class PlayerState extends EventEmitter {
 
     // Inventory & Equipment
     this.inventory = [];
-    
+
     this.equippedWeaponId = "sword_t1"; // Start with sword? Or null? Let's give default sword.
     this.equippedShieldId = "torch"; // Start with torch?
     this.equippedHelmetId = null;
@@ -2422,47 +2791,43 @@ export class PlayerState extends EventEmitter {
     this.droppedItems.clear();
     this.exploredAreas.clear();
     // this.visitedLevels? (checked before, variable name check needed)
-    
+
     // Add Starting Items to Inventory (if not equipping directly)
     // Actually, equipping directly above is just IDs. We need valid item objects/logic.
     // Better strategy: Clear all, then use addItem/equipItem properly.
-    
+
     this.equippedWeaponId = null;
     this.equippedShieldId = null;
-    
+
     // Add defaults
     this.addItem("sword_t1", 1);
     this.addItem("torch", 1);
 
-    // Auto-equip? Or let user do it? 
+    // Auto-equip? Or let user do it?
     // Usually starting with them in inventory is safer/standard.
     this.emit("hungerUpdated", 0);
   }
 
-  public getName(): string { return this.characterName; }
-  public getHunger(): number { return this.hunger; }
-
-
-
-
-
-
-
-
-  public getEquipment(): any {
-      return {
-          "head": (this as any).equippedHelmetItem || null,
-          "neck": (this as any).equippedNeckItem || null,
-          "body": (this as any).equippedArmorItem || null,
-          "legs": (this as any).equippedLegsItem || null,
-          "boots": (this as any).equippedBootsItem || null, // Changed from 'feet' to 'boots'
-          "mainHand": (this as any).equippedWeaponItem || null, // Changed from 'hand' to 'mainHand'
-          "offHand": (this as any).equippedShieldItem || null, // Changed from 'shield_slot' to 'offHand'
-          "ammo": (this as any).equippedAmmoItem || null,
-          "ring": (this as any).equippedRingItem || null
-      };
+  public getName(): string {
+    return this.characterName;
+  }
+  public getHunger(): number {
+    return this.hunger;
   }
 
+  public getEquipment(): any {
+    return {
+      head: (this as any).equippedHelmetItem || null,
+      neck: (this as any).equippedNeckItem || null,
+      body: (this as any).equippedArmorItem || null,
+      legs: (this as any).equippedLegsItem || null,
+      boots: (this as any).equippedBootsItem || null, // Changed from 'feet' to 'boots'
+      mainHand: (this as any).equippedWeaponItem || null, // Changed from 'hand' to 'mainHand'
+      offHand: (this as any).equippedShieldItem || null, // Changed from 'shield_slot' to 'offHand'
+      ammo: (this as any).equippedAmmoItem || null,
+      ring: (this as any).equippedRingItem || null,
+    };
+  }
 
   public getDroppedItemsMap() {
     return this.droppedItems;
@@ -2472,48 +2837,49 @@ export class PlayerState extends EventEmitter {
   }
 
   public getExploredAreas() {
-      return this.exploredAreas;
+    return this.exploredAreas;
   }
 
   // --- VISITED LEVELS ---
   public hasVisitedLevel(level: string): boolean {
-      return this.visitedLevels.has(level);
+    return this.visitedLevels.has(level);
   }
 
   public markLevelVisited(level: string): void {
-      this.visitedLevels.add(level);
+    this.visitedLevels.add(level);
   }
 
   public getVisitedLevels(): string[] {
-      return Array.from(this.visitedLevels);
-  }
-  
-  public setVisitedLevels(levels: string[]) {
-      this.visitedLevels = new Set(levels);
+    return Array.from(this.visitedLevels);
   }
 
-  public loadState(data: any, saveTimestamp?: number) { // saveTimestamp added
+  public setVisitedLevels(levels: string[]) {
+    this.visitedLevels = new Set(levels);
+  }
+
+  public loadState(data: any, saveTimestamp?: number) {
+    // saveTimestamp added
     if (!data) return;
 
     if (data.visitedLevels) {
-        this.visitedLevels = new Set(data.visitedLevels);
+      this.visitedLevels = new Set(data.visitedLevels);
     } else {
-        this.visitedLevels.clear();
+      this.visitedLevels.clear();
     }
 
     if (data.characterName) this.characterName = data.characterName;
     if (data.health !== undefined) this.health = data.health;
     if (data.level !== undefined) {
-        this.level = data.level;
-        // Sanitization: Recalculate MaxHealth based on Level to fix any save corruption
-        const baseHealth = 100;
-        // Adjusted to 5 HP per level (User Request)
-        this.maxHealth = baseHealth + (this.level - 1) * 5;
-        // Adjusted to 4 Speed per level (User Request) & Fix missing load logic
-        this.baseSpeed = 400 + (this.level - 1) * 4;
-        
-        // Force update immediately
-        this.emit("maxHealthChanged", this.getMaxHealth());
+      this.level = data.level;
+      // Sanitization: Recalculate MaxHealth based on Level to fix any save corruption
+      const baseHealth = 100;
+      // Adjusted to 5 HP per level (User Request)
+      this.maxHealth = baseHealth + (this.level - 1) * 5;
+      // Adjusted to 4 Speed per level (User Request) & Fix missing load logic
+      this.baseSpeed = 400 + (this.level - 1) * 4;
+
+      // Force update immediately
+      this.emit("maxHealthChanged", this.getMaxHealth());
     }
     // if (data.maxHealth !== undefined) this.maxHealth = data.maxHealth; // Deprecated: Always calculated from Level
     if (data.experience !== undefined) this.experience = data.experience;
@@ -2521,181 +2887,214 @@ export class PlayerState extends EventEmitter {
 
     // --- MIGRATION & LOAD ---
     // Strength (was Melee)
-    if (data.skills && data.skills.strength) { // Modern
-         this.strength.level = data.skills.strength.level;
-         this.strength.experience = data.skills.strength.experience;
-    } else if (data.skills && data.skills.melee) { // Nested Old
-         this.strength.level = data.skills.melee.level;
-         this.strength.experience = data.skills.melee.experience;
-    } else if (data.meleeLevel !== undefined) { // Flat Old
-         this.strength.level = data.meleeLevel;
-         this.strength.experience = data.meleeExperience || 0;
+    if (data.skills && data.skills.strength) {
+      // Modern
+      this.strength.level = data.skills.strength.level;
+      this.strength.experience = data.skills.strength.experience;
+    } else if (data.skills && data.skills.melee) {
+      // Nested Old
+      this.strength.level = data.skills.melee.level;
+      this.strength.experience = data.skills.melee.experience;
+    } else if (data.meleeLevel !== undefined) {
+      // Flat Old
+      this.strength.level = data.meleeLevel;
+      this.strength.experience = data.meleeExperience || 0;
     }
 
     // Dexterity (was Range)
     if (data.skills && data.skills.dexterity) {
-         this.dexterity.level = data.skills.dexterity.level;
-         this.dexterity.experience = data.skills.dexterity.experience;
+      this.dexterity.level = data.skills.dexterity.level;
+      this.dexterity.experience = data.skills.dexterity.experience;
     } else if (data.skills && data.skills.range) {
-         this.dexterity.level = data.skills.range.level;
-         this.dexterity.experience = data.skills.range.experience;
+      this.dexterity.level = data.skills.range.level;
+      this.dexterity.experience = data.skills.range.experience;
     } else if (data.rangeLevel !== undefined) {
-         this.dexterity.level = data.rangeLevel;
-         this.dexterity.experience = data.rangeExperience || 0;
+      this.dexterity.level = data.rangeLevel;
+      this.dexterity.experience = data.rangeExperience || 0;
     }
 
     // Reflex (was Defense Skill)
     if (data.skills && data.skills.reflex) {
-         this.reflex.level = data.skills.reflex.level;
-         this.reflex.experience = data.skills.reflex.experience;
+      this.reflex.level = data.skills.reflex.level;
+      this.reflex.experience = data.skills.reflex.experience;
     } else if (data.skills && data.skills.defense) {
-         this.reflex.level = data.skills.defense.level;
-         this.reflex.experience = data.skills.defense.experience;
+      this.reflex.level = data.skills.defense.level;
+      this.reflex.experience = data.skills.defense.experience;
     } else if (data.defenseLevel !== undefined) {
-         this.reflex.level = data.defenseLevel;
-         this.reflex.experience = data.defenseExperience || 0;
+      this.reflex.level = data.defenseLevel;
+      this.reflex.experience = data.defenseExperience || 0;
     }
-    
+
     // Intelligence (New)
     if (data.skills && data.skills.intelligence) {
-         this.intelligence.level = data.skills.intelligence.level;
-         this.intelligence.experience = data.skills.intelligence.experience;
+      this.intelligence.level = data.skills.intelligence.level;
+      this.intelligence.experience = data.skills.intelligence.experience;
     } else {
-         // Default
-         this.intelligence = { level: 1, experience: 0 };
+      // Default
+      this.intelligence = { level: 1, experience: 0 };
     }
 
     if (data.playTime !== undefined) this.playTime = data.playTime;
     if (data.balance !== undefined) this.balance = data.balance;
     this.sessionStartTime = Date.now(); // Always reset session start time on load
-    
+
     // Inventory
     this.inventory = [];
     if (data.inventory) {
-        data.inventory.forEach((item: any) => {
-            this.inventory.push({
-                uid: item.uid || this.generateUID(),
-                itemId: item.itemId,
-                count: item.count,
-                stars: item.stars,
-                attributes: item.attributes
-            });
+      data.inventory.forEach((item: any) => {
+        this.inventory.push({
+          uid: item.uid || this.generateUID(),
+          itemId: item.itemId,
+          count: item.count,
+          stars: item.stars,
+          attributes: item.attributes,
         });
+      });
     }
 
     // Restore Active Buffs
     if (data.activeBuffs && Array.isArray(data.activeBuffs)) {
-        this.activeBuffs.clear();
-        const now = Date.now();
-        const elapsed = saveTimestamp ? (now - saveTimestamp) : 0;
-        
-        data.activeBuffs.forEach((buff: Buff) => {
-            // Reduce duration by elapsed time since save
-            const remaining = buff.duration - elapsed;
-            
-            if (remaining > 0) {
-                // Re-apply buff
-                this.addBuff(buff.id, buff.attr, buff.value, remaining, buff.isPercent);
-            }
-        });
+      this.activeBuffs.clear();
+      const now = Date.now();
+      const elapsed = saveTimestamp ? now - saveTimestamp : 0;
+
+      data.activeBuffs.forEach((buff: Buff) => {
+        // Reduce duration by elapsed time since save
+        const remaining = buff.duration - elapsed;
+
+        if (remaining > 0) {
+          // Re-apply buff
+          this.addBuff(
+            buff.id,
+            buff.attr,
+            buff.value,
+            remaining,
+            buff.isPercent,
+          );
+        }
+      });
     }
 
     // Restore Map Markers
     if (data.markers) {
-        this._markers = data.markers;
-        this.emit("markersChanged", this._markers);
+      this._markers = data.markers;
+      this.emit("markersChanged", this._markers);
     }
 
-    this.equippedWeaponId = data.equippedWeaponId || null; 
-    this.equippedWeaponItem = data.equippedWeaponItem || (this.equippedWeaponId ? { itemId: this.equippedWeaponId, count: 1, uid: "equipped_weapon" } : null);
+    this.equippedWeaponId = data.equippedWeaponId || null;
+    this.equippedWeaponItem =
+      data.equippedWeaponItem ||
+      (this.equippedWeaponId
+        ? { itemId: this.equippedWeaponId, count: 1, uid: "equipped_weapon" }
+        : null);
 
-    this.equippedShieldId = data.equippedShieldId || null; 
-    this.equippedShieldItem = data.equippedShieldItem || (this.equippedShieldId ? { itemId: this.equippedShieldId, count: 1, uid: "equipped_shield" } : null);
+    this.equippedShieldId = data.equippedShieldId || null;
+    this.equippedShieldItem =
+      data.equippedShieldItem ||
+      (this.equippedShieldId
+        ? { itemId: this.equippedShieldId, count: 1, uid: "equipped_shield" }
+        : null);
 
     this.equippedHelmetId = data.equippedHelmetId || null;
-    this.equippedHelmetItem = data.equippedHelmetItem || (this.equippedHelmetId ? { itemId: this.equippedHelmetId, count: 1, uid: "equipped_helmet" } : null);
+    this.equippedHelmetItem =
+      data.equippedHelmetItem ||
+      (this.equippedHelmetId
+        ? { itemId: this.equippedHelmetId, count: 1, uid: "equipped_helmet" }
+        : null);
 
     this.equippedArmorId = data.equippedArmorId || null;
-    this.equippedArmorItem = data.equippedArmorItem || (this.equippedArmorId ? { itemId: this.equippedArmorId, count: 1, uid: "equipped_armor" } : null);
+    this.equippedArmorItem =
+      data.equippedArmorItem ||
+      (this.equippedArmorId
+        ? { itemId: this.equippedArmorId, count: 1, uid: "equipped_armor" }
+        : null);
 
     this.equippedLegsId = data.equippedLegsId || null;
-    this.equippedLegsItem = data.equippedLegsItem || (this.equippedLegsId ? { itemId: this.equippedLegsId, count: 1, uid: "equipped_legs" } : null);
+    this.equippedLegsItem =
+      data.equippedLegsItem ||
+      (this.equippedLegsId
+        ? { itemId: this.equippedLegsId, count: 1, uid: "equipped_legs" }
+        : null);
 
     this.equippedBootsId = data.equippedBootsId || null;
-    this.equippedBootsItem = data.equippedBootsItem || (this.equippedBootsId ? { itemId: this.equippedBootsId, count: 1, uid: "equipped_boots" } : null);
+    this.equippedBootsItem =
+      data.equippedBootsItem ||
+      (this.equippedBootsId
+        ? { itemId: this.equippedBootsId, count: 1, uid: "equipped_boots" }
+        : null);
     this.shieldInventoryIds = data.shieldInventoryIds || []; // Ensure empty array if undefined
-    
+
     // Persistent Items
     this.containers.clear();
     if (data.containers) {
-        data.containers.forEach(([id, items]: [string, any[]]) => {
-            this.containers.set(id, items);
-        });
+      data.containers.forEach(([id, items]: [string, any[]]) => {
+        this.containers.set(id, items);
+      });
     }
-    
+
     this.droppedItems.clear();
     if (data.persistentItems) {
-        // Calculate Time Offset (Current Time - Save Time)
-        // We add this offset to item.createdAt so that (Now - NewCreatedAt) == (SaveTime - OldCreatedAt) is NOT what we want.
-        // We want (Now - NewCreatedAt) == (SaveTime - OldCreatedAt).
-        // Let's do math:
-        // Elapsed_Old = SaveTime - OldCreatedAt
-        // Elapsed_New = Now - NewCreatedAt
-        // We want Elapsed_New = Elapsed_Old
-        // Now - NewCreatedAt = SaveTime - OldCreatedAt
-        // NewCreatedAt = Now - (SaveTime - OldCreatedAt)
-        // NewCreatedAt = Now - SaveTime + OldCreatedAt
-        
-        let timeShift = 0;
-        if (saveTimestamp) {
-            timeShift = Date.now() - saveTimestamp;
-        }
+      // Calculate Time Offset (Current Time - Save Time)
+      // We add this offset to item.createdAt so that (Now - NewCreatedAt) == (SaveTime - OldCreatedAt) is NOT what we want.
+      // We want (Now - NewCreatedAt) == (SaveTime - OldCreatedAt).
+      // Let's do math:
+      // Elapsed_Old = SaveTime - OldCreatedAt
+      // Elapsed_New = Now - NewCreatedAt
+      // We want Elapsed_New = Elapsed_Old
+      // Now - NewCreatedAt = SaveTime - OldCreatedAt
+      // NewCreatedAt = Now - (SaveTime - OldCreatedAt)
+      // NewCreatedAt = Now - SaveTime + OldCreatedAt
 
-        data.persistentItems.forEach(([level, items]: [string, any[]]) => {
-            const seenIds = new Set<string>();
-            const adjustedItems: any[] = [];
+      let timeShift = 0;
+      if (saveTimestamp) {
+        timeShift = Date.now() - saveTimestamp;
+      }
 
-            items.forEach(item => {
-                 // DEDUPLICATION: Check if ID was already processed in this level
-                 if (seenIds.has(item.itemId)) {
-                     // console.warn(`[PlayerState] Removing duplicate item ${item.itemId} from Level ${level} during Load`);
-                     return;
-                 }
-                 seenIds.add(item.itemId);
+      data.persistentItems.forEach(([level, items]: [string, any[]]) => {
+        const seenIds = new Set<string>();
+        const adjustedItems: any[] = [];
 
-                 if (item.createdAt && saveTimestamp) {
-                     // Shift the creation time forward by the duration we were offline
-                     // So if we were offline for 1 hour, createdAt moves forward by 1 hour.
-                     item.createdAt = item.createdAt + timeShift;
-                 }
-                 adjustedItems.push(item);
-            });
-            this.droppedItems.set(level, adjustedItems);
+        items.forEach((item) => {
+          // DEDUPLICATION: Check if ID was already processed in this level
+          if (seenIds.has(item.itemId)) {
+            // console.warn(`[PlayerState] Removing duplicate item ${item.itemId} from Level ${level} during Load`);
+            return;
+          }
+          seenIds.add(item.itemId);
+
+          if (item.createdAt && saveTimestamp) {
+            // Shift the creation time forward by the duration we were offline
+            // So if we were offline for 1 hour, createdAt moves forward by 1 hour.
+            item.createdAt = item.createdAt + timeShift;
+          }
+          adjustedItems.push(item);
         });
+        this.droppedItems.set(level, adjustedItems);
+      });
     }
 
     // Explored Areas
     this.exploredAreas.clear();
     if (data.exploredAreas) {
-        data.exploredAreas.forEach(([level, area]: [string, boolean[][]]) => {
-            this.exploredAreas.set(level, area);
-        });
+      data.exploredAreas.forEach(([level, area]: [string, boolean[][]]) => {
+        this.exploredAreas.set(level, area);
+      });
     }
-    
+
     // Altar & Magic
     this.altarStorage.clear();
     if (data.altarStorage) {
-        data.altarStorage.forEach(([id, items]: [string, any[]]) => {
-            this.altarStorage.set(id, items);
-        });
+      data.altarStorage.forEach(([id, items]: [string, any[]]) => {
+        this.altarStorage.set(id, items);
+      });
     }
-    
+
     if (data.enchantedRunes) {
-        this.enchantedRunes = data.enchantedRunes;
+      this.enchantedRunes = data.enchantedRunes;
     } else {
-        this.enchantedRunes = [];
+      this.enchantedRunes = [];
     }
-    
+
     // Force UI Update
     this.emit("reset");
     this.emit("inventoryUpdated");
@@ -2713,153 +3112,198 @@ export class PlayerState extends EventEmitter {
   }
 
   public setName(n: string) {
-      this.characterName = n;
-      this.emit("nameChanged", n);
+    this.characterName = n;
+    this.emit("nameChanged", n);
   }
-
 
   public loadFromData(data: any) {
     if (!data) return;
 
     // Restore Name
     if (data.characterName) this.characterName = data.characterName;
-    
+
     // Restore Core Vitals
     if (data.level !== undefined) this.level = data.level;
     if (data.experience !== undefined) this.experience = data.experience;
-    
+
     // Skills
     if (data.meleeLevel !== undefined) this.strength.level = data.meleeLevel;
-    else if(data.strengthLevel !== undefined) this.strength.level = data.strengthLevel;
+    else if (data.strengthLevel !== undefined)
+      this.strength.level = data.strengthLevel;
 
-    if (data.meleeExperience !== undefined) this.strength.experience = data.meleeExperience;
-    else if (data.strengthExperience !== undefined) this.strength.experience = data.strengthExperience;
+    if (data.meleeExperience !== undefined)
+      this.strength.experience = data.meleeExperience;
+    else if (data.strengthExperience !== undefined)
+      this.strength.experience = data.strengthExperience;
 
     if (data.rangeLevel !== undefined) this.dexterity.level = data.rangeLevel;
-    else if (data.dexterityLevel !== undefined) this.dexterity.level = data.dexterityLevel;
+    else if (data.dexterityLevel !== undefined)
+      this.dexterity.level = data.dexterityLevel;
 
-    if (data.rangeExperience !== undefined) this.dexterity.experience = data.rangeExperience;
-    else if (data.dexterityExperience !== undefined) this.dexterity.experience = data.dexterityExperience;
-    
+    if (data.rangeExperience !== undefined)
+      this.dexterity.experience = data.rangeExperience;
+    else if (data.dexterityExperience !== undefined)
+      this.dexterity.experience = data.dexterityExperience;
+
     if (data.defenseLevel !== undefined) this.reflex.level = data.defenseLevel;
-    else if (data.reflexLevel !== undefined) this.reflex.level = data.reflexLevel;
+    else if (data.reflexLevel !== undefined)
+      this.reflex.level = data.reflexLevel;
 
-    if (data.defenseExperience !== undefined) this.reflex.experience = data.defenseExperience;
-    else if (data.reflexExperience !== undefined) this.reflex.experience = data.reflexExperience;
+    if (data.defenseExperience !== undefined)
+      this.reflex.experience = data.defenseExperience;
+    else if (data.reflexExperience !== undefined)
+      this.reflex.experience = data.reflexExperience;
 
     if (data.intelligenceLevel !== undefined) {
-         this.intelligence.level = data.intelligenceLevel;
-         this.intelligence.experience = data.intelligenceExperience || 0;
+      this.intelligence.level = data.intelligenceLevel;
+      this.intelligence.experience = data.intelligenceExperience || 0;
     }
-    
+
     // Hunger
     if (data.hunger !== undefined) this.hunger = data.hunger;
-    
+
     // Willpower
     if (data.willpowerExp !== undefined) this.willpowerExp = data.willpowerExp;
-    if (data.willpowerTarget !== undefined) this.willpowerTarget = data.willpowerTarget;
-    
+    if (data.willpowerTarget !== undefined)
+      this.willpowerTarget = data.willpowerTarget;
+
     // Equipment IDs
     // Equipment Items
     if (data.equippedWeaponId !== undefined) {
-        this.equippedWeaponId = data.equippedWeaponId;
-        this.equippedWeaponItem = data.equippedWeaponItem || (data.equippedWeaponId ? { itemId: data.equippedWeaponId, count: 1, uid: "equipped_weapon" } : null);
+      this.equippedWeaponId = data.equippedWeaponId;
+      this.equippedWeaponItem =
+        data.equippedWeaponItem ||
+        (data.equippedWeaponId
+          ? { itemId: data.equippedWeaponId, count: 1, uid: "equipped_weapon" }
+          : null);
     }
     if (data.equippedShieldId !== undefined) {
-        this.equippedShieldId = data.equippedShieldId;
-        this.equippedShieldItem = data.equippedShieldItem || (data.equippedShieldId ? { itemId: data.equippedShieldId, count: 1, uid: "equipped_shield" } : null);
+      this.equippedShieldId = data.equippedShieldId;
+      this.equippedShieldItem =
+        data.equippedShieldItem ||
+        (data.equippedShieldId
+          ? { itemId: data.equippedShieldId, count: 1, uid: "equipped_shield" }
+          : null);
     }
     if (data.equippedHelmetId !== undefined) {
-        this.equippedHelmetId = data.equippedHelmetId;
-        this.equippedHelmetItem = data.equippedHelmetItem || (data.equippedHelmetId ? { itemId: data.equippedHelmetId, count: 1, uid: "equipped_helmet" } : null);
+      this.equippedHelmetId = data.equippedHelmetId;
+      this.equippedHelmetItem =
+        data.equippedHelmetItem ||
+        (data.equippedHelmetId
+          ? { itemId: data.equippedHelmetId, count: 1, uid: "equipped_helmet" }
+          : null);
     }
     if (data.equippedArmorId !== undefined) {
-        this.equippedArmorId = data.equippedArmorId;
-        this.equippedArmorItem = data.equippedArmorItem || (data.equippedArmorId ? { itemId: data.equippedArmorId, count: 1, uid: "equipped_armor" } : null);
+      this.equippedArmorId = data.equippedArmorId;
+      this.equippedArmorItem =
+        data.equippedArmorItem ||
+        (data.equippedArmorId
+          ? { itemId: data.equippedArmorId, count: 1, uid: "equipped_armor" }
+          : null);
     }
     if (data.equippedLegsId !== undefined) {
-        this.equippedLegsId = data.equippedLegsId;
-        this.equippedLegsItem = data.equippedLegsItem || (data.equippedLegsId ? { itemId: data.equippedLegsId, count: 1, uid: "equipped_legs" } : null);
+      this.equippedLegsId = data.equippedLegsId;
+      this.equippedLegsItem =
+        data.equippedLegsItem ||
+        (data.equippedLegsId
+          ? { itemId: data.equippedLegsId, count: 1, uid: "equipped_legs" }
+          : null);
     }
     if (data.equippedBootsId !== undefined) {
-        this.equippedBootsId = data.equippedBootsId;
-        this.equippedBootsItem = data.equippedBootsItem || (data.equippedBootsId ? { itemId: data.equippedBootsId, count: 1, uid: "equipped_boots" } : null);
+      this.equippedBootsId = data.equippedBootsId;
+      this.equippedBootsItem =
+        data.equippedBootsItem ||
+        (data.equippedBootsId
+          ? { itemId: data.equippedBootsId, count: 1, uid: "equipped_boots" }
+          : null);
     }
-    
+
     // New Slots
     if (data.equippedNeckId !== undefined) {
-        this.equippedNeckId = data.equippedNeckId;
-        this.equippedNeckItem = data.equippedNeckItem || (data.equippedNeckId ? { itemId: data.equippedNeckId, count: 1, uid: "equipped_neck" } : null);
+      this.equippedNeckId = data.equippedNeckId;
+      this.equippedNeckItem =
+        data.equippedNeckItem ||
+        (data.equippedNeckId
+          ? { itemId: data.equippedNeckId, count: 1, uid: "equipped_neck" }
+          : null);
     }
     if (data.equippedRingId !== undefined) {
-        this.equippedRingId = data.equippedRingId;
-        this.equippedRingItem = data.equippedRingItem || (data.equippedRingId ? { itemId: data.equippedRingId, count: 1, uid: "equipped_ring" } : null);
+      this.equippedRingId = data.equippedRingId;
+      this.equippedRingItem =
+        data.equippedRingItem ||
+        (data.equippedRingId
+          ? { itemId: data.equippedRingId, count: 1, uid: "equipped_ring" }
+          : null);
     }
     if (data.equippedAmmoId !== undefined) {
-        this.equippedAmmoId = data.equippedAmmoId;
-        this.equippedAmmoItem = data.equippedAmmoItem || (data.equippedAmmoId ? { itemId: data.equippedAmmoId, count: 1, uid: "equipped_ammo" } : null);
+      this.equippedAmmoId = data.equippedAmmoId;
+      this.equippedAmmoItem =
+        data.equippedAmmoItem ||
+        (data.equippedAmmoId
+          ? { itemId: data.equippedAmmoId, count: 1, uid: "equipped_ammo" }
+          : null);
     }
 
     if (data.markers) {
-        this._markers = data.markers;
-        this.emit("markersChanged", this._markers);
+      this._markers = data.markers;
+      this.emit("markersChanged", this._markers);
     }
-    
+
     if (data.windowConfigs) {
-        this.windowConfigs = { ...data.windowConfigs };
+      this.windowConfigs = { ...data.windowConfigs };
     }
 
     // Inventory
     this.inventory = [];
     if (data.inventory) {
-        data.inventory.forEach((item: any) => {
-            this.inventory.push({
-                uid: item.uid || this.generateUID(),
-                itemId: item.itemId,
-                count: item.count,
-                stars: item.stars,
-                attributes: item.attributes
-            });
+      data.inventory.forEach((item: any) => {
+        this.inventory.push({
+          uid: item.uid || this.generateUID(),
+          itemId: item.itemId,
+          count: item.count,
+          stars: item.stars,
+          attributes: item.attributes,
         });
+      });
     }
 
     // Containers (MAP & INVENTORY)
     this.containers.clear();
     if (data.containers) {
-        data.containers.forEach(([id, items]: [string, any[]]) => {
-            this.containers.set(id, items);
-        });
+      data.containers.forEach(([id, items]: [string, any[]]) => {
+        this.containers.set(id, items);
+      });
     }
-    
+
     // Visited Levels
     this.visitedLevels.clear();
     if (data.visitedLevels) {
-        data.visitedLevels.forEach((lvl: string) => this.visitedLevels.add(lvl));
+      data.visitedLevels.forEach((lvl: string) => this.visitedLevels.add(lvl));
     }
-    
+
     // Persistent Items (Dropped on Ground)
     this.droppedItems.clear();
     if (data.persistentItems) {
-        data.persistentItems.forEach(([level, items]: [string, any[]]) => {
-            this.droppedItems.set(level, items);
-        });
+      data.persistentItems.forEach(([level, items]: [string, any[]]) => {
+        this.droppedItems.set(level, items);
+      });
     }
-    
+
     // Explored Areas
     this.exploredAreas.clear();
     if (data.exploredAreas) {
-        data.exploredAreas.forEach(([level, area]: [string, boolean[][]]) => {
-            this.exploredAreas.set(level, area);
-        });
+      data.exploredAreas.forEach(([level, area]: [string, boolean[][]]) => {
+        this.exploredAreas.set(level, area);
+      });
     }
 
     // Emit Updates to UI
     this.emit("reset");
     this.emit("stateLoaded");
-    
+
     // Load Quests
     if (data.quests) {
-        QuestManager.getInstance().loadSaveData(data.quests);
+      QuestManager.getInstance().loadSaveData(data.quests);
     }
     this.emit("inventoryUpdated");
     this.emit("healthChanged", this.health);
@@ -2867,10 +3311,10 @@ export class PlayerState extends EventEmitter {
   }
 
   public respawn(): void {
-      this.resetWillpower();
-      this.recalculateMaxHealth();
-      this.health = this.maxHealth;
-      this.emit("healthChanged", this.health);
+    this.resetWillpower();
+    this.recalculateMaxHealth();
+    this.health = this.maxHealth;
+    this.emit("healthChanged", this.health);
   }
 
   public getWindowPosition(type: string) {
@@ -2880,159 +3324,267 @@ export class PlayerState extends EventEmitter {
     this.openWindows[type] = { x, y };
   }
   public update(time: number, delta: number): void {
-      // Periodic updates (called by GameScene)
-      this.statusTimer += delta;
+    // Periodic updates (called by GameScene)
+    this.statusTimer += delta;
 
-      // Hunger Decay: -1 every 2 seconds (2000ms)
-      if (time - this.lastHungerDecay > 2000) {
-          this.hunger = Math.max(0, this.hunger - 1);
-          this.lastHungerDecay = time;
-          this.emit("hungerUpdated", this.hunger);
-      }
+    // Hunger Decay: -1 every 2 seconds (2000ms)
+    if (time - this.lastHungerDecay > 2000) {
+      this.hunger = Math.max(0, this.hunger - 1);
+      this.lastHungerDecay = time;
+      this.emit("hungerUpdated", this.hunger);
+    }
 
-      // Regeneration: Every 2 seconds (aligned with hunger for simplicity, or separate)
-      if (time - this.lastRegen > 2000) {
-          this.regenerateHealth();
-          this.lastRegen = time;
-      }
+    // Regeneration: Every 2 seconds (aligned with hunger for simplicity, or separate)
+    if (time - this.lastRegen > 2000) {
+      this.regenerateHealth();
+      this.lastRegen = time;
+    }
 
-      // Update Buffs
-      if (this.activeBuffs.size > 0) {
-          this.activeBuffs.forEach((buff, key) => {
-              buff.duration -= delta;
-              if (buff.duration <= 0) {
-                  this.removeBuff(key);
-              }
-          });
-      }
+    // Update Buffs
+    if (this.activeBuffs.size > 0) {
+      this.activeBuffs.forEach((buff, key) => {
+        buff.duration -= delta;
+        if (buff.duration <= 0) {
+          this.removeBuff(key);
+        }
+      });
+    }
   }
 
   // --- BUFF METHODS ---
-  public addBuff(id: string, attr: string, value: number, duration: number, isPercent: boolean = false) {
-      this.activeBuffs.set(id, { id, attr, value, duration, isPercent });
-      this.emit("buffsChanged");
-      this.emit("requestTooltipUpdate"); // Force tooltip refresh if open
+  public addBuff(
+    id: string,
+    attr: string,
+    value: number,
+    duration: number,
+    isPercent: boolean = false,
+  ) {
+    this.activeBuffs.set(id, { id, attr, value, duration, isPercent });
+    this.emit("buffsChanged");
+    this.emit("requestTooltipUpdate"); // Force tooltip refresh if open
   }
 
   public removeBuff(id: string) {
-      if (this.activeBuffs.delete(id)) {
-          this.emit("buffsChanged");
-          this.emit("requestTooltipUpdate");
-      }
+    if (this.activeBuffs.delete(id)) {
+      this.emit("buffsChanged");
+      this.emit("requestTooltipUpdate");
+    }
   }
 
   public getBuffs(): Buff[] {
-      return Array.from(this.activeBuffs.values());
+    return Array.from(this.activeBuffs.values());
   }
 
   public getBuffsSaveData(): Buff[] {
-      return Array.from(this.activeBuffs.values());
+    return Array.from(this.activeBuffs.values());
+  }
+
+  // --- SNAPSHOT CONTRACT (Phase 1: Decouples SaveSystem from internal fields) ---
+
+  /**
+   * Export complete player state as a serializable snapshot.
+   * This is the ONLY API SaveSystem should use to gather player data.
+   *
+   * @returns PlayerSnapshot - fully serializable state (no Maps, Sets, or Functions)
+   */
+  public exportSnapshot(): PlayerSnapshot {
+    return {
+      // --- Identity & Vitals ---
+      characterName: this.characterName,
+      health: this.health,
+      maxHealth: this.maxHealth,
+      level: this.level,
+      experience: this.experience,
+      attackDamage: this.attackDamage,
+
+      // --- Skills (Modern Format) ---
+      skills: {
+        strength: { ...this.strength },
+        dexterity: { ...this.dexterity },
+        reflex: { ...this.reflex },
+        intelligence: { ...this.intelligence },
+      },
+
+      // --- Magic & Willpower ---
+      willpowerExp: this.willpowerExp,
+      willpowerTarget: this.willpowerTarget,
+
+      // --- Hunger ---
+      hunger: this.hunger,
+
+      // --- Playtime & Balance ---
+      playTime: this.playTime,
+      balance: this.balance,
+
+      // --- Equipment (IDs + Full Items) ---
+      equippedWeaponId: this.equippedWeaponId || null,
+      equippedWeaponItem: this.equippedWeaponItem,
+
+      equippedShieldId: this.equippedShieldId || null,
+      equippedShieldItem: this.getEquippedItemInSlot("shield"),
+
+      equippedHelmetId: this.equippedHelmetId || null,
+      equippedHelmetItem: this.getEquippedItemInSlot("helmet"),
+
+      equippedArmorId: this.equippedArmorId || null,
+      equippedArmorItem: this.getEquippedItemInSlot("armor"),
+
+      equippedLegsId: this.equippedLegsId || null,
+      equippedLegsItem: this.getEquippedItemInSlot("legs"),
+
+      equippedBootsId: this.equippedBootsId || null,
+      equippedBootsItem: this.getEquippedItemInSlot("boots"),
+
+      equippedNeckId: this.equippedNeckId || null,
+      equippedNeckItem: this.getEquippedItemInSlot("neck"),
+
+      equippedRingId: this.equippedRingId || null,
+      equippedRingItem: this.getEquippedItemInSlot("ring"),
+
+      equippedAmmoId: this.equippedAmmoId || null,
+      equippedAmmoItem: this.getEquippedItemInSlot("ammo"),
+
+      // --- Inventory ---
+      inventory: this.inventory.map((i) => ({ ...i })),
+      shieldInventoryIds: [...this.shieldInventoryIds],
+      inventoryWeaponIds: this.getInventoryWeapons().map((w) => w.id),
+
+      // --- World State (convert Maps to Arrays) ---
+      exploredAreas: Array.from(this.exploredAreas.entries()),
+      persistentItems: Array.from(this.droppedItems.entries()),
+      containers: Array.from(this.containers.entries()),
+      visitedLevels: Array.from(this.visitedLevels),
+
+      // --- Altar & Magic ---
+      altarStorage: Array.from(this.altarStorage.entries()),
+      enchantedRunes: [...this.enchantedRunes],
+
+      // --- Quests & Status ---
+      quests: QuestManager.getInstance().getSaveData(),
+      activeBuffs: this.getBuffsSaveData(),
+
+      // --- UI State ---
+      markers: this.getMarkers(),
+      windowConfigs: { ...this.openWindows },
+    };
+  }
+
+  /**
+   * Import a complete player state snapshot.
+   * This is the ONLY API SaveSystem should use to restore player data.
+   * Handles both modern and legacy save formats via migration logic.
+   *
+   * @param snapshot - PlayerSnapshot to import
+   * @param saveTimestamp - Optional timestamp of when save was created (for buff duration adjustment)
+   */
+  public importSnapshot(
+    snapshot: PlayerSnapshot,
+    saveTimestamp?: number,
+  ): void {
+    if (!snapshot) return;
+
+    // Delegate to existing loadState() which has all migration logic
+    this.loadState(snapshot, saveTimestamp);
   }
 
   public getHealthRegen(): number {
-      const tier = this.getHungerTier();
-      const regenBonusPct = tier * 0.2; // 0.2% per tier
-      // Calculate based on Total Max Health (including buffs)
-      // Allow float regen
-      return Math.max(0, this.getMaxHealth() * (regenBonusPct / 100));
+    const tier = this.getHungerTier();
+    const regenBonusPct = tier * 0.2; // 0.2% per tier
+    // Calculate based on Total Max Health (including buffs)
+    // Allow float regen
+    return Math.max(0, this.getMaxHealth() * (regenBonusPct / 100));
   }
 
   private regenerateHealth() {
-      const maxHP = this.getMaxHealth();
-      if (this.health >= maxHP) return;
-      if (this.isDead()) return; // Dead players don't regen
+    const maxHP = this.getMaxHealth();
+    if (this.health >= maxHP) return;
+    if (this.isDead()) return; // Dead players don't regen
 
-      const regenAmount = this.getHealthRegen();
-      
-      if (regenAmount > 0) {
-          this.setHealth(Math.min(maxHP, this.health + regenAmount));
-      }
+    const regenAmount = this.getHealthRegen();
+
+    if (regenAmount > 0) {
+      this.setHealth(Math.min(maxHP, this.health + regenAmount));
+    }
   }
 
-
-
   public getHungerTier(): number {
-      // 0-100 = Tier 0? Or Tier 1?
-      // "Cada tier de fome vai dar um bonus... checando ao tier 10"
-      // 1000 Total. 10 Tiers = 100 each.
-      // Stockpile (1001-2000) counts as Tier 10? Or just "Stock"?
-      // Assuming Tier = Math.floor(hunger / 100). Max 10.
-      return Math.min(10, Math.floor(this.hunger / 100));
+    // 0-100 = Tier 0? Or Tier 1?
+    // "Cada tier de fome vai dar um bonus... checando ao tier 10"
+    // 1000 Total. 10 Tiers = 100 each.
+    // Stockpile (1001-2000) counts as Tier 10? Or just "Stock"?
+    // Assuming Tier = Math.floor(hunger / 100). Max 10.
+    return Math.min(10, Math.floor(this.hunger / 100));
   }
 
   public eatFood(amount: number) {
-      // Max 2000 (1000 normal + 1000 stock)
-      this.hunger = Math.min(2000, this.hunger + amount);
-      this.emit("hungerUpdated", this.hunger);
-      this.log("msg_ate_food", { amount }, "#10b981");
+    // Max 2000 (1000 normal + 1000 stock)
+    this.hunger = Math.min(2000, this.hunger + amount);
+    this.emit("hungerUpdated", this.hunger);
+    this.log("msg_ate_food", { amount }, "#10b981");
   }
-  
+
   public consumeItem(uid: string): boolean {
-      const item = this.getInventoryItem(uid);
-      if (!item) return false;
-      
-      const def = WeaponRegistry.getWeaponDefinition(item.itemId);
-      if (!def || !def.consumable || def.type !== "food") return false;
-      
-      // Check Max Hunger Overflow
-      const val = def.hungerValue || 0;
-      if (this.hunger + val > 2000) {
-          this.emit("message", t_game("msg_hunger_full"));
-          return false;
-      }
-      
-      // Consume logic
-      if (val > 0) {
-          this.eatFood(val);
-      }
-      
-      // Decrease count or Remove
-      if (item.count > 1) {
-          item.count--;
-          this.emit("inventoryUpdated");
-      } else {
-          this.removeInventoryItem(uid);
-      }
-      
-      return true;
+    const item = this.getInventoryItem(uid);
+    if (!item) return false;
+
+    const def = WeaponRegistry.getWeaponDefinition(item.itemId);
+    if (!def || !def.consumable || def.type !== "food") return false;
+
+    // Check Max Hunger Overflow
+    const val = def.hungerValue || 0;
+    if (this.hunger + val > 2000) {
+      this.emit("message", t_game("msg_hunger_full"));
+      return false;
+    }
+
+    // Consume logic
+    if (val > 0) {
+      this.eatFood(val);
+    }
+
+    // Decrease count or Remove
+    if (item.count > 1) {
+      item.count--;
+      this.emit("inventoryUpdated");
+    } else {
+      this.removeInventoryItem(uid);
+    }
+
+    return true;
   }
 
   public clearWindowPositions() {
     this.openWindows = {};
   }
-  
-
-
-
 
   public isCloudShadowsEnabled(): boolean {
-      return this._cloudShadowsEnabled;
+    return this._cloudShadowsEnabled;
   }
 
   public setCloudShadowsEnabled(enabled: boolean): void {
-      if (this._cloudShadowsEnabled !== enabled) {
-          this._cloudShadowsEnabled = enabled;
-          this.emit("cloudShadowsChanged", enabled);
-      }
+    if (this._cloudShadowsEnabled !== enabled) {
+      this._cloudShadowsEnabled = enabled;
+      this.emit("cloudShadowsChanged", enabled);
+    }
   }
 
   public toggleCloudShadows(): void {
-      this.setCloudShadowsEnabled(!this._cloudShadowsEnabled);
+    this.setCloudShadowsEnabled(!this._cloudShadowsEnabled);
   }
 
   // --- Rune Cooldown System ---
   public isRuneOnCooldown(): boolean {
-      const now = Date.now();
-      return (now - this.lastRuneCastTime) < this.runeCooldownDuration;
+    const now = Date.now();
+    return now - this.lastRuneCastTime < this.runeCooldownDuration;
   }
 
   public getRemainingCooldown(): number {
-      const now = Date.now();
-      const elapsed = now - this.lastRuneCastTime;
-      return Math.max(0, this.runeCooldownDuration - elapsed);
+    const now = Date.now();
+    const elapsed = now - this.lastRuneCastTime;
+    return Math.max(0, this.runeCooldownDuration - elapsed);
   }
 
   public startRuneCooldown(): void {
-      this.lastRuneCastTime = Date.now();
+    this.lastRuneCastTime = Date.now();
   }
 }
