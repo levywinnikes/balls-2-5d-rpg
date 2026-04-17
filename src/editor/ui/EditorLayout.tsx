@@ -62,9 +62,16 @@ export const EditorLayout: React.FC = () => {
     }
   }, [currentLayer, selectedTool, selectedTile]);
 
+  const getScene = (): EditorScene | null => {
+    const scene = gameRef.current?.scene.getScene("EditorScene") as
+      | EditorScene
+      | undefined;
+    return scene || null;
+  };
+
   const handleSave = async () => {
     setSaveStatus("Saving...");
-    const scene = gameRef.current?.scene.getScene("EditorScene") as any;
+    const scene = getScene();
     if (!scene) return;
 
     try {
@@ -251,6 +258,53 @@ export const EditorLayout: React.FC = () => {
               )}
             </div>
           ))}
+        </div>
+
+        <div
+          style={{
+            padding: "10px",
+            borderTop: "1px solid #333",
+            borderBottom: "1px solid #333",
+            fontWeight: "bold",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <Grid size={14} /> Actions
+        </div>
+        <div
+          style={{
+            padding: "10px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
+          <button
+            onClick={() => {
+              const scene = getScene();
+              if (scene) {
+                scene.scene.stop("EditorScene");
+              }
+
+              const url = new URL(window.location.href);
+              url.searchParams.delete("editor");
+              window.location.href = url.toString();
+            }}
+            style={{
+              padding: "8px 10px",
+              borderRadius: "4px",
+              background: "#7f1d1d",
+              color: "#fff",
+              border: "1px solid #ef4444",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: 700,
+            }}
+          >
+            Exit Editor
+          </button>
         </div>
 
         <div

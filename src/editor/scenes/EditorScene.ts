@@ -24,7 +24,7 @@ export class EditorScene extends Phaser.Scene {
 
   preload() {
     // Load Map
-    this.load.json("newmap_data", "newmap.json");
+    this.load.json("newmap_data", "maps/newmap.json");
 
     // Load standard assets (subset for editor?)
     // Ideally we load same as BootScene

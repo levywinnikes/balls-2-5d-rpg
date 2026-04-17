@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
-import { useUI } from "../../context/UIContext";
 import { Sword, Scroll, Trash2, Droplets, User, Bot } from "lucide-react";
 import { AudioManager } from "../../game/systems/AudioManager";
 
@@ -11,7 +10,6 @@ interface MainMenuUIProps {
 
 export const MainMenuUI: React.FC<MainMenuUIProps> = ({ onStart }) => {
   const { t, language, setLanguage } = useLanguage();
-  const { toggleEditorMode } = useUI();
   const [menu, setMenu] = useState<"main" | "new" | "load">("main");
   const [saves, setSaves] = useState<any[]>([]);
   const [charName, setCharName] = useState("");
@@ -154,8 +152,9 @@ export const MainMenuUI: React.FC<MainMenuUIProps> = ({ onStart }) => {
 
             <button
               onClick={() => {
-                toggleEditorMode(true);
-                onStart("editor");
+                const url = new URL(window.location.href);
+                url.searchParams.set("editor", "true");
+                window.location.href = url.toString();
               }}
               className={`${btnStyle} border-blue-900 text-blue-400`}
             >
