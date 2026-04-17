@@ -72,7 +72,14 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 - When these files change, update `docs/ARCHITECTURE_MAP.md` and the localization contract if any visible labels or descriptions change.
 - For UI overview work, check `src/game/systems/StatManager.ts` as the source of computed stat labels and breakdowns.
 
-## 11. EXECUTION RUNBOOK (MANDATORY)
+## 11. DOCUMENTATION PASS RULE (IMPORTANT)
+
+- Whenever the AI opens a new source file during investigation, it should capture any finding that helps future navigation or maintenance.
+- Record module boundaries, important entry points, hidden dependencies, special validation needs, and cross-file relationships in the relevant docs when they matter.
+- Keep these notes concise and actionable; do not duplicate code, but do record what a future AI or maintainer needs to know before editing.
+- If a file changes the mental model of the engine, prefer updating `docs/ARCHITECTURE_MAP.md` or the relevant contract in the same task.
+
+## 12. EXECUTION RUNBOOK (MANDATORY)
 
 - Before implementing any task, follow [AI_RUNBOOK.md](./AI_RUNBOOK.md).
 - Map impacted modules using [ARCHITECTURE_MAP.md](./ARCHITECTURE_MAP.md) before code edits.
