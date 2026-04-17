@@ -65,7 +65,14 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 - NPC dialogue text (including future conversation systems) must always use translation keys.
 - For these domains, read and follow `docs/contracts/LOCALIZATION_CONTRACT.md` before editing code.
 
-## 10. EXECUTION RUNBOOK (MANDATORY)
+## 10. DASHBOARD / OVERVIEW LAYER (IMPORTANT)
+
+- The character dashboard is split across `src/ui/dashboard/HeroDashboard.tsx` and the detail panels under `src/ui/dashboard/components/`.
+- `ItemDetailPanel.tsx`, `StarPointsDetailPanel.tsx`, and `ConditionDetailPanel.tsx` are presentation-only views; they should read state from shared helpers and not own game rules.
+- When these files change, update `docs/ARCHITECTURE_MAP.md` and the localization contract if any visible labels or descriptions change.
+- For UI overview work, check `src/game/systems/StatManager.ts` as the source of computed stat labels and breakdowns.
+
+## 11. EXECUTION RUNBOOK (MANDATORY)
 
 - Before implementing any task, follow [AI_RUNBOOK.md](./AI_RUNBOOK.md).
 - Map impacted modules using [ARCHITECTURE_MAP.md](./ARCHITECTURE_MAP.md) before code edits.

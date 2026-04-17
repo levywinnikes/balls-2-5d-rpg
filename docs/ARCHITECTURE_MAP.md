@@ -12,6 +12,8 @@ Use it before editing code to identify boundaries, owners, and validation scope.
 | Scene Runtime | `src/game/scenes/GameScene.ts`, `src/game/scenes/LoadingScene.ts` | Do not bypass `PlayerState` for UI state sync; keep scene pause/resume behavior contract-safe | `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/contracts/PLAYER_STATE_CONTRACT.md` |
 | Player State Hub | `src/game/entities/Player/PlayerState.ts` | Single source of truth for player-facing state and events | `docs/contracts/PLAYER_STATE_CONTRACT.md` |
 | UI Windows / HUD | `src/ui/windows/**`, `src/ui/components/**`, `src/ui/GameOverlay.tsx` | No hardcoded player-facing text; translation keys required | `docs/contracts/UI_DESIGN_CONTRACT.md` |
+| Character Dashboard / Stat Panels | `src/ui/dashboard/HeroDashboard.tsx`, `src/ui/dashboard/components/ItemDetailPanel.tsx`, `src/ui/dashboard/components/StarPointsDetailPanel.tsx`, `src/ui/dashboard/components/ConditionDetailPanel.tsx`, `src/ui/dashboard/components/HeroEquipmentPanel.tsx`, `src/ui/dashboard/components/HeroSmartInventory.tsx`, `src/ui/dashboard/components/HeroStatsTab.tsx` | Presentation layer only; derive state from `PlayerState` and stat helpers, never from raw scene logic | `docs/contracts/UI_DESIGN_CONTRACT.md`, `docs/contracts/LOCALIZATION_CONTRACT.md` |
+| Content Localization / Labels | `src/game/i18n/translations.ts`, `src/game/systems/StatManager.ts`, `src/game/utils/TooltipUtils.tsx` | Keep translation keys synchronized across languages; no fallback literals for player-facing labels | `docs/contracts/LOCALIZATION_CONTRACT.md` |
 | Map / BMS Access | `src/game/maps/MapLoader.ts`, `src/services/WorldMapService.ts` | Legacy map array access forbidden; use BMS-safe APIs | `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/SYSTEM_BMS.md` |
 | Navigation / Pathfinding | `src/services/NavigationService.ts`, `src/workers/pathfinding.worker.ts`, `src/workers/navigation.worker.ts` | Preserve buffer contract expected by workers | `docs/contracts/MAP_SYSTEM_CONTRACT.md` |
 | Save / Persistence | `src/game/systems/SaveSystem.ts`, `src/game/systems/AutoSaveSystem.ts` | Electron mode is canonical durable save path | `docs/contracts/PLAYER_STATE_CONTRACT.md` |
@@ -34,6 +36,10 @@ For every task summary, include:
 - `src/game/systems/TransitionSystem.ts`
 - `src/services/NavigationService.ts`
 - `src/services/WorldMapService.ts`
+- `src/ui/dashboard/HeroDashboard.tsx`
+- `src/ui/dashboard/components/ItemDetailPanel.tsx`
+- `src/ui/dashboard/components/StarPointsDetailPanel.tsx`
+- `src/ui/dashboard/components/ConditionDetailPanel.tsx`
 
 ## Fast Start
 
