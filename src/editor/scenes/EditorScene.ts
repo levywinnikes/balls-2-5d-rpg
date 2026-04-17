@@ -207,8 +207,8 @@ export class EditorScene extends Phaser.Scene {
              }
         }
         
-        if (!mapData.tiles) {
-             mapData.tiles = {};
+           if (!mapData.tileDefinitions) {
+               mapData.tileDefinitions = {};
         }
         
         let symbolToPlace = "";
@@ -217,7 +217,7 @@ export class EditorScene extends Phaser.Scene {
             symbolToPlace = ""; 
         } else {
             // Find existing symbol
-            const entry = Object.entries(mapData.tiles).find(([sym, def]: any) => def.id === this.selectedTile);
+            const entry = Object.entries(mapData.tileDefinitions).find(([sym, def]: any) => def.id === this.selectedTile);
             if(entry) {
                 symbolToPlace = entry[0];
             } else {
@@ -226,13 +226,13 @@ export class EditorScene extends Phaser.Scene {
                 // Simple strategy: use ID if short, or generate "t1", "t2"...
                 let attempt = this.selectedTile.substring(0, 2);
                 let counter = 1;
-                while (mapData.tiles[attempt] || mapData.entities[attempt]) {
+                while (mapData.tileDefinitions[attempt] || mapData.entityTemplates?.[attempt]) {
                     attempt = this.selectedTile.substring(0, 2) + counter++;
                 }
                 
                 // Add definition
                 console.log(`[Editor] Creating new symbol '${attempt}' for tile '${this.selectedTile}'`);
-                mapData.tiles[attempt] = { id: this.selectedTile };
+                mapData.tileDefinitions[attempt] = { id: this.selectedTile };
                 symbolToPlace = attempt;
             }
         }

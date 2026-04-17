@@ -69,7 +69,7 @@ export const SidebarMinimap: React.FC = () => {
   const getTileColor = (symbol: string, mapData: any): string => {
     if (colorCache.current[symbol]) return colorCache.current[symbol];
 
-    const definitions = { ...mapData.tiles, ...mapData.entities };
+    const definitions = { ...mapData.tileDefinitions, ...mapData.entityTemplates };
     const tileDef = definitions[symbol];
 
     if (!tileDef || symbol === "...") return "transparent";
