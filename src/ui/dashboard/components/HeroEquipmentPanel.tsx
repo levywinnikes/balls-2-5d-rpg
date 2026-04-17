@@ -190,7 +190,7 @@ export const HeroEquipmentPanel: React.FC<{
         [EquipmentSlot.RING]: "ring",
       };
       const key = map[slot] || slot;
-      return t(key as any) || slot;
+      return t(key as any);
     };
 
     const renderSlot = (slot: EquipmentSlot) => (
@@ -214,7 +214,7 @@ export const HeroEquipmentPanel: React.FC<{
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-white/40 text-[10px] font-bold tracking-[0.2em] uppercase mb-2 border-b border-white/10 pb-2 w-full text-center">
-          {t("dashboard.equipment" as any) || "Equipment"}
+          {t("dashboard.equipment" as any)}
         </h3>
 
         {/* Filter Buttons */}
@@ -227,7 +227,7 @@ export const HeroEquipmentPanel: React.FC<{
                 : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white"
             }`}
           >
-            {t("all" as any) || "All"}
+            {t("all" as any)}
           </button>
           <button
             onClick={() => onSlotClick("consumables" as any)}
@@ -237,7 +237,7 @@ export const HeroEquipmentPanel: React.FC<{
                 : "bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white"
             }`}
           >
-            {t("consumables" as any) || "Consumables"}
+            {t("consumables" as any)}
           </button>
         </div>
 
@@ -289,8 +289,8 @@ export const HeroEquipmentPanel: React.FC<{
 
         <div className="text-white/30 text-[9px] mt-0 uppercase tracking-widest opacity-50">
           {activeSection === "EQUIPMENT"
-            ? t("dashboard.hint_nav" as any) || "Navigate / Select"
-            : t("dashboard.hint_select" as any) || "Equipment Panel"}
+            ? t("dashboard.hint_nav" as any)
+            : t("dashboard.hint_select" as any)}
         </div>
       </div>
     );

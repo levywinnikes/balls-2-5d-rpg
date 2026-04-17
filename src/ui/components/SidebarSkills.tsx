@@ -91,14 +91,14 @@ export const SidebarSkills: React.FC = () => {
                     icon={<Star size={12 * scale} />} 
                     onMouseEnter={(e) => showTooltip({
                         text: t("level"),
-                        subtext: `${t("experience")}: ${playerState.getExperience()}\nNext: ${Math.ceil(XPTable.getXPRequiredForLevel(levelData.level + 1))}`,
+                        subtext: `${t("experience")}: ${playerState.getExperience()}\n${t("tooltip_next" as any)}: ${Math.ceil(XPTable.getXPRequiredForLevel(levelData.level + 1))}`,
                         x: e.clientX,
                         y: e.clientY
                     })}
                     onMouseLeave={hideTooltip}
                 />
                 <div className="text-[9px] text-[#666] text-right -mt-1 mb-1 pr-1">
-                    {levelData.level * 100 - levelData.percent} XP to next
+                    {levelData.level * 100 - levelData.percent} {t("tooltip_xp_to_next" as any)}
                 </div>
             </div>
 
@@ -112,7 +112,7 @@ export const SidebarSkills: React.FC = () => {
                 icon={<Sword size={12 * scale} />} 
                 onMouseEnter={(e) => showTooltip({
                     text: t("strength"),
-                    subtext: `Level ${strengthData.level}\nProgress: ${strengthData.percent.toFixed(1)}%`,
+                    subtext: `${t("level")} ${strengthData.level}\n${t("tooltip_progress" as any)}: ${strengthData.percent.toFixed(1)}%`,
                     x: e.clientX,
                     y: e.clientY
                 })}
@@ -126,7 +126,7 @@ export const SidebarSkills: React.FC = () => {
                 icon={<Crosshair size={12 * scale} />} 
                 onMouseEnter={(e) => showTooltip({
                     text: t("dexterity"),
-                    subtext: `Level ${dexterityData.level}\nProgress: ${dexterityData.percent.toFixed(1)}%`,
+                    subtext: `${t("level")} ${dexterityData.level}\n${t("tooltip_progress" as any)}: ${dexterityData.percent.toFixed(1)}%`,
                     x: e.clientX,
                     y: e.clientY
                 })}
@@ -140,7 +140,7 @@ export const SidebarSkills: React.FC = () => {
                 icon={<Shield size={12 * scale} />}
                 onMouseEnter={(e) => showTooltip({
                     text: t("reflex"),
-                    subtext: `Level ${reflexData.level}\nProgress: ${reflexData.percent.toFixed(1)}%`,
+                    subtext: `${t("level")} ${reflexData.level}\n${t("tooltip_progress" as any)}: ${reflexData.percent.toFixed(1)}%`,
                     x: e.clientX,
                     y: e.clientY
                 })}
@@ -154,7 +154,7 @@ export const SidebarSkills: React.FC = () => {
                 icon={<Brain size={12 * scale} />}
                 onMouseEnter={(e) => showTooltip({
                     text: t("intelligence"),
-                    subtext: `Level ${intelligenceData.level}\nProgress: ${intelligenceData.percent.toFixed(1)}%`,
+                    subtext: `${t("level")} ${intelligenceData.level}\n${t("tooltip_progress" as any)}: ${intelligenceData.percent.toFixed(1)}%`,
                     x: e.clientX,
                     y: e.clientY
                 })}
@@ -213,7 +213,7 @@ export const SidebarSkills: React.FC = () => {
                                 </div>
 
                                 <div className="col-span-2 h-px bg-gray-600 my-0.5"/>
-                                <span className="text-gray-500 italic">Subtotal:</span>
+                                <span className="text-gray-500 italic">{t("tooltip_subtotal")}</span>
                                 <span className="text-right text-gray-300">{subtotal}</span>
 
                                 <span className="text-purple-400">{t("tooltip_willpower_bonus")}:</span>
@@ -229,7 +229,7 @@ export const SidebarSkills: React.FC = () => {
                         );
 
                         showTooltip({
-                            text: isMagic ? (t("magic_damage" as any) || "Magic Dmg") : t("attack"),
+                            text: isMagic ? t("magic_damage" as any) : t("attack"),
                             subtext: tooltipContent,
                             x: e.clientX,
                             y: e.clientY
@@ -243,7 +243,7 @@ export const SidebarSkills: React.FC = () => {
                          <Sword size={12 * scale} className="text-orange-400"/>
                     )}
                     <span className={playerState.getEquippedWeapon()?.element === "fire" ? "text-purple-400" : ""}>
-                        {playerState.getEquippedWeapon()?.element === "fire" ? (t("magic_damage" as any) || "Magic Dmg") : t("attack")}
+                        {playerState.getEquippedWeapon()?.element === "fire" ? t("magic_damage" as any) : t("attack")}
                     </span>
                 </div>
                 <span className={`font-bold text-right ${playerState.getEquippedWeapon()?.element === "fire" ? "text-purple-400" : "text-orange-400"}`}>
@@ -285,7 +285,7 @@ export const SidebarSkills: React.FC = () => {
                                 </div>
 
                                 <div className="col-span-2 h-px bg-gray-700 my-0.5"/>
-                                <span className="text-gray-500 italic">Subtotal:</span>
+                                <span className="text-gray-500 italic">{t("tooltip_subtotal")}</span>
                                 <span className="text-right text-gray-300">{subtotal}</span>
 
                                 <span className="text-purple-400">{t("tooltip_willpower_bonus")}:</span>

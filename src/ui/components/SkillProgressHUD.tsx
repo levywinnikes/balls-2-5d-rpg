@@ -89,7 +89,7 @@ export const SkillProgressHUD: React.FC = () => {
           // Add new progressing skill
           newSkills.push({
             type,
-            label: t(labelKey as any) || labelKey,
+            label: t(labelKey as any),
             level: info.level,
             progress: info.progress * 100,
             accumulatedXp: gained,
