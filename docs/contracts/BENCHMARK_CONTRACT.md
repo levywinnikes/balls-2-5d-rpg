@@ -102,3 +102,16 @@ A feature is NOT done unless:
 ## 8. Documentation Language
 
 All benchmark contract updates must be in English.
+
+## 9. Logging and Diagnostics Standard
+
+Benchmark output and report payloads must be actionable for debugging regressions.
+
+1. Step labels must be stable and descriptive; avoid renaming labels without updating this contract and changelog notes.
+2. Step failures must include explicit cause context (expected vs actual state whenever possible).
+3. UI interaction failures must identify the target selector intent (button title/text or element title prefix).
+4. Timeouts must preserve the step label and timeout value in the error message.
+5. Runtime error capture remains mandatory; if stack trace exists, it should be preserved in report output.
+6. E2E report payload must keep: benchmark name, map, level, pass/fail, total time, per-step timing, and runtime errors.
+
+These rules exist to keep failures reproducible and easy to triage across local and CI environments.
