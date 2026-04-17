@@ -3021,7 +3021,7 @@ export default class GameScene extends Phaser.Scene {
           } else {
             ps.emit("uiNotification", {
               type: "error",
-              message: "No charges left.",
+              message: t_game("msg_no_charges_left"),
             });
           }
         }
@@ -3037,8 +3037,7 @@ export default class GameScene extends Phaser.Scene {
     if (runeDef && runeDef.singleTargetOnly) {
       PlayerState.getInstance().emit(
         "message",
-        t_game("msg_star_rune_no_target" as any) ||
-          "This rune requires a target!",
+        t_game("msg_star_rune_no_target" as any),
       );
       return; // Keep targeting mode active so player can click an enemy
     }
@@ -3068,7 +3067,7 @@ export default class GameScene extends Phaser.Scene {
     if (currentMem > maxMem) {
       ps.emit("uiNotification", {
         type: "error",
-        message: "Memory Overload! Runes inactive.",
+        message: t_game("msg_memory_overload_runes_inactive"),
       });
       this.resetCursorMode();
       return;
@@ -3079,7 +3078,10 @@ export default class GameScene extends Phaser.Scene {
       const remaining = Math.ceil(ps.getRemainingCooldown() / 1000);
       ps.emit("uiNotification", {
         type: "error",
-        message: `Rune on cooldown! Wait ${remaining}s`,
+        message: t_game("msg_rune_on_cooldown_wait").replace(
+          "{seconds}",
+          remaining.toString(),
+        ),
       });
       return;
     }
@@ -3094,7 +3096,10 @@ export default class GameScene extends Phaser.Scene {
 
       // DON'T reset cursor mode - keep rune selected for continuous casting
     } else {
-      ps.emit("uiNotification", { type: "error", message: "No charges left." });
+      ps.emit("uiNotification", {
+        type: "error",
+        message: t_game("msg_no_charges_left"),
+      });
       // DON'T reset cursor mode - allow manual cancel or rune change
     }
   }
@@ -3625,10 +3630,15 @@ export default class GameScene extends Phaser.Scene {
                 );
               const pItem = pItems.find((i) => i.itemId === item.itemId);
               if (pItem) pItem.count = item.count;
-              const itemName = def ? t_game(`item_${def.id}` as any) : "Item";
+              const itemName = def
+                ? t_game(`item_${def.id}` as any)
+                : t_game("generic_item");
               PlayerState.getInstance().emit("uiNotification", {
                 type: "info",
-                message: "Consumed 1x " + itemName,
+                message: t_game("msg_consumed_item").replace(
+                  "{item}",
+                  itemName,
+                ),
               });
             } else {
               PlayerState.getInstance().removePersistentDroppedItem(

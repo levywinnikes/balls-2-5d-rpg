@@ -8,8 +8,8 @@ const { execSync } = require("child_process");
 const path = require("path");
 
 const ROOT_DIR = process.cwd();
-const SOURCE_GLOB = "-- '*.ts' '*.tsx' '*.js' '*.jsx'";
 const EXCLUDED_FILES = new Set(["src/game/i18n/translations.ts"]);
+const VALID_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
 const RULES = [
   {
@@ -58,11 +58,11 @@ function getDiffText() {
   let committed = "";
 
   if (base) {
-    committed = tryRun(`git diff --unified=0 ${base}...HEAD ${SOURCE_GLOB}`);
+    committed = tryRun(`git diff --unified=0 ${base}...HEAD`);
   }
 
-  const staged = tryRun(`git diff --unified=0 --cached ${SOURCE_GLOB}`);
-  const unstaged = tryRun(`git diff --unified=0 ${SOURCE_GLOB}`);
+  const staged = tryRun("git diff --unified=0 --cached");
+  const unstaged = tryRun("git diff --unified=0");
 
   return [committed, staged, unstaged].filter(Boolean).join("\n");
 }
@@ -81,6 +81,10 @@ function parseAddedLines(diffText) {
   for (const line of lines) {
     if (line.startsWith("+++ b/")) {
       currentFile = normalizePath(line.slice(6));
+      const ext = path.extname(currentFile).toLowerCase();
+      if (!VALID_EXTENSIONS.has(ext)) {
+        currentFile = "";
+      }
       continue;
     }
 

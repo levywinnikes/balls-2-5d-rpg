@@ -277,6 +277,10 @@ export const translations = {
     msg_select_target: "Select target...",
     msg_action_canceled: "Canceled.",
     msg_memory_overload_runes_inactive: "Memory Overload! Runes inactive.",
+    msg_no_charges_left: "No charges left.",
+    msg_rune_on_cooldown_wait: "Rune on cooldown! Wait {seconds}s",
+    msg_consumed_item: "Consumed 1x {item}",
+    generic_item: "Item",
     
     // Actions (Context Menu)
     action_pickup: "Pick Up",
@@ -918,6 +922,10 @@ export const translations = {
     msg_action_canceled: "Cancelado.",
     msg_memory_overload_runes_inactive:
       "Sobrecarga de Memória! Runas inativas.",
+    msg_no_charges_left: "Sem cargas restantes.",
+    msg_rune_on_cooldown_wait: "Runa em recarga! Aguarde {seconds}s",
+    msg_consumed_item: "Consumido 1x {item}",
+    generic_item: "Item",
 
     // Actions (Context Menu)
     action_pickup: "Pegar",
