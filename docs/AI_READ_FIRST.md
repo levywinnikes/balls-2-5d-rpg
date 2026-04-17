@@ -40,6 +40,12 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 - The guard fails if forbidden legacy patterns are found (e.g. `levelData.map`, `levelData.tiles`, `mapData.tiles`, `mapData.levels[...].map`, `levelData.map.length`).
 - Temporary scope note: `src/editor/` is excluded from this check until editor migration to BMS is completed.
 
+## 6. SAVE SYSTEM MODE (IMPORTANT)
+
+- Reliable local save persistence is **Electron-only** (`window.electronAPI`).
+- Browser runtime uses session fallback only (in-memory), which is not durable storage.
+- When validating save/load behavior, use `npm run electron-dev`.
+
 ---
 
 _Reference current implementation plan for full context._

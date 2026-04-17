@@ -22,7 +22,8 @@ Communication between the Phaser Engine and React UI is handled strictly via the
 
 ## Persistence System
 Persistence is handled in `src/game/systems/SaveSystem.ts`:
-- **Format**: JSON serialized objects stored in `localStorage` or downloaded.
+- **Primary Mode (Supported)**: Electron local persistence via `window.electronAPI`.
+- **Browser Mode**: Ephemeral fallback only (in-memory session), not reliable disk persistence.
 - **Data Saved**: Player equipment, position, level, health, hunger, and explored area (Fog of War).
 - **Map Persistence**: The state of dropped items and dead enemies is persisted per-level within the `PlayerState` maps.
 

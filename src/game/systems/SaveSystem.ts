@@ -87,10 +87,16 @@ export class SaveSystem {
   private scene: Phaser.Scene;
   private readonly SAVE_VERSION = "2.3.0"; // Bump version
   private currentCharacterName: string | null = null;
-  private memorySaveData: GameSaveData | null = null; // In-memory storage for Web
+  private memorySaveData: GameSaveData | null = null; // Ephemeral fallback for Browser-only sessions
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  private warnBrowserFallback(context: string): void {
+    console.warn(
+      `[SaveSystem] ${context}: persistent local saves are supported only via Electron (window.electronAPI). Browser mode is ephemeral and non-persistent.`,
+    );
   }
 // ... (omitted methods)
 
@@ -122,9 +128,10 @@ export class SaveSystem {
             return false;
         }
     } else {
-        // Web: Just session
+        // Browser fallback: session-only, not persisted to disk
+        this.warnBrowserFallback("createCharacter");
         this.memorySaveData = initialData;
-        console.log(`Web: Character session created: ${name}`);
+        console.log(`Web: Character session created (ephemeral): ${name}`);
         return true;
     }
   }
@@ -150,7 +157,8 @@ export class SaveSystem {
         }
         return [];
     } else {
-        // Web: Only show current session
+        // Browser fallback: only current in-memory session
+        this.warnBrowserFallback("listCharacters");
         if(this.memorySaveData && this.currentCharacterName) {
             return [{
                 name: this.currentCharacterName,
@@ -176,7 +184,8 @@ export class SaveSystem {
              return null;
         }
     } else {
-        // Web
+        // Browser fallback: load only current in-memory session
+        this.warnBrowserFallback("loadCharacter");
         if(name === this.currentCharacterName && this.memorySaveData) {
             return this.memorySaveData;
         }
@@ -400,8 +409,9 @@ export class SaveSystem {
               return false;
           }
       } else {
+          this.warnBrowserFallback("saveGame");
           this.memorySaveData = saveData;
-          console.log(`Web Save: Stored in memory for ${targetName}`);
+          console.log(`Web Save: Stored in memory only (ephemeral) for ${targetName}`);
           return true;
       }
 
