@@ -7,6 +7,7 @@
 import Phaser from "phaser";
 import { PlayerState } from "../entities/Player/PlayerState";
 import { RuntimeErrorMonitor } from "../services/RuntimeErrorMonitor";
+import { t_game } from "../i18n/translations";
 import { QuestManager } from "./QuestManager";
 import { TransitionSystem } from "./TransitionSystem";
 import { SaveSystem } from "./SaveSystem";
@@ -45,6 +46,10 @@ export class BenchmarkRunner {
   private config: BenchmarkConfig;
 
   private benchmarkStarted: boolean = false;
+
+  private getBenchmarkStepLabel(key: string): string {
+    return t_game(key as any);
+  }
 
   // Scene-level getter/setter callbacks
   private getPickupZonePosition: () => { x: number; y: number } = () => ({
@@ -225,26 +230,32 @@ export class BenchmarkRunner {
     const height = this.scene.cameras.main.height;
     const panelWidth = Math.min(760, width - 48);
     const lines: string[] = [
-      `${this.config.benchmarkName} ${passed ? "PASS" : "FAIL"}`,
-      `Total: ${(totalMs / 1000).toFixed(2)}s`,
+      `${this.config.benchmarkName} ${t_game(passed ? "benchmark_status_pass" : "benchmark_status_fail")}`,
+      `${t_game("benchmark_summary_total")}: ${(totalMs / 1000).toFixed(2)}s`,
       "",
     ];
 
     steps.forEach((step, i) => {
-      const status = step.ok ? "PASS" : "FAIL";
+      const status = t_game(
+        step.ok ? "benchmark_status_pass" : "benchmark_status_fail",
+      );
       const timing = `${(step.durationMs / 1000).toFixed(2)}s`;
       const extra = step.error ? ` (${step.error})` : "";
       lines.push(`${i + 1}. ${status} ${step.label} - ${timing}${extra}`);
 
       // Add structured error context if available
       if (!step.ok && step.errorContext) {
-        lines.push(`   Expected: ${step.errorContext.expectedBehavior}`);
-        lines.push(`   Actual: ${step.errorContext.actualBehavior}`);
+        lines.push(
+          `   ${t_game("benchmark_summary_expected")}: ${step.errorContext.expectedBehavior}`,
+        );
+        lines.push(
+          `   ${t_game("benchmark_summary_actual")}: ${step.errorContext.actualBehavior}`,
+        );
         if (step.errorContext.relevantState) {
           const stateStr = JSON.stringify(
             step.errorContext.relevantState,
           ).substring(0, 100);
-          lines.push(`   State: ${stateStr}...`);
+          lines.push(`   ${t_game("benchmark_summary_state")}: ${stateStr}...`);
         }
       }
     });
@@ -355,7 +366,9 @@ export class BenchmarkRunner {
       console.log(`[Benchmark] STEP ${label}`);
       playerState.emit("uiNotification", {
         type: "info",
-        message: `${this.config.benchmarkName}: ${label}`,
+        message: t_game("benchmark_notify_step")
+          .replace("{name}", this.config.benchmarkName)
+          .replace("{step}", label),
       });
       const t0 = performance.now();
       await this.benchmarkDelay(250);
@@ -398,15 +411,19 @@ export class BenchmarkRunner {
 
     let passed = false;
     try {
-      await step("spawn ready", "Player spawns at level 0", async () => {
+      await step(
+        this.getBenchmarkStepLabel("benchmark_step_spawn_ready"),
+        t_game("benchmark_expected_spawn_ready"),
+        async () => {
         this.moveBenchmarkPlayer(96, 96);
         await this.benchmarkDelay(100);
         return this.getCurrentLevelCallback() === "0";
-      });
+        },
+      );
 
       await step(
-        "pickup loot",
-        "Player picks up torch from ground",
+        this.getBenchmarkStepLabel("benchmark_step_pickup_loot"),
+        t_game("benchmark_expected_pickup_loot"),
         async () => {
           this.moveBenchmarkPlayer(336, 112);
           const maxAttempts = 5;
@@ -443,8 +460,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "transition down",
-        "Player transitions to level -1 below",
+        this.getBenchmarkStepLabel("benchmark_step_transition_down"),
+        t_game("benchmark_expected_transition_down"),
         async () => {
           this.moveBenchmarkPlayer(272, 272);
           await this.transitionSystem!.tryManualTransition(8, 8, 32);
@@ -454,8 +471,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "transition up",
-        "Player transitions back to level 0",
+        this.getBenchmarkStepLabel("benchmark_step_transition_up"),
+        t_game("benchmark_expected_transition_up"),
         async () => {
           this.moveBenchmarkPlayer(272, 272);
           await this.transitionSystem!.tryManualTransition(8, 8, 32);
@@ -465,8 +482,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "pathfinding route",
-        "Pathfinding finds a valid route from player to target",
+        this.getBenchmarkStepLabel("benchmark_step_pathfinding_route"),
+        t_game("benchmark_expected_pathfinding_route"),
         async () => {
           if (!this.player || !this.player.sprite) {
             throw new Error("pathfinding not ready");
@@ -504,8 +521,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "quest log sync",
-        "Quest manager starts quest and syncs with save data",
+        this.getBenchmarkStepLabel("benchmark_step_quest_log_sync"),
+        t_game("benchmark_expected_quest_log_sync"),
         async () => {
           const started = questManager.startQuest("rat_plague");
           await this.benchmarkDelay(120);
@@ -518,8 +535,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "quest log window",
-        "Quest log window opens/closes with keyboard shortcut",
+        this.getBenchmarkStepLabel("benchmark_step_quest_log_window"),
+        t_game("benchmark_expected_quest_log_window"),
         async () => {
           const before = (window as any).__uiWindows?.questLog ?? false;
           window.dispatchEvent(
@@ -539,8 +556,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "hero menu window",
-        "Hero menu window pauses game and can be toggled",
+        this.getBenchmarkStepLabel("benchmark_step_hero_menu_window"),
+        t_game("benchmark_expected_hero_menu_window"),
         async () => {
           const before = (window as any).__uiWindows?.heroMenu ?? false;
           const sceneWasPausedBefore = this.scene.scene.isPaused("GameScene");
@@ -571,8 +588,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "system menu mouse pause",
-        "System menu opens via button and pauses the game",
+        this.getBenchmarkStepLabel("benchmark_step_system_menu_mouse_pause"),
+        t_game("benchmark_expected_system_menu_mouse_pause"),
         async () => {
           return this.runHudPauseWindowStep({
             windowKey: "systemMenu",
@@ -585,8 +602,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "settings mouse pause",
-        "Settings window opens via button and pauses the game",
+        this.getBenchmarkStepLabel("benchmark_step_settings_mouse_pause"),
+        t_game("benchmark_expected_settings_mouse_pause"),
         async () => {
           return this.runHudPauseWindowStep({
             windowKey: "settings",
@@ -599,8 +616,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "equipment roundtrip",
-        "Equipment can be equipped and unequipped",
+        this.getBenchmarkStepLabel("benchmark_step_equipment_roundtrip"),
+        t_game("benchmark_expected_equipment_roundtrip"),
         async () => {
           const ps = PlayerState.getInstance();
           const targetItemId = "torch";
@@ -708,8 +725,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "item drop roundtrip",
-        "Items can be dropped and picked up",
+        this.getBenchmarkStepLabel("benchmark_step_item_drop_roundtrip"),
+        t_game("benchmark_expected_item_drop_roundtrip"),
         async () => {
           const ps = PlayerState.getInstance();
           const inventoryBeforeDrop = ps.getInventory();
@@ -800,8 +817,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "torch light roundtrip",
-        "Torch can be lit/extinguished",
+        this.getBenchmarkStepLabel("benchmark_step_torch_light_roundtrip"),
+        t_game("benchmark_expected_torch_light_roundtrip"),
         async () => {
           const ps = PlayerState.getInstance();
 
@@ -850,8 +867,8 @@ export class BenchmarkRunner {
       );
 
       await step(
-        "save/load roundtrip",
-        "Game state can be saved and restored",
+        this.getBenchmarkStepLabel("benchmark_step_save_load_roundtrip"),
+        t_game("benchmark_expected_save_load_roundtrip"),
         async () => {
           const saved = await this.saveSystem.saveGame(benchmarkSaveName);
           if (!saved) {
@@ -901,7 +918,9 @@ export class BenchmarkRunner {
       );
       playerState.emit("uiNotification", {
         type: "success",
-        message: `${this.config.benchmarkName} OK (${stepResults.length} steps)`,
+        message: t_game("benchmark_notify_success")
+          .replace("{name}", this.config.benchmarkName)
+          .replace("{steps}", stepResults.length.toString()),
       });
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error));
@@ -910,10 +929,13 @@ export class BenchmarkRunner {
       if (passed && runtimeErrors.length > 0) {
         passed = false;
         stepResults.push({
-          label: "runtime error check",
+          label: t_game("benchmark_step_runtime_error_check"),
           ok: false,
           durationMs: 0,
-          error: `${runtimeErrors.length} runtime error(s) captured`,
+          error: t_game("benchmark_runtime_errors_captured").replace(
+            "{count}",
+            runtimeErrors.length.toString(),
+          ),
         });
       }
 

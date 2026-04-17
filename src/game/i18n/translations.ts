@@ -42,6 +42,54 @@ export const translations = {
     quality_mid: "MID",
     quality_high: "HIGH",
 
+    // Benchmark UI
+    benchmark_status_pass: "PASS",
+    benchmark_status_fail: "FAIL",
+    benchmark_summary_total: "Total",
+    benchmark_summary_expected: "Expected",
+    benchmark_summary_actual: "Actual",
+    benchmark_summary_state: "State",
+    benchmark_notify_step: "{name}: {step}",
+    benchmark_notify_success: "{name} OK ({steps} steps)",
+    benchmark_step_spawn_ready: "spawn ready",
+    benchmark_step_pickup_loot: "pickup loot",
+    benchmark_step_transition_down: "transition down",
+    benchmark_step_transition_up: "transition up",
+    benchmark_step_pathfinding_route: "pathfinding route",
+    benchmark_step_quest_log_sync: "quest log sync",
+    benchmark_step_quest_log_window: "quest log window",
+    benchmark_step_hero_menu_window: "hero menu window",
+    benchmark_step_system_menu_mouse_pause: "system menu mouse pause",
+    benchmark_step_settings_mouse_pause: "settings mouse pause",
+    benchmark_step_equipment_roundtrip: "equipment roundtrip",
+    benchmark_step_item_drop_roundtrip: "item drop roundtrip",
+    benchmark_step_torch_light_roundtrip: "torch light roundtrip",
+    benchmark_step_save_load_roundtrip: "save/load roundtrip",
+    benchmark_step_runtime_error_check: "runtime error check",
+    benchmark_runtime_errors_captured: "{count} runtime error(s) captured",
+    benchmark_expected_spawn_ready: "Player spawns at level 0",
+    benchmark_expected_pickup_loot: "Player picks up torch from ground",
+    benchmark_expected_transition_down: "Player transitions to level -1 below",
+    benchmark_expected_transition_up: "Player transitions back to level 0",
+    benchmark_expected_pathfinding_route:
+      "Pathfinding finds a valid route from player to target",
+    benchmark_expected_quest_log_sync:
+      "Quest manager starts quest and syncs with save data",
+    benchmark_expected_quest_log_window:
+      "Quest log window opens/closes with keyboard shortcut",
+    benchmark_expected_hero_menu_window:
+      "Hero menu window pauses game and can be toggled",
+    benchmark_expected_system_menu_mouse_pause:
+      "System menu opens via button and pauses the game",
+    benchmark_expected_settings_mouse_pause:
+      "Settings window opens via button and pauses the game",
+    benchmark_expected_equipment_roundtrip:
+      "Equipment can be equipped and unequipped",
+    benchmark_expected_item_drop_roundtrip: "Items can be dropped and picked up",
+    benchmark_expected_torch_light_roundtrip: "Torch can be lit/extinguished",
+    benchmark_expected_save_load_roundtrip:
+      "Game state can be saved and restored",
+
     // Iron Shield Jokes (English)
     joke_is_1: "I've seen butter harder than you.",
     joke_is_2: "Are you hiding behind me, or am I stuck with you?",
@@ -648,6 +696,55 @@ export const translations = {
     quality_low: "BAIXA",
     quality_mid: "MÉDIA",
     quality_high: "ALTA",
+
+    // Benchmark UI
+    benchmark_status_pass: "SUCESSO",
+    benchmark_status_fail: "FALHA",
+    benchmark_summary_total: "Total",
+    benchmark_summary_expected: "Esperado",
+    benchmark_summary_actual: "Atual",
+    benchmark_summary_state: "Estado",
+    benchmark_notify_step: "{name}: {step}",
+    benchmark_notify_success: "{name} OK ({steps} etapas)",
+    benchmark_step_spawn_ready: "spawn pronto",
+    benchmark_step_pickup_loot: "coleta de loot",
+    benchmark_step_transition_down: "transição para baixo",
+    benchmark_step_transition_up: "transição para cima",
+    benchmark_step_pathfinding_route: "rota de pathfinding",
+    benchmark_step_quest_log_sync: "sincronização do log de quests",
+    benchmark_step_quest_log_window: "janela do log de quests",
+    benchmark_step_hero_menu_window: "janela de herói",
+    benchmark_step_system_menu_mouse_pause: "menu do sistema pausa via mouse",
+    benchmark_step_settings_mouse_pause: "configurações pausa via mouse",
+    benchmark_step_equipment_roundtrip: "equipar e desequipar",
+    benchmark_step_item_drop_roundtrip: "dropar e recuperar item",
+    benchmark_step_torch_light_roundtrip: "acender/apagar tocha",
+    benchmark_step_save_load_roundtrip: "salvar/carregar",
+    benchmark_step_runtime_error_check: "checagem de erro em runtime",
+    benchmark_runtime_errors_captured: "{count} erro(s) de runtime capturado(s)",
+    benchmark_expected_spawn_ready: "Jogador nasce no nível 0",
+    benchmark_expected_pickup_loot: "Jogador coleta tocha do chão",
+    benchmark_expected_transition_down: "Jogador transiciona para o nível -1",
+    benchmark_expected_transition_up: "Jogador volta para o nível 0",
+    benchmark_expected_pathfinding_route:
+      "Pathfinding encontra uma rota válida do jogador ao alvo",
+    benchmark_expected_quest_log_sync:
+      "Quest manager inicia a quest e sincroniza com o save",
+    benchmark_expected_quest_log_window:
+      "Janela do log de quests abre/fecha por atalho",
+    benchmark_expected_hero_menu_window:
+      "Janela de herói pausa o jogo e pode ser alternada",
+    benchmark_expected_system_menu_mouse_pause:
+      "Menu do sistema abre via botão e pausa o jogo",
+    benchmark_expected_settings_mouse_pause:
+      "Janela de configurações abre via botão e pausa o jogo",
+    benchmark_expected_equipment_roundtrip:
+      "Equipamentos podem ser equipados e desequipados",
+    benchmark_expected_item_drop_roundtrip:
+      "Itens podem ser dropados e coletados novamente",
+    benchmark_expected_torch_light_roundtrip: "Tocha pode ser acesa/apagada",
+    benchmark_expected_save_load_roundtrip:
+      "Estado do jogo pode ser salvo e restaurado",
 
     // Iron Shield Jokes (Portuguese)
     joke_is_1: "Já vi manteiga mais dura que você.",
