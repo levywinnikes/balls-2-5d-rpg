@@ -70,7 +70,7 @@ Required updates when impact exists:
 | Item pickup | Yes | Auto-run step + fixture entity check | `GameScene.runBenchmark` / `smoke_test.json` |
 | Down transition | Yes | Auto-run step + tile checkpoint | `GameScene.runBenchmark` / `smoke_test.json` |
 | Up transition | Yes | Auto-run step + tile checkpoint | `GameScene.runBenchmark` / `smoke_test.json` |
-| Save/Load behavior | Not yet | Pending benchmark extension | N/A |
+| Save/Load behavior | Yes | Auto-run save/load roundtrip | `GameScene.runBenchmark` / `SaveSystem` |
 | Quest log flow | Not yet | Pending benchmark extension | N/A |
 | Window/UI interactions | Not yet | Pending benchmark extension | N/A |
 

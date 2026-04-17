@@ -1219,6 +1219,10 @@ export default class GameScene extends Phaser.Scene {
     if (this.benchmarkStarted || !this.player || !this.transitionSystem) return;
     this.benchmarkStarted = true;
     RuntimeErrorMonitor.clear();
+    const benchmarkSaveName = `${this.benchmarkName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "")}_${Date.now()}`;
 
     const playerState = PlayerState.getInstance();
     const startedAt = this.time.now;
@@ -1318,6 +1322,40 @@ export default class GameScene extends Phaser.Scene {
         return this.currentLevel === "0";
       });
 
+      await step("save/load roundtrip", async () => {
+        const saved = await this.saveSystem.saveGame(benchmarkSaveName);
+        if (!saved) {
+          throw new Error("saveGame returned false");
+        }
+
+        const loaded = await this.saveSystem.loadCharacter(benchmarkSaveName);
+        if (!loaded) {
+          throw new Error("loadCharacter returned null");
+        }
+
+        const snapshot = playerState.exportSnapshot();
+        const expectedInventory = snapshot.inventory?.some(
+          (item) => item.itemId === "light_torch",
+        );
+        const loadedInventory = loaded.playerState.inventory?.some(
+          (item) => item.itemId === "light_torch",
+        );
+
+        const isMatch =
+          loaded.map === "smoke_test" &&
+          loaded.currentLevel === this.currentLevel &&
+          loaded.playerState.characterName === snapshot.characterName &&
+          expectedInventory === loadedInventory;
+
+        if (!isMatch) {
+          throw new Error(
+            `loaded save mismatch | map=${loaded.map} level=${loaded.currentLevel} name=${loaded.playerState.characterName} inventoryMatch=${expectedInventory === loadedInventory}`,
+          );
+        }
+
+        return true;
+      });
+
       passed = true;
       console.log(
         `[Benchmark] PASS ${stepResults.length}/${stepResults.length} steps`,
@@ -1345,6 +1383,15 @@ export default class GameScene extends Phaser.Scene {
         steps: stepResults,
         totalMs: this.time.now - startedAt,
       });
+
+      try {
+        await this.saveSystem.deleteCharacter(benchmarkSaveName);
+      } catch (error) {
+        console.warn(
+          `[Benchmark] Failed to clean up temporary save ${benchmarkSaveName}`,
+          error,
+        );
+      }
     }
   }
 
