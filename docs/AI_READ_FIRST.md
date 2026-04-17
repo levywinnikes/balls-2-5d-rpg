@@ -19,6 +19,75 @@
 | Level Transitions     | `src/game/systems/TransitionSystem.ts`    |
 | Navigation Workers    | `src/services/NavigationService.ts`       |
 
+## 2.1 ADDITIONAL RUNTIME SYSTEMS
+
+- `src/game/systems/QuestManager.ts`: quest lifecycle and save/load state.
+- `src/game/systems/InventorySystem.ts`: item pickup flow and pickup notifications.
+- `src/game/services/MapProcessingService.ts`: spawn resolution and legacy grid helpers.
+- `src/game/systems/AutoSaveSystem.ts`: disabled persistence shim kept for compatibility.
+- `src/game/systems/AudioManager.ts`: procedural audio startup and shutdown.
+- `src/game/services/RuntimeErrorMonitor.ts`: global runtime error capture and reporting.
+- `src/game/systems/PathfindingManager.ts`: singleton wrapper around the pathfinding worker.
+- `src/game/systems/TooltipManager.ts`: world tooltip positioning and lifecycle.
+- `src/game/systems/WindowSystem.ts`: draggable window implementation used by overlay UIs.
+- `src/game/managers/ConsumableManager.ts`: item consumption adapter and effect application.
+- `src/game/entities/EnemyMagicRegistry.ts`: enemy spell definitions and combat magic tuning.
+- Movement is handled by `NavigationService`, `PathfindingManager`, and `TransitionSystem`; there is no active `MovementSystem` implementation.
+
+## 2.2 CONTENT, COMBAT & UI SHELL
+
+- `src/game/systems/BattleSystem.ts`: combat resolution, damage mitigation, and battle-side notifications.
+- `src/game/systems/StatManager.ts`: derived stats, DPS/APS, star points, and equipment modifiers.
+- `src/game/entities/weapons/WeaponRegistry.ts`: item/weapon source of truth and preload bridge for related registries.
+- `src/game/entities/EnemyRegistry.ts`: enemy definitions, loot tables, and combat tuning.
+- `src/ui/GameOverlay.tsx`: scene overlay shell, pause/resume handoff, and HUD composition.
+- `src/ui/components/window/WindowRegistry.ts`: window catalog and default dimensions.
+- `src/ui/components/window/WindowContext.tsx`: open/close/focus state plus window position persistence via `PlayerState`.
+- `src/ui/HUD.tsx`: persistent HUD composition and toolbar/minimap layout.
+- `src/ui/components/NotificationSystem.tsx` and `src/ui/components/StatusWidget.tsx`: direct `PlayerState` event subscribers for toasts and status bars.
+- `src/ui/components/window/WindowLayer.tsx`: renders external windows, but intentionally skips `hero_menu` because that flow is owned by the overlay/dashboard path.
+- Legacy note: some registry entries still use raw English names/descriptions, so localization checks must cover registry definitions as well as JSON content packs.
+
+## 2.3 APP, LOADING & LEVEL RENDERING
+
+- `src/App.tsx`: React/Phaser bootstrap, benchmark auto-start, and game/editor switching.
+- `src/game/scenes/BootScene.ts`: initial asset boot and handoff to title.
+- `src/game/scenes/LoadingScene.ts`: BMS metadata and binary streaming.
+- `src/game/maps/LevelRenderer.ts`: level rendering, fog/lighting, and perspective handling.
+- `src/game/graphics/TilePool.ts`: sprite pooling for map rendering.
+
+## 2.4 NAVIGATION PATHS
+
+- `src/services/NavigationService.ts` + `src/game/systems/PathfindingManager.ts`: path request wrappers around the workers.
+- `src/workers/pathfinding.worker.ts`: single-level grid pathfinding worker.
+- `src/workers/navigation.worker.ts`: multilevel pathfinding worker using portals/stairs.
+
+## 2.5 GRAPHICS, HUDS & FEEDBACK
+
+- `src/game/graphics/tiles/**`: procedural tile registry and tile renderers; tile definitions must include step sound, speed modifier, and minimap/world-map color metadata for walkable terrain.
+- `src/game/graphics/PlayerGraphic.ts`: procedural player texture and animation keys.
+- `src/game/graphics/ItemGraphic.ts`: procedural item texture generator.
+- `src/game/hud/PlayerHud.ts`: cached static/dynamic player bar with animated health and XP rendering.
+- `src/game/hud/EnemyHud.ts`: enemy health bar visibility is controlled by damage state and z-level matching.
+- `src/game/hud/InventoryIcons.ts`: shared glyphs for the in-game UI.
+- `src/game/effects/**`: floating text, XP, and level-up feedback effects.
+- Enemy selection visuals are level-aware; if target and player are on different Z-levels, the indicator hides and clears the selection.
+
+## 2.4 EDITOR PATHS
+
+- `src/game/scenes/MapEditorScene.ts` + `src/game/mapEditor/editor-ui.ts`: in-game editor still has partial legacy map-shape handling and separate save flow.
+- `src/editor/scenes/EditorScene.ts` + `src/editor/ui/EditorLayout.tsx`: standalone editor path with its own bootstrap.
+- `scripts/map-server.js`: separate local save endpoint for editor persistence with basic width/height/layers validation; it writes to `public/maps/newmap.json`.
+- The main menu `MAP EDITOR` button now routes to the dedicated editor app route instead of the in-game editor scene.
+
+## 2.5 CONTENT DATA PACKS
+
+- `public/data/dialogues.json`: dialogue tree source used by the dialogue manager.
+- `public/data/quests/*.json`: quest definitions and stage/reward conditions.
+- `public/data/enemies.json`: enemy metadata feed for runtime content.
+- `public/maps/*.json`: map metadata, level config, tile atlas, and entity templates.
+- Legacy note: some quest/dialogue files still contain raw prose text, so localization checks must be applied when editing those JSON content packs.
+
 ## 3. COMMON SIDE EFFECTS
 
 When you change the map system, look for regressions in:

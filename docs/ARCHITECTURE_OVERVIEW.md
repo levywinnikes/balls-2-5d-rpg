@@ -53,6 +53,27 @@ Persistence is handled in `src/game/systems/SaveSystem.ts`:
 - **Data Saved**: Player equipment, position, level, health, hunger, and explored area (Fog of War).
 - **Map Persistence**: The state of dropped items and dead enemies is persisted per-level within the `PlayerState` maps.
 
+### Save Flow
+
+1. `GameScene` owns the live runtime state and injects it into `SaveSystem`.
+2. `SaveSystem.saveGame()` reads `currentMap` and `currentLevel` from the scene registry.
+3. Before serializing, it syncs active dropped items from the scene into `PlayerState` so per-level item state stays authoritative.
+4. The save payload is built from `PlayerState.exportSnapshot()` plus scene data such as `playerPos`, `deadEnemies`, `activeEnemies`, `ui`, `timestamp`, and `version`.
+5. In Electron mode, the payload is written through `window.electronAPI.saveGame()`.
+6. In browser mode, the payload is kept only in `memorySaveData`, which is session-only and not durable.
+
+### Load Flow
+
+1. `SaveSystem.loadCharacter()` asks Electron for the saved payload, or returns the current in-memory payload in browser mode.
+2. `GameScene` restores `currentMap`, `currentLevel`, `playerPos`, and then loads the persisted player snapshot back into `PlayerState`.
+3. Enemy state and per-level persistence maps are repopulated from the loaded save payload.
+4. If the load data is missing or incompatible, the caller must treat that as a failed load and fall back to a clean start path.
+
+### Benchmark Coverage
+
+- The benchmark harness validates save/load by creating a temporary character, saving it, loading it back, and comparing the loaded map, level, character name, inventory, and the quest state used by the smoke test.
+- Use `npm run benchmark:e2e` when checking persistence regressions, because it covers the full save/load roundtrip instead of serialization alone.
+
 ## Key Services
 
 - **`MapLoader`**: Safe interface for binary map access.

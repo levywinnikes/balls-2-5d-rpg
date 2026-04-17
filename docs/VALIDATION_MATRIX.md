@@ -10,17 +10,17 @@ Use this matrix to decide mandatory validation commands based on change impact.
 
 ## Impact -> Required Commands
 
-| Impact Area | Required Commands |
-| :-- | :-- |
-| Docs-only (no code/config/runtime change) | No runtime command required; ensure markdown/lint checks pass if applicable |
-| UI text / HUD / windows / notifications | `npm run check:i18n-ui`, `npm run build` |
-| Gameplay logic / systems / scenes | `npm run build`, `npm run benchmark:e2e` |
-| Save/load flow | `npm run build`, `npm run benchmark:e2e` |
-| Map/BMS internals | `npm run check:bms`, `npm run build`, `npm run benchmark:e2e` |
-| Pathfinding / navigation workers | `npm run build`, `npm run benchmark:e2e` |
-| Benchmark harness / checkpoints | `npm run check:i18n-ui`, `npm run build`, `npm run benchmark:e2e` |
-| Dependency or build config updates | `npm run build`, `npm run ci` |
-| Cross-cutting refactor (multi-module) | `npm run check:i18n-ui`, `npm run build`, `npm run benchmark:e2e`, `npm run ci` |
+| Impact Area                               | Required Commands                                                               |
+| :---------------------------------------- | :------------------------------------------------------------------------------ |
+| Docs-only (no code/config/runtime change) | No runtime command required; ensure markdown/lint checks pass if applicable     |
+| UI text / HUD / windows / notifications   | `npm run check:i18n-ui`, `npm run build`                                        |
+| Gameplay logic / systems / scenes         | `npm run build`, `npm run benchmark:e2e`                                        |
+| Save/load flow                            | `npm run build`, `npm run benchmark:e2e`                                        |
+| Map/BMS internals                         | `npm run check:bms`, `npm run build`, `npm run benchmark:e2e`                   |
+| Pathfinding / navigation workers          | `npm run build`, `npm run benchmark:e2e`                                        |
+| Benchmark harness / checkpoints           | `npm run check:i18n-ui`, `npm run build`, `npm run benchmark:e2e`               |
+| Dependency or build config updates        | `npm run build`, `npm run ci`                                                   |
+| Cross-cutting refactor (multi-module)     | `npm run check:i18n-ui`, `npm run build`, `npm run benchmark:e2e`, `npm run ci` |
 
 ## I18N Guard Scope
 

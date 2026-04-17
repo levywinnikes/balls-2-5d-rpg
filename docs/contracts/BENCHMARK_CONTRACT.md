@@ -71,7 +71,7 @@ Required updates when impact exists:
 | Item pickup            |   Yes   | Auto-run step + fixture entity check          | `GameScene.runBenchmark` / `smoke_test.json` |
 | Down transition        |   Yes   | Auto-run step + tile checkpoint               | `GameScene.runBenchmark` / `smoke_test.json` |
 | Up transition          |   Yes   | Auto-run step + tile checkpoint               | `GameScene.runBenchmark` / `smoke_test.json` |
-| Save/Load behavior     |   Yes   | Auto-run save/load roundtrip                  | `GameScene.runBenchmark` / `SaveSystem`      |
+| Save/Load behavior     |   Yes   | Auto-run save/load roundtrip smoke test       | `GameScene.runBenchmark` / `SaveSystem`      |
 | Quest log flow         |   Yes   | Auto-run quest activation + persistence check | `GameScene.runBenchmark` / `QuestManager`    |
 | Window/UI interactions |   Yes   | Auto-run quest log + hero menu window toggle  | `GameScene.runBenchmark` / `UIContext`       |
 | Modal pause flow       |   Yes   | Auto-run HUD click + system menu resume check | `GameScene.runBenchmark` / `UIContext`       |
@@ -79,6 +79,8 @@ Required updates when impact exists:
 | Navigation/pathfinding |   Yes   | Auto-run worker route request + route result  | `GameScene.runBenchmark` / `Pathfinding API` |
 | Inventory/equipment UI |   Yes   | Auto-run main-hand equip/unequip roundtrip    | `GameScene.runBenchmark` / `UIContext`       |
 | Item drop flow         |   Yes   | Auto-run inventory drop + nearby pickup check | `GameScene.runBenchmark` / `PlayerState`     |
+
+The save/load benchmark coverage above is a smoke test, not a full schema audit. Broader persistence coverage belongs to the save system contract and dedicated gameplay tests.
 
 ## 6. Remaining Coverage Targets
 
