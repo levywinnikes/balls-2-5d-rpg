@@ -32,6 +32,7 @@
 - **Updates:** If a code change modifies a rule defined in a contract, the contract MUST be updated in the same PR/Task.
 - **Feature Rule (Mandatory):** Every feature task MUST include contract maintenance as part of Definition of Done. The AI must proactively update affected contracts without requiring a separate user request.
 - **Benchmark Rule (Mandatory):** Every feature that affects gameplay, UI flow, transitions, save/load, inventory, map interactions, or performance-sensitive systems MUST update `BENCHMARK_CONTRACT.md` and benchmark checkpoints in the same task.
+- **I18N Rule (Mandatory):** Any user-facing text introduced in UI/HUD/scenes/windows MUST be implemented via translation keys (no hardcoded interface strings) and updated for all supported languages in the same task.
 - **Conflicts:** If a user request contradicts a contract, the AI must explicitly ask for clarification or propose a contract update.
 
 ## Delivery Checklist (PR/Task)
@@ -45,6 +46,7 @@ Every feature or bugfix task MUST pass this checklist before merge:
 5. Runtime errors and warnings introduced by the change were addressed or explicitly documented.
 6. Generated local artifacts/logs are not committed unless they are explicitly part of repository policy.
 7. Task summary includes: scope, files touched, validation results, and residual risks.
+8. UI text changes were added through translation keys for all supported languages; no hardcoded player-facing interface strings were introduced.
 
 If any item is not satisfied, the task is considered incomplete.
 

@@ -52,6 +52,12 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 - Benchmark-related changes must update `docs/contracts/BENCHMARK_CONTRACT.md` in the same task.
 - Do not wait for explicit user reminder to keep contracts aligned with code.
 
+## 8. UI TRANSLATION RULE (MANDATORY)
+
+- Any player-facing text added to UI/HUD/windows/scenes must be translated via keys in `src/game/i18n/translations.ts`.
+- Do not introduce hardcoded interface strings.
+- For UI changes, read and follow `docs/contracts/UI_DESIGN_CONTRACT.md` before editing code.
+
 ---
 
 _Reference current implementation plan for full context._

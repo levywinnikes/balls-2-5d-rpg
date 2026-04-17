@@ -8,6 +8,7 @@ This project is an isometric RPG with a Phaser engine, React UI, and a BMS-based
 2. Read [PROJECT_CONTRACT.md](./PROJECT_CONTRACT.md).
 3. If your change touches maps, read [SYSTEM_BMS.md](./SYSTEM_BMS.md).
 4. If your change touches UI layout or styling, check the UI contract files under `docs/contracts/`.
+5. If your change adds or modifies player-facing UI text, update translation keys in `src/game/i18n/translations.ts` for all supported languages.
 
 ## Safe Workflow
 
