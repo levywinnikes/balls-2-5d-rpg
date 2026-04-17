@@ -135,6 +135,16 @@ export class BenchmarkRunner {
     return true;
   }
 
+  private clickButtonByBenchmarkId(benchmarkId: string): boolean {
+    const button = document.querySelector(
+      `button[data-benchmark-id="${benchmarkId}"]`,
+    ) as HTMLButtonElement | null;
+
+    if (!button) return false;
+    button.click();
+    return true;
+  }
+
   private clickElementByTitlePrefix(prefix: string): string | null {
     const element = Array.from(document.querySelectorAll("[title]")).find(
       (target) => target.getAttribute("title")?.startsWith(prefix),
@@ -172,15 +182,27 @@ export class BenchmarkRunner {
   private async runHudPauseWindowStep(options: {
     windowKey: string;
     openButtonTitle: string;
+    openButtonTitles?: string[];
+    openButtonBenchmarkId?: string;
     closeButtonTitle?: string;
     closeButtonText?: string;
+    closeButtonTexts?: string[];
+    closeButtonBenchmarkId?: string;
     missingOpenError: string;
     missingCloseError: string;
   }): Promise<boolean> {
     const before = (window as any).__uiWindows?.[options.windowKey] ?? false;
     const sceneWasPausedBefore = this.scene.scene.isPaused("GameScene");
 
-    if (!this.clickButtonByTitle(options.openButtonTitle)) {
+    const openTitles = options.openButtonTitles ?? [options.openButtonTitle];
+    const openClicked =
+      (options.openButtonBenchmarkId
+        ? this.clickButtonByBenchmarkId(options.openButtonBenchmarkId)
+        : false) ||
+      this.clickFirstMatchingButtonCallback(openTitles) !== null ||
+      openTitles.some((title) => this.clickButtonByTitle(title));
+
+    if (!openClicked) {
       throw new Error(options.missingOpenError);
     }
 
@@ -188,11 +210,17 @@ export class BenchmarkRunner {
     const opened = (window as any).__uiWindows?.[options.windowKey] ?? false;
     const scenePausedAfterOpen = this.scene.scene.isPaused("GameScene");
 
-    const closeClicked = options.closeButtonTitle
-      ? this.clickButtonByTitle(options.closeButtonTitle)
-      : options.closeButtonText
-        ? this.clickButtonByText(options.closeButtonText)
-        : false;
+    const closeTexts = options.closeButtonTexts ??
+      (options.closeButtonText ? [options.closeButtonText] : []);
+    const closeClicked =
+      (options.closeButtonBenchmarkId
+        ? this.clickButtonByBenchmarkId(options.closeButtonBenchmarkId)
+        : false) ||
+      (options.closeButtonTitle
+        ? this.clickButtonByTitle(options.closeButtonTitle)
+        : closeTexts.length > 0
+          ? closeTexts.some((text) => this.clickButtonByText(text))
+          : false);
 
     if (!closeClicked) {
       throw new Error(options.missingCloseError);
@@ -415,9 +443,9 @@ export class BenchmarkRunner {
         this.getBenchmarkStepLabel("benchmark_step_spawn_ready"),
         t_game("benchmark_expected_spawn_ready"),
         async () => {
-        this.moveBenchmarkPlayer(96, 96);
-        await this.benchmarkDelay(100);
-        return this.getCurrentLevelCallback() === "0";
+          this.moveBenchmarkPlayer(96, 96);
+          await this.benchmarkDelay(100);
+          return this.getCurrentLevelCallback() === "0";
         },
       );
 
@@ -593,8 +621,12 @@ export class BenchmarkRunner {
         async () => {
           return this.runHudPauseWindowStep({
             windowKey: "systemMenu",
-            openButtonTitle: "System Menu",
-            closeButtonText: "Resume Game",
+            openButtonTitle: t_game("hud_system"),
+            openButtonTitles: [t_game("hud_system"), "System Menu"],
+            openButtonBenchmarkId: "hud-system-menu",
+            closeButtonText: t_game("sys_resume"),
+            closeButtonTexts: [t_game("sys_resume"), "Resume Game"],
+            closeButtonBenchmarkId: "system-menu-resume",
             missingOpenError: "system menu HUD button not found",
             missingCloseError: "system menu resume button not found",
           });
@@ -607,7 +639,9 @@ export class BenchmarkRunner {
         async () => {
           return this.runHudPauseWindowStep({
             windowKey: "settings",
-            openButtonTitle: "Settings",
+            openButtonTitle: t_game("settings"),
+            openButtonTitles: [t_game("settings"), "Settings"],
+            openButtonBenchmarkId: "hud-settings",
             closeButtonTitle: "Close Window",
             missingOpenError: "settings HUD button not found",
             missingCloseError: "settings close button not found",
@@ -870,6 +904,8 @@ export class BenchmarkRunner {
         this.getBenchmarkStepLabel("benchmark_step_save_load_roundtrip"),
         t_game("benchmark_expected_save_load_roundtrip"),
         async () => {
+          const currentMap =
+            this.scene.registry.get("currentMap")?.toString() ?? "newmap";
           const saved = await this.saveSystem.saveGame(benchmarkSaveName);
           if (!saved) {
             throw new Error("saveGame returned false");
@@ -896,7 +932,7 @@ export class BenchmarkRunner {
             : [];
 
           const isMatch =
-            loaded.map === "smoke_test" &&
+            loaded.map === currentMap &&
             loaded.currentLevel === this.getCurrentLevelCallback() &&
             loaded.playerState.characterName === snapshot.characterName &&
             expectedInventory === loadedInventory &&

@@ -6,6 +6,7 @@
 import Phaser from "phaser";
 import { MapLoader } from "../maps/MapLoader";
 import { WorldMapService } from "../../services/WorldMapService";
+import { t_game } from "../i18n/translations";
 
 export default class LoadingScene extends Phaser.Scene {
   private targetData: any = null;
@@ -37,7 +38,7 @@ export default class LoadingScene extends Phaser.Scene {
     this.statusText = this.make.text({
       x: width / 2,
       y: height / 2 - 50,
-      text: "Connecting to World...",
+      text: t_game("loading_connecting_world"),
       style: {
         font: "20px monospace",
         color: "#ffffff",
@@ -58,7 +59,7 @@ export default class LoadingScene extends Phaser.Scene {
     });
 
     this.load.on("complete", () => {
-      this.statusText.setText("Initializing World...");
+      this.statusText.setText(t_game("loading_initializing_world"));
     });
 
     // 3. Trigger BMS Metadata Download
@@ -75,10 +76,10 @@ export default class LoadingScene extends Phaser.Scene {
     const mapName = this.targetData?.mapName || "newmap";
 
     // 1. BMS Loading Initializer
-    this.statusText.setText("Downloading World Data...");
+    this.statusText.setText(t_game("loading_downloading_world_data"));
     const mapMetadata = this.cache.json.get("map_raw_data");
     if (!mapMetadata) {
-      console.error("Critical Error: BMS Metadata missing!");
+      console.error(t_game("loading_bms_metadata_missing"));
       this.scene.start("GameScene", this.targetData);
       return;
     }
@@ -86,12 +87,12 @@ export default class LoadingScene extends Phaser.Scene {
     await this.yieldToBrowser();
 
     // 2. Async Load All Binary Levels
-    this.statusText.setText("Streaming Binary Continents...");
+    this.statusText.setText(t_game("loading_streaming_binary_continents"));
     await this.mapLoader.loadAllLevels(mapName);
     await this.yieldToBrowser();
 
     // 3. Pathfinding (Minimal initialization)
-    this.statusText.setText("Building Navigation Matrix...");
+    this.statusText.setText(t_game("loading_building_navigation_matrix"));
     // For now, we stub this or use the new binary-friendly logic
     const levels = Object.keys(mapMetadata.levels);
     const pathfindingGrids: Record<string, number[][]> = {};
@@ -100,11 +101,11 @@ export default class LoadingScene extends Phaser.Scene {
     }
 
     // 4. World Map Buffers (Binary-powered)
-    this.statusText.setText("Rendering Mini-maps...");
+    this.statusText.setText(t_game("loading_rendering_minimaps"));
     WorldMapService.preRenderAll(mapMetadata, this.mapLoader.getBinaryLevels());
     await this.yieldToBrowser();
 
-    this.statusText.setText("Entering World...");
+    this.statusText.setText(t_game("loading_entering_world"));
     this.progressBar.clear();
     this.progressBar.fillStyle(0x00ffff, 1);
     this.progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300, 30);

@@ -204,7 +204,7 @@ export default class GameScene extends Phaser.Scene {
       // RESTORE PLAYER STATE FROM SAVE DATA
       if (data.playerState) {
         console.log("💾 Restoring Player State from Save Data...");
-        PlayerState.getInstance().loadFromData(data.playerState);
+        PlayerState.getInstance().importSnapshot(data.playerState);
       }
     }
 
@@ -228,7 +228,10 @@ export default class GameScene extends Phaser.Scene {
     if (data.playerState && !data.isNewGame && !this.isRespawning) {
       console.log("📂 Loading Player State from Save Data");
       // Pass timestamp to adjust decay timers
-      PlayerState.getInstance().loadState(data.playerState, data.timestamp);
+      PlayerState.getInstance().importSnapshot(
+        data.playerState,
+        data.timestamp,
+      );
     }
     // Note: persistentItems are handled within loadState if present in data
   }
@@ -1677,7 +1680,12 @@ export default class GameScene extends Phaser.Scene {
       }
       if (!this.player.checkLineOfSight(worldX, worldY)) {
         console.warn("[GameScene] Drop blocked: No line of sight.");
-        this.showFloatingText(worldX, worldY, t_game("msg_no_line_of_sight"), 0xffa500);
+        this.showFloatingText(
+          worldX,
+          worldY,
+          t_game("msg_no_line_of_sight"),
+          0xffa500,
+        );
         return false;
       }
     }
@@ -3169,7 +3177,7 @@ export default class GameScene extends Phaser.Scene {
   private applyAutoSaveData(autoSaveData: any): void {
     if (!autoSaveData) return;
     if (autoSaveData.playerState) {
-      PlayerState.getInstance().loadState(
+      PlayerState.getInstance().importSnapshot(
         autoSaveData.playerState,
         autoSaveData.timestamp,
       );

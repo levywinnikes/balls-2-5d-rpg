@@ -31,9 +31,22 @@ export const RPGSlot: React.FC<RPGSlotProps> = ({
   size = "100%",
   imagePath
 }) => {
-  // Determine Rarity Color
-  // TODO: Add rarity to definitions. Defaulting to common/gray.
-  // const rarityColor = "var(--rarity-common)";
+  const rarityColor = React.useMemo(() => {
+    const attrs = item?.attributes ?? [];
+    const legacyStars = item?.stars ?? 0;
+
+    if (attrs.some((attr) => attr.tier === "gold") || legacyStars >= 3) {
+      return "var(--rarity-legendary)";
+    }
+    if (attrs.some((attr) => attr.tier === "silver") || legacyStars === 2) {
+      return "var(--rarity-rare)";
+    }
+    if (attrs.some((attr) => attr.tier === "bronze") || legacyStars === 1) {
+      return "var(--rarity-uncommon)";
+    }
+
+    return "var(--rarity-common)";
+  }, [item]);
   
   const hasItem = !!item && !!def;
 
@@ -54,7 +67,11 @@ export const RPGSlot: React.FC<RPGSlotProps> = ({
         ${selected ? "border-[var(--accent-gold)] shadow-[var(--accent-glow)]" : ""}
         ${className}
       `}
-      style={{ width: size, height: size }}
+      style={{
+        width: size,
+        height: size,
+        borderColor: selected ? undefined : hasItem ? rarityColor : undefined,
+      }}
     >
       {/* Background Pattern (Optional) */}
       {!hasItem && <div className="absolute inset-0 opacity-[0.03] bg-stripes pointer-events-none" />}

@@ -5,6 +5,7 @@ import { User, BookOpen, Settings, Menu, Zap, Box } from "lucide-react";
 import { SkillProgressHUD } from "./components/SkillProgressHUD";
 import { StatusWidget } from "./components/StatusWidget";
 import { PlayerState } from "../game/entities/Player/PlayerState";
+import { useLanguage } from "../context/LanguageContext";
 
 // --- Subcomponent: Minimap Container (Top Right) ---
 const MinimapWidget: React.FC = () => {
@@ -22,16 +23,17 @@ const MinimapWidget: React.FC = () => {
 // --- Subcomponent: Action Toolbar (Bottom Center) ---
 const ActionToolbar: React.FC = () => {
   const { toggleWindow, windows } = useUI();
+  const { t } = useLanguage();
   const [hovered, setHovered] = useState<string | null>(null);
   const [perspectiveMode, setPerspectiveMode] = useState<"2D" | "3D">(
     PlayerState.getInstance().getPerspectiveMode(),
   );
 
   const tools = [
-    { id: "heroMenu", icon: User, label: "Hero Menu" },
-    { id: "grimorio", icon: BookOpen, label: "Grimório" },
-    { id: "settings", icon: Settings, label: "Settings" },
-    { id: "cheats", icon: Zap, label: "Cheats" },
+    { id: "heroMenu", icon: User, label: t("hero_menu") },
+    { id: "grimorio", icon: BookOpen, label: t("ui_spellbook") },
+    { id: "settings", icon: Settings, label: t("settings") },
+    { id: "cheats", icon: Zap, label: t("debug_tools") },
   ];
 
   const handleTogglePerspective = () => {
@@ -81,14 +83,12 @@ const ActionToolbar: React.FC = () => {
                     ${perspectiveMode === "2D" ? "text-cyan-400 bg-cyan-500/10" : "text-gray-400 hover:text-white hover:bg-white/10"}
                     hover:scale-110 active:scale-95
                 `}
-        title="Toggle 2.5D / 2D"
+        title={t("toggle_perspective_view")}
       >
         <Box size={24} strokeWidth={perspectiveMode === "2D" ? 2.5 : 2} />
         {hovered === "perspective" && (
           <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black text-white text-xs px-2 py-1 rounded border border-gray-700 shadow-lg animate-in fade-in slide-in-from-bottom-2">
-            {perspectiveMode === "3D"
-              ? "View: 2.5D (Perspective)"
-              : "View: 2D (Flat)"}
+            {perspectiveMode === "3D" ? t("view_perspective") : t("view_flat")}
           </div>
         )}
       </button>
@@ -97,8 +97,9 @@ const ActionToolbar: React.FC = () => {
       <div className="w-px bg-white/10 mx-1" />
       <button
         onClick={() => toggleWindow("systemMenu")}
+        data-benchmark-id="hud-system-menu"
         className="text-gray-500 hover:text-gray-300 p-2 hover:bg-white/5 rounded-xl transition-colors"
-        title="System Menu"
+        title={t("hud_system")}
       >
         <Menu size={20} />
       </button>
@@ -106,8 +107,9 @@ const ActionToolbar: React.FC = () => {
       {/* Settings Button */}
       <button
         onClick={() => toggleWindow("settings")}
+        data-benchmark-id="hud-settings"
         className="text-gray-500 hover:text-gray-300 p-2 hover:bg-white/5 rounded-xl transition-colors"
-        title="Settings"
+        title={t("settings")}
       >
         <Settings size={20} />
       </button>

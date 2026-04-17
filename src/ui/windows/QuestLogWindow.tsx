@@ -154,7 +154,7 @@ export const QuestLogContent: React.FC = () => {
                     const stage = selectedQuestDef.stages.find(
                       (s) => s.id === selectedQuestState.stageId,
                     );
-                    if (!stage) return <div>Stage Error</div>;
+                    if (!stage) return <div>{t("quest_stage_error")}</div>;
 
                     return (
                       <>
@@ -187,11 +187,21 @@ export const QuestLogContent: React.FC = () => {
                                   }
                                 >
                                   {cond.type === "kill" &&
-                                    `Kill ${cond.target} (${current}/${target})`}
+                                    t("quest_condition_kill", {
+                                      target: cond.target || "",
+                                      current: String(current),
+                                      targetCount: String(target),
+                                    })}
                                   {cond.type === "collect" &&
-                                    `Collect ${cond.target} (${current}/${target})`}
+                                    t("quest_condition_collect", {
+                                      target: cond.target || "",
+                                      current: String(current),
+                                      targetCount: String(target),
+                                    })}
                                   {cond.type === "talk" &&
-                                    `Talk to ${cond.target}`}
+                                    t("quest_condition_talk", {
+                                      target: cond.target || "",
+                                    })}
                                 </span>
                               </div>
                             );
@@ -223,8 +233,7 @@ export const QuestLogContent: React.FC = () => {
                 <Gift size={14} /> {t("rewards")}
               </h3>
               <div className="text-gray-400 text-sm">
-                {/* We could list total rewards here if defined in JSON root, currently per stage */}
-                See stage completion for rewards.
+                {t("quest_rewards_hint")}
               </div>
             </div>
           </div>

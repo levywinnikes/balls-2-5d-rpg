@@ -18,6 +18,7 @@ import { useWindowSystem } from "./components/window/WindowContext";
 import { HeroDashboard } from "./dashboard/HeroDashboard";
 import { useFPS } from "../hooks/useFPS";
 import { PerfMonitor } from "./components/PerfMonitor";
+import { useLanguage } from "../context/LanguageContext";
 
 export const GameOverlay: React.FC = () => {
   const {
@@ -30,6 +31,7 @@ export const GameOverlay: React.FC = () => {
     isEditorMode,
     scale,
   } = useUI();
+  const { t } = useLanguage();
   const { openWindow, closeWindow, isWindowOpen, openWindows } =
     useWindowSystem();
   const [contextMenu, setContextMenu] = useState<{
@@ -189,11 +191,11 @@ export const GameOverlay: React.FC = () => {
       scene.showFloatingText(
         scene.player.sprite.x,
         scene.player.sprite.y - 50,
-        "Quick Saved!",
+        t("msg_quick_saved"),
         0x00ff00,
       );
     }
-  }, [windows, windowPositions]);
+  }, [windows, windowPositions, t]);
 
   const handleQuickLoad = useCallback(async () => {
     const scene = (window as any).game?.scene.getScene("GameScene");
@@ -212,7 +214,7 @@ export const GameOverlay: React.FC = () => {
               scene.showFloatingText(
                 scene.player.sprite.x,
                 scene.player.sprite.y - 50,
-                "Quick Loaded!",
+                t("msg_quick_loaded"),
                 0xffff00,
               ),
             100,
@@ -220,11 +222,9 @@ export const GameOverlay: React.FC = () => {
         }
       }
     } else {
-      alert(
-        "Quick Load only available in Native Mode (or from memory session).",
-      );
+      alert(t("msg_quick_load_native_only"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

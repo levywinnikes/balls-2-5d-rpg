@@ -3,13 +3,12 @@ export type Language = "en" | "pt";
 export let currentLanguage: Language = "en";
 
 export const setGlobalLanguage = (lang: Language) => {
-    currentLanguage = lang;
+  currentLanguage = lang;
 };
 
 export const t_game = (key: keyof typeof translations.en): string => {
-    return translations[currentLanguage][key] || key;
+  return translations[currentLanguage][key] || key;
 };
-
 
 export const translations = {
   en: {
@@ -24,6 +23,9 @@ export const translations = {
     cloud_shadows: "Cloud Shadows",
     quality: "Quality",
     show_fps: "Show FPS",
+    language: "Language",
+    language_english: "English",
+    language_portuguese: "Portuguese",
     enabled: "ENABLED",
     disabled: "DISABLED",
     on: "ON",
@@ -85,10 +87,43 @@ export const translations = {
       "Settings window opens via button and pauses the game",
     benchmark_expected_equipment_roundtrip:
       "Equipment can be equipped and unequipped",
-    benchmark_expected_item_drop_roundtrip: "Items can be dropped and picked up",
+    benchmark_expected_item_drop_roundtrip:
+      "Items can be dropped and picked up",
     benchmark_expected_torch_light_roundtrip: "Torch can be lit/extinguished",
     benchmark_expected_save_load_roundtrip:
       "Game state can be saved and restored",
+
+    // Loading / Overlay
+    loading_connecting_world: "Connecting to World...",
+    loading_initializing_world: "Initializing World...",
+    loading_downloading_world_data: "Downloading World Data...",
+    loading_streaming_binary_continents: "Streaming Binary Continents...",
+    loading_building_navigation_matrix: "Building Navigation Matrix...",
+    loading_rendering_minimaps: "Rendering Mini-maps...",
+    loading_entering_world: "Entering World...",
+    loading_bms_metadata_missing: "Critical Error: BMS Metadata missing!",
+    msg_quick_saved: "Quick Saved!",
+    msg_quick_loaded: "Quick Loaded!",
+    msg_quick_load_native_only:
+      "Quick Load only available in Native Mode (or from memory session).",
+
+    // UI / System Messages
+    msg_save_system_missing: "Error: Save System not found.",
+    msg_save_failed: "Save Failed! Check console for details.",
+    msg_save_exception: "Save Exception: {error}",
+    msg_save_exit_missing:
+      "Error: Save System not found. Cannot save before exit.",
+    msg_save_exit_exception: "Error during Save & Exit: {error}",
+    toggle_perspective_view: "Toggle 2.5D / 2D",
+    view_perspective: "View: 2.5D (Perspective)",
+    view_flat: "View: 2D (Flat)",
+
+    // Quest UI
+    quest_stage_error: "Stage Error",
+    quest_condition_kill: "Kill {target} ({current}/{targetCount})",
+    quest_condition_collect: "Collect {target} ({current}/{targetCount})",
+    quest_condition_talk: "Talk to {target}",
+    quest_rewards_hint: "See stage completion for rewards.",
 
     // Iron Shield Jokes (English)
     joke_is_1: "I've seen butter harder than you.",
@@ -239,7 +274,7 @@ export const translations = {
     panel_all_stats: "Stats",
     health: "Health",
     hunger: "Hunger",
-    
+
     // Equipment Slots
     head: "Head",
     neck: "Neck",
@@ -253,7 +288,7 @@ export const translations = {
     dashboard_available_for: "Available for {slot}",
     dashboard_select_item: "Select an Item",
     dashboard_hint_nav: "Arrows to Navigate • Enter to Select",
-    
+
     // Sidebar
     level_progress: "Level Progress",
     cap_free: "oz free",
@@ -261,14 +296,14 @@ export const translations = {
     log: "Log",
     backpack: "Backpack",
     rank: "Rank",
-    
+
     // Stats Tooltips
     type: "Type",
     range: "Range",
     weight: "Weight",
     consumable: "Consumable",
     stackable: "Stackable",
-    
+
     // Messages
     too_heavy: "Too Heavy!",
     msg_too_heavy: "Too Heavy!",
@@ -293,7 +328,7 @@ export const translations = {
     msg_rune_added_spellbook: "Rune added to Spellbook.",
     msg_consumed_item: "Consumed 1x {item}",
     generic_item: "Item",
-    
+
     // Actions (Context Menu)
     action_pickup: "Pick Up",
     action_inspect: "Inspect",
@@ -303,12 +338,15 @@ export const translations = {
 
     // Combat Logs
     combat_blocked_enemy: "Player attack on {target} blocked",
-    combat_blocked_player: "You blocked an attack by {target}. (Reflex XP: +{xp})",
+    combat_blocked_player:
+      "You blocked an attack by {target}. (Reflex XP: +{xp})",
     combat_gained_skill_xp: "Gained {amount} {skill} XP.",
-    combat_blocked_armor_player: "Your armor absorbed the attack from {target}.",
+    combat_blocked_armor_player:
+      "Your armor absorbed the attack from {target}.",
     combat_blocked_armor_enemy: "Your attack on {target} absorbed by armor.",
     combat_damage_dealt: "You deal {damage} damage to {target}.",
-    combat_damage_taken: "You lose {damage} hitpoints due to an attack by {target}.",
+    combat_damage_taken:
+      "You lose {damage} hitpoints due to an attack by {target}.",
     combat_killed: "You killed {target}.",
     combat_gained_xp: "You gained {xp} experience.",
     combat_level_up: "You advanced from Level {old} to Level {new}.",
@@ -360,11 +398,12 @@ export const translations = {
     item_cheese: "Cheese",
     item_magic_rune: "Magic Rune",
     desc_magic_rune: "A mystical rune pulsing with energy.",
-    
+
     // Altar System
     msg_altar_need_blank: "You need a Magic Rune to craft.",
     msg_rune_crafted: "Rune Enchanted successfully!",
-    msg_altar_only_blank: "The Altar only accepts Magic Runes (for enchanting) or Blank Runes.",
+    msg_altar_only_blank:
+      "The Altar only accepts Magic Runes (for enchanting) or Blank Runes.",
     msg_rune_stored: "Rune stored in Altar.",
     msg_rune_withdrawn: "Rune withdrawn from Altar.",
     msg_drag_runes_altar: "Drag runes <-> Altar Storage",
@@ -403,13 +442,13 @@ export const translations = {
     msg_game_saved: "Game Saved!",
     hero_menu: "Hero Menu", // ADDED
     equipment: "Equipment",
-    
+
     // Container
     container: "Container",
     item_wooden_chest: "Wooden Chest",
     container_full: "Container is full.",
     container_move_hint: "Use drag to move containers.",
-    
+
     hud_character: "Character",
     hud_inventory: "Inventory",
     hud_settings: "Settings",
@@ -429,7 +468,8 @@ export const translations = {
     // Conditions / Willpower
     conditions: "Conditions",
     willpower: "Willpower",
-    willpower_desc: "Increases HP, Speed, Damage, Defense and Armor.\nSurvival Bonus: +1% to All Stats per Tier",
+    willpower_desc:
+      "Increases HP, Speed, Damage, Defense and Armor.\nSurvival Bonus: +1% to All Stats per Tier",
     willpower_locked: "Unlocks at Level 2",
     popup_willpower_tier: "Willpower Tier {tier}!",
 
@@ -441,7 +481,7 @@ export const translations = {
     hunger_desc: "Hunger determines regeneration.",
     msg_ate_food: "You ate {amount} food.",
     msg_hunger_full: "You are full!",
-    
+
     // Tooltips Breakdown
     tooltip_base: "Base",
     tooltip_level_bonus: "Level Bonus",
@@ -508,37 +548,40 @@ export const translations = {
     tooltip_hunger_max: "Stockpiled (Max Tier Reached)",
     tooltip_crit_chance: "Crit Chance",
     tooltip_crit_damage: "Crit Damage",
-    
+
     // Attribute Tooltips
     tooltip_str_info: "Increases Melee Damage and Critical Hit Damage.",
     tooltip_dex_info: "Increases Ranged Damage and Critical Hit Chance.",
-    tooltip_int_info: "Increases Magic Damage, Rune Power and Rune Memory Capacity.",
+    tooltip_int_info:
+      "Increases Magic Damage, Rune Power and Rune Memory Capacity.",
     tooltip_ref_info: "Increases Defense effectiveness.",
-    tooltip_level_info: "Increases Health, Capacity, Speed, Memory and overall effectiveness.",
-    
+    tooltip_level_info:
+      "Increases Health, Capacity, Speed, Memory and overall effectiveness.",
+
     // Level Bonuses
     tooltip_bonus_hp: "Health: +{value}",
     tooltip_bonus_cap: "Capacity: +{value} oz",
     tooltip_bonus_speed: "Speed: +{value}",
     tooltip_bonus_all_dmg: "All Damage: +{value}%",
-    
+
     tooltip_hp_info: "Your vitality. Reaches 0, you die.",
     tooltip_cap_info: "Maximum weight you can carry.",
     tooltip_atk_info: "Total Attack Power (Weapon + Skills).",
     tooltip_def_info: "Total Defense (Shield + Skills).",
     tooltip_arm_info: "Damage Reduction from Equipment.",
     tooltip_spd_info: "Movement Speed (Level + Equip).",
-    
+
     tooltip_next_level: "{value}% to next level",
     tooltip_regen_info: "Regen: Base + Hunger",
     tooltip_cap_total: "Total: {value} oz",
     tooltip_cap_used: "Used: {value} oz",
-    
+
     tooltip_affected_atk: "Affected by: Weapon, Level, Str/Dex, Willpower",
-    tooltip_affected_def: "Affected by: Shield, Weapon, Level, Reflex, Willpower",
+    tooltip_affected_def:
+      "Affected by: Shield, Weapon, Level, Reflex, Willpower",
     tooltip_affected_spd: "Affected by: Level, Boots, Terrain, Willpower",
     tooltip_sum_armor: "Sum of: Helm, Armor, Legs, Boots",
-    
+
     tooltip_bonus_melee: "Melee Dmg: +{value}%",
     tooltip_bonus_ranged: "Ranged Dmg: +{value}%",
     tooltip_bonus_magic: "Magic Dmg: +{value}%",
@@ -552,7 +595,7 @@ export const translations = {
     attr_melee_crit_chance: "Critical Chance",
     attr_melee_crit_damage: "Critical Damage",
     ITEM_ATTRIBUTES: "Item Attributes",
-    
+
     // Stat Categories
     stat_category_base: "Base",
     stat_category_equipment: "Equipment",
@@ -575,9 +618,9 @@ export const translations = {
     // stats.defense, armor, speed, etc are already defined above
     // "stats.defense": "Defense", // REMOVED DUPLICATE
     // Actually, lines 457-461 are duplicates of lines 157-162 range or similar.
-    // Let me just empty this block or merge it with the top one. 
+    // Let me just empty this block or merge it with the top one.
     // "stats.maxMana" and "stats.base" seem new?
-    
+
     // Keeping unique keys
     "stats.maxHealth": "Max Health",
     "stats.maxMana": "Max Mana",
@@ -601,15 +644,15 @@ export const translations = {
     "Reflex Bonus": "Reflex Bonus",
 
     // UI Polish Keys
-    "stats_strength": "Strength",
-    "stats_dexterity": "Dexterity",
-    "stats_reflex": "Reflex",
-    "stats_intelligence": "Intelligence",
+    stats_strength: "Strength",
+    stats_dexterity: "Dexterity",
+    stats_reflex: "Reflex",
+    stats_intelligence: "Intelligence",
     "stats_group.Combat": "Combat",
     "stats_group.Defense": "Defense",
     "stats_group.Misc": "Misc",
     "stats_group.Attributes": "Attributes",
-    
+
     "stats.range": "Range",
     "stats.cooldown": "Attack Speed",
     "stats.dps": "DPS",
@@ -619,13 +662,13 @@ export const translations = {
     "stats.offensiveExp": "Offensive Exp",
     "stats.defensiveExp": "Defensive Exp",
     "stats.expDamagePercent": "Damage XP %",
-    "dps_avg_dmg": "Avg Damage",
-    "dps_crit_factor": "Crit Factor",
-    "aps_base_weapon": "Weapon Base",
-    "aps_final_cooldown": "Final Cooldown",
-    "aps_formula_title": "APS Formula",
-    "aps_formula_desc": "How many attacks per second based on cooldown.",
-    
+    dps_avg_dmg: "Avg Damage",
+    dps_crit_factor: "Crit Factor",
+    aps_base_weapon: "Weapon Base",
+    aps_final_cooldown: "Final Cooldown",
+    aps_formula_title: "APS Formula",
+    aps_formula_desc: "How many attacks per second based on cooldown.",
+
     // Filter & Action Buttons
     all: "All",
     consumables: "Consumables",
@@ -635,7 +678,8 @@ export const translations = {
 
     // Star Points
     star_points: "Star Points",
-    star_points_desc: "An ancient force resonates through your stars... its true purpose remains unknown.",
+    star_points_desc:
+      "An ancient force resonates through your stars... its true purpose remains unknown.",
     star_points_from_level: "Level Bonus",
     star_points_from_equipment: "Equipment Stars",
     star_points_bronze: "Bronze Star",
@@ -644,9 +688,10 @@ export const translations = {
 
     // Star Rune
     item_star_rune: "Star Rune",
-    desc_star_rune: "A rune that channels the power of the stars. Its damage scales with your Star Points.",
+    desc_star_rune:
+      "A rune that channels the power of the stars. Its damage scales with your Star Points.",
     combat_star_damage: "Star Damage",
-    msg_star_rune_no_target: "Star Rune requires a target!"
+    msg_star_rune_no_target: "Star Rune requires a target!",
   },
   pt: {
     // Stats Web (HeroMenu) - Adding to PT
@@ -673,10 +718,10 @@ export const translations = {
     "Reflex Bonus": "Bônus de Reflexo",
 
     // UI Polish Keys
-    "stats_strength": "Força",
-    "stats_dexterity": "Destreza",
-    "stats_reflex": "Reflexos",
-    "stats_intelligence": "Inteligência",
+    stats_strength: "Força",
+    stats_dexterity: "Destreza",
+    stats_reflex: "Reflexos",
+    stats_intelligence: "Inteligência",
     "stats_group.Combat": "Combate",
     "stats_group.Defense": "Defesa",
     "stats_group.Misc": "Outros",
@@ -691,12 +736,12 @@ export const translations = {
     "stats.offensiveExp": "Exp. Ofensivo",
     "stats.defensiveExp": "Exp. Defensivo",
     "stats.expDamagePercent": "XP por Dano %",
-    "dps_avg_dmg": "Dano Médio",
-    "dps_crit_factor": "Fator Crítico",
-    "aps_base_weapon": "Base da Arma",
-    "aps_final_cooldown": "Recarga Final",
-    "aps_formula_title": "Fórmula de APS",
-    "aps_formula_desc": "Quantos ataques por segundo baseados na sua recarga.",
+    dps_avg_dmg: "Dano Médio",
+    dps_crit_factor: "Fator Crítico",
+    aps_base_weapon: "Base da Arma",
+    aps_final_cooldown: "Recarga Final",
+    aps_formula_title: "Fórmula de APS",
+    aps_formula_desc: "Quantos ataques por segundo baseados na sua recarga.",
     ITEM_ATTRIBUTES: "Atributos do Item", // Added
 
     // UI General
@@ -727,13 +772,16 @@ export const translations = {
     interface_scale: "Escala da Interface",
     system_saves: "Sistema / Saves",
     adjust_ui: "Ajuste o tamanho de janelas e textos.",
-    
+
     // Settings Options
     visual_effects: "Efeitos Visuais",
     blood_particles: "Sangue",
     cloud_shadows: "Sombras de Nuvens",
     quality: "Qualidade",
     show_fps: "Mostrar FPS",
+    language: "Idioma",
+    language_english: "Inglês",
+    language_portuguese: "Português",
     enabled: "ATIVADO",
     disabled: "DESATIVADO",
     on: "LIGADO",
@@ -776,7 +824,8 @@ export const translations = {
     benchmark_step_torch_light_roundtrip: "acender/apagar tocha",
     benchmark_step_save_load_roundtrip: "salvar/carregar",
     benchmark_step_runtime_error_check: "checagem de erro em runtime",
-    benchmark_runtime_errors_captured: "{count} erro(s) de runtime capturado(s)",
+    benchmark_runtime_errors_captured:
+      "{count} erro(s) de runtime capturado(s)",
     benchmark_expected_spawn_ready: "Jogador nasce no nível 0",
     benchmark_expected_pickup_loot: "Jogador coleta tocha do chão",
     benchmark_expected_transition_down: "Jogador transiciona para o nível -1",
@@ -800,6 +849,31 @@ export const translations = {
     benchmark_expected_torch_light_roundtrip: "Tocha pode ser acesa/apagada",
     benchmark_expected_save_load_roundtrip:
       "Estado do jogo pode ser salvo e restaurado",
+
+    // Loading / Overlay
+    loading_connecting_world: "Conectando ao Mundo...",
+    loading_initializing_world: "Inicializando o Mundo...",
+    loading_downloading_world_data: "Baixando Dados do Mundo...",
+    loading_streaming_binary_continents: "Transmitindo Continentes Binários...",
+    loading_building_navigation_matrix: "Montando Matriz de Navegação...",
+    loading_rendering_minimaps: "Renderizando Minimapas...",
+    loading_entering_world: "Entrando no Mundo...",
+    loading_bms_metadata_missing: "Erro Crítico: Metadados BMS ausentes!",
+    msg_quick_saved: "Salvamento Rápido Concluído!",
+    msg_quick_loaded: "Carregamento Rápido Concluído!",
+    msg_quick_load_native_only:
+      "Carregamento rápido disponível apenas no modo nativo (ou da sessão em memória).",
+
+    // UI / System Messages
+    msg_save_system_missing: "Erro: Sistema de Save não encontrado.",
+    msg_save_failed: "Falha ao salvar! Verifique o console.",
+    msg_save_exception: "Exceção ao salvar: {error}",
+    msg_save_exit_missing:
+      "Erro: Sistema de Save não encontrado. Não é possível salvar antes de sair.",
+    msg_save_exit_exception: "Erro ao salvar e sair: {error}",
+    toggle_perspective_view: "Alternar 2.5D / 2D",
+    view_perspective: "Visualização: 2.5D (Perspectiva)",
+    view_flat: "Visualização: 2D (Plana)",
 
     // Iron Shield Jokes (Portuguese)
     joke_is_1: "Já vi manteiga mais dura que você.",
@@ -928,7 +1002,7 @@ export const translations = {
     spellbook: "Grimório", // ADDED
     character_overview: "Resumo do Personagem", // ADDED
     panel_all_stats: "Status",
-    
+
     // Equipment Slots
     head: "Cabeça",
     neck: "Colar",
@@ -942,7 +1016,7 @@ export const translations = {
     dashboard_available_for: "Disponível para {slot}",
     dashboard_select_item: "Selecione um Item",
     dashboard_hint_nav: "Setas para Navegar • Enter para Selecionar",
-    
+
     // Sidebar
     level_progress: "Progresso de Nível",
     cap_free: "oz livres",
@@ -950,14 +1024,14 @@ export const translations = {
     log: "Log",
     backpack: "Mochila",
     rank: "Rank",
-    
+
     // Stats Tooltips
     type: "Tipo",
     range: "Alcance",
     weight: "Peso",
     consumable: "Consumível",
     stackable: "Empilhável",
-    
+
     // Messages
     too_heavy: "Muito pesado!",
     msg_too_heavy: "Muito pesado!",
@@ -993,18 +1067,21 @@ export const translations = {
 
     // Combat Logs
     combat_blocked_enemy: "Seu ataque em {target} foi bloqueado",
-    combat_blocked_player: "Você bloqueou um ataque de {target}. (XP de Reflexo: +{xp})",
+    combat_blocked_player:
+      "Você bloqueou um ataque de {target}. (XP de Reflexo: +{xp})",
     combat_gained_skill_xp: "Ganhou {amount} XP de {skill}.",
     combat_blocked_armor_player: "Sua armadura absorveu o ataque de {target}.",
     combat_blocked_armor_enemy: "A armadura de {target} absorveu seu ataque.",
     combat_damage_dealt: "Você causou {damage} de dano em {target}.",
-    combat_damage_taken: "Você perdeu {damage} de vida por um ataque de {target}.",
+    combat_damage_taken:
+      "Você perdeu {damage} de vida por um ataque de {target}.",
     combat_killed: "Você matou {target}.",
     combat_gained_xp: "Você ganhou {xp} de experiência.",
     combat_level_up: "Você avançou do Nível {old} para o Nível {new}.",
     combat_skill_up: "Você avançou para o nível {level} de {skill}.",
     welcome_msg: "Bem-vindo ao Balls 2.5D RPG!",
-    msg_willpower_tier_up: "Você avançou para o Nível de Força de Vontade {tier}.",
+    msg_willpower_tier_up:
+      "Você avançou para o Nível de Força de Vontade {tier}.",
     msg_willpower_lost: "Você perdeu sua Força de Vontade ao morrer.",
 
     // System Menu
@@ -1026,10 +1103,12 @@ export const translations = {
     // Attribute Tooltips
     tooltip_str_info: "Aumenta Dano Melee e Dano Crítico.",
     tooltip_dex_info: "Aumenta Dano à Distância e Chance Crítica.",
-    tooltip_int_info: "Aumenta Dano Mágico, Poder das Runas e Capacidade de Memória.",
+    tooltip_int_info:
+      "Aumenta Dano Mágico, Poder das Runas e Capacidade de Memória.",
     tooltip_ref_info: "Aumenta efeciência da Defesa.",
-    tooltip_level_info: "Aumenta Vida, Capacidade, Velocidade, Memória e eficiência geral.",
-    
+    tooltip_level_info:
+      "Aumenta Vida, Capacidade, Velocidade, Memória e eficiência geral.",
+
     // Level Bonuses
     tooltip_bonus_hp: "Vida: +{value}",
     tooltip_bonus_cap: "Capacidade: +{value} oz",
@@ -1047,12 +1126,12 @@ export const translations = {
     tooltip_regen_info: "Regen: Base + Fome",
     tooltip_cap_total: "Total: {value} oz",
     tooltip_cap_used: "Usado: {value} oz",
-    
+
     tooltip_affected_atk: "Afetado por: Arma, Nível, Força/Des, Vontade",
     tooltip_affected_def: "Afetado por: Escudo, Arma, Nível, Reflexo, Vontade",
     tooltip_affected_spd: "Afetado por: Nível, Botas, Terreno, Vontade",
     tooltip_sum_armor: "Soma de: Elmo, Armadura, Calça, Botas",
-    
+
     tooltip_bonus_melee: "Dano Melee: +{value}%",
     tooltip_bonus_ranged: "Dano Distância: +{value}%",
     tooltip_bonus_magic: "Dano Mágico: +{value}%",
@@ -1095,7 +1174,8 @@ export const translations = {
     desc_dragon_shield: "Um escudo lendário feito de escamas de dragão.",
     item_leather_helmet: "Elmo de Couro",
     item_dragon_armor: "Armadura de Dragão",
-    desc_dragon_armor: "Uma armadura extremamente durável feita de escamas de dragão.",
+    desc_dragon_armor:
+      "Uma armadura extremamente durável feita de escamas de dragão.",
     item_leather_armor: "Armadura de Couro",
     item_leather_legs: "Calça de Couro",
     item_leather_boots: "Botas de Couro",
@@ -1120,7 +1200,8 @@ export const translations = {
     // Altar System
     msg_altar_need_blank: "Você precisa de uma Runa Mágica.",
     msg_rune_crafted: "Runa encantada com sucesso!",
-    msg_altar_only_blank: "O Altar aceita apenas Runas Mágicas (para encantar) ou Runas em Branco.",
+    msg_altar_only_blank:
+      "O Altar aceita apenas Runas Mágicas (para encantar) ou Runas em Branco.",
     msg_rune_stored: "Runa armazenada no Altar.",
     msg_rune_withdrawn: "Runa retirada do Altar.",
     msg_drag_runes_altar: "Arraste runas <-> Altar",
@@ -1164,7 +1245,7 @@ export const translations = {
     save_game: "Salvar Jogo",
     msg_game_saved: "Jogo Salvo!",
     hero_menu: "Menu do Herói", // ADDED
-    
+
     // Container
     container: "Baú",
     item_wooden_chest: "Baú de Madeira",
@@ -1186,7 +1267,12 @@ export const translations = {
     quest_completed: "Missão Completa",
     rewards: "Recompensas",
     select_quest: "Selecione uma missão para ver detalhes.",
-    
+    quest_stage_error: "Erro de etapa",
+    quest_condition_kill: "Mate {target} ({current}/{targetCount})",
+    quest_condition_collect: "Colete {target} ({current}/{targetCount})",
+    quest_condition_talk: "Fale com {target}",
+    quest_rewards_hint: "Veja a conclusão da etapa para recompensas.",
+
     // Stat Categories (PT)
     stat_category_base: "Base",
     stat_category_equipment: "Equipamento",
@@ -1194,14 +1280,15 @@ export const translations = {
     stat_category_consumable: "Consumível",
     stat_category_passive: "Passiva",
     stat_category_skill: "Habilidade",
-    
+
     // Conditions / Willpower
     // Conditions / Willpower
     willpower: "Força de Vontade",
-    willpower_desc: "Aumenta PV, Velocidade, Dano, Defesa e Armadura.\nBônus de Sobrevivência: +1% no Total (após outros bônus) por Nível",
+    willpower_desc:
+      "Aumenta PV, Velocidade, Dano, Defesa e Armadura.\nBônus de Sobrevivência: +1% no Total (após outros bônus) por Nível",
     willpower_locked: "Desbloqueia no Nível 2",
     popup_willpower_tier: "Força de Vontade Tier {tier}!",
-    
+
     // Hunger
     // Hunger
     hunger_tier: "Tier",
@@ -1262,7 +1349,7 @@ export const translations = {
     notif_reached_tier: "Alcançou Tier {tier}",
     notif_exp: "+{xp} XP",
     notif_item_get: "+{amount} {item}",
-    
+
     // Filter & Action Buttons
     all: "Todos",
     consumables: "Consumíveis",
@@ -1275,7 +1362,8 @@ export const translations = {
 
     // Star Points
     star_points: "Pontos de Estrela",
-    star_points_desc: "Uma força antiga ressoa através de suas estrelas... seu verdadeiro propósito permanece desconhecido.",
+    star_points_desc:
+      "Uma força antiga ressoa através de suas estrelas... seu verdadeiro propósito permanece desconhecido.",
     star_points_from_level: "Bônus de Nível",
     star_points_from_equipment: "Estrelas do Equipamento",
     star_points_bronze: "Estrela de Bronze",
@@ -1284,8 +1372,9 @@ export const translations = {
 
     // Star Rune
     item_star_rune: "Runa Estelar",
-    desc_star_rune: "Uma runa que canaliza o poder das estrelas. Seu dano escala com seus Pontos de Estrela.",
+    desc_star_rune:
+      "Uma runa que canaliza o poder das estrelas. Seu dano escala com seus Pontos de Estrela.",
     combat_star_damage: "Dano de Estrela",
-    msg_star_rune_no_target: "A Runa Estelar requer um alvo!"
-  }
+    msg_star_rune_no_target: "A Runa Estelar requer um alvo!",
+  },
 };
