@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { useUI } from "../../context/UIContext";
-import { Sword, Scroll, Trash2, Droplets, User } from "lucide-react";
+import { Sword, Scroll, Trash2, Droplets, User, Bot } from "lucide-react";
 import { AudioManager } from "../../game/systems/AudioManager";
 
 interface MainMenuUIProps {
@@ -160,6 +160,22 @@ export const MainMenuUI: React.FC<MainMenuUIProps> = ({ onStart }) => {
               className={`${btnStyle} border-blue-900 text-blue-400`}
             >
               <Droplets size={20} /> MAP EDITOR
+            </button>
+
+            <button
+              onClick={() =>
+                onStart({
+                  isNewGame: true,
+                  map: "smoke_test",
+                  benchmarkMode: true,
+                  benchmarkName: "Smoke Test Benchmark",
+                  charName: "Benchmark",
+                  spawnInfo: { x: 96, y: 96, level: "0" },
+                })
+              }
+              className={`${btnStyle} border-amber-700 text-amber-300`}
+            >
+              <Bot size={20} /> BENCHMARK
             </button>
 
             {/* Language Flag Toggle (Cute) */}

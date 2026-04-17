@@ -100,6 +100,9 @@ export default class GameScene extends Phaser.Scene {
   private lastItemClickTime: number = 0;
   private lastClickedItem: DroppedItem | null = null;
   private isUiDragging: boolean = false;
+  private benchmarkMode: boolean = false;
+  private benchmarkStarted: boolean = false;
+  private benchmarkName: string = "Benchmark";
 
   private darkOverlay!: Phaser.GameObjects.RenderTexture;
   private darknessLayer!: Phaser.GameObjects.Graphics;
@@ -153,6 +156,8 @@ export default class GameScene extends Phaser.Scene {
     this.processedData = data.processedData || null;
     this.isTransitioning = false;
     this.enemiesByLevel.clear(); // FIX: Clear stale enemies from previous run
+    this.benchmarkMode = !!data.benchmarkMode;
+    this.benchmarkName = data.benchmarkName || this.benchmarkName;
 
     // START: Handle New Game - Clear Stale Registry Data
     if (data.isNewGame) {
@@ -1113,9 +1118,95 @@ export default class GameScene extends Phaser.Scene {
 
       this.isInitialized = true;
       this.isPathfindingReady = true;
+
+      if (this.benchmarkMode) {
+        this.time.delayedCall(800, () => {
+          void this.runBenchmark();
+        });
+      }
     } catch (error) {
       console.error("Erro ao inicializar GameScene:", error);
       this.isPathfindingReady = false;
+    }
+  }
+
+  private benchmarkDelay(ms: number): Promise<void> {
+    return new Promise((resolve) => this.time.delayedCall(ms, resolve));
+  }
+
+  private moveBenchmarkPlayer(x: number, y: number): void {
+    if (!this.player || !this.player.sprite) return;
+    this.player.sprite.setPosition(x, y);
+    this.player.sprite.body?.updateFromGameObject();
+    if (this.pickupZone) {
+      this.pickupZone.setPosition(x, y);
+    }
+  }
+
+  private async runBenchmark(): Promise<void> {
+    if (this.benchmarkStarted || !this.player || !this.transitionSystem) return;
+    this.benchmarkStarted = true;
+
+    const playerState = PlayerState.getInstance();
+    const report: string[] = [];
+    const fail = (message: string) => {
+      console.error(`[Benchmark] FAIL ${message}`);
+      playerState.emit("uiNotification", { type: "error", message });
+    };
+
+    const step = async (label: string, action: () => Promise<boolean> | boolean) => {
+      console.log(`[Benchmark] STEP ${label}`);
+      playerState.emit("uiNotification", {
+        type: "info",
+        message: `${this.benchmarkName}: ${label}`,
+      });
+      await this.benchmarkDelay(250);
+      const ok = await action();
+      if (!ok) {
+        throw new Error(label);
+      }
+      report.push(label);
+    };
+
+    try {
+      await step("spawn ready", async () => {
+        this.moveBenchmarkPlayer(96, 96);
+        await this.benchmarkDelay(100);
+        return this.currentLevel === "0";
+      });
+
+      await step("pickup chest", async () => {
+        this.moveBenchmarkPlayer(336, 112);
+        this.pickupNearbyItem();
+        await this.benchmarkDelay(150);
+        return playerState.getInventory().some((item) => item.itemId === "chest");
+      });
+
+      await step("transition down", async () => {
+        this.moveBenchmarkPlayer(272, 272);
+        await this.transitionSystem.tryManualTransition(8, 8, 32);
+        await this.benchmarkDelay(350);
+        return this.currentLevel === "-1";
+      });
+
+      await step("transition up", async () => {
+        this.moveBenchmarkPlayer(272, 272);
+        await this.transitionSystem.tryManualTransition(8, 8, 32);
+        await this.benchmarkDelay(350);
+        return this.currentLevel === "0";
+      });
+
+      console.log(`[Benchmark] PASS ${report.length}/${report.length} steps`);
+      playerState.emit("uiNotification", {
+        type: "success",
+        message: `${this.benchmarkName} OK (${report.length} steps)`,
+      });
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error));
+    } finally {
+      this.time.delayedCall(800, () => {
+        window.dispatchEvent(new Event("returnToTitle"));
+      });
     }
   }
 

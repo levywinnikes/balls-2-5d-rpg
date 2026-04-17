@@ -110,14 +110,16 @@ export default class LoadingScene extends Phaser.Scene {
     this.progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300, 30);
 
     // 5. Start GameScene
+    const spawnInfo = this.targetData?.spawnInfo || {
+      x: mapMetadata.width * 16,
+      y: mapMetadata.height * 16,
+      level: mapMetadata.config?.startLevel || "1",
+    };
+
     const finalData = {
       ...this.targetData,
       processedData: {
-        spawnInfo: {
-          x: mapMetadata.width * 16,
-          y: mapMetadata.height * 16,
-          level: mapMetadata.config?.startLevel || "1",
-        },
+        spawnInfo,
         pathfindingGrids,
         normalizedMapData: mapMetadata,
       },
