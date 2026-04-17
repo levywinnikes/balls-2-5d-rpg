@@ -72,7 +72,7 @@ Required updates when impact exists:
 | Up transition | Yes | Auto-run step + tile checkpoint | `GameScene.runBenchmark` / `smoke_test.json` |
 | Save/Load behavior | Yes | Auto-run save/load roundtrip | `GameScene.runBenchmark` / `SaveSystem` |
 | Quest log flow | Yes | Auto-run quest activation + persistence check | `GameScene.runBenchmark` / `QuestManager` |
-| Window/UI interactions | Not yet | Pending benchmark extension | N/A |
+| Window/UI interactions | Yes | Auto-run quest log window toggle | `GameScene.runBenchmark` / `UIContext` |
 
 ## 6. Definition of Done Addendum
 

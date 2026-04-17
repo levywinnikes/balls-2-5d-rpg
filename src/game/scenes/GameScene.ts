@@ -1334,6 +1334,23 @@ export default class GameScene extends Phaser.Scene {
         return started && activeQuestIds.includes("rat_plague");
       });
 
+      await step("quest log window", async () => {
+        const before = (window as any).__uiWindows?.questLog ?? false;
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "l", bubbles: true }),
+        );
+        await this.benchmarkDelay(150);
+        const opened = (window as any).__uiWindows?.questLog ?? false;
+
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "l", bubbles: true }),
+        );
+        await this.benchmarkDelay(150);
+        const closed = (window as any).__uiWindows?.questLog ?? false;
+
+        return !before && opened && !closed;
+      });
+
       await step("save/load roundtrip", async () => {
         const saved = await this.saveSystem.saveGame(benchmarkSaveName);
         if (!saved) {

@@ -215,6 +215,11 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
   );
   const nextZIndexRef = React.useRef(100);
 
+  useEffect(() => {
+    (window as any).__uiWindows = windows;
+    (window as any).__uiWindowPositions = windowPositions;
+  }, [windows, windowPositions]);
+
   // Auto-Scale Logic
   useEffect(() => {
     const handleResize = () => {
