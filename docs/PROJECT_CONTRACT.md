@@ -26,6 +26,11 @@
 | **Generator**       | Procedural generation algorithms (Cellular Automata).                            | [GENERATOR_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/GENERATOR_CONTRACT.md)         |
 | **Benchmark**       | Automated benchmark/smoke execution, required checkpoints, and result reporting. | [BENCHMARK_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/BENCHMARK_CONTRACT.md)         |
 
+## Operational Guides
+
+- [AI_RUNBOOK.md](./AI_RUNBOOK.md) defines the mandatory AI task flow.
+- [VALIDATION_MATRIX.md](./VALIDATION_MATRIX.md) defines required commands by impact area.
+
 ## Maintenance Protocol
 
 - **Creation:** When a new complex system is added, a new contract MUST be created.
@@ -33,6 +38,7 @@
 - **Feature Rule (Mandatory):** Every feature task MUST include contract maintenance as part of Definition of Done. The AI must proactively update affected contracts without requiring a separate user request.
 - **Benchmark Rule (Mandatory):** Every feature that affects gameplay, UI flow, transitions, save/load, inventory, map interactions, or performance-sensitive systems MUST update `BENCHMARK_CONTRACT.md` and benchmark checkpoints in the same task.
 - **I18N Rule (Mandatory):** Any user-facing text introduced in UI/HUD/scenes/windows MUST be implemented via translation keys (no hardcoded interface strings) and updated for all supported languages in the same task.
+- **Validation Rule (Mandatory):** Required validations MUST be selected from `docs/VALIDATION_MATRIX.md` based on impacted areas.
 - **Conflicts:** If a user request contradicts a contract, the AI must explicitly ask for clarification or propose a contract update.
 
 ## Delivery Checklist (PR/Task)
@@ -47,6 +53,7 @@ Every feature or bugfix task MUST pass this checklist before merge:
 6. Generated local artifacts/logs are not committed unless they are explicitly part of repository policy.
 7. Task summary includes: scope, files touched, validation results, and residual risks.
 8. UI text changes were added through translation keys for all supported languages; no hardcoded player-facing interface strings were introduced.
+9. Validation commands were selected and executed according to `docs/VALIDATION_MATRIX.md`.
 
 If any item is not satisfied, the task is considered incomplete.
 

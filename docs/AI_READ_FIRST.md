@@ -58,6 +58,12 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 - Do not introduce hardcoded interface strings.
 - For UI changes, read and follow `docs/contracts/UI_DESIGN_CONTRACT.md` before editing code.
 
+## 9. EXECUTION RUNBOOK (MANDATORY)
+
+- Before implementing any task, follow [AI_RUNBOOK.md](./AI_RUNBOOK.md).
+- Determine required validations using [VALIDATION_MATRIX.md](./VALIDATION_MATRIX.md).
+- Do not mark a task as complete without reporting executed validations and outcomes.
+
 ---
 
 _Reference current implementation plan for full context._
