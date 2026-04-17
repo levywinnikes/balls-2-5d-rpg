@@ -13,6 +13,14 @@
 /dist
 /dist_installer
 
+# benchmark artifacts and local run logs
+/artifacts/benchmark/
+/benchmark_latest.txt
+/benchmark_latest_output.txt
+/benchmark_run_latest.txt
+/benchmark_run_output.txt
+/build_run_output.txt
+
 # misc
 .DS_Store
 .env.local
