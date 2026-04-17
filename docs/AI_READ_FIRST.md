@@ -11,13 +11,13 @@
 
 ## 2. KEY SERVICE HUB
 
-| Logic Category | Target File |
-| :--- | :--- |
-| Map Loading/Indexing | `src/game/maps/MapLoader.ts` |
+| Logic Category        | Target File                               |
+| :-------------------- | :---------------------------------------- |
+| Map Loading/Indexing  | `src/game/maps/MapLoader.ts`              |
 | UI State / Fog of War | `src/game/entities/Player/PlayerState.ts` |
-| Minimap Buffers | `src/services/WorldMapService.ts` |
-| Level Transitions | `src/game/systems/TransitionSystem.ts` |
-| Navigation Workers | `src/services/NavigationService.ts` |
+| Minimap Buffers       | `src/services/WorldMapService.ts`         |
+| Level Transitions     | `src/game/systems/TransitionSystem.ts`    |
+| Navigation Workers    | `src/services/NavigationService.ts`       |
 
 ## 3. COMMON SIDE EFFECTS
 
@@ -37,7 +37,9 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 ## 5. SAFETY CHECK (BMS CONTRACT)
 
 - Run `npm run check:bms` before opening a PR that touches map-related code.
-- The guard fails if forbidden legacy patterns are found (e.g. `levelData.map`, `levelData.tiles`, `mapData.tiles`).
+- The guard fails if forbidden legacy patterns are found (e.g. `levelData.map`, `levelData.tiles`, `mapData.tiles`, `mapData.levels[...].map`, `levelData.map.length`).
+- Temporary scope note: `src/editor/` is excluded from this check until editor migration to BMS is completed.
 
 ---
-*Reference current implementation plan for full context.*
+
+_Reference current implementation plan for full context._

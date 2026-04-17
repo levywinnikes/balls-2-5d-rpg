@@ -2,6 +2,7 @@
 
 > [!IMPORTANT]
 > **🤖 FOR AI ASSISTANTS (MANDATORY READ)**
+>
 > 1. **Binary Map System (BMS)**: This project uses a binary storage engine. **NEVER** use `.map` arrays or `tiles/entities` property names. Reference `/docs/SYSTEM_BMS.md` before any changes to maps.
 > 2. **Side-Effect Analysis**: Before modifying any logic in `MapLoader`, `GameScene`, or `NavigationService`, analyze potential collateral effects on level transitions and pathfinding.
 > 3. **Architecture**: See `/docs/ARCHITECTURE_OVERVIEW.md` for the React-Phaser bridge logic.
@@ -17,7 +18,12 @@ Para começar a desenvolver neste novo projeto:
 3.  Execute `npm start` para iniciar o ambiente de desenvolvimento.
 
 ## Diferenciais da Engine
+
 - Sistema de movimentação isométrica com Phaser.
 - HUD dinâmico e janelas reajustáveis.
 - Sistema de combate e atributos centralizado.
 - Suporte a iluminação dinâmica e partículas.
+
+## Contribution Safety
+
+If you plan to change code in this repository, read [docs/CONTRIBUTING_SAFE.md](docs/CONTRIBUTING_SAFE.md) first. It summarizes the safe workflow, the quality gates, and the high-risk areas of the engine.

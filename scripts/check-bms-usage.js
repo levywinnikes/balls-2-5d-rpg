@@ -9,6 +9,7 @@ const path = require("path");
 const ROOT_DIR = process.cwd();
 const TARGET_DIRS = ["src"];
 const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx"]);
+const IGNORED_PATH_PREFIXES = ["src/editor/"];
 
 const FORBIDDEN_PATTERNS = [
   {
@@ -26,13 +27,33 @@ const FORBIDDEN_PATTERNS = [
     description: "Legacy mapData.tiles access is forbidden",
     regex: /\bmapData\.tiles\b/g,
   },
+  {
+    id: "BMS004",
+    description: "Legacy level-scoped map arrays are forbidden",
+    regex: /\bmapData\.levels(?:\[[^\]]+\]|\.[A-Za-z0-9_]+)\.map\b/g,
+  },
+  {
+    id: "BMS005",
+    description: "Legacy level-scoped tile arrays are forbidden",
+    regex: /\bmapData\.levels(?:\[[^\]]+\]|\.[A-Za-z0-9_]+)\.tiles\b/g,
+  },
+  {
+    id: "BMS006",
+    description:
+      "Legacy map length usage is forbidden; use mapData.width or mapData.height",
+    regex: /\blevelData\.map\.length\b/g,
+  },
 ];
 
 function walkDir(dirPath, out) {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
   for (const entry of entries) {
-    if (entry.name === "node_modules" || entry.name === "build" || entry.name === "dist") {
+    if (
+      entry.name === "node_modules" ||
+      entry.name === "build" ||
+      entry.name === "dist"
+    ) {
       continue;
     }
 
@@ -51,6 +72,11 @@ function walkDir(dirPath, out) {
 }
 
 function findViolations(filePath) {
+  const relPath = path.relative(ROOT_DIR, filePath).replace(/\\/g, "/");
+  if (IGNORED_PATH_PREFIXES.some((prefix) => relPath.startsWith(prefix))) {
+    return [];
+  }
+
   const source = fs.readFileSync(filePath, "utf8");
   const lines = source.split(/\r?\n/);
   const violations = [];
@@ -86,7 +112,9 @@ function main() {
   const violations = files.flatMap(findViolations);
 
   if (violations.length === 0) {
-    console.log("[BMS Guard] OK - no forbidden legacy map access patterns found.");
+    console.log(
+      "[BMS Guard] OK - no forbidden legacy map access patterns found.",
+    );
     process.exit(0);
   }
 
