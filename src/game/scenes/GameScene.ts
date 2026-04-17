@@ -1211,7 +1211,7 @@ export default class GameScene extends Phaser.Scene {
       item.setVisible(true);
       PlayerState.getInstance().emit("uiNotification", {
         type: "error",
-        message: t_game("msg_cap_full") || "Full Cap",
+        message: t_game("msg_cap_full"),
       });
       playerState.endGroundDrag(false); // Clear visuals
     }
@@ -2692,7 +2692,7 @@ export default class GameScene extends Phaser.Scene {
             this.showFloatingText(
               pixelX,
               pixelY - 80,
-              t_game("fall_safety_active") || "Safety active!",
+              t_game("fall_safety_active"),
               "#00ff00",
             );
             (this as any)._lastSafetyMsgTime = now;
