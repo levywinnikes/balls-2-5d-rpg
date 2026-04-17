@@ -126,7 +126,7 @@ export const SidebarSpellbook: React.FC = () => {
             {/* Custom Quantity Overlay */}
             {transferRequest && (
                 <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-50 p-4">
-                    <span className="text-purple-300 text-xs mb-2 font-bold">{t("quantity" as any) || "Quantity"}</span>
+                    <span className="text-purple-300 text-xs mb-2 font-bold">{t("quantity" as any)}</span>
                     <input 
                         type="number" 
                         min="1"
@@ -160,7 +160,7 @@ export const SidebarSpellbook: React.FC = () => {
             {/* Memory Bar */}
             <div className="mb-2">
                 <div className="flex justify-between text-[10px] text-purple-300 mb-0.5">
-                    <span>Memory</span>
+                    <span>{t("memory" as any)}</span>
                     <span>{memoryUsage} / {memoryCapacity}</span>
                 </div>
                 <div className="h-1.5 bg-[#222] rounded-full overflow-hidden">
@@ -258,7 +258,7 @@ export const SidebarSpellbook: React.FC = () => {
             </div>
             
             <div className="text-[9px] text-gray-500 text-center mt-1">
-                {t("drag_rune_hint") || "Drag Runes"}
+                {t("drag_rune_hint")}
             </div>
         </div>
     );

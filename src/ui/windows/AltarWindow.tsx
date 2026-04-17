@@ -183,7 +183,7 @@ export const AltarContent: React.FC = () => {
                 <div style={{ padding: "8px", backgroundColor: "var(--bg-glass-heavy)", border: "1px solid var(--border-subtle)", borderRadius: "4px", display: "flex", gap: "12px", alignItems: "center" }}>
                      
                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                         <div style={{ fontSize: "10px", color: "#aaa", marginBottom: "4px" }}>{t("item_magic_rune" as any) || "Magic Rune"}</div>
+                         <div style={{ fontSize: "10px", color: "#aaa", marginBottom: "4px" }}>{t("item_magic_rune" as any)}</div>
                          <div 
                             style={{ 
                                 width: "48px", height: "48px", 
@@ -194,7 +194,7 @@ export const AltarContent: React.FC = () => {
                                 position: "relative"
                             }}
                          >
-                             <img src={`assets/items/magic_rune.png`} alt="Magic Rune" style={{ width: "100%", height: "100%", imageRendering: "pixelated", opacity: blankRunesCount > 0 ? 1 : 0.5 }} />
+                             <img src={`assets/items/magic_rune.png`} alt={t("item_magic_rune" as any)} style={{ width: "100%", height: "100%", imageRendering: "pixelated", opacity: blankRunesCount > 0 ? 1 : 0.5 }} />
                              <span style={{ position: "absolute", bottom: "1px", right: "2px", fontSize: "10px", color: "#fff", fontWeight: "bold", textShadow: "1px 1px 0 #000" }}>
                                  {blankRunesCount}
                              </span>
@@ -202,7 +202,7 @@ export const AltarContent: React.FC = () => {
                      </div>
 
                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
-                         <div style={{ fontSize: "11px", fontWeight: "bold", color: "#d8b4fe" }}>{t("ui_craft" as any) || "Enchant Station"}</div>
+                         <div style={{ fontSize: "11px", fontWeight: "bold", color: "#d8b4fe" }}>{t("ui_craft" as any)}</div>
                          <div style={{ display: "flex", gap: "6px" }}>
                              <select 
                                 value={selectedRuneId}
@@ -210,7 +210,7 @@ export const AltarContent: React.FC = () => {
                                 style={{ flex: 1, padding: "4px", backgroundColor: "#333", color: "#fff", border: "1px solid #555", borderRadius: "4px", fontSize: "11px" }}
                              >
                                  {RuneRegistry.getAllRunes().map(r => (
-                                     <option key={r.id} value={r.id}>{r.name} ({r.memoryCost} Mem)</option>
+                                     <option key={r.id} value={r.id}>{r.name} ({r.memoryCost} {t("memory_short" as any)})</option>
                                  ))}
                              </select>
                              <button 
@@ -221,7 +221,7 @@ export const AltarContent: React.FC = () => {
                                     color: blankRunesCount > 0 ? "#fff" : "#888", border: "none", borderRadius: "4px", cursor: blankRunesCount > 0 ? "pointer" : "default", fontWeight: "bold", fontSize: "11px" 
                                 }}
                              >
-                                 {t("action_enchant" as any) || "Enchant"}
+                                 {t("action_enchant" as any)}
                              </button>
                          </div>
                      </div>
@@ -230,7 +230,7 @@ export const AltarContent: React.FC = () => {
                 {/* MEMORY BAR (New) */}
                 <div style={{ padding: "4px 8px", backgroundColor: "var(--bg-glass)", border: "1px solid var(--border-subtle)", borderRadius: "4px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#ccc", marginBottom: "2px" }}>
-                        <span>{t("memory" as any) || "Memory"}</span>
+                        <span>{t("memory" as any)}</span>
                         <span>{memoryCurrent} / {memoryMax}</span>
                     </div>
                     <div style={{ width: "100%", height: "6px", backgroundColor: "#333", borderRadius: "3px", overflow: "hidden" }}>
@@ -251,10 +251,10 @@ export const AltarContent: React.FC = () => {
                     {/* LEFT: MY SPELLBOOK */}
                     <div style={{ display: "flex", flexDirection: "column", backgroundColor: "var(--bg-glass)", border: "1px solid var(--border-subtle)", borderRadius: "4px", padding: "4px" }}>
                         <div style={{ fontSize: "11px", fontWeight: "bold", color: "#93c5fd", marginBottom: "4px", textAlign: "center", borderBottom: "1px solid #333", paddingBottom: "2px" }}>
-                            {t("ui_spellbook" as any) || "My Spellbook"}
+                            {t("ui_spellbook" as any)}
                         </div>
                         <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "2px" }}>
-                             {playerRunes.length === 0 && <div style={{ color: "#555", fontSize: "10px", textAlign: "center", marginTop: "20px" }}>{t("ui_empty" as any) || "Empty"}</div>}
+                             {playerRunes.length === 0 && <div style={{ color: "#555", fontSize: "10px", textAlign: "center", marginTop: "20px" }}>{t("ui_empty" as any)}</div>}
                              {playerRunes.map((rune, idx) => {
                                  const def = RuneRegistry.getRune(rune.runeId);
                                  return (
@@ -262,10 +262,10 @@ export const AltarContent: React.FC = () => {
                                          <span style={{ fontSize: "11px", color: "#ccc" }}>{def?.name} (x{rune.count})</span>
                                          <button 
                                             onClick={() => handleStoreClick(rune.runeId)}
-                                            title={t("drag_rune_hint" as any) || "Store"}
+                                            title={t("drag_rune_hint" as any)}
                                             style={{ cursor: "pointer", backgroundColor: "#333", border: "none", color: "#22c55e", padding: "2px 6px", borderRadius: "2px", fontSize: "10px" }}
                                          >
-                                             {t("ui_store_btn" as any) || "Store ->"}
+                                             {t("ui_store_btn" as any)}
                                          </button>
                                      </div>
                                  )
@@ -281,10 +281,10 @@ export const AltarContent: React.FC = () => {
                         onDrop={handleStorageDrop}
                     >
                         <div style={{ fontSize: "11px", fontWeight: "bold", color: "#86efac", marginBottom: "4px", textAlign: "center", borderBottom: "1px solid #333", paddingBottom: "2px" }}>
-                            {t("ui_storage" as any) || "Altar Storage"}
+                            {t("ui_storage" as any)}
                         </div>
                         <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "2px" }}>
-                             {storedRunes.length === 0 && <div style={{ color: "#555", fontSize: "10px", textAlign: "center", marginTop: "20px" }}>{t("ui_empty" as any) || "Empty"}</div>}
+                             {storedRunes.length === 0 && <div style={{ color: "#555", fontSize: "10px", textAlign: "center", marginTop: "20px" }}>{t("ui_empty" as any)}</div>}
                              {storedRunes.map((rune, idx) => {
                                  const def = RuneRegistry.getRune(rune.runeId);
                                  return (
@@ -318,10 +318,10 @@ export const AltarContent: React.FC = () => {
                                      >
                                          <button 
                                             onClick={() => handleWithdrawClick(rune.runeId)}
-                                            title={t("msg_rune_withdrawn" as any) || "Withdraw"}
+                                            title={t("msg_rune_withdrawn" as any)}
                                             style={{ cursor: "pointer", backgroundColor: "#333", border: "none", color: "#3b82f6", padding: "2px 6px", borderRadius: "2px", fontSize: "10px" }}
                                          >
-                                             {t("ui_withdraw_btn" as any) || "<- Withdraw"}
+                                             {t("ui_withdraw_btn" as any)}
                                          </button>
                                          <span style={{ fontSize: "11px", color: "#ccc" }}>{def?.name} (x{rune.count})</span>
                                      </div>
@@ -336,7 +336,7 @@ export const AltarContent: React.FC = () => {
                 {transferRequest && (
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.95)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "8px" }}>
                         <span style={{ color: "#d8b4fe", fontSize: "12px", marginBottom: "8px", fontWeight: "bold" }}>
-                            {transferRequest.direction === "store" ? (t("ui_store_qty_title" as any) || "Store Quantity") : (t("ui_withdraw_qty_title" as any) || "Withdraw Quantity")}
+                            {transferRequest.direction === "store" ? t("ui_store_qty_title" as any) : t("ui_withdraw_qty_title" as any)}
                         </span>
                         <input 
                             type="number" 
@@ -356,13 +356,13 @@ export const AltarContent: React.FC = () => {
                                 onClick={handleTransferConfirm} 
                                 style={{ backgroundColor: "#9333ea", color: "#fff", border: "none", padding: "6px 16px", fontSize: "11px", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}
                             >
-                                {t("ui_confirm" as any) || "Confirm"}
+                                {t("ui_confirm" as any)}
                             </button>
                             <button 
                                 onClick={handleTransferCancel} 
                                 style={{ backgroundColor: "#374151", color: "#d1d5db", border: "none", padding: "6px 12px", fontSize: "11px", borderRadius: "4px", cursor: "pointer" }}
                             >
-                                {t("ui_cancel" as any) || "Cancel"}
+                                {t("ui_cancel" as any)}
                             </button>
                         </div>
                     </div>

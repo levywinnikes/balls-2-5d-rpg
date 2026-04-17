@@ -410,7 +410,7 @@ export const HeroStatsTab: React.FC<HeroStatsTabProps> = ({
             <span>
               XP: {Math.floor(wpExp)} / {wpTarget}
             </span>
-            <span className="text-purple-300 font-bold">+{wpBonus}% Stats</span>
+            <span className="text-purple-300 font-bold">+{wpBonus}% {t("panel_all_stats" as any)}</span>
           </div>
 
           <ProgressBar

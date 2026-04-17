@@ -22,13 +22,13 @@ export const HeroMenuContent: React.FC = () => {
                     onClick={() => setActiveTab("overview")}
                     className={`px-3 py-1 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 ${activeTab === "overview" ? "border-[var(--accent-gold)] text-[var(--accent-gold)]" : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}
                 >
-                    {t("overview" as any) || "Overview"}
+                    {t("overview" as any)}
                 </button>
                 <button 
                     onClick={() => setActiveTab("stats")}
                     className={`px-3 py-1 text-sm font-bold uppercase tracking-wider transition-colors border-b-2 ${activeTab === "stats" ? "border-[var(--accent-gold)] text-[var(--accent-gold)]" : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}
                 >
-                    {t("stats" as any) || "Stats"}
+                    {t("stats" as any)}
                 </button>
             </div>
 

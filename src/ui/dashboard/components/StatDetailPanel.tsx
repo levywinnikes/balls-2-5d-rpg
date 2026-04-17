@@ -52,14 +52,14 @@ export const StatDetailPanel: React.FC<StatDetailPanelProps> = ({ statKey, label
             {/* Header */}
             <div className="border-b border-white/10 pb-3 mb-4">
                 <div className="text-xs text-white/40 uppercase tracking-widest">
-                    {t("character_overview" as any) || "Character Overview"}
+                    {t("character_overview" as any)}
                 </div>
                 <div className="text-lg font-bold text-white mt-1">{label}</div>
             </div>
 
             {/* Total Value */}
             <div className="text-center py-6 bg-white/5 rounded-lg border border-white/5 mb-4">
-                <div className="text-[10px] text-white/40 uppercase tracking-widest mb-2">Total</div>
+                <div className="text-[10px] text-white/40 uppercase tracking-widest mb-2">{t("panel_total" as any)}</div>
                 <div className="text-4xl font-bold text-blue-400">{result.finalValue}</div>
             </div>
 
@@ -68,7 +68,7 @@ export const StatDetailPanel: React.FC<StatDetailPanelProps> = ({ statKey, label
             {/* Modifiers */}
                 {enhancedModifiers.length > 0 ? (
                     <div className="space-y-2">
-                        <div className="text-[10px] text-white/30 uppercase tracking-widest pl-1">Modificadores</div>
+                        <div className="text-[10px] text-white/30 uppercase tracking-widest pl-1">{t("panel_modifiers" as any)}</div>
                         {enhancedModifiers.map((mod: any, i: number) => {
                             const qualityStyles = mod.quality ? getQualityStyles(mod.quality) : 'bg-white/5 border-white/5';
                             const absoluteText = mod.absoluteContribution ? ` (${mod.absoluteContribution})` : '';
@@ -92,13 +92,13 @@ export const StatDetailPanel: React.FC<StatDetailPanelProps> = ({ statKey, label
                         })}
                     </div>
                 ) : (
-                    <div className="text-center text-sm text-white/30 italic py-6">Sem modificadores</div>
+                    <div className="text-center text-sm text-white/30 italic py-6">{t("panel_no_modifiers" as any)}</div>
                 )}
 
                 {/* Global Multipliers */}
                 {result.breakdown.globalMultipliers && result.breakdown.globalMultipliers.length > 0 && (
                     <div className="space-y-2 mt-3">
-                        <div className="text-[10px] text-purple-400/50 uppercase tracking-widest pl-1">Multiplicadores</div>
+                        <div className="text-[10px] text-purple-400/50 uppercase tracking-widest pl-1">{t("panel_multipliers" as any)}</div>
                         {result.breakdown.globalMultipliers.map((mod: any, i: number) => {
                             // Calculate absolute contribution for multipliers
                             // The multiplier is applied to the subtotal after PERCENT bonuses

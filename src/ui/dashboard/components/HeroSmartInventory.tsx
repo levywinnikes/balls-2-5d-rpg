@@ -159,10 +159,12 @@ export const HeroSmartInventory: React.FC<{
                 <Ghost size={24} className="opacity-50" />
               </div>
               <p className="text-[10px] text-white/30 uppercase tracking-widest font-bold">
-                {t("dashboard_empty" as any) || "Empty"}
+                {t("dashboard_empty" as any)}
               </p>
               <p className="text-[9px] text-white/20 mt-1">
-                {selectedSlot ? "No compatible items" : "Inventory is empty"}
+                {selectedSlot
+                  ? t("dashboard_no_items_compatible" as any)
+                  : t("dashboard_inventory_empty" as any)}
               </p>
             </div>
           )}
