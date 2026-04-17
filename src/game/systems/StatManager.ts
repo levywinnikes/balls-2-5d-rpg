@@ -190,7 +190,7 @@ export class StatManager {
             const item = state.getEquippedItemInSlot(slot);
             if (item && item.attributes && item.attributes.length > 0) {
                 const def = WeaponRegistry.getWeaponDefinition(item.itemId);
-                const name = def ? (t_game(def.name as any) || def.name) : item.itemId;
+                const name = def ? t_game(def.name as any) : item.itemId;
                 
                 const starDetails: { tier: string; points: number }[] = [];
                 let itemTotal = 0;
@@ -842,7 +842,7 @@ export class StatManager {
             if (item) {
                 const def = WeaponRegistry.getWeaponDefinition(item.itemId);
                 if (def) {
-                    const name = t_game(def.name as any) || def.name;
+                    const name = t_game(def.name as any);
                     const isWeapon = def.type === "melee" || def.type === "ranged";
                     
                     // Implicit Star Bonus Removed (Strict Mode)
@@ -898,7 +898,7 @@ export class StatManager {
             if (item) {
                 const def = WeaponRegistry.getWeaponDefinition(item.itemId);
                 if (def) {
-                    const name = t_game(def.name as any) || def.name;
+                    const name = t_game(def.name as any);
                     const isArmorOrShield = [ItemType.BODY_ARMOR, ItemType.LEGS, ItemType.HELMET, ItemType.BOOTS, ItemType.SHIELD].includes(def.type);
                     
                     // Star bonuses for armor/shields
