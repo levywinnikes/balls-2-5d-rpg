@@ -29,7 +29,7 @@ export const RPGSlot: React.FC<RPGSlotProps> = ({
   selected = false,
   className = "",
   size = "100%",
-  imagePath
+  imagePath,
 }) => {
   const rarityColor = React.useMemo(() => {
     const attrs = item?.attributes ?? [];
@@ -47,7 +47,7 @@ export const RPGSlot: React.FC<RPGSlotProps> = ({
 
     return "var(--rarity-common)";
   }, [item]);
-  
+
   const hasItem = !!item && !!def;
 
   return (
@@ -74,58 +74,71 @@ export const RPGSlot: React.FC<RPGSlotProps> = ({
       }}
     >
       {/* Background Pattern (Optional) */}
-      {!hasItem && <div className="absolute inset-0 opacity-[0.03] bg-stripes pointer-events-none" />}
+      {!hasItem && (
+        <div className="absolute inset-0 opacity-[0.03] bg-stripes pointer-events-none" />
+      )}
 
       {hasItem && (
         <>
-            <img 
-                src={imagePath || `assets/items/${def!.id}.png`} 
-                alt={def!.name} 
-                className="w-[85%] h-[85%] object-contain pixelated drop-shadow-md pointer-events-none" 
-            />
-            
-            {/* Count Indicator */}
-            {item!.count > 1 && (
-                <span className="absolute bottom-0 right-1 text-[10px] font-bold text-white drop-shadow-md pointer-events-none font-mono tracking-tighter">
-                    {item!.count}
-                </span>
-            )}
+          <img
+            src={imagePath || `assets/items/${def!.id}.png`}
+            alt={def!.name}
+            className="w-[85%] h-[85%] object-contain pixelated drop-shadow-md pointer-events-none"
+          />
 
-            {/* Stars/Quality Indicator (Rainbow Ordered) */}
-            {(item!.attributes && item!.attributes.length > 0) ? (
-                 <div className="absolute top-0 right-0 p-0.5 pointer-events-none flex flex-row-reverse gap-[-2px]">
-                     {/* Sort: Bronze -> Silver -> Gold (Rendered Reverse so Gold is Rightmost? Or User wants Gold -> Silver? User: "Ouro -> Prata -> Bronze") 
+          {/* Count Indicator */}
+          {item!.count > 1 && (
+            <span className="absolute bottom-0 right-1 text-[10px] font-bold text-white drop-shadow-md pointer-events-none font-mono tracking-tighter">
+              {item!.count}
+            </span>
+          )}
+
+          {/* Stars/Quality Indicator (Rainbow Ordered) */}
+          {item!.attributes && item!.attributes.length > 0 ? (
+            <div className="absolute top-0 right-0 p-0.5 pointer-events-none flex flex-row-reverse gap-[-2px]">
+              {/* Sort: Bronze -> Silver -> Gold (Rendered Reverse so Gold is Rightmost? Or User wants Gold -> Silver? User: "Ouro -> Prata -> Bronze") 
                          Visual Example: [O][O][P][B]
                          Flex-row-reverse makes first in DOM appear last on right? 
                          Let's just use normal flex and sort correctly.
                      */}
-                     {[...item!.attributes]
-                         .sort((a, b) => {
-                             const tierOrder = { gold: 3, silver: 2, bronze: 1 };
-                             // @ts-ignore
-                             return tierOrder[b.tier] - tierOrder[a.tier];
-                         })
-                         .map((attr, idx) => {
-                            let color = "#cd7f32"; // Bronze
-                            if (attr.tier === "silver") color = "#c0c0c0";
-                            if (attr.tier === "gold") color = "#fbbf24";
-                            
-                            return (
-                                <span key={idx} style={{ color }} className="text-[9px] drop-shadow-md -ml-0.5">★</span>
-                            );
-                         })
-                     }
-                 </div>
-            ) : (
-                // Fallback for Legacy Items (Count only)
-                item!.stars && item!.stars > 0 && (
-                    <div className="absolute top-0 right-0 p-0.5 pointer-events-none">
-                         {Array.from({ length: item!.stars }).map((_, i) => (
-                             <span key={i} className="text-[9px] text-[var(--accent-gold)] -ml-0.5">★</span>
-                         ))}
-                    </div>
-                )
-            )}
+              {[...item!.attributes]
+                .sort((a, b) => {
+                  const tierOrder = { gold: 3, silver: 2, bronze: 1 };
+                  // @ts-ignore
+                  return tierOrder[b.tier] - tierOrder[a.tier];
+                })
+                .map((attr, idx) => {
+                  let color = "#cd7f32"; // Bronze
+                  if (attr.tier === "silver") color = "#c0c0c0";
+                  if (attr.tier === "gold") color = "#fbbf24";
+
+                  return (
+                    <span
+                      key={idx}
+                      style={{ color }}
+                      className="text-[9px] drop-shadow-md -ml-0.5"
+                    >
+                      ★
+                    </span>
+                  );
+                })}
+            </div>
+          ) : (
+            // Fallback for Legacy Items (Count only)
+            item!.stars &&
+            item!.stars > 0 && (
+              <div className="absolute top-0 right-0 p-0.5 pointer-events-none">
+                {Array.from({ length: item!.stars }).map((_, i) => (
+                  <span
+                    key={i}
+                    className="text-[9px] text-[var(--accent-gold)] -ml-0.5"
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            )
+          )}
         </>
       )}
     </div>

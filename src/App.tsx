@@ -18,6 +18,7 @@ import { WindowProvider } from "./ui/components/window/WindowContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { MainMenuUI } from "./ui/screens/MainMenuUI";
 import { RuntimeErrorMonitor } from "./game/services/RuntimeErrorMonitor";
+import { ThreeDSliceView } from "./three-d/bootstrap/ThreeDSliceView";
 
 const GameLayout: React.FC = () => {
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -302,9 +303,14 @@ const GameLayout: React.FC = () => {
 
 function App() {
   // Check for Editor Mode (Env Var or URL Param)
+  const searchParams = new URLSearchParams(window.location.search);
   const isEditor =
     process.env.REACT_APP_EDITOR === "true" ||
-    new URLSearchParams(window.location.search).get("editor") === "true";
+    searchParams.get("editor") === "true";
+  const isThreeDSlice =
+    searchParams.get("slice3d") === "1" ||
+    searchParams.get("debug_3d") === "1" ||
+    searchParams.get("debug_3d") === "true";
 
   return (
     <LanguageProvider>
@@ -319,7 +325,13 @@ function App() {
           }
         `}</style>
         <WindowProvider>
-          {isEditor ? <EditorLayout /> : <GameLayout />}
+          {isEditor ? (
+            <EditorLayout />
+          ) : isThreeDSlice ? (
+            <ThreeDSliceView />
+          ) : (
+            <GameLayout />
+          )}
         </WindowProvider>
       </UIProvider>
     </LanguageProvider>

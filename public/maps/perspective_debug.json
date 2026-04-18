@@ -1,0 +1,67 @@
+{
+  "mapName": "perspective_debug",
+  "tileSize": 32,
+  "width": 24,
+  "height": 24,
+  "config": {
+    "startLevel": "0",
+    "mapName": "Perspective Debug Arena"
+  },
+  "tileAtlas": [
+    "...",
+    "cob",
+    "rok",
+    "wal",
+    "sw",
+    "rof",
+    "flr"
+  ],
+  "tileDefinitions": {
+    "cob": {
+      "id": "cobblestone",
+      "color": "#64748b"
+    },
+    "rok": {
+      "id": "rock",
+      "block": true,
+      "color": "#525252"
+    },
+    "wal": {
+      "id": "wall",
+      "block": true,
+      "color": "#94a3b8"
+    },
+    "sw": {
+      "id": "stone-wall",
+      "block": true,
+      "color": "#4b5563"
+    },
+    "rof": {
+      "id": "red-roof",
+      "color": "#ef4444"
+    },
+    "flr": {
+      "id": "floor",
+      "color": "#78350f"
+    }
+  },
+  "entityTemplates": {},
+  "levels": {
+    "0": {
+      "binFile": "perspective_debug_0.bin",
+      "playerPos": {
+        "x": 384,
+        "y": 576
+      },
+      "entities": []
+    },
+    "1": {
+      "binFile": "perspective_debug_1.bin",
+      "playerPos": {
+        "x": 384,
+        "y": 576
+      },
+      "entities": []
+    }
+  }
+}

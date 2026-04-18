@@ -210,7 +210,8 @@ export class BenchmarkRunner {
     const opened = (window as any).__uiWindows?.[options.windowKey] ?? false;
     const scenePausedAfterOpen = this.scene.scene.isPaused("GameScene");
 
-    const closeTexts = options.closeButtonTexts ??
+    const closeTexts =
+      options.closeButtonTexts ??
       (options.closeButtonText ? [options.closeButtonText] : []);
     const closeClicked =
       (options.closeButtonBenchmarkId

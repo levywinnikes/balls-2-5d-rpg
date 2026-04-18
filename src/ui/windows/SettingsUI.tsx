@@ -13,6 +13,7 @@ import {
   Headphones,
 } from "lucide-react";
 import { AudioManager } from "../../game/systems/AudioManager";
+import { PlayerState } from "../../game/entities/Player/PlayerState";
 
 export const SettingsContent: React.FC = () => {
   const {
@@ -65,6 +66,10 @@ export const SettingsContent: React.FC = () => {
     const next = !sfxOff;
     setSfxOff(next);
     am.setSfxEnabled(!next);
+  };
+
+  const handleOpenPerspectiveDebugMap = () => {
+    PlayerState.getInstance().requestPerspectiveDebugMap("perspective_debug");
   };
 
   return (
@@ -591,6 +596,29 @@ export const SettingsContent: React.FC = () => {
           />
           {t("visualize_collisions" as any)}:{" "}
           {debugCollision ? t("on") : t("off")}
+        </button>
+
+        <button
+          onClick={handleOpenPerspectiveDebugMap}
+          style={{
+            padding: `${s(10)}px`,
+            width: "100%",
+            marginTop: "6px",
+            background: "#3b2f14",
+            border: "1px solid #c8a24a",
+            color: "#f6d77b",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "bold",
+            fontSize: `${s(12)}px`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            transition: "all 0.2s",
+          }}
+        >
+          {t("open_perspective_debug_map" as any)}
         </button>
       </div>
     </div>

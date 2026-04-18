@@ -206,9 +206,12 @@ export class TransitionSystem {
       this.scene.cameras.main.fadeIn(150, 0, 0, 0);
 
       // Cooldown para não voltar imediatamente se o jogador segurar a tecla
-      this.scene.time.delayedCall(500, () => {
+      // Use window.setTimeout (real time) instead of scene.time.delayedCall so that
+      // heavy per-frame tile creation in LevelRenderer (3D upper levels) does NOT
+      // delay the cooldown by stalling the Phaser game loop.
+      window.setTimeout(() => {
         this.isTransitioning = false;
-      });
+      }, 500);
     } catch (error) {
       console.error(`Failed to transition to level ${newLevel}:`, error);
       this.isTransitioning = false;

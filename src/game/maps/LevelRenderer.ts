@@ -6,6 +6,11 @@ import { TilePool } from "../graphics/TilePool";
 import type { DroppedItem } from "../entities/DroppedItem";
 import { PlayerState } from "../entities/Player/PlayerState";
 import { MultiLevelMapData } from "./MapTypes";
+import {
+  DEFAULT_PROJECTION_SETTINGS,
+  getContainerProjection,
+  getDepthOffset,
+} from "./PerspectiveProjection";
 
 export default class LevelRenderer {
   private scene: Phaser.Scene;
@@ -15,6 +20,10 @@ export default class LevelRenderer {
     new Map();
   private volumetricGraphics: Map<string, Phaser.GameObjects.Graphics> =
     new Map();
+  private volumetricSlices: Map<
+    string,
+    Map<string, Phaser.GameObjects.TileSprite>
+  > = new Map();
   private renderedDecorations: Map<string, Phaser.GameObjects.Sprite[]> =
     new Map();
   private levelContainers: Map<string, Phaser.GameObjects.Container> =
@@ -31,6 +40,14 @@ export default class LevelRenderer {
   private updateThrottleMs: number = 60; // 60ms limit (Fast refresh)
   private currentPerspectiveFactor: number = 1.0;
   private targetPerspectiveFactor: number = 1.0;
+  private readonly projectionSettings = DEFAULT_PROJECTION_SETTINGS;
+  private lastPerspectivePlayerX: number = Number.NaN;
+  private lastPerspectivePlayerY: number = Number.NaN;
+  private orientableFaceState: Map<
+    string,
+    { horizontal: "e" | "w"; vertical: "n" | "s" }
+  > = new Map();
+  private readonly orientableQuadrantDeadZonePx: number = 10;
 
   constructor(scene: Phaser.Scene, tileSize: number, currentLevel: string) {
     this.scene = scene;
@@ -71,43 +88,52 @@ export default class LevelRenderer {
 
     this.levelContainers.forEach((container, levelKey) => {
       const levelNum = parseInt(levelKey);
-      const levelDiff = levelNum - currentLevelNum;
+      const projection = getContainerProjection(
+        playerX,
+        playerY,
+        levelNum,
+        currentLevelNum,
+        this.currentPerspectiveFactor,
+        this.projectionSettings,
+      );
 
-      const pFactor = this.currentPerspectiveFactor;
-
-      // 1. Perspective SCALE (Subtle 4% per level for stability)
-      const perspectiveScale = 1 + levelDiff * 0.04 * pFactor;
-
-      // 2. Perspective TRANSFORM (Vertical Z-Stacking)
-      // [RPG SCALE FIX] Shift levels UP by 16px per Z-level to keep buildings 'grounded' and small-scale
-      const zShiftY = levelDiff * -16 * pFactor;
-
-      container.setScale(perspectiveScale);
-      container.x = playerX * (1 - perspectiveScale);
-      container.y = playerY * (1 - perspectiveScale) + zShiftY;
+      container.setScale(projection.scale);
+      container.x = projection.x;
+      container.y = projection.y;
 
       // 3. Update CONTAINER DEPTH dynamically based on current level
       // This ensures that levels below the player have high negative depth, and levels above have high positive depth.
-      container.setDepth(levelDiff * 100000);
+      container.setDepth(projection.depth);
 
       // 3.5 Force DEPTH SORTING within the container
       // Phaser 3 Containers do NOT sort by depth automatically.
       container.sort("depth");
 
+      // 3.6 Alpha falloff — distant floors fade to reduce visual clutter
+      container.setAlpha(
+        this.getContainerAlpha(
+          projection.levelDiff,
+          this.currentPerspectiveFactor,
+        ),
+      );
+
       // 4. Perspective TINT
       let finalTint = 0xffffff;
-      if (levelDiff > 0) {
+      if (projection.levelDiff > 0) {
+        // Phase 2: upper floors get a cool/clean tint instead of warm yellow —
+        // reads as "sky-lit" rather than sepia and keeps structure colors true.
         finalTint = Phaser.Display.Color.GetColor(
-          Math.min(255, 220 + levelDiff * 20),
-          Math.min(255, 220 + levelDiff * 20),
-          180,
+          Math.min(255, 215 + projection.levelDiff * 14),
+          Math.min(255, 222 + projection.levelDiff * 14),
+          Math.min(255, 235 + projection.levelDiff * 8),
         );
-      } else if (levelDiff < 0) {
-        const darknessVal = Math.max(80, 255 + levelDiff * 50);
+      } else if (projection.levelDiff < 0) {
+        // Underground: warm amber-shadow (slight red shift) to suggest torch/earth tones.
+        const darknessVal = Math.max(80, 255 + projection.levelDiff * 50);
         finalTint = Phaser.Display.Color.GetColor(
+          Math.min(255, darknessVal + 18),
           darknessVal,
-          darknessVal,
-          Math.min(255, darknessVal + 30),
+          Math.max(0, darknessVal - 14),
         );
       }
 
@@ -116,7 +142,30 @@ export default class LevelRenderer {
         if (!child.active) return;
 
         if (child.setTint) {
-          child.setTint(finalTint);
+          const tileBaseDepth = Number(child.getData?.("tileBaseDepth") || 0);
+          const isUnderTile = !!child.getData?.("isUnderTile");
+
+          // Tune readability in perspective mode: walls/structures get slightly stronger contrast,
+          // while under-tiles stay subtly dim to avoid muddy stacks.
+          let tint = finalTint;
+          if (this.currentPerspectiveFactor > 0.001) {
+            const isStructure = tileBaseDepth > 0;
+            if (isStructure && projection.levelDiff > 0) {
+              tint = Phaser.Display.Color.GetColor(
+                Math.min(255, 230 + projection.levelDiff * 16),
+                Math.min(255, 230 + projection.levelDiff * 16),
+                Math.min(255, 205 + projection.levelDiff * 10),
+              );
+            } else if (isStructure && projection.levelDiff < 0) {
+              const c = Math.max(72, 230 + projection.levelDiff * 36);
+              tint = Phaser.Display.Color.GetColor(c, c, Math.min(255, c + 24));
+            } else if (isUnderTile) {
+              const c = Math.max(80, 210 + projection.levelDiff * 20);
+              tint = Phaser.Display.Color.GetColor(c, c, Math.min(255, c + 16));
+            }
+          }
+
+          child.setTint(tint);
         }
       });
     });
@@ -266,6 +315,7 @@ export default class LevelRenderer {
       graphics.setDepth(-10); // Sit below the roof tiles
       container.add(graphics);
       this.volumetricGraphics.set(level, graphics);
+      this.volumetricSlices.set(level, new Map());
     }
     return container;
   }
@@ -316,6 +366,9 @@ export default class LevelRenderer {
     const player = (this.scene as any).player as any;
     const factorChanged =
       this.currentPerspectiveFactor !== this.targetPerspectiveFactor;
+    const perspectiveActive =
+      this.currentPerspectiveFactor > 0.001 ||
+      this.targetPerspectiveFactor > 0.001;
 
     if (factorChanged) {
       // Smooth Ease: 0.004 per ms (~250ms transition)
@@ -333,31 +386,374 @@ export default class LevelRenderer {
       }
     }
 
-    // We must update the visual positions every frame of the transition OR every frame the player moves
-    // To keep side-faces perfectly anchored, we update them here.
-    if (
-      player?.sprite &&
-      (factorChanged || Date.now() - this.lastUpdateTime < 100)
-    ) {
+    if (!player?.sprite) {
+      return;
+    }
+
+    if (!perspectiveActive && !factorChanged) {
+      return;
+    }
+
+    const currentX = player.sprite.x;
+    const currentY = player.sprite.y;
+    const playerMoved =
+      Number.isNaN(this.lastPerspectivePlayerX) ||
+      Number.isNaN(this.lastPerspectivePlayerY) ||
+      Math.abs(currentX - this.lastPerspectivePlayerX) > 0.05 ||
+      Math.abs(currentY - this.lastPerspectivePlayerY) > 0.05;
+
+    // Keep side-faces anchored by recalculating when transition is active or player position changes.
+    if (factorChanged || playerMoved) {
       this.updateAllTileTints(
         PlayerState.getInstance().isDebugCollisionEnabled(),
       );
       this.drawVolumetricPolygons();
+      this.lastPerspectivePlayerX = currentX;
+      this.lastPerspectivePlayerY = currentY;
     }
+  }
+
+  /** Keep 3D structures opaque; separation between floors comes from scale/tint, not transparency. */
+  private getContainerAlpha(
+    _levelDiff: number,
+    _perspectiveFactor: number,
+  ): number {
+    return 1.0;
+  }
+
+  private getTileSolidColor(tileId: string): number {
+    const registryDef = TileRegistry.getTileDefinition(tileId);
+    if (registryDef?.color) {
+      return Phaser.Display.Color.HexStringToColor(registryDef.color).color;
+    }
+
+    if (tileId.includes("roof")) return 0xef4444;
+    if (tileId.includes("wood")) return 0x8b5a2b;
+    if (tileId.includes("gothic") || tileId.includes("stone")) return 0x64748b;
+    if (tileId.includes("wall")) return 0x7a7a7a;
+    return 0xa3a3a3;
+  }
+
+  private shadeColor(color: number, multiplier: number): number {
+    const base = Phaser.Display.Color.ValueToColor(color);
+    return Phaser.Display.Color.GetColor(
+      Phaser.Math.Clamp(Math.round(base.red * multiplier), 0, 255),
+      Phaser.Math.Clamp(Math.round(base.green * multiplier), 0, 255),
+      Phaser.Math.Clamp(Math.round(base.blue * multiplier), 0, 255),
+    );
+  }
+
+  private isRoofTile(tileId: string): boolean {
+    return tileId.includes("roof");
+  }
+
+  private isQuadrantOrientableTile(tileId: string): boolean {
+    return tileId === "rock" || tileId === "wall" || tileId === "stone-wall";
+  }
+
+  private getOrientedVisibleFaces(
+    tileKey: string,
+    tileId: string,
+    tileCenterX: number,
+    tileCenterY: number,
+    availableFaces: Array<"n" | "s" | "e" | "w">,
+  ): Array<"n" | "s" | "e" | "w"> {
+    if (!this.isQuadrantOrientableTile(tileId) || availableFaces.length <= 2) {
+      return availableFaces;
+    }
+
+    const player = (this.scene as any).player as any;
+    const playerSprite = player?.sprite;
+    if (!playerSprite) {
+      return availableFaces;
+    }
+
+    const previous = this.orientableFaceState.get(tileKey);
+    const dx = playerSprite.x - tileCenterX;
+    const dy = playerSprite.y - tileCenterY;
+
+    let horizontal: "e" | "w" = previous?.horizontal ?? (dx >= 0 ? "e" : "w");
+    if (Math.abs(dx) > this.orientableQuadrantDeadZonePx) {
+      horizontal = dx >= 0 ? "e" : "w";
+    }
+
+    let vertical: "n" | "s" = previous?.vertical ?? (dy >= 0 ? "s" : "n");
+    if (Math.abs(dy) > this.orientableQuadrantDeadZonePx) {
+      vertical = dy >= 0 ? "s" : "n";
+    }
+
+    this.orientableFaceState.set(tileKey, { horizontal, vertical });
+
+    const preferredFaces: Array<"n" | "s" | "e" | "w"> = [vertical, horizontal];
+    const filteredFaces = preferredFaces.filter((face) =>
+      availableFaces.includes(face),
+    );
+
+    if (filteredFaces.length > 0) {
+      return filteredFaces;
+    }
+
+    return availableFaces.slice(0, Math.min(2, availableFaces.length));
+  }
+
+  private getVolumetricTextureKey(
+    tileId: string,
+    face: "n" | "s" | "e" | "w",
+  ): string | null {
+    let faceTileId = tileId;
+
+    if (face === "n" || face === "s") {
+      const frontId = `${tileId}-front`;
+      faceTileId = TileRegistry.getTileDefinition(frontId) ? frontId : tileId;
+    } else {
+      faceTileId = TileRegistry.getSideTextureID(tileId);
+    }
+
+    const textureKey = TileRegistry.getTextureId(faceTileId);
+    return this.scene.textures.exists(textureKey) ? textureKey : null;
+  }
+
+  private isStructuralTileForVolumetric(
+    symbol: string | undefined,
+    mapData: MultiLevelMapData,
+    levelStr: string,
+    x: number,
+    y: number,
+  ): boolean {
+    if (!symbol || symbol === "...") {
+      return false;
+    }
+
+    const tileDef = this.getTileDefinition(symbol, mapData, levelStr, x, y);
+    if (!tileDef) {
+      return false;
+    }
+
+    const tileId = tileDef.id;
+    if (this.isRoofTile(tileId)) {
+      return false;
+    }
+
+    const baseDepth = TileRegistry.getBaseDepth(tileId);
+    const isStair = tileId.includes("stair");
+    return baseDepth > 0 || isStair;
+  }
+
+  private resetVolumetricSlices(levelStr: string): void {
+    const levelSlices = this.volumetricSlices.get(levelStr);
+    if (!levelSlices) return;
+
+    levelSlices.forEach((slice) => slice.setVisible(false));
+  }
+
+  private ensureVolumetricSlice(
+    levelStr: string,
+    faceKey: string,
+    textureKey: string,
+  ): Phaser.GameObjects.TileSprite {
+    let levelSlices = this.volumetricSlices.get(levelStr);
+    if (!levelSlices) {
+      levelSlices = new Map();
+      this.volumetricSlices.set(levelStr, levelSlices);
+    }
+
+    let slice = levelSlices.get(faceKey);
+    if (!slice) {
+      slice = this.scene.add.tileSprite(0, 0, 8, 8, textureKey);
+      slice.setOrigin(0, 0);
+      slice.setVisible(false);
+      slice.setDepth(-9);
+      this.getLevelContainer(levelStr).add(slice);
+      levelSlices.set(faceKey, slice);
+    }
+
+    if (slice.texture.key !== textureKey) {
+      slice.setTexture(textureKey);
+    }
+
+    return slice;
+  }
+
+  private updateTexturedVolumetricFace(
+    levelStr: string,
+    faceKey: string,
+    textureKey: string,
+    face: "n" | "s" | "e" | "w",
+    p1: { x: number; y: number },
+    p2: { x: number; y: number },
+    p4: { x: number; y: number },
+    deltaX: number,
+    deltaY: number,
+    tileId: string,
+  ): void {
+    const projectedHeight = Math.hypot(deltaX, deltaY);
+    const slice = this.ensureVolumetricSlice(levelStr, faceKey, textureKey);
+
+    let tint = 0xffffff;
+    if (face === "s") tint = 0xf2f2f2;
+    else if (face === "n") tint = 0x969696;
+    else if (face === "e") tint = 0xc8c8c8;
+    else tint = 0xb0b0b0;
+
+    const topWidth = Math.max(4, Math.abs(p2.x - p1.x));
+    const topHeight = Math.max(4, Math.abs(p2.y - p1.y));
+
+    // Anchor at the top-left corner of the bounding box of the face parallelogram.
+    // For near-vertical projections (typical top-down camera) this produces a clean
+    // rectangular texture strip that fills the wall face correctly.
+    if (face === "n" || face === "s") {
+      slice.setPosition(Math.min(p1.x, p4.x), Math.min(p1.y, p4.y));
+      slice.setSize(topWidth + 1, Math.max(4, projectedHeight + 1));
+    } else {
+      slice.setPosition(Math.min(p1.x, p4.x), Math.min(p1.y, p4.y));
+      slice.setSize(Math.max(4, projectedHeight + 1), topHeight + 1);
+    }
+
+    slice.setTint(tint);
+    slice.setAlpha(this.isRoofTile(tileId) ? 0 : 1);
+    slice.setVisible(!this.isRoofTile(tileId));
+  }
+
+  private shouldHideUpperRoofTile(
+    tileId: string,
+    level: number,
+    x: number,
+    y: number,
+    playerGridX: number,
+    playerGridY: number,
+    mapData: MultiLevelMapData,
+    mapLoader: MapLoader,
+  ): boolean {
+    if (!this.isRoofTile(tileId) || level <= parseInt(this.currentLevel)) {
+      return false;
+    }
+
+    const levelStr = level.toString();
+    const tileOverPlayerSymbol = mapLoader.getTileAt(
+      playerGridX,
+      playerGridY,
+      levelStr,
+    );
+    if (!tileOverPlayerSymbol || tileOverPlayerSymbol === "...") {
+      return false;
+    }
+
+    const tileOverPlayer = this.getTileDefinition(
+      tileOverPlayerSymbol,
+      mapData,
+      levelStr,
+      playerGridX,
+      playerGridY,
+    );
+    if (!tileOverPlayer || !this.isRoofTile(tileOverPlayer.id)) {
+      return false;
+    }
+
+    return Math.abs(x - playerGridX) <= 4 && Math.abs(y - playerGridY) <= 4;
+  }
+
+  private getVolumetricFaceStyle(
+    face: "n" | "s" | "e" | "w",
+    levelDiff: number,
+    perspectiveFactor: number,
+    tileId: string,
+  ): { fill: number; fillAlpha: number; stroke: number; strokeAlpha: number } {
+    const clampedFactor = Phaser.Math.Clamp(perspectiveFactor, 0, 1);
+    const baseColor = this.getTileSolidColor(tileId);
+    const distanceFade = Phaser.Math.Clamp(
+      1 - Math.abs(levelDiff) * 0.04,
+      0.82,
+      1,
+    );
+
+    // Phase 2 polish: stronger N/S contrast for a more convincing 3D block read.
+    // S face is the "lit" front face; N is the deep shadow face.
+    let faceMultiplier = 0.7;
+    if (face === "s")
+      faceMultiplier = 0.97; // bright lit face
+    else if (face === "n")
+      faceMultiplier = 0.44; // deep shadow
+    else if (face === "e") faceMultiplier = 0.8;
+    else if (face === "w") faceMultiplier = 0.6;
+
+    const fill = this.shadeColor(baseColor, faceMultiplier * distanceFade);
+    const stroke = this.shadeColor(
+      baseColor,
+      Math.max(0.22, faceMultiplier * 0.44),
+    );
+    const fillAlpha = Phaser.Math.Clamp(0.93 + clampedFactor * 0.07, 0.93, 1.0);
+    const strokeAlpha = Phaser.Math.Clamp(
+      0.86 + clampedFactor * 0.14,
+      0.86,
+      1.0,
+    );
+
+    return { fill, fillAlpha, stroke, strokeAlpha };
+  }
+
+  private getTopSilhouetteStyle(
+    perspectiveFactor: number,
+    levelDiff: number,
+  ): { color: number; alpha: number; width: number } {
+    const clampedFactor = Phaser.Math.Clamp(perspectiveFactor, 0, 1);
+    // Phase 2: fade less aggressively so edges remain crisp on middle floors.
+    const distanceFade = Phaser.Math.Clamp(
+      1 - Math.abs(levelDiff) * 0.07,
+      0.6,
+      1,
+    );
+    return {
+      color: 0xffffff,
+      alpha:
+        Phaser.Math.Clamp(0.35 + clampedFactor * 0.5, 0.35, 0.9) * distanceFade,
+      width: 1,
+    };
+  }
+
+  /** Stair-specific top edge: golden/amber outline with double width to aid navigation. */
+  private getStairSilhouetteStyle(
+    perspectiveFactor: number,
+    levelDiff: number,
+  ): { color: number; alpha: number; width: number } {
+    const clampedFactor = Phaser.Math.Clamp(perspectiveFactor, 0, 1);
+    const distanceFade = Phaser.Math.Clamp(
+      1 - Math.abs(levelDiff) * 0.07,
+      0.55,
+      1,
+    );
+    return {
+      color: 0xffe080,
+      alpha:
+        Phaser.Math.Clamp(0.45 + clampedFactor * 0.45, 0.45, 0.95) *
+        distanceFade,
+      width: 2,
+    };
   }
 
   private drawVolumetricPolygons(tilesToKeep_Global?: Set<string>): void {
     const factor = this.currentPerspectiveFactor;
     if (factor <= 0) {
       this.volumetricGraphics.forEach((g) => g.clear());
+      this.volumetricSlices.forEach((_, levelStr) =>
+        this.resetVolumetricSlices(levelStr),
+      );
       return;
     }
 
     const mapLoader = (this.scene as any).mapLoader;
+    const mapData = this.scene.cache.json.get(
+      `${this.scene.registry.get("currentMap")}_data`,
+    ) as MultiLevelMapData;
+    if (!mapData) {
+      return;
+    }
+    const currentLevelNum = parseInt(this.currentLevel);
 
     this.volumetricGraphics.forEach((graphics, levelStr) => {
       graphics.clear();
+      this.resetVolumetricSlices(levelStr);
       const levelNum = parseInt(levelStr);
+      const levelDiff = levelNum - currentLevelNum;
 
       const levelTiles = this.renderedTiles.get(levelStr);
       if (!levelTiles) return;
@@ -369,8 +765,15 @@ export default class LevelRenderer {
 
       levelTiles.forEach((sprites, key) => {
         const sprite = sprites[0];
-        if (!sprite || !sprite.active) return;
+        if (!sprite || !sprite.active || !sprite.visible) return;
         if (key.includes("_side_")) return;
+        const tileBaseDepth = Number(sprite.getData?.("tileBaseDepth") || 0);
+        const tileId = String(sprite.getData?.("tileId") || "");
+        const isStair = tileId.includes("stair");
+        const isRoof = this.isRoofTile(tileId);
+        const isStructure = tileBaseDepth > 0 || isStair;
+        if (!isStructure) return;
+        const shouldDrawTopSilhouette = tileBaseDepth > 0 || isStair;
 
         // Parse grid coords from key
         const match = key.match(/(\d+)_(\d+)_(\d+)/);
@@ -379,12 +782,7 @@ export default class LevelRenderer {
         const x = parseInt(xStr);
         const y = parseInt(yStr);
 
-        // 1. TOPMOST CHECK: Only drawing from the highest tile ensures walls are always visible.
-        const nextLevelStr = (levelNum + 1).toString();
-        const tileAbove = mapLoader.getTileAt(x, y, nextLevelStr);
-        if (tileAbove && tileAbove !== "...") {
-          return; // Not the topmost tile, skip
-        }
+        // Draw per-structure-level walls (not only topmost) so middle floors keep visible walls.
 
         // 2. Cross-Container Transform Math (From current Roof Level down to Level 0 Anchor)
         const worldX = x * this.tileSize;
@@ -404,6 +802,12 @@ export default class LevelRenderer {
 
         const deltaX = localBaseX - worldX;
         const deltaY = localBaseY - worldY;
+        const projectedHeight = Math.hypot(deltaX, deltaY);
+
+        // Ignore near-flat projections to avoid tiny side polygons that shimmer during movement.
+        if (projectedHeight < this.tileSize * 0.12) {
+          return;
+        }
 
         const neighbors = [
           { dx: 0, dy: 1, type: "s" as const },
@@ -412,13 +816,36 @@ export default class LevelRenderer {
           { dx: -1, dy: 0, type: "w" as const },
         ];
 
-        neighbors.forEach((n) => {
+        const exposedNeighbors = neighbors.filter((n) => {
+          const neighborX = x + n.dx;
+          const neighborY = y + n.dy;
           const neighborSymbol = mapLoader.getTileAt(
-            x + n.dx,
-            y + n.dy,
+            neighborX,
+            neighborY,
             levelStr,
           );
-          if (!neighborSymbol || neighborSymbol === "...") {
+          return !this.isStructuralTileForVolumetric(
+            neighborSymbol,
+            mapData,
+            levelStr,
+            neighborX,
+            neighborY,
+          );
+        });
+
+        const orientedFaces = this.getOrientedVisibleFaces(
+          key,
+          tileId,
+          worldX + size / 2,
+          worldY + size / 2,
+          exposedNeighbors.map((n) => n.type),
+        );
+
+        neighbors.forEach((n) => {
+          const isExposed = exposedNeighbors.some(
+            (candidate) => candidate.type === n.type,
+          );
+          if (isExposed && orientedFaces.includes(n.type)) {
             let p1, p2, p3, p4;
 
             // Wall connects Roof points (worldX/Y) to projected Base points (worldX/Y + delta)
@@ -445,18 +872,55 @@ export default class LevelRenderer {
               p4 = { x: worldX + deltaX, y: worldY + deltaY };
             }
 
-            let fillColor = 0x888888;
-            if (n.type === "s") fillColor = 0xaaaaaa;
-            if (n.type === "n") fillColor = 0x555555;
+            const textureKey = this.getVolumetricTextureKey(tileId, n.type);
+            if (!isRoof && textureKey) {
+              this.updateTexturedVolumetricFace(
+                levelStr,
+                `${key}_${n.type}`,
+                textureKey,
+                n.type,
+                p1,
+                p2,
+                p4,
+                deltaX,
+                deltaY,
+                tileId,
+              );
+            } else if (!isRoof) {
+              const style = this.getVolumetricFaceStyle(
+                n.type,
+                levelDiff,
+                factor,
+                tileId,
+              );
+              graphics.fillStyle(style.fill, style.fillAlpha);
+              graphics.beginPath();
+              graphics.moveTo(p1.x, p1.y);
+              graphics.lineTo(p2.x, p2.y);
+              graphics.lineTo(p3.x, p3.y);
+              graphics.lineTo(p4.x, p4.y);
+              graphics.closePath();
+              graphics.fill();
+              graphics.lineStyle(1, style.stroke, style.strokeAlpha);
+              graphics.strokePath();
+            }
 
-            graphics.fillStyle(fillColor, 1.0);
-            graphics.beginPath();
-            graphics.moveTo(p1.x, p1.y);
-            graphics.lineTo(p2.x, p2.y);
-            graphics.lineTo(p3.x, p3.y);
-            graphics.lineTo(p4.x, p4.y);
-            graphics.closePath();
-            graphics.fill();
+            if (shouldDrawTopSilhouette) {
+              // Phase 2: stairs get a distinct golden/amber silhouette at 2px;
+              // regular structures get the white silhouette at 1px.
+              const silhouette = isStair
+                ? this.getStairSilhouetteStyle(factor, levelDiff)
+                : this.getTopSilhouetteStyle(factor, levelDiff);
+              graphics.lineStyle(
+                silhouette.width,
+                silhouette.color,
+                silhouette.alpha,
+              );
+              graphics.beginPath();
+              graphics.moveTo(p1.x, p1.y);
+              graphics.lineTo(p2.x, p2.y);
+              graphics.strokePath();
+            }
           }
         });
       });
@@ -724,14 +1188,30 @@ export default class LevelRenderer {
       ...Object.keys(mapData.levels).map((level) => parseInt(level)),
     );
     const levelsToRender: number[] = [];
+    // In 3D perspective mode, always render adjacent upper levels so they are
+    // visible with perspective scaling/tint. In 2D mode, keep the original
+    // overlap-only behaviour to avoid rendering unnecessary tiles.
+    const perspectiveOn =
+      this.currentPerspectiveFactor > 0.001 ||
+      this.targetPerspectiveFactor > 0.001;
+    // Cap at ±3 levels from current to avoid perf spikes on deep maps
+    const upperRenderLimit = Math.min(maxLevel, currentLevelNum + 3);
     for (
       let levelToCheck = currentLevelNum + 1;
-      levelToCheck <= maxLevel;
+      levelToCheck <= upperRenderLimit;
       levelToCheck++
     ) {
       if (!mapData.levels[levelToCheck.toString()]) {
         continue;
       }
+
+      if (perspectiveOn) {
+        // Always include upper levels when perspective is active
+        levelsToRender.push(levelToCheck);
+        continue;
+      }
+
+      // 2D mode: only render upper level if player is physically under a tile
       let hasOverlap = false;
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
@@ -1007,6 +1487,19 @@ export default class LevelRenderer {
         if (!symbol || symbol === "...") continue;
         const tileDef = this.getTileDefinition(symbol, mapData, levelStr, x, y);
         if (!tileDef || tileDef.id === "transparent") continue;
+        const roofCutHidden = this.shouldHideUpperRoofTile(
+          tileDef.id,
+          level,
+          x,
+          y,
+          gridX,
+          gridY,
+          mapData,
+          mapLoader,
+        );
+        const upperVisible =
+          !PlayerState.getInstance().getDiagnosticSettings().hideTiles &&
+          !roofCutHidden;
 
         const tileKey = `${level}_${x}_${y}_upper`;
 
@@ -1033,9 +1526,12 @@ export default class LevelRenderer {
 
           sprite.setAlpha(1.0);
           sprite.setName(tileKey);
-          sprite.setVisible(true);
+          sprite.setVisible(upperVisible);
           sprite.setActive(true);
           levelTiles.set(tileKey, [sprite, ...additionalSprites]);
+        }
+        if (levelTiles.has(tileKey)) {
+          levelTiles.get(tileKey)!.forEach((s) => s.setVisible(upperVisible));
         }
         tilesToKeep.push(tileKey);
 
@@ -1068,9 +1564,21 @@ export default class LevelRenderer {
 
               sprite.setAlpha(1.0);
               sprite.setName(underTileKey);
-              sprite.setVisible(true);
+              sprite.setVisible(
+                !PlayerState.getInstance().getDiagnosticSettings().hideTiles,
+              );
               sprite.setActive(true);
               levelTiles.set(underTileKey, [sprite, ...additionalSprites]);
+            }
+            if (levelTiles.has(underTileKey)) {
+              levelTiles
+                .get(underTileKey)!
+                .forEach((s) =>
+                  s.setVisible(
+                    !PlayerState.getInstance().getDiagnosticSettings()
+                      .hideTiles,
+                  ),
+                );
             }
             tilesToKeep.push(underTileKey);
           }
@@ -1105,7 +1613,7 @@ export default class LevelRenderer {
   }
 
   private getDepthForLevel(targetLevel: number, currentLevel: number): number {
-    return (targetLevel - currentLevel) * 100000;
+    return getDepthOffset(targetLevel, currentLevel, this.projectionSettings);
   }
 
   private clearRenderedTiles(): void {
@@ -1302,6 +1810,8 @@ export default class LevelRenderer {
     const scene = this.scene as any;
     const decorationsMeta = scene.decorationsByLevel?.get(this.currentLevel);
     if (!decorationsMeta) return;
+    const currentLevelNum = parseInt(this.currentLevel);
+    const levelDepthOffset = this.getDepthForLevel(currentLevelNum, 0);
 
     const keysToKeep = new Set<string>();
     const radius = this.renderRadius;
@@ -1327,7 +1837,7 @@ export default class LevelRenderer {
               meta.worldX,
               meta.worldY,
               {
-                levelOffset: parseInt(this.currentLevel) * 10000,
+                levelOffset: levelDepthOffset,
                 isUnderTile: false,
                 reusableSprite: reusable,
               },
@@ -1345,9 +1855,7 @@ export default class LevelRenderer {
 
           if (meta.scale) sprite.setScale(meta.scale);
           if (meta.rotation) sprite.setRotation(meta.rotation);
-          sprite.setDepth(
-            meta.worldY + parseInt(this.currentLevel) * 10000 + 10,
-          );
+          sprite.setDepth(meta.worldY + levelDepthOffset + 10);
 
           if (meta.isCollidable) {
             this.scene.physics.add.existing(sprite, true);
@@ -1381,6 +1889,7 @@ export default class LevelRenderer {
     this.renderedTiles.forEach((levelMap, level) => {
       levelMap.forEach((sprites, key) => {
         if (!activeKeys.has(key)) {
+          this.orientableFaceState.delete(key);
           const wallsLayer = mapLoader?.getWallsLayer?.(level);
           sprites.forEach((s) => {
             if (wallsLayer) wallsLayer.remove(s);
@@ -1514,9 +2023,11 @@ export default class LevelRenderer {
       tiles.forEach((sprites) => sprites.forEach((s) => s.destroy()));
     });
     this.renderedTiles.clear();
+    this.orientableFaceState.clear();
 
     this.levelContainers.forEach((c) => c.destroy());
     this.levelContainers.clear();
+    this.volumetricSlices.clear();
 
     if (this.debugGraphics) {
       this.debugGraphics.destroy();

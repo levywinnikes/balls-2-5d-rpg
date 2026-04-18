@@ -405,23 +405,16 @@ export class MapLoader {
   }
 
   private async loadJson(url: string): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.scene.load.json("tempMapData", url);
-      this.scene.load.once("complete", () => {
-        const data = this.scene.cache.json.get("tempMapData");
-        this.scene.cache.json.remove("tempMapData");
-        if (!data) {
-          reject(new Error(`Failed to load JSON: ${url}`));
-          return;
-        }
-        resolve(data);
-      });
-      this.scene.load.once("loaderror", (file: any) => {
-        if (file.key === "tempMapData")
-          reject(new Error(`Load error for ${url}`));
-      });
-      this.scene.load.start();
-    });
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Load error for ${url} (HTTP ${response.status})`);
+    }
+
+    try {
+      return await response.json();
+    } catch {
+      throw new Error(`Failed to parse JSON: ${url}`);
+    }
   }
 
   public seedMapItemsToPersistence(mapName: string, level: string): void {

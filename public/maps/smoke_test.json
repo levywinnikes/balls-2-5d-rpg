@@ -37,6 +37,14 @@
         "symbol": "sup"
       },
       {
+        "id": "stair-up-to-level1",
+        "type": "tile",
+        "level": "0",
+        "x": 6,
+        "y": 6,
+        "symbol": "sup"
+      },
+      {
         "id": "enemy-checkpoint",
         "type": "entity",
         "level": "0",
@@ -72,7 +80,9 @@
     "plr",
     "gob",
     "chs",
-    "tre"
+    "tre",
+    "flr",
+    "rof"
   ],
   "tileDefinitions": {
     "grs": {
@@ -97,6 +107,14 @@
     "hol": {
       "id": "hole",
       "color": "#111827"
+    },
+    "flr": {
+      "id": "floor",
+      "color": "#78350f"
+    },
+    "rof": {
+      "id": "red-roof",
+      "color": "#ef4444"
     }
   },
   "entityTemplates": {
@@ -165,6 +183,30 @@
           "symbol": "gob"
         }
       ]
+    },
+    "1": {
+      "binFile": "smoke_test_1.bin",
+      "playerPos": {
+        "x": 96,
+        "y": 96
+      },
+      "entities": []
+    },
+    "2": {
+      "binFile": "smoke_test_2.bin",
+      "playerPos": {
+        "x": 96,
+        "y": 96
+      },
+      "entities": []
+    },
+    "3": {
+      "binFile": "smoke_test_3.bin",
+      "playerPos": {
+        "x": 96,
+        "y": 96
+      },
+      "entities": []
     }
   }
 }

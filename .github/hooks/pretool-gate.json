@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "node scripts/copilot-pretool-gate.js",
+        "timeout": 10
+      }
+    ]
+  }
+}

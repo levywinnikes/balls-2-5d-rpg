@@ -32,7 +32,10 @@ import { CloudGraphic } from "./CloudGraphic";
 import { BasaltGraphic } from "./BasaltGraphic";
 import { BedHeadGraphic, BedBodyGraphic } from "./house/BedGraphic";
 import { PavementGraphic } from "./floor/PavementGraphic";
-import { ProceduralTransition, TransitionDirection } from "./ProceduralTransition";
+import {
+  ProceduralTransition,
+  TransitionDirection,
+} from "./ProceduralTransition";
 import { DungeonFloorGraphic } from "./DungeonFloorGraphic";
 import { DungeonWallGraphic } from "./DungeonWallGraphic";
 import { CrackedEarthGraphic } from "./CrackedEarthGraphic";
@@ -54,9 +57,9 @@ import { WoodenRoofGraphic } from "./roof/WoodenRoofGraphic";
 
 // Central registry for all game tiles
 const COLORS = {
-    grass: 0x4ade80,
-    water: 0x00bfff,
-    sand: 0xf4e1a1
+  grass: 0x4ade80,
+  water: 0x00bfff,
+  sand: 0xf4e1a1,
 };
 
 type TileGraphic = {
@@ -65,7 +68,7 @@ type TileGraphic = {
     scene: Phaser.Scene,
     x: number,
     y: number,
-    pool?: Phaser.GameObjects.Sprite[]
+    pool?: Phaser.GameObjects.Sprite[],
   ) =>
     | Phaser.GameObjects.Sprite
     | {
@@ -94,8 +97,8 @@ export type TileDefinition = {
   bodySize?: { width: number; height: number };
   bodyOffset?: { x: number; y: number };
   color?: string;
-  stepSound?: string;      // Key for AudioManager footstep
-  speedModifier?: number;  // Velocity multiplier (default 1.0)
+  stepSound?: string; // Key for AudioManager footstep
+  speedModifier?: number; // Velocity multiplier (default 1.0)
 };
 
 export class TileRegistry {
@@ -161,12 +164,12 @@ export class TileRegistry {
           true,
           2,
           { width: 32, height: 32 },
-          { width: 32, height: 32 }
+          { width: 32, height: 32 },
         ),
         isCollidable: true,
         blocksRanged: true,
         baseDepth: 2,
-        origin: { x: 0.5, y: 0.5 }, 
+        origin: { x: 0.5, y: 0.5 },
       },
 
       {
@@ -335,7 +338,7 @@ export class TileRegistry {
       },
       {
         id: "hole",
-        graphic: ManholeGraphic, 
+        graphic: ManholeGraphic,
         color: "#171717",
         isCollidable: false,
         blocksRanged: false,
@@ -356,12 +359,12 @@ export class TileRegistry {
           true,
           1,
           { width: 32, height: 32 },
-          { width: 32, height: 32 }
+          { width: 32, height: 32 },
         ),
         color: "#8b4513",
         isCollidable: true,
         blocksRanged: false,
-        baseDepth: 1, 
+        baseDepth: 1,
       },
       {
         id: "snow",
@@ -600,39 +603,63 @@ export class TileRegistry {
     ]);
 
     // --- Dynamic Registration for Terrain Transitions ---
-    const directions: TransitionDirection[] = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
-    
+    const directions: TransitionDirection[] = [
+      "n",
+      "s",
+      "e",
+      "w",
+      "nw",
+      "ne",
+      "sw",
+      "se",
+    ];
+
     // 1. Grass / Water Hybrids
-    directions.forEach(dir => {
-        this.registerTile({
-            id: `grs_wat_${dir}`,
-            graphic: new ProceduralTransition(COLORS.grass, COLORS.water, dir, `grs_wat_${dir}`),
-            isCollidable: false,
-            blocksRanged: false,
-            baseDepth: 0
-        });
+    directions.forEach((dir) => {
+      this.registerTile({
+        id: `grs_wat_${dir}`,
+        graphic: new ProceduralTransition(
+          COLORS.grass,
+          COLORS.water,
+          dir,
+          `grs_wat_${dir}`,
+        ),
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      });
     });
 
     // 2. Grass / Sand Hybrids
-    directions.forEach(dir => {
-        this.registerTile({
-            id: `grs_snd_${dir}`,
-            graphic: new ProceduralTransition(COLORS.grass, COLORS.sand, dir, `grs_snd_${dir}`),
-            isCollidable: false,
-            blocksRanged: false,
-            baseDepth: 0
-        });
+    directions.forEach((dir) => {
+      this.registerTile({
+        id: `grs_snd_${dir}`,
+        graphic: new ProceduralTransition(
+          COLORS.grass,
+          COLORS.sand,
+          dir,
+          `grs_snd_${dir}`,
+        ),
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      });
     });
 
     // 3. Path / Water Hybrids
-    directions.forEach(dir => {
-        this.registerTile({
-            id: `pth_wat_${dir}`,
-            graphic: new ProceduralTransition(COLORS.grass, COLORS.water, dir, `pth_wat_${dir}`),
-            isCollidable: false,
-            blocksRanged: false,
-            baseDepth: 0
-        });
+    directions.forEach((dir) => {
+      this.registerTile({
+        id: `pth_wat_${dir}`,
+        graphic: new ProceduralTransition(
+          COLORS.grass,
+          COLORS.water,
+          dir,
+          `pth_wat_${dir}`,
+        ),
+        isCollidable: false,
+        blocksRanged: false,
+        baseDepth: 0,
+      });
     });
 
     this.initialized = true;
@@ -640,7 +667,7 @@ export class TileRegistry {
 
   static preloadAll(scene: Phaser.Scene): void {
     this.initialize();
-    
+
     // Generate global shadow texture once
     const { BaseTileGraphic } = require("./BaseTileGraphic");
     BaseTileGraphic.generateShadowTexture(scene);
@@ -653,7 +680,7 @@ export class TileRegistry {
   static getDepthForTile(
     tileId: string,
     targetLevel: number,
-    currentLevel: number
+    currentLevel: number,
   ): number {
     const baseDepth = this.getBaseDepth(tileId);
     const levelDiff = currentLevel - targetLevel;
@@ -675,7 +702,7 @@ export class TileRegistry {
       customDepth?: number;
       reusableSprite?: Phaser.GameObjects.Sprite;
     } = {},
-    pool?: Phaser.GameObjects.Sprite[]
+    pool?: Phaser.GameObjects.Sprite[],
   ): {
     sprite: Phaser.GameObjects.Sprite;
     additionalSprites: Phaser.GameObjects.Sprite[];
@@ -686,10 +713,10 @@ export class TileRegistry {
     if (!tileDef) throw new Error(`Tile ${tileId} not registered`);
 
     const created = tileDef.graphic.create(
-        scene, 
-        x, 
-        y, 
-        options.reusableSprite ? [options.reusableSprite] : pool
+      scene,
+      x,
+      y,
+      options.reusableSprite ? [options.reusableSprite] : pool,
     );
 
     let mainSprite: Phaser.GameObjects.Sprite;
@@ -712,24 +739,29 @@ export class TileRegistry {
     if (tileDef.origin) {
       mainSprite.setOrigin(tileDef.origin.x, tileDef.origin.y);
     }
-    
+
     // ... logic for depth ...
     let depth = (options.levelOffset || 0) + y;
     if (tileDef.baseDepth === 0) {
-        // Floor tiles use Y - 5000 to ensure they are ALWAYS below players/objects at same Y
-        depth = (options.levelOffset || 0) + y - 5000; 
+      // Floor tiles use Y - 5000 to ensure they are ALWAYS below players/objects at same Y
+      depth = (options.levelOffset || 0) + y - 5000;
     } else {
-        depth += (tileDef.baseDepth || 0);
+      depth += tileDef.baseDepth || 0;
     }
     if (options.isUnderTile) depth -= 1;
     mainSprite.setDepth(depth);
+    mainSprite.setData("tileId", tileId);
+    mainSprite.setData("tileBaseDepth", tileDef.baseDepth || 0);
+    mainSprite.setData("isUnderTile", !!options.isUnderTile);
 
     // Physics
     if (tileDef.isCollidable && scene.physics.world) {
       scene.physics.add.existing(mainSprite, true);
       const body = mainSprite.body as Phaser.Physics.Arcade.StaticBody;
-      if (tileDef.bodySize) body.setSize(tileDef.bodySize.width, tileDef.bodySize.height, false);
-      if (tileDef.bodyOffset) body.setOffset(tileDef.bodyOffset.x, tileDef.bodyOffset.y);
+      if (tileDef.bodySize)
+        body.setSize(tileDef.bodySize.width, tileDef.bodySize.height, false);
+      if (tileDef.bodyOffset)
+        body.setOffset(tileDef.bodyOffset.x, tileDef.bodyOffset.y);
       body.enable = true; // Ensure re-enabled
       body.immovable = true;
     }
@@ -740,6 +772,9 @@ export class TileRegistry {
       sprite.setDepth(depth + 0.1);
       sprite.setVisible(true); // Ensure re-visible if from pool
       sprite.setActive(true);
+      sprite.setData("tileId", tileId);
+      sprite.setData("tileBaseDepth", tileDef.baseDepth || 0);
+      sprite.setData("isUnderTile", !!options.isUnderTile);
     });
 
     return {
@@ -774,43 +809,43 @@ export class TileRegistry {
   }
 
   public static getSideTextureID(tileId: string): string {
-      this.initialize();
-      // Heuristic 1: Explicit side texture
-      const sideId = `${tileId}-side`;
-      if (this.tiles.has(sideId)) return sideId;
+    this.initialize();
+    // Heuristic 1: Explicit side texture
+    const sideId = `${tileId}-side`;
+    if (this.tiles.has(sideId)) return sideId;
 
-      const frontId = `${tileId}-front`;
-      if (this.tiles.has(frontId)) return frontId;
+    const frontId = `${tileId}-front`;
+    if (this.tiles.has(frontId)) return frontId;
 
-      // Heuristic 2: Texture variant side
-      const sideTextureId = `${tileId}-texture-side`;
-      if (this.tiles.has(sideTextureId)) return sideTextureId;
-      
-      // Fallback: Use the same tileId and let the renderer apply tint
-      return tileId;
+    // Heuristic 2: Texture variant side
+    const sideTextureId = `${tileId}-texture-side`;
+    if (this.tiles.has(sideTextureId)) return sideTextureId;
+
+    // Fallback: Use the same tileId and let the renderer apply tint
+    return tileId;
   }
 
   public static getTextureId(tileId: string): string {
-      this.initialize();
-      const tileDef = this.tiles.get(tileId);
-      if (!tileDef) return tileId;
+    this.initialize();
+    const tileDef = this.tiles.get(tileId);
+    if (!tileDef) return tileId;
 
-      const graphic = tileDef.graphic;
-      // 1. If it's a GenericWallGraphic instance, it likely has a textureKey
-      if (graphic instanceof GenericWallGraphic) {
-          return (graphic as any).textureKey || tileId;
-      }
-      
-      // 2. If it's a BaseTileGraphic subclass (constructor), it has a static TEXTURE_KEY
-      if (typeof graphic === 'function' && (graphic as any).TEXTURE_KEY) {
-          return (graphic as any).TEXTURE_KEY;
-      }
+    const graphic = tileDef.graphic;
+    // 1. If it's a GenericWallGraphic instance, it likely has a textureKey
+    if (graphic instanceof GenericWallGraphic) {
+      return (graphic as any).textureKey || tileId;
+    }
 
-      return tileId;
+    // 2. If it's a BaseTileGraphic subclass (constructor), it has a static TEXTURE_KEY
+    if (typeof graphic === "function" && (graphic as any).TEXTURE_KEY) {
+      return (graphic as any).TEXTURE_KEY;
+    }
+
+    return tileId;
   }
 
   static getRegisteredTiles(): TileDefinition[] {
-      this.initialize();
-      return Array.from(this.tiles.values());
+    this.initialize();
+    return Array.from(this.tiles.values());
   }
 }

@@ -1,0 +1,161 @@
+# Copilot Instructions — Balls 2.5D RPG
+
+## MANDATORY: Read contracts before any code change
+
+Before writing or modifying any code, you MUST:
+
+1. Identify which domain the task touches (see table below).
+2. Read the corresponding contract file(s) listed for that domain.
+3. If you have not read the relevant contract, **refuse to implement and ask for confirmation first**.
+
+| Domain                                                                | Contract file(s) to read                                                              |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Map rendering, tiles, BMS, binary levels, LevelRenderer, TileRegistry | `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/SYSTEM_BMS.md`                         |
+| 3D perspective, projection, volumetric walls, PerspectiveProjection   | `docs/contracts/PERSPECTIVE_MODE_CONTRACT.md`, `docs/PERSPECTIVE_MODE_MASTER_PLAN.md` |
+| Level transitions, stairs, holes, TransitionSystem                    | `docs/contracts/MAP_SYSTEM_CONTRACT.md`                                               |
+| Player state, stats, inventory, equipment                             | `docs/contracts/PLAYER_STATE_CONTRACT.md`                                             |
+| Save/load, SaveSystem, persistence                                    | `docs/contracts/SAVE_SYSTEM_CONTRACT.md`                                              |
+| UI components, HUD, windows, React overlays                           | `docs/contracts/UI_DESIGN_CONTRACT.md`                                                |
+| Any player-facing text, labels, notifications                         | `docs/contracts/LOCALIZATION_CONTRACT.md`                                             |
+| Combat, BattleSystem, damage, XP                                      | `docs/contracts/BATTLE_SYSTEM_CONTRACT.md`                                            |
+| Benchmark, smoke test, smoke_test.json, generate-smoke-map.js         | `docs/contracts/BENCHMARK_CONTRACT.md`                                                |
+| Cross-cutting / multiple domains                                      | All contracts above that apply                                                        |
+
+After reading, state: "Li o contrato X. A restrição relevante para esta tarefa é Y."
+
+## MANDATORY: Communication and Disagreement Protocol
+
+To avoid false agreement and silent divergence, before implementing you MUST:
+
+1. Present a brief alignment check with 3 explicit points:
+   - What I agree with from the request.
+   - What I believe is risky or incompatible with contracts/current code.
+   - What is still uncertain and requires confirmation.
+2. If there is any conflict between user request and contracts/code behavior, do NOT proceed silently.
+   - Explicitly describe the conflict.
+   - Ask for decision/priority before implementation.
+3. If uncertainty remains about map structure, projection, benchmark assumptions, or ownership boundaries, pause and ask targeted questions first.
+4. Never say "you are right" as a default response pattern. Agreement must be evidence-based and tied to code/contracts.
+
+Required pre-implementation response format (concise):
+
+- `Entendimento:` one-line summary of the requested outcome.
+- `Risco/Conflito:` what can break or what conflicts with contract.
+- `Dúvida objetiva:` exactly what needs confirmation before coding.
+
+## MANDATORY: Contract Checklist Gate (Deterministic)
+
+Before any implementation tool use (file edits or implementation-oriented terminal commands), update:
+
+- `.github/agent-runtime/contract-checklist.json`
+
+Required fields in this file:
+
+- `updatedAt` (ISO datetime)
+- `task`
+- `contractsRead` (non-empty array)
+- `understanding`
+- `riskConflict`
+- `objectiveQuestion`
+
+Additional required fields for documentation control:
+
+- `documentationIndexChecked` (boolean)
+- `impactedModules` (non-empty array; module IDs from `docs/PROJECT_DOCUMENTATION_INDEX.json`)
+- `docsRead` (non-empty array)
+- `docsCoverageStatus` (`covered` | `missing` | `divergent`)
+- `divergenceDetected` (boolean)
+- `divergenceNotes` (string; mandatory when divergenceDetected=true)
+- `docUpdatesRequired` (array)
+- `docUpdatesCompleted` (boolean)
+
+Enforcement:
+
+- Workspace hook config: `.github/hooks/pretool-gate.json`
+- Gate script: `scripts/copilot-pretool-gate.js`
+- If checklist is missing/incomplete/stale, tool permission must be `ask` and implementation must pause until checklist is refreshed.
+
+Documentation-first enforcement:
+
+- If `docsCoverageStatus` is `missing` or `divergent`, implementation MUST pause.
+- In these cases, documentation must be updated first and `docUpdatesCompleted` must be `true` before code changes continue.
+
+## MANDATORY: Documentation Index Workflow
+
+Source of truth index:
+
+- `docs/PROJECT_DOCUMENTATION_INDEX.md`
+- `docs/PROJECT_DOCUMENTATION_INDEX.json` (machine-readable enforcement)
+
+Before any implementation:
+
+1. Check the impacted domain in the documentation index.
+2. Read the listed canonical docs/contracts for that domain.
+3. Record documentation coverage in checklist (`covered`, `missing`, or `divergent`).
+4. If missing/divergent, update documentation before code changes.
+
+---
+
+## Hard rules (non-negotiable)
+
+### Map / BMS
+
+- `MapLoader.getTileAt(x, y, level)` is the only allowed tile access. Never access `levelData.map`, `levelData.tiles`, or `mapData.levels[z].map` directly.
+- All tile graphics are **procedural** (Phaser Graphics). External PNG textures for tiles are forbidden.
+- Tile size is always **32×32 pixels**. Never use 128px or `setScale(4)`.
+- Upper floor levels (level 1+) must use `"..."` (void/sky) as the default tile. Only explicitly placed structure tiles should be solid. Never fill upper floors with `grs` or any terrain tile as default.
+- Every level in a map must be normalized to the same width×height, padded with `"..."` for upper floors.
+
+### Perspective / 3D renderer
+
+- Projection math lives exclusively in `PerspectiveProjection.ts`. Do not duplicate it.
+- `LevelRenderer` owns all rendering and must not bypass `MapLoader` for tile data.
+- `currentLevel`, renderer state, and entity depth must stay in sync at all times.
+- `shouldHideUpperRoofTile()` controls roof cut — do not add parallel roof-hiding logic elsewhere.
+- Roof tiles (`tileId.includes("roof")`) must never extrude volumetric walls.
+
+### Benchmark
+
+- `npm run benchmark:e2e` must pass 14/14 before any task is considered done.
+- Any change to `smoke_test.json`, `generate-smoke-map.js`, or transition logic requires running the benchmark.
+- Never remove or rename existing benchmark steps without updating `BENCHMARK_CONTRACT.md`.
+
+### Player-facing text
+
+- All player-facing strings must use `t_game(...)` translation keys. No hardcoded strings.
+
+### Architecture boundaries
+
+- `PlayerState` is the single source of truth for player stats, inventory, and mode flags.
+- React → Phaser: only via `PlayerState` methods. Phaser → React: only via `PlayerState` events.
+- Do not bypass `PlayerState` for UI state sync.
+
+### Collaboration safety
+
+- Do not optimize for "agreement tone". Optimize for technical correctness and explicit trade-offs.
+- If prior agreement is contradicted by new evidence, explicitly call out the contradiction and propose correction.
+- When implementing from conversation context, re-check active contracts before code changes even if discussed earlier in the same thread.
+
+---
+
+## Validation commands by impact area
+
+| Change area               | Required commands                                             |
+| ------------------------- | ------------------------------------------------------------- |
+| Gameplay, scenes, systems | `npm run build`, `npm run benchmark:e2e`                      |
+| Map / BMS                 | `npm run check:bms`, `npm run build`, `npm run benchmark:e2e` |
+| UI text / HUD             | `npm run check:i18n-ui`, `npm run build`                      |
+| Save/load                 | `npm run build`, `npm run benchmark:e2e`                      |
+| Benchmark harness         | `npm run build`, `npm run benchmark:e2e`                      |
+
+---
+
+## Reference docs
+
+- `docs/AI_READ_FIRST.md` — quick service hub and BMS rules
+- `docs/AI_RUNBOOK.md` — mandatory execution flow
+- `docs/PROJECT_DOCUMENTATION_INDEX.md` — canonical documentation domain index
+- `docs/ARCHITECTURE_MAP.md` — module → contract mapping
+- `docs/ARCHITECTURE_OVERVIEW.md` — system overview
+- `docs/SYSTEM_BMS.md` — binary map system
+- `docs/VALIDATION_MATRIX.md` — full validation matrix

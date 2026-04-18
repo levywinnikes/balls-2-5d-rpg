@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "source": "docs/PROJECT_DOCUMENTATION_INDEX.md",
+  "modules": [
+    {
+      "id": "global-workflow",
+      "name": "Global execution workflow",
+      "pathPrefixes": ["."],
+      "docsRequired": [
+        "docs/AI_RUNBOOK.md",
+        "docs/VALIDATION_MATRIX.md"
+      ],
+      "contractsRequired": []
+    },
+    {
+      "id": "architecture-map",
+      "name": "Project architecture map",
+      "pathPrefixes": ["src/", "scripts/", "public/"],
+      "docsRequired": [
+        "docs/ARCHITECTURE_MAP.md",
+        "docs/ARCHITECTURE_OVERVIEW.md"
+      ],
+      "contractsRequired": []
+    },
+    {
+      "id": "map-bms",
+      "name": "Map system / BMS",
+      "pathPrefixes": ["src/game/maps/", "src/services/WorldMapService.ts", "public/maps/"],
+      "docsRequired": [
+        "docs/SYSTEM_BMS.md"
+      ],
+      "contractsRequired": [
+        "docs/contracts/MAP_SYSTEM_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "perspective",
+      "name": "Perspective / 2.5D-3D",
+      "pathPrefixes": ["src/game/maps/LevelRenderer.ts", "src/game/maps/PerspectiveProjection.ts", "docs/PERSPECTIVE_"],
+      "docsRequired": [
+        "docs/PERSPECTIVE_MODE_MASTER_PLAN.md"
+      ],
+      "contractsRequired": [
+        "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "player-state",
+      "name": "Player state and sync",
+      "pathPrefixes": ["src/game/entities/Player/PlayerState.ts"],
+      "docsRequired": [],
+      "contractsRequired": [
+        "docs/contracts/PLAYER_STATE_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "save-load",
+      "name": "Save/load persistence",
+      "pathPrefixes": ["src/game/systems/SaveSystem.ts"],
+      "docsRequired": [],
+      "contractsRequired": [
+        "docs/contracts/SAVE_SYSTEM_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "combat",
+      "name": "Combat",
+      "pathPrefixes": ["src/game/systems/BattleSystem.ts"],
+      "docsRequired": [],
+      "contractsRequired": [
+        "docs/contracts/BATTLE_SYSTEM_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "ui-hud",
+      "name": "UI/HUD/window behavior",
+      "pathPrefixes": ["src/ui/"],
+      "docsRequired": [],
+      "contractsRequired": [
+        "docs/contracts/UI_DESIGN_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "localization",
+      "name": "Localization",
+      "pathPrefixes": ["src/game/i18n/", "public/data/"],
+      "docsRequired": [],
+      "contractsRequired": [
+        "docs/contracts/LOCALIZATION_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "benchmark",
+      "name": "Benchmark and smoke harness",
+      "pathPrefixes": ["scripts/run-benchmark-e2e.js", "scripts/generate-smoke-map.js", "public/maps/smoke_test"],
+      "docsRequired": [],
+      "contractsRequired": [
+        "docs/contracts/BENCHMARK_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "editor",
+      "name": "Editor",
+      "pathPrefixes": ["src/editor/", "src/game/scenes/MapEditorScene.ts", "scripts/map-server.js"],
+      "docsRequired": [],
+      "contractsRequired": [
+        "docs/contracts/EDITOR_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "generator-biome",
+      "name": "Generation / biome / tooling",
+      "pathPrefixes": ["generate_", "scripts/", "tools/"],
+      "docsRequired": [],
+      "contractsRequired": [
+        "docs/contracts/GENERATOR_CONTRACT.md",
+        "docs/contracts/BIOME_SYSTEM_CONTRACT.md"
+      ]
+    }
+  ]
+}

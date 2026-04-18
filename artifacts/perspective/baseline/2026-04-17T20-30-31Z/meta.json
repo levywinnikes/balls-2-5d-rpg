@@ -1,0 +1,22 @@
+{
+  "commit": "b9ff5c55a9cbdc329d43695c6e48998a1cef3ac8",
+  "date": "2026-04-17T20:30:31.1577343Z",
+  "tester": "copilot-agent",
+  "os": "Windows",
+  "resolution": "",
+  "notes": "Automated baseline bootstrap. npm run build: PASS. npm run benchmark:e2e: PASS. benchmark report: artifacts/benchmark/benchmark-report-1776457801122.json. Manual capture for screenshots/clips and scenario findings is still pending.",
+  "automation": {
+    "build": {
+      "command": "npm run build",
+      "status": "PASS"
+    },
+    "benchmark": {
+      "command": "npm run benchmark:e2e",
+      "status": "PASS",
+      "report": "artifacts/benchmark/benchmark-report-1776457801122.json",
+      "benchmarkName": "Smoke Test Benchmark",
+      "totalMs": 9824.800000000745,
+      "completedAtIso": "2026-04-17T20:30:25.841Z"
+    }
+  }
+}

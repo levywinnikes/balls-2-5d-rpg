@@ -43,6 +43,7 @@ export const translations = {
     quality_low: "LOW",
     quality_mid: "MID",
     quality_high: "HIGH",
+    open_perspective_debug_map: "Open 3D Debug Map",
 
     // Benchmark UI
     benchmark_status_pass: "PASS",
@@ -799,6 +800,7 @@ export const translations = {
     quality_low: "BAIXA",
     quality_mid: "MÉDIA",
     quality_high: "ALTA",
+    open_perspective_debug_map: "Abrir Mapa Debug 3D",
 
     // Benchmark UI
     benchmark_status_pass: "SUCESSO",

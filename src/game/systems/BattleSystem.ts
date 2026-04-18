@@ -36,14 +36,24 @@ export default class BattleSystem {
     const def = EnemyRegistry.getEnemyDefinition(enemy.enemyType);
     const magicAttacks = def?.magicAttacks ?? [];
     return (
-      magicAttacks.some((attackId) => attackId.toLowerCase().includes("fire")) ||
-      enemy.enemyType === "dragon"
+      magicAttacks.some((attackId) =>
+        attackId.toLowerCase().includes("fire"),
+      ) || enemy.enemyType === "dragon"
     );
   }
 
   private getPlayerElementResistance(element: string): number {
     const state = PlayerState.getInstance();
-    const slots = ["weapon", "shield", "helmet", "armor", "legs", "boots", "neck", "ring"];
+    const slots = [
+      "weapon",
+      "shield",
+      "helmet",
+      "armor",
+      "legs",
+      "boots",
+      "neck",
+      "ring",
+    ];
 
     const total = slots.reduce((acc, slot) => {
       const equipped = state.getEquippedItemInSlot(slot);

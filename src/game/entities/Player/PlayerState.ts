@@ -550,10 +550,21 @@ export class PlayerState extends EventEmitter {
     return this._perspectiveMode;
   }
 
+  public setPerspectiveMode(mode: "2D" | "3D") {
+    if (this._perspectiveMode === mode) return this._perspectiveMode;
+    this._perspectiveMode = mode;
+    this.emit("perspectiveModeChanged", this._perspectiveMode);
+    return this._perspectiveMode;
+  }
+
   public togglePerspectiveMode() {
     this._perspectiveMode = this._perspectiveMode === "3D" ? "2D" : "3D";
     this.emit("perspectiveModeChanged", this._perspectiveMode);
     return this._perspectiveMode;
+  }
+
+  public requestPerspectiveDebugMap(mapName: string = "perspective_debug") {
+    this.emit("requestPerspectiveDebugMap", { mapName });
   }
 
   public static getInstance(): PlayerState {
@@ -564,7 +575,11 @@ export class PlayerState extends EventEmitter {
     } else {
       // HMR PROTECTION: If new methods are missing on a stale instance (surviving HMR),
       // we re-patch the prototype to keep the singleton functional without a full refresh.
-      if (!win._playerStateInstance.requestZJump) {
+      if (
+        !win._playerStateInstance.requestZJump ||
+        !win._playerStateInstance.requestPerspectiveDebugMap ||
+        !win._playerStateInstance.setPerspectiveMode
+      ) {
         Object.setPrototypeOf(win._playerStateInstance, PlayerState.prototype);
       }
     }

@@ -1,0 +1,138 @@
+{
+  "profile": "3D",
+  "commit": "b9ff5c55a9cbdc329d43695c6e48998a1cef3ac8",
+  "date": "2026-04-17T20:30:31.1577343Z",
+  "environment": {
+    "os": "Windows",
+    "resolution": "",
+    "notes": "Baseline initialized from automated run. Scenario evidence and manual findings pending."
+  },
+  "scenarios": [
+    {
+      "id": "multi_floor_alignment",
+      "pass": null,
+      "status": "pending_manual_capture",
+      "visualFindings": [],
+      "functionalFindings": [],
+      "performance": {
+        "avgFps": null,
+        "minFps": null,
+        "stutterCount30s": null
+      },
+      "evidence": {
+        "screens": [],
+        "clip": ""
+      }
+    },
+    {
+      "id": "stair_transitions",
+      "pass": null,
+      "status": "pending_manual_capture",
+      "visualFindings": [],
+      "functionalFindings": [
+        "Automated smoke benchmark includes transition down/up steps as PASS."
+      ],
+      "performance": {
+        "avgFps": null,
+        "minFps": null,
+        "stutterCount30s": null
+      },
+      "evidence": {
+        "screens": [],
+        "clip": ""
+      }
+    },
+    {
+      "id": "dense_structure_readability",
+      "pass": null,
+      "status": "pending_manual_capture",
+      "visualFindings": [],
+      "functionalFindings": [],
+      "performance": {
+        "avgFps": null,
+        "minFps": null,
+        "stutterCount30s": null
+      },
+      "evidence": {
+        "screens": [],
+        "clip": ""
+      }
+    },
+    {
+      "id": "combat_interaction_floor_boundaries",
+      "pass": null,
+      "status": "pending_manual_capture",
+      "visualFindings": [],
+      "functionalFindings": [],
+      "performance": {
+        "avgFps": null,
+        "minFps": null,
+        "stutterCount30s": null
+      },
+      "evidence": {
+        "screens": [],
+        "clip": ""
+      }
+    },
+    {
+      "id": "ui_overlays_during_movement_transition",
+      "pass": null,
+      "status": "pending_manual_capture",
+      "visualFindings": [],
+      "functionalFindings": [
+        "Automated smoke benchmark includes quest log/system/settings/menu steps as PASS."
+      ],
+      "performance": {
+        "avgFps": null,
+        "minFps": null,
+        "stutterCount30s": null
+      },
+      "evidence": {
+        "screens": [],
+        "clip": ""
+      }
+    }
+  ],
+  "automatedChecks": {
+    "benchmarkReport": "artifacts/benchmark/benchmark-report-1776457801122.json",
+    "benchmarkPassed": true,
+    "benchmarkTotalMs": 9824.800000000745,
+    "steps": [
+      {
+        "label": "transition down",
+        "ok": true,
+        "durationMs": 798.5999999977648
+      },
+      {
+        "label": "transition up",
+        "ok": true,
+        "durationMs": 792.8000000007451
+      },
+      {
+        "label": "quest log window",
+        "ok": true,
+        "durationMs": 572.9000000022352
+      },
+      {
+        "label": "hero menu window",
+        "ok": true,
+        "durationMs": 568
+      },
+      {
+        "label": "system menu mouse pause",
+        "ok": true,
+        "durationMs": 667.4000000022352
+      },
+      {
+        "label": "settings mouse pause",
+        "ok": true,
+        "durationMs": 666.6999999992549
+      }
+    ]
+  },
+  "summary": {
+    "criticalIssues": [],
+    "overallReadability": "pending_manual_capture",
+    "overallStability": "automated_checks_pass_manual_capture_pending"
+  }
+}

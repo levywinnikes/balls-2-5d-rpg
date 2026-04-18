@@ -655,6 +655,24 @@ export default class GameScene extends Phaser.Scene {
     }
   };
 
+  private onRequestPerspectiveDebugMap = (payload?: { mapName?: string }) => {
+    if (this.isTransitioning) return;
+
+    const mapName = payload?.mapName || "perspective_debug";
+    const playerState = PlayerState.getInstance();
+    playerState.setPerspectiveMode("3D");
+
+    this.registry.remove("playerPos");
+    this.registry.remove("currentLevel");
+
+    this.scene.start("LoadingScene", {
+      mapName,
+      map: mapName,
+      isNewGame: true,
+      charName: playerState.getName(),
+    });
+  };
+
   async create(): Promise<void> {
     // Changed to match file (async)
     try {
@@ -663,6 +681,10 @@ export default class GameScene extends Phaser.Scene {
       // START: Clear previous listeners to prevent duplicates
       PlayerState.getInstance().off("message", this.onMessage);
       PlayerState.getInstance().off("requestZJump", this.onZJump);
+      PlayerState.getInstance().off(
+        "requestPerspectiveDebugMap",
+        this.onRequestPerspectiveDebugMap,
+      );
 
       // Register listeners immediately
       PlayerState.getInstance().on("startGroundDrag", this.onStartGroundDrag);
@@ -670,6 +692,10 @@ export default class GameScene extends Phaser.Scene {
       PlayerState.getInstance().on("uiDragStart", this.onUiDragStart);
       PlayerState.getInstance().on("uiDragEnd", this.onUiDragEnd);
       PlayerState.getInstance().on("requestZJump", this.onZJump);
+      PlayerState.getInstance().on(
+        "requestPerspectiveDebugMap",
+        this.onRequestPerspectiveDebugMap,
+      );
 
       // Cleanup previous potential listeners
       PlayerState.getInstance().on("prepareRuneCast", this.onPrepareRuneCast);
@@ -2881,6 +2907,7 @@ export default class GameScene extends Phaser.Scene {
     ps.off("endGroundDrag", this.onEndGroundDrag);
     ps.off("uiDragStart", this.onUiDragStart);
     ps.off("uiDragEnd", this.onUiDragEnd);
+    ps.off("requestPerspectiveDebugMap", this.onRequestPerspectiveDebugMap);
     ps.off("prepareRuneCast", this.onPrepareRuneCast);
     ps.off("spawnDroppedItem", this.onSpawnDroppedItem);
 
