@@ -1,25 +1,30 @@
 ﻿{
-  "updatedAt": "2026-04-18T13:10:00Z",
-  "task": "Bugfix: corrigir entrada do modulo 3D separado por URL (slice3d/debug_3d)",
+  "updatedAt": "2026-04-18T15:45:00Z",
+  "task": "Feature: seeding automatico de itens de mapa no slice 3D por nivel",
   "contractsRead": [
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/contracts/BENCHMARK_CONTRACT.md",
-    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md"
+    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
+    "docs/contracts/PLAYER_STATE_CONTRACT.md",
+    "docs/contracts/LOCALIZATION_CONTRACT.md"
   ],
-  "phaseStatus": "Bugfix complete",
-  "understanding": "Existe divergencia entre a URL comunicada (debug_3d=true) e a chave real de roteamento (slice3d=1). O ajuste deve garantir acesso consistente ao modulo 3D separado sem entrar no jogo normal.",
-  "riskConflict": "Risco baixo de regressao no bootstrap do App; precisa preservar editor mode, game layout padrao e benchmark URL params existentes.",
-  "objectiveQuestion": "Aceitar debug_3d=true alem de slice3d=1 resolve o acesso ao modulo 3D separado sem quebrar os fluxos atuais? Sim, e o mapeamento W/S do slice foi ajustado.",
+  "phaseStatus": "Feature in progress",
+  "understanding": "Fazer o runtime 3D semear entidades de item do mapa no primeiro acesso ao nivel, escrevendo os dropped items persistentes no PlayerState e mantendo o pickup por UID sem estado paralelo.",
+  "riskConflict": "Risco de duplicar itens se o seeding rodar mais de uma vez por nivel ou se ignorar visitedLevels. Risco de divergencia com o fluxo 2D se o parsing de entidades-item nao respeitar entityTemplates e coordenadas em tiles (32px).",
+  "objectiveQuestion": "O slice 3D consegue semear itens de mapa por nivel no PlayerState e continuar com build + benchmark sem regressao?",
   "documentationIndexChecked": true,
-  "impactedModules": ["architecture-map", "map-bms", "perspective", "benchmark"],
+  "impactedModules": ["architecture-map", "perspective", "player-state", "localization", "benchmark"],
   "docsRead": [
     "docs/AI_READ_FIRST.md",
     "docs/PROJECT_CONTRACT.md",
     "docs/AI_RUNBOOK.md",
     "docs/VALIDATION_MATRIX.md",
     "docs/PROJECT_DOCUMENTATION_INDEX.json",
+    "docs/PERSPECTIVE_MODE_MASTER_PLAN.md",
+    "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/SYSTEM_BMS.md",
-    "docs/PERSPECTIVE_MODE_MASTER_PLAN.md"
+    "docs/contracts/PLAYER_STATE_CONTRACT.md",
+    "docs/contracts/LOCALIZATION_CONTRACT.md"
   ],
   "docsCoverageStatus": "covered",
   "divergenceDetected": false,
@@ -27,10 +32,8 @@
   "docUpdatesRequired": [],
   "docUpdatesCompleted": true,
   "validationResults": {
-    "checkBms": 0,
-    "build": 0,
-    "benchmarkE2E": 0,
-    "benchmarkSteps": "14/14 PASS",
-    "runtimeErrors": 0
+    "pending": false,
+    "build": "pass",
+    "benchmarkE2E": "pass (14/14)"
   }
 }

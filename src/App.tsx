@@ -307,10 +307,16 @@ function App() {
   const isEditor =
     process.env.REACT_APP_EDITOR === "true" ||
     searchParams.get("editor") === "true";
-  const isThreeDSlice =
+  const isAutoBenchmark = searchParams.get("autobenchmark") === "1";
+  const isLegacy2D =
+    searchParams.get("legacy2d") === "1" ||
+    searchParams.get("mode") === "2d" ||
+    isAutoBenchmark;
+  const forceThreeDSlice =
     searchParams.get("slice3d") === "1" ||
     searchParams.get("debug_3d") === "1" ||
     searchParams.get("debug_3d") === "true";
+  const isThreeDSlice = !isEditor && (forceThreeDSlice || !isLegacy2D);
 
   return (
     <LanguageProvider>

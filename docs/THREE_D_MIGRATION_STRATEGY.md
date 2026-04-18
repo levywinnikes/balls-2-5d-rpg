@@ -267,6 +267,15 @@ Use one of these URLs to open the isolated Babylon slice (without entering norma
 
 1. `http://localhost:4000/?slice3d=1`
 2. `http://localhost:4000/?debug_3d=true`
+3. optional map override for seeding in the 3D slice: `http://localhost:4000/?slice3d=1&map=newmap`
+
+Current runtime default:
+
+1. 3D slice is now the default app entry.
+2. Legacy 2D runtime remains available as fallback via:
+	- `http://localhost:4000/?legacy2d=1`
+	- `http://localhost:4000/?mode=2d`
+3. Benchmark compatibility is preserved because `autobenchmark=1` forces legacy 2D entry.
 
 Control mapping in the isolated slice:
 
@@ -274,9 +283,21 @@ Control mapping in the isolated slice:
 2. `S` / `ArrowDown`: move backward
 3. `A` / `ArrowLeft`: strafe left
 4. `D` / `ArrowRight`: strafe right
+5. `Space`: jump
+6. `V`: toggle third-person / first-person camera
+7. First-person mode: look around with mouse
+8. `E`: pickup nearby item (torch orb test), syncing to `PlayerState` inventory
 
 Recent stabilization fixes for this phase:
 
 1. URL compatibility fix to accept both `slice3d` and `debug_3d` query params
 2. map JSON loading hardened in `MapLoader` using robust fetch-based path
 3. W/S movement inversion corrected in the Babylon debug slice runtime
+4. first 2D gameplay mechanic attached to 3D slice: proximity pickup via `PlayerState.addItem(...)`
+5. dropped items in the 3D slice now consume the real per-level persistent item list from `PlayerState`, preserving item UID/count/stars/attributes on pickup
+
+Current limitation:
+
+1. the isolated 3D slice now reads real persistent dropped items and also seeds first-visit item entities from map JSON metadata (`entityTemplates` + `levels[level].entities`) into `PlayerState`
+2. non-item entities remain outside this slice scope; enemy/container behavior still depends on broader migration phases
+3. when no persistent dropped item exists for the current level, the torch orb fallback remains available only as an empty-state debug pickup
