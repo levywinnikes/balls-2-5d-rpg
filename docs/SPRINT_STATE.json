@@ -28,7 +28,8 @@
     "Hotfix ratos flutuando: advanceEnemyPath target.y corrigido para enemy.worldPos.y.",
     "Sprint 9: todas issues do playtesting de interacao FP e visibilidade resolvidas.",
     "Analise 2D EXP: NotificationSystem recebe uiNotification type=exp com barra (startProgress/endProgress), mas ThreeDSliceView suprime exp em NotificationSystem suppressTypes=['exp']; issue incluida no Sprint 11.",
-    "Nova direcao de produto registrada: top-down por camadas como padrao; backlog tecnico adicionado no Sprint 12 para visibilidade vertical smooth e politica de memoria de andares acima."
+    "Nova direcao de produto registrada: top-down por camadas como padrao; backlog tecnico adicionado no Sprint 12 para visibilidade vertical smooth e politica de memoria de andares acima.",
+    "Diretriz confirmada pelo usuario: outros modos de visao podem permanecer apenas para debug interno; toda estrutura de mapa e decisao visual deve ser pensada exclusivamente para a perspectiva top-down."
   ],
   "sprintBacklog": [
     { "id": "S10-T1", "title": "Paridade de comida 2D->3D: hunger/consumo/efeitos exatamente iguais ao 2D", "status": "not-started" },
@@ -51,6 +52,6 @@
     { "sprint": 12, "id": "S12-T2", "title": "Ocultacao suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "not-started" },
     { "sprint": 12, "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima nao relevantes e recarregar ao sair da cobertura", "status": "not-started" },
     { "sprint": 12, "id": "S12-T4", "title": "Padronizar semantica de camadas dos mapas (ex: esgoto 0, cidade suspensa 1, telhados/andares superiores)", "status": "not-started" },
-    { "sprint": 12, "id": "S12-T5", "title": "Definir politica do toggle de perspectiva (remocao ou debug-only) durante migracao top-down", "status": "not-started" }
+    { "sprint": 12, "id": "S12-T5", "title": "Manter outros modos de visao apenas como debug interno durante a migracao; produto e mapas pensados somente para top-down", "status": "not-started" }
   ]
 }

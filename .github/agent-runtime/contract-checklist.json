@@ -13,8 +13,8 @@
   ],
   "phaseStatus": "In progress",
   "understanding": "Registrar no backlog: (1) paridade de notificacao de EXP no 3D igual 2D (toast exp + barra/progresso visivel), (2) nova direcao de arquitetura top-down por camadas com ocultacao suave de andares superiores e possivel descarte de memoria quando nao relevantes.",
-  "riskConflict": "Ha divergencia entre a direcao solicitada (top-down por camadas como padrao) e docs canonicos atuais de perspectiva que ainda descrevem 3D como direcao estrategica com fallback 2D temporario.",
-  "objectiveQuestion": "Definir no planejamento se o toggle de perspectiva sera removido por completo ou mantido apenas para debug durante transicao.",
+  "riskConflict": "Ha divergencia entre a direcao solicitada (top-down por camadas como padrao, com outros modos apenas para debug interno) e docs canonicos atuais de perspectiva que ainda descrevem 3D como direcao estrategica com fallback 2D temporario.",
+  "objectiveQuestion": "Respondida: manter outros modos de visao apenas para debug interno durante a transicao; produto e mapas devem ser concebidos somente para top-down.",
   "documentationIndexChecked": true,
   "impactedModules": [
     "global-workflow",
@@ -42,7 +42,7 @@
   "divergenceNotes": "PERSPECTIVE_MODE_MASTER_PLAN.md e PERSPECTIVE_MODE_CONTRACT.md apontam 3D como direcao estrategica, enquanto a nova solicitacao prioriza top-down por camadas como padrao de produto.",
   "docUpdatesRequired": [
     "Atualizar docs/PERSPECTIVE_MODE_MASTER_PLAN.md com direcao top-down por camadas como padrao",
-    "Atualizar docs/contracts/PERSPECTIVE_MODE_CONTRACT.md com politica de transicao do toggle de perspectiva",
+    "Atualizar docs/contracts/PERSPECTIVE_MODE_CONTRACT.md com politica de transicao: outros modos apenas para debug interno",
     "Atualizar docs/ARCHITECTURE_OVERVIEW.md com modelo de visibilidade vertical smooth hide/show por camadas"
   ],
   "docUpdatesCompleted": false,

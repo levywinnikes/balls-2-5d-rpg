@@ -126,4 +126,4 @@ Sprint 12 (diretriz top-down por camadas):
 2. Implementar ocultacao suave (fade) de andares/estruturas acima do player quando ele estiver sob cobertura.
 3. Definir e aplicar politica de memoria por camada: descarregar andares superiores nao relevantes e recarregar quando voltarem a ser visiveis.
 4. Padronizar semantica de camadas dos mapas para cenarios compostos (exemplo: esgoto no nivel base local, cidade suspensa acima, telhados/andares superiores em niveis seguintes).
-5. Definir politica do toggle de perspectiva durante migracao: remover do player-facing ou manter apenas para debug interno.
+5. Manter outros modos de visao apenas como debug interno durante a migracao; produto, estrutura de mapa e decisoes visuais passam a ser pensados somente para top-down.
