@@ -426,6 +426,12 @@ export const translations = {
     ui_empty: "Empty",
     action_enchant: "Enchant",
 
+    // Grimorio (Spellbook) Window
+    title_grimorio: "Grimorio",
+    label_memory: "Memory",
+    msg_no_runes: "No runes in spellbook.",
+    msg_rune_memory_overloaded: "Memory Overloaded! Runes are inactive.",
+
     // Menu & HUD
     menu_new_game: "New Journey",
     menu_load_game: "Load Journey",
@@ -1224,6 +1230,12 @@ export const translations = {
     ui_cancel: "Cancelar",
     ui_empty: "Vazio",
     action_enchant: "Encantar",
+
+    // Grimorio (Grimório) Window
+    title_grimorio: "Grimório",
+    label_memory: "Memória",
+    msg_no_runes: "Nenhuma runa no grimório.",
+    msg_rune_memory_overloaded: "Memória Sobrecarregada! Runas inativas.",
 
     // Fall Safety
     fall_safety_on: "Segurança Ativa",

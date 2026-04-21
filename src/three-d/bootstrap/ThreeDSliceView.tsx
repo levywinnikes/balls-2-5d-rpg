@@ -18,7 +18,11 @@ export function ThreeDSliceView() {
   // S7-FP1: track first-person mode to show/hide crosshair
   const [isFP, setIsFP] = useState(false);
   // S8-T2: rune hotbar HUD state
-  const [runeSlots, setRuneSlots] = useState<string[]>(["fire_burst_rune", "", ""]);
+  const [runeSlots, setRuneSlots] = useState<string[]>([
+    "fire_burst_rune",
+    "",
+    "",
+  ]);
   const [activeRuneSlot, setActiveRuneSlot] = useState(0);
   // S9-T1: damage vignette flash
   const [vignetteActive, setVignetteActive] = useState(false);
@@ -45,7 +49,9 @@ export function ThreeDSliceView() {
 
     // S8-T2: listen for rune slot changes
     const handleRuneSlot = (e: Event) => {
-      const detail = (e as CustomEvent<{ slots: string[]; activeIndex: number }>).detail;
+      const detail = (
+        e as CustomEvent<{ slots: string[]; activeIndex: number }>
+      ).detail;
       setRuneSlots(detail.slots);
       setActiveRuneSlot(detail.activeIndex);
     };
@@ -55,21 +61,25 @@ export function ThreeDSliceView() {
     const handlePlayerHit = () => {
       setVignetteActive(true);
       if (vignetteTimerRef.current) clearTimeout(vignetteTimerRef.current);
-      vignetteTimerRef.current = setTimeout(() => setVignetteActive(false), 400);
+      vignetteTimerRef.current = setTimeout(
+        () => setVignetteActive(false),
+        400,
+      );
     };
     document.addEventListener("slice3d:playerHit", handlePlayerHit);
 
     // Bridge classic HUD/UIContext windows to WindowSystem ids used by ThreeDSliceView.
     const handleUiWindowToggled = (e: Event) => {
-      const detail = (e as CustomEvent<{ key: string; isOpen: boolean }>).detail;
+      const detail = (e as CustomEvent<{ key: string; isOpen: boolean }>)
+        .detail;
       const windowIdMap: Record<string, string> = {
         heroMenu: "hero_menu",
         settings: "settings",
         expandedMap: "expandedMap",
         questLog: "questLog",
         cheats: "cheats",
-        // Temporary routing until Grimorio and SystemMenu are registered in WindowRegistry for 3D.
-        grimorio: "hero_menu",
+        // S11-T1: Grimorio now has its own window
+        grimorio: "grimorio",
         systemMenu: "settings",
       };
 
@@ -86,7 +96,10 @@ export function ThreeDSliceView() {
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      document.removeEventListener("slice3d:cameraModeChanged", handleCameraMode);
+      document.removeEventListener(
+        "slice3d:cameraModeChanged",
+        handleCameraMode,
+      );
       document.removeEventListener("slice3d:runeSlotChanged", handleRuneSlot);
       document.removeEventListener("slice3d:playerHit", handlePlayerHit);
       document.removeEventListener("ui:windowToggled", handleUiWindowToggled);
@@ -177,7 +190,8 @@ export function ThreeDSliceView() {
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
-            background: "radial-gradient(ellipse at center, transparent 55%, rgba(220,0,0,0.55) 100%)",
+            background:
+              "radial-gradient(ellipse at center, transparent 55%, rgba(220,0,0,0.55) 100%)",
             animation: "none",
             opacity: 1,
             transition: "opacity 0.4s ease-out",
@@ -198,11 +212,42 @@ export function ThreeDSliceView() {
           }}
         >
           {/* Horizontal bar */}
-          <div style={{ position: "absolute", top: "50%", left: 0, width: "100%", height: 1.5, background: "rgba(255,255,255,0.85)", transform: "translateY(-50%)" }} />
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 0,
+              width: "100%",
+              height: 1.5,
+              background: "rgba(255,255,255,0.85)",
+              transform: "translateY(-50%)",
+            }}
+          />
           {/* Vertical bar */}
-          <div style={{ position: "absolute", left: "50%", top: 0, width: 1.5, height: "100%", background: "rgba(255,255,255,0.85)", transform: "translateX(-50%)" }} />
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: 0,
+              width: 1.5,
+              height: "100%",
+              background: "rgba(255,255,255,0.85)",
+              transform: "translateX(-50%)",
+            }}
+          />
           {/* Center dot */}
-          <div style={{ position: "absolute", top: "50%", left: "50%", width: 2, height: 2, background: "white", borderRadius: "50%", transform: "translate(-50%,-50%)" }} />
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              width: 2,
+              height: 2,
+              background: "white",
+              borderRadius: "50%",
+              transform: "translate(-50%,-50%)",
+            }}
+          />
         </div>
       )}
       <HUD />
@@ -224,7 +269,10 @@ export function ThreeDSliceView() {
             style={{
               width: 48,
               height: 48,
-              border: i === activeRuneSlot ? "2px solid #ff8800" : "2px solid rgba(255,255,255,0.3)",
+              border:
+                i === activeRuneSlot
+                  ? "2px solid #ff8800"
+                  : "2px solid rgba(255,255,255,0.3)",
               borderRadius: 6,
               background: "rgba(0,0,0,0.6)",
               display: "flex",
@@ -237,13 +285,15 @@ export function ThreeDSliceView() {
             }}
           >
             <div style={{ fontSize: 18 }}>{runeId ? "✦" : "·"}</div>
-            <div style={{ fontSize: 9, marginTop: 2, opacity: 0.75 }}>{i + 1}</div>
+            <div style={{ fontSize: 9, marginTop: 2, opacity: 0.75 }}>
+              {i + 1}
+            </div>
           </div>
         ))}
       </div>
       <WindowLayer />
       <HeroDashboard />
-      <NotificationSystem suppressTypes={["exp"]} />
+      <NotificationSystem />
       <LevelUpNotification />
       <ThreeDFloatingText
         engine={runtimeBridge?.engine}

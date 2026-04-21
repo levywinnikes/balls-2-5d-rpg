@@ -14,6 +14,7 @@ import {
   Vector3,
   VertexData,
   Animation,
+  Texture,
 } from "@babylonjs/core";
 import {
   DroppedItemData,
@@ -24,6 +25,7 @@ import { ItemType } from "../../config/ItemConstants";
 import { ItemRegistry } from "../../game/entities/items/ItemRegistry";
 import { AudioManager } from "../../game/systems/AudioManager";
 import { WeaponRegistry } from "../../game/entities/weapons/WeaponRegistry";
+import { ContainerRegistry } from "../../game/entities/containers/ContainerRegistry";
 import {
   EnemyRegistry,
   EnemyDefinition,
@@ -214,6 +216,35 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
   player.material = playerMaterial;
 
+  // S11-T4: temporary 2D billboard sprite for hero in 3D runtime.
+  const heroSpriteMat = new StandardMaterial("slice-player-sprite-mat", scene);
+  const heroSpriteTex = new Texture(
+    "/assets/sprites/hero_peasant.png",
+    scene,
+    true,
+    false,
+  );
+  heroSpriteTex.hasAlpha = true;
+  heroSpriteTex.updateSamplingMode(Texture.NEAREST_NEAREST);
+  heroSpriteMat.diffuseTexture = heroSpriteTex;
+  heroSpriteMat.opacityTexture = heroSpriteTex;
+  heroSpriteMat.useAlphaFromDiffuseTexture = true;
+  heroSpriteMat.backFaceCulling = false;
+  heroSpriteMat.specularColor = Color3.Black();
+
+  const heroBillboard = MeshBuilder.CreatePlane(
+    "slice-player-sprite",
+    { width: 1.0, height: 1.55 },
+    scene,
+  );
+  heroBillboard.material = heroSpriteMat;
+  heroBillboard.parent = player;
+  heroBillboard.position = new Vector3(0, 0.78, 0);
+  heroBillboard.billboardMode = Mesh.BILLBOARDMODE_Y;
+
+  // Hide procedural body to prioritize sprite silhouette.
+  player.visibility = 0.01;
+
   // Fallback pickup kept only for empty-state debugging while 3D begins consuming
   // the real persistent dropped-item list from PlayerState.
   const pickupMaterial = createMaterial(
@@ -241,6 +272,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let lastPlayerAttackAt = 0;
   let activeRuneSlotIndex = 0;
   let lastRuneCastAt = 0;
+  // S11-T1: rune targeting mode (Opção A parity)
+  let runeTargetingMode = false;
+  let targetingRuneId: string | null = null;
   const seededEnemyLevels = new Set<string>();
   let mapDataCache: SliceMapData | null = null;
   let worldMapReady = false;
@@ -1381,9 +1415,102 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const destroyEnemy = (enemy: SliceEnemy) => {
+  const emitBloodBurst = (
+    origin: Vector3,
+    colorHex: string,
+    particleCount: number,
+    spread: number,
+    lifetimeSec: number,
+  ) => {
+    const particles: Mesh[] = [];
+    const velocities: Vector3[] = [];
+    const bloodMat = new StandardMaterial(
+      `slice_blood_mat_${Date.now()}`,
+      scene,
+    );
+    bloodMat.diffuseColor = Color3.FromHexString(colorHex);
+    bloodMat.emissiveColor = Color3.FromHexString(colorHex).scale(0.15);
+    bloodMat.specularColor = Color3.Black();
+
+    for (let i = 0; i < particleCount; i += 1) {
+      const p = MeshBuilder.CreateSphere(
+        `slice_blood_${Date.now()}_${i}`,
+        { diameter: 0.05 + Math.random() * 0.08, segments: 3 },
+        scene,
+      );
+      p.material = bloodMat;
+      p.position = origin.add(
+        new Vector3(
+          (Math.random() - 0.5) * spread,
+          Math.random() * 0.25,
+          (Math.random() - 0.5) * spread,
+        ),
+      );
+      particles.push(p);
+      velocities.push(
+        new Vector3(
+          (Math.random() - 0.5) * 2.5,
+          1.2 + Math.random() * 1.1,
+          (Math.random() - 0.5) * 2.5,
+        ),
+      );
+    }
+
+    let age = 0;
+    const obs = scene.onBeforeRenderObservable.add(() => {
+      const dt = scene.getEngine().getDeltaTime() / 1000;
+      age += dt;
+      const t = Math.min(1, age / lifetimeSec);
+
+      for (let i = 0; i < particles.length; i += 1) {
+        const particle = particles[i];
+        const vel = velocities[i];
+        vel.y -= 5.5 * dt;
+        particle.position.addInPlace(vel.scale(dt));
+        particle.scaling.setAll(Math.max(0.01, 1 - t * 0.85));
+      }
+
+      if (age >= lifetimeSec) {
+        particles.forEach((p) => p.dispose());
+        bloodMat.dispose();
+        scene.onBeforeRenderObservable.remove(obs);
+      }
+    });
+  };
+
+  const destroyEnemy = (
+    enemy: SliceEnemy,
+    context?: { finishingDamage?: number; isFireKill?: boolean },
+  ) => {
     if (enemy.isDead) {
       return;
+    }
+
+    const bloodEnabled = localStorage.getItem("tgs_settings_blood") !== "false";
+    const maxHp = Math.max(1, enemy.definition.health || 100);
+    const finishingDamage = Math.max(0, context?.finishingDamage || 0);
+    const overkill = finishingDamage > maxHp * 0.5;
+    const isFireKill = !!context?.isFireKill;
+
+    if (bloodEnabled) {
+      if (overkill) {
+        emitBloodBurst(
+          enemy.worldPos.clone().add(new Vector3(0, 0.35, 0)),
+          isFireKill ? "#ff7a33" : "#aa1e1e",
+          22,
+          1.6,
+          1.2,
+        );
+        audioManager.playSplash();
+      } else if (!isFireKill) {
+        emitBloodBurst(
+          enemy.worldPos.clone().add(new Vector3(0, 0.25, 0)),
+          "#7a1010",
+          8,
+          0.45,
+          0.8,
+        );
+      }
     }
 
     enemy.isDead = true;
@@ -1587,7 +1714,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
 
     if (enemy.health <= 0) {
-      destroyEnemy(enemy);
+      destroyEnemy(enemy, {
+        finishingDamage: damage,
+        isFireKill: isFireAttack,
+      });
       return;
     }
 
@@ -2069,6 +2199,28 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     item: DroppedItemData,
     requestedCount?: number,
   ): boolean => {
+    const potentialContainerDef = WeaponRegistry.getWeaponDefinition(
+      item.weaponId,
+    );
+    if (
+      potentialContainerDef &&
+      (potentialContainerDef.type === "container" ||
+        ContainerRegistry.getContainer(potentialContainerDef.id))
+    ) {
+      const containerDef = ContainerRegistry.getContainer(
+        potentialContainerDef.id,
+      );
+      if (containerDef) {
+        playerState.openContainer(
+          item.itemId,
+          containerDef.id,
+          t_game(containerDef.name as any),
+          { x: item.x, y: item.y, level: activeLevel },
+        );
+        return true;
+      }
+    }
+
     const availableCount = item.count || 1;
     const pickupCount = Math.max(
       1,
@@ -2464,6 +2616,120 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerState.log("action_cast_rune", { runeId }, "#ff8800");
   };
 
+  // S11-T1: Cast rune at specific target (from targeting mode)
+  const castRuneAtTarget = (targetEnemyUid: string) => {
+    if (!targetingRuneId) return;
+
+    const runeId = targetingRuneId;
+    runeTargetingMode = false;
+    targetingRuneId = null;
+    const def = RuneRegistry.getRune(runeId);
+    if (!def) return;
+
+    const now = Date.now();
+    if (now - lastRuneCastAt < 1000) {
+      playerState.emit("message", t_game("msg_rune_cooldown_active"));
+      return;
+    }
+
+    const targetEnemy = enemies.get(targetEnemyUid);
+    if (!targetEnemy || targetEnemy.isDead) return;
+
+    lastRuneCastAt = now;
+
+    // Build projectile mesh (same as castRune3d)
+    const hexColor = def.effect3d?.color ?? "#ff5500";
+    const projMat = new StandardMaterial("rune_proj_mat_" + now, scene);
+    projMat.emissiveColor = Color3.FromHexString(hexColor);
+    projMat.disableLighting = true;
+
+    const proj = MeshBuilder.CreateSphere(
+      "rune_proj_" + now,
+      { diameter: 0.18, segments: 4 },
+      scene,
+    );
+    proj.material = projMat;
+    proj.position = player.position.clone();
+    proj.position.y += 0.3;
+
+    const speed = def.effect3d?.speed ?? 14;
+    const impactRadius = def.effect3d?.radius ?? 1.0;
+
+    // Animate projectile
+    const finalTarget = targetEnemy;
+    const removeObs = scene.onBeforeRenderObservable.add(() => {
+      const dt = scene.getEngine().getDeltaTime() / 1000;
+      const toTarget = finalTarget.worldPos.subtract(proj.position);
+      const dist = toTarget.length();
+      if (dist < 0.2) {
+        // Impact: apply damage
+        const playerInt = playerState.getIntelligenceData().level;
+        const dmg = RuneRegistry.calculateDamage(
+          runeId,
+          playerState.getLevel(),
+          playerInt,
+        );
+
+        const damage = Math.max(
+          1,
+          dmg.min + Math.floor(Math.random() * (dmg.max - dmg.min + 1)),
+        );
+        finalTarget.health = Math.max(0, finalTarget.health - damage);
+        finalTarget.isProvoked = true;
+        playerState.emit("floatingText", {
+          x: finalTarget.worldPos.x,
+          y: finalTarget.worldPos.y,
+          z: finalTarget.worldPos.z,
+          damage: -damage,
+          isCritical: false,
+        });
+
+        // Impact flash
+        const flashMat = new StandardMaterial("rune_flash_" + now, scene);
+        flashMat.emissiveColor = Color3.FromHexString(hexColor);
+        flashMat.wireframe = true;
+        const flash = MeshBuilder.CreateSphere(
+          "rune_flash_mesh_" + now,
+          { diameter: impactRadius * 2, segments: 4 },
+          scene,
+        );
+        flash.material = flashMat;
+        flash.position = finalTarget.worldPos.clone();
+        let flashAge = 0;
+        const flashObs = scene.onBeforeRenderObservable.add(() => {
+          flashAge += scene.getEngine().getDeltaTime() / 1000;
+          flash.scaling.setAll(1 + flashAge * 4);
+          const alpha = Math.max(0, 1 - flashAge / 0.3);
+          flashMat.emissiveColor = Color3.FromHexString(hexColor).scale(alpha);
+          if (flashAge > 0.3) {
+            flash.dispose();
+            flashMat.dispose();
+            scene.onBeforeRenderObservable.remove(flashObs);
+          }
+        });
+
+        // Remove rune from inventory
+        const rune = playerState.getEnchantedRunes().find((r) => r.runeId === runeId);
+        if (rune && rune.count > 0) {
+          rune.count--;
+        }
+        playerState.emit("runesUpdated");
+
+        proj.dispose();
+        projMat.dispose();
+        scene.onBeforeRenderObservable.remove(removeObs);
+      } else {
+        const step = speed * dt;
+        proj.position.addInPlace(
+          toTarget.normalize().scale(Math.min(step, dist)),
+        );
+      }
+    });
+
+    playerState.emit("runeCasted");
+    playerState.log("action_cast_rune", { runeId }, "#ff8800");
+  };
+
   const onKeyDown = (event: KeyboardEvent) => {
     void ensureAudioReady();
 
@@ -2524,6 +2790,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   playerState.on("dropItem", handleDropItem);
   playerState.on("requestPickup", handleRequestPickup);
   playerState.on("spawnDroppedItem", addDroppedItemFromEvent);
+  // S11-T1: listen for rune targeting from menu
+  playerState.on("prepareRuneCast", (runeId: string) => {
+    runeTargetingMode = true;
+    targetingRuneId = runeId;
+    playerState.emit("uiNotification", {
+      type: "info",
+      message: t_game("msg_select_target"),
+    });
+  });
+  playerState.on("cancelRuneCast", () => {
+    runeTargetingMode = false;
+    targetingRuneId = null;
+  });
   // S8-T2: emit initial rune slot state so React HUD can show slots on load
   dispatchRuneSlotUpdate();
 
@@ -2544,6 +2823,39 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     const isRightClick = pointerInfo.event.button === 2;
     const isLeftClick = pointerInfo.event.button === 0;
+
+    // S11-T1: Handle rune targeting mode (Opção A parity)
+    if (runeTargetingMode && targetingRuneId && isLeftClick) {
+      let pickResult;
+      if (isFirstPerson) {
+        const cx = engine.getRenderWidth() / 2;
+        const cy = engine.getRenderHeight() / 2;
+        pickResult = scene.pick(cx, cy);
+      } else {
+        pickResult = scene.pick(scene.pointerX, scene.pointerY);
+      }
+
+      let targetEnemy: SliceEnemy | null = null;
+      let currentMesh: any = pickResult?.pickedMesh;
+      while (currentMesh) {
+        const metadata = currentMesh.metadata as
+          | { sliceEnemyUid?: string }
+          | undefined;
+        if (metadata?.sliceEnemyUid) {
+          targetEnemy = enemies.get(metadata.sliceEnemyUid) || null;
+          break;
+        }
+        currentMesh = currentMesh.parent;
+      }
+
+      if (targetEnemy && !targetEnemy.isDead) {
+        // Cast rune at target
+        castRuneAtTarget(targetEnemy.uid);
+      } else {
+        playerState.emit("message", t_game("msg_target_obstructed"));
+      }
+      return;
+    }
 
     if (isRightClick) {
       pendingStairInteract = true;

@@ -1,41 +1,30 @@
 ﻿{
-  "updatedAt": "2026-04-21T20:00:00Z",
-  "task": "S10-T2: Paridade formula de defesa/dano 3D vs 2D em createDebugSliceScene.ts",
+  "updatedAt": "2026-04-21T23:00:00Z",
+  "task": "Sprint 11 FECHADA — SPRINT_STATE.json atualizado e commit preparado",
   "contractsRead": [
-    "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
-    "docs/contracts/BATTLE_SYSTEM_CONTRACT.md",
     "docs/contracts/UI_DESIGN_CONTRACT.md",
-    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
-    "docs/contracts/PLAYER_STATE_CONTRACT.md",
-    "docs/contracts/SAVE_SYSTEM_CONTRACT.md",
-    "docs/contracts/LOCALIZATION_CONTRACT.md"
+    "docs/contracts/LOCALIZATION_CONTRACT.md",
+    "docs/contracts/BATTLE_SYSTEM_CONTRACT.md",
+    "docs/contracts/PLAYER_STATE_CONTRACT.md"
   ],
-  "phaseStatus": "In progress",
-  "understanding": "Registrar no backlog: (1) paridade de notificacao de EXP no 3D igual 2D (toast exp + barra/progresso visivel), (2) nova direcao de arquitetura top-down por camadas com ocultacao suave de andares superiores e possivel descarte de memoria quando nao relevantes.",
-  "riskConflict": "Diretriz confirmada e propagada para a documentacao canonica: top-down por camadas e a unica direcao de produto; modos alternativos permanecem apenas para debug interno.",
-  "objectiveQuestion": "Respondida: manter outros modos de visao apenas para debug interno durante a transicao; produto e mapas devem ser concebidos somente para top-down.",
+  "understanding": "Replicar fluxo 2D em 3D: (1) Criar menu Grimório window em React, (2) Selecionar runa emite prepareRuneCast, (3) 3D entra em targeting mode (mostra reticle), (4) Click alvo lança runa com visuals 3D. Sem automático Q key até selection — parity flow completo.",
+  "riskConflict": "Precisar criar novo window component + integrar targeting com pointerObserver 3D + emitir eventos corretos PlayerState. UI text deve usar chaves de tradução (LOCALIZATION_CONTRACT).",
+  "objectiveQuestion": "Confirmado usuario: Opção A (true parity 2D flow).",
   "documentationIndexChecked": true,
   "impactedModules": [
     "global-workflow",
     "architecture-map",
     "perspective",
-    "map-bms"
+    "player-state",
+    "combat",
+    "ui-hud",
+    "localization"
   ],
   "docsRead": [
-    "docs/PROJECT_DOCUMENTATION_INDEX.md",
-    "docs/PROJECT_DOCUMENTATION_INDEX.json",
-    "docs/AI_RUNBOOK.md",
-    "docs/VALIDATION_MATRIX.md",
-    "docs/ARCHITECTURE_MAP.md",
-    "docs/ARCHITECTURE_OVERVIEW.md",
-    "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
-    "docs/PERSPECTIVE_MODE_MASTER_PLAN.md",
-    "docs/SYSTEM_BMS.md",
-    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
-    "docs/contracts/MAP_SYSTEM_CONTRACT.md",
-    "docs/SPRINT_MASTER_PLAN.md",
-    "docs/SPRINT_STATE.json"
+    "docs/contracts/UI_DESIGN_CONTRACT.md",
+    "docs/contracts/LOCALIZATION_CONTRACT.md",
+    "docs/contracts/BATTLE_SYSTEM_CONTRACT.md"
   ],
   "docsCoverageStatus": "covered",
   "divergenceDetected": false,
@@ -43,6 +32,6 @@
   "docUpdatesRequired": [],
   "docUpdatesCompleted": true,
   "validationResults": {
-    "pending": false
+    "pending": true
   }
 }

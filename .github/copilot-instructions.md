@@ -8,18 +8,19 @@ Before writing or modifying any code, you MUST:
 2. Read the corresponding contract file(s) listed for that domain.
 3. If you have not read the relevant contract, **refuse to implement and ask for confirmation first**.
 
-| Domain                                                                | Contract file(s) to read                                                              |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Map rendering, tiles, BMS, binary levels, LevelRenderer, TileRegistry | `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/SYSTEM_BMS.md`                         |
-| 3D perspective, projection, volumetric walls, PerspectiveProjection   | `docs/contracts/PERSPECTIVE_MODE_CONTRACT.md`, `docs/PERSPECTIVE_MODE_MASTER_PLAN.md` |
-| Level transitions, stairs, holes, TransitionSystem                    | `docs/contracts/MAP_SYSTEM_CONTRACT.md`                                               |
-| Player state, stats, inventory, equipment                             | `docs/contracts/PLAYER_STATE_CONTRACT.md`                                             |
-| Save/load, SaveSystem, persistence                                    | `docs/contracts/SAVE_SYSTEM_CONTRACT.md`                                              |
-| UI components, HUD, windows, React overlays                           | `docs/contracts/UI_DESIGN_CONTRACT.md`                                                |
-| Any player-facing text, labels, notifications                         | `docs/contracts/LOCALIZATION_CONTRACT.md`                                             |
-| Combat, BattleSystem, damage, XP                                      | `docs/contracts/BATTLE_SYSTEM_CONTRACT.md`                                            |
-| Benchmark, smoke test, smoke_test.json, generate-smoke-map.js         | `docs/contracts/BENCHMARK_CONTRACT.md`                                                |
-| Cross-cutting / multiple domains                                      | All contracts above that apply                                                        |
+| Domain                                                                | Contract file(s) to read                                                                         |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **3D Slice Runtime, HUD, FloatingText, Audio integration**            | **`docs/THREE_D_INTEGRATION_BLUEPRINT.md` (CLÁUSULA PÉTREA — ler ANTES de qualquer mudança 3D)** |
+| Map rendering, tiles, BMS, binary levels, LevelRenderer, TileRegistry | `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/SYSTEM_BMS.md`                                    |
+| 3D perspective, projection, volumetric walls, PerspectiveProjection   | `docs/contracts/PERSPECTIVE_MODE_CONTRACT.md`, `docs/PERSPECTIVE_MODE_MASTER_PLAN.md`            |
+| Level transitions, stairs, holes, TransitionSystem                    | `docs/contracts/MAP_SYSTEM_CONTRACT.md`                                                          |
+| Player state, stats, inventory, equipment                             | `docs/contracts/PLAYER_STATE_CONTRACT.md`                                                        |
+| Save/load, SaveSystem, persistence                                    | `docs/contracts/SAVE_SYSTEM_CONTRACT.md`                                                         |
+| UI components, HUD, windows, React overlays                           | `docs/contracts/UI_DESIGN_CONTRACT.md`                                                           |
+| Any player-facing text, labels, notifications                         | `docs/contracts/LOCALIZATION_CONTRACT.md`                                                        |
+| Combat, BattleSystem, damage, XP                                      | `docs/contracts/BATTLE_SYSTEM_CONTRACT.md`                                                       |
+| Benchmark, smoke test, smoke_test.json, generate-smoke-map.js         | `docs/contracts/BENCHMARK_CONTRACT.md`                                                           |
+| Cross-cutting / multiple domains                                      | All contracts above that apply                                                                   |
 
 After reading, state: "Li o contrato X. A restrição relevante para esta tarefa é Y."
 
@@ -58,41 +59,17 @@ Required fields in this file:
 - `riskConflict`
 - `objectiveQuestion`
 
-Additional required fields for documentation control:
-
-- `documentationIndexChecked` (boolean)
-- `impactedModules` (non-empty array; module IDs from `docs/PROJECT_DOCUMENTATION_INDEX.json`)
-- `docsRead` (non-empty array)
-- `docsCoverageStatus` (`covered` | `missing` | `divergent`)
-- `divergenceDetected` (boolean)
-- `divergenceNotes` (string; mandatory when divergenceDetected=true)
-- `docUpdatesRequired` (array)
-- `docUpdatesCompleted` (boolean)
-
 Enforcement:
 
 - Workspace hook config: `.github/hooks/pretool-gate.json`
 - Gate script: `scripts/copilot-pretool-gate.js`
 - If checklist is missing/incomplete/stale, tool permission must be `ask` and implementation must pause until checklist is refreshed.
 
-Documentation-first enforcement:
+Checklist refresh triggers (mandatory):
 
-- If `docsCoverageStatus` is `missing` or `divergent`, implementation MUST pause.
-- In these cases, documentation must be updated first and `docUpdatesCompleted` must be `true` before code changes continue.
-
-## MANDATORY: Documentation Index Workflow
-
-Source of truth index:
-
-- `docs/PROJECT_DOCUMENTATION_INDEX.md`
-- `docs/PROJECT_DOCUMENTATION_INDEX.json` (machine-readable enforcement)
-
-Before any implementation:
-
-1. Check the impacted domain in the documentation index.
-2. Read the listed canonical docs/contracts for that domain.
-3. Record documentation coverage in checklist (`covered`, `missing`, or `divergent`).
-4. If missing/divergent, update documentation before code changes.
+- If observed runtime behavior diverges from expected contract behavior (ex: 2D vs 3D parity gaps), refresh checklist before implementation.
+- If canonical docs/indices were changed in the current or previous task, refresh checklist before next implementation task.
+- If task scope changes mid-execution (new impacted modules or contracts), refresh checklist immediately and continue only after update.
 
 ---
 
@@ -140,13 +117,13 @@ Before any implementation:
 
 ## Validation commands by impact area
 
-| Change area               | Required commands                                             |
-| ------------------------- | ------------------------------------------------------------- |
-| Gameplay, scenes, systems | `npm run build`, `npm run benchmark:e2e`                      |
-| Map / BMS                 | `npm run check:bms`, `npm run build`, `npm run benchmark:e2e` |
-| UI text / HUD             | `npm run check:i18n-ui`, `npm run build`                      |
-| Save/load                 | `npm run build`, `npm run benchmark:e2e`                      |
-| Benchmark harness         | `npm run build`, `npm run benchmark:e2e`                      |
+| Change area               | Required commands                                                      |
+| ------------------------- | ---------------------------------------------------------------------- |
+| Gameplay, scenes, systems | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`             |
+| Map / BMS                 | `npm run check:bms`, `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e` |
+| UI text / HUD             | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`             |
+| Save/load                 | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`             |
+| Benchmark harness         | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`             |
 
 ---
 

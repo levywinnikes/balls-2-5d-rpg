@@ -6,6 +6,7 @@ import { ContainerContent } from "../../windows/ContainerWindow";
 import { AltarContent } from "../../windows/AltarWindow";
 import { QuestLogContent } from "../../windows/QuestLogWindow";
 import { CheatsContent } from "../../windows/CheatsWindow";
+import { GrimiorioContent } from "../../windows/GrimiorioWindow";
 
 // Registry Type
 export type WindowContentComponent = React.FC<any>;
@@ -41,5 +42,6 @@ WindowRegistry.register("questLog", QuestLogContent, "Quest Log", 700, 500);
 WindowRegistry.register("container", ContainerContent, "Container", 300, 200);
 WindowRegistry.register("altar", AltarContent, "Altar", 440, 420);
 WindowRegistry.register("cheats", CheatsContent, "Cheats", 380, 580);
+WindowRegistry.register("grimorio", GrimiorioContent, "Grimorio", 400, 500);
 
 export { WindowRegistry };
