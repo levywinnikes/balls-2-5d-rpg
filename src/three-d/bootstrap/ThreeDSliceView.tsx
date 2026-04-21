@@ -20,6 +20,9 @@ export function ThreeDSliceView() {
   // S8-T2: rune hotbar HUD state
   const [runeSlots, setRuneSlots] = useState<string[]>(["fire_burst_rune", "", ""]);
   const [activeRuneSlot, setActiveRuneSlot] = useState(0);
+  // S9-T1: damage vignette flash
+  const [vignetteActive, setVignetteActive] = useState(false);
+  const vignetteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toggleWindow, closeWindow, isWindowOpen, openWindow } =
     useWindowSystem();
 
@@ -48,10 +51,46 @@ export function ThreeDSliceView() {
     };
     document.addEventListener("slice3d:runeSlotChanged", handleRuneSlot);
 
+    // S9-T1: listen for player hit → trigger vignette flash
+    const handlePlayerHit = () => {
+      setVignetteActive(true);
+      if (vignetteTimerRef.current) clearTimeout(vignetteTimerRef.current);
+      vignetteTimerRef.current = setTimeout(() => setVignetteActive(false), 400);
+    };
+    document.addEventListener("slice3d:playerHit", handlePlayerHit);
+
+    // Bridge classic HUD/UIContext windows to WindowSystem ids used by ThreeDSliceView.
+    const handleUiWindowToggled = (e: Event) => {
+      const detail = (e as CustomEvent<{ key: string; isOpen: boolean }>).detail;
+      const windowIdMap: Record<string, string> = {
+        heroMenu: "hero_menu",
+        settings: "settings",
+        expandedMap: "expandedMap",
+        questLog: "questLog",
+        cheats: "cheats",
+        // Temporary routing until Grimorio and SystemMenu are registered in WindowRegistry for 3D.
+        grimorio: "hero_menu",
+        systemMenu: "settings",
+      };
+
+      const mappedId = windowIdMap[detail.key];
+      if (!mappedId) return;
+
+      if (detail.isOpen) {
+        openWindow(mappedId);
+      } else {
+        closeWindow(mappedId);
+      }
+    };
+    document.addEventListener("ui:windowToggled", handleUiWindowToggled);
+
     return () => {
       window.removeEventListener("resize", handleResize);
       document.removeEventListener("slice3d:cameraModeChanged", handleCameraMode);
       document.removeEventListener("slice3d:runeSlotChanged", handleRuneSlot);
+      document.removeEventListener("slice3d:playerHit", handlePlayerHit);
+      document.removeEventListener("ui:windowToggled", handleUiWindowToggled);
+      if (vignetteTimerRef.current) clearTimeout(vignetteTimerRef.current);
       setRuntimeBridge(null);
       runtime.dispose();
     };
@@ -131,6 +170,20 @@ export function ThreeDSliceView() {
   return (
     <div className="relative w-screen h-screen bg-[#0b0f17] overflow-hidden">
       <canvas ref={canvasRef} className="w-full h-full block outline-none" />
+      {/* S9-T1: damage vignette flash — red radial border when player takes damage */}
+      {vignetteActive && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background: "radial-gradient(ellipse at center, transparent 55%, rgba(220,0,0,0.55) 100%)",
+            animation: "none",
+            opacity: 1,
+            transition: "opacity 0.4s ease-out",
+          }}
+        />
+      )}
       {/* S7-FP1: crosshair — only visible in first-person mode */}
       {isFP && (
         <div

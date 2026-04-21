@@ -264,6 +264,14 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({
       setWindows((prev) => {
         const isOpen = !prev[key];
         if (isOpen) bringToFront(key);
+
+        // Bridge event used by 3D runtime UI (WindowSystem) to mirror HUD toolbar toggles.
+        document.dispatchEvent(
+          new CustomEvent("ui:windowToggled", {
+            detail: { key, isOpen },
+          }),
+        );
+
         return { ...prev, [key]: isOpen };
       });
     },

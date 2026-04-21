@@ -1,6 +1,6 @@
 ﻿{
-  "updatedAt": "2026-04-21T12:00:00Z",
-  "task": "Sprint 8: Runas simples v1 + hotfix ratos flutuando + commit telhado cidade_suspensa",
+  "updatedAt": "2026-04-21T14:00:00Z",
+  "task": "Sprint 9: Feedback visual de combate FP — damage HUD coração, floating dmg world→screen, FP aim interaction parity",
   "contractsRead": [
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",

@@ -94,3 +94,27 @@ Criterios de aceite Sprint 1:
 2. Picos de frame reduzidos em deslocamento rapido.
 3. Nenhuma regressao de renderizacao de mapa ou colisao.
 4. Build compilando.
+
+## Backlog Consolidado (Issues 2026-04-21)
+
+Objetivo: garantir rastreabilidade de todas as issues reportadas pelo usuario durante os testes de paridade 2D->3D.
+
+Sprint 9 (interacao e leitura de cena no 3D):
+
+1. Escadas/buracos do esgoto: transicao somente por clique direito quando o heroi estiver proximo (remover loop automatico de sobe/desce).
+2. Ocultar entidades de andares superiores quando o andar acima estiver oculto para o jogador atual.
+3. Corrigir menus de acao rapida no modo 3D que estao sem resposta (itens destacados no screenshot).
+
+Sprint 10 (paridade de combate/sobrevivencia):
+
+1. Sistema de comida no 3D exatamente igual ao 2D.
+2. Formula de defesa no 3D igual ao 2D: composicao de equipamento + reflexo conforme implementacao canonica.
+3. Tocha equipavel em mao ou escudo; quando no escudo nao soma ataque.
+4. Ataque desarmado ajustado para faixa 1..5 e alcance levemente menor que espada de madeira.
+
+Sprint 11 (paridade de magia e feedback visual):
+
+1. Grimorio no 3D com mesmo fluxo do 2D (menu proprio, selecao de runa e disparo no inimigo).
+2. Altar de runas com mesmo fluxo de criacao do 2D.
+3. Sistema de sangue e overdamage igual ao 2D.
+4. Adaptacao temporaria de sprites 2D para heroi/inimigos no 3D via billboarding, ate substituicao artistica definitiva.

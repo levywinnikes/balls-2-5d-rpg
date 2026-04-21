@@ -99,6 +99,7 @@ type EnemySpawnData = {
 type SliceEnemy = {
   uid: string;
   spawnKey: string;  // deterministic key for persistence (level_type_index)
+  level: string;
   enemyType: string;
   definition: EnemyDefinition;
   meshRoot: TransformNode;
@@ -1256,24 +1257,29 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
   };
 
-  const spawnEnemy = (spawn: EnemySpawnData, index: number, spawnKey: string) => {
+  const spawnEnemy = (
+    spawn: EnemySpawnData,
+    index: number,
+    spawnKey: string,
+    level: string,
+  ) => {
     const definition = EnemyRegistry.getEnemyDefinition(spawn.enemyType);
     if (!definition) {
       return;
     }
 
     // Skip enemies already killed in a previous visit to this level
-    if (playerState.isEnemy3dDead(activeLevel, spawnKey)) {
+    if (playerState.isEnemy3dDead(level, spawnKey)) {
       return;
     }
 
-    const uid = `${activeLevel}_${spawn.enemyType}_${index}_${Date.now().toString(36)}`;
+    const uid = `${level}_${spawn.enemyType}_${index}_${Date.now().toString(36)}`;
     const meshRoot = createEnemyVisual(
       scene,
       spawn.enemyType,
       `slice-enemy-${uid}`,
     );
-    const spawnLevelY = levelToWorldY(activeLevel);
+    const spawnLevelY = levelToWorldY(level);
     const worldPos = new Vector3(
       worldToSliceCoord(spawn.x),
       spawnLevelY,
@@ -1285,6 +1291,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const instance: SliceEnemy = {
       uid,
       spawnKey,
+      level,
       enemyType: spawn.enemyType,
       definition,
       meshRoot,
@@ -1301,6 +1308,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       isProvoked: false,
     };
 
+    meshRoot.setEnabled(level === activeLevel);
     enemies.set(uid, instance);
   };
 
@@ -1312,7 +1320,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const spawns = await getEnemySpawnsForLevel(level);
     spawns.forEach((spawn, index) => {
       const spawnKey = `${level}_${spawn.enemyType}_${index}`;
-      spawnEnemy(spawn, index, spawnKey);
+      spawnEnemy(spawn, index, spawnKey, level);
     });
     seededEnemyLevels.add(level);
   };
@@ -1861,6 +1869,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const now = Date.now();
 
     enemies.forEach((enemy) => {
+      const onActiveLevel = enemy.level === activeLevel;
+      enemy.meshRoot.setEnabled(onActiveLevel && !enemy.isDead);
+
+      if (!onActiveLevel) {
+        if (selectedEnemyUid === enemy.uid) {
+          setSelectedEnemy(null);
+        }
+        return;
+      }
+
       if (enemy.isDead) {
         return;
       }
@@ -2133,9 +2151,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let stairAnimDuration = 2.0;     // total time to climb/descend stairs
   let stairAnimStartY = 0;
   let stairAnimTargetY = 0;
-    const CHUNK_UPDATE_INTERVAL = 0.2;
+  const CHUNK_UPDATE_INTERVAL = 0.2;
   let stairAnimTargetLevel = "0";  // target level to switch to after animation
   let isStairAnimActive = false;   // true only while a stair transition is playing
+  let pendingStairInteract = false; // set by right-click; consumed by stair transition gate
 
   const requestPointerLockIfPossible = () => {
     if (!isFirstPerson || document.pointerLockElement === canvas) {
@@ -2178,6 +2197,51 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     document.exitPointerLock?.();
     scene.activeCamera = camera;
     camera.attachControl(canvas, true);
+  };
+
+  const findNearbyStairTarget = (
+    maxDistanceUnits = 1.15,
+  ): { targetLevel: string } | null => {
+    const tileX = Math.floor(player.position.x);
+    const tileZ = Math.floor(player.position.z);
+
+    let best: { targetLevel: string; distance: number } | null = null;
+
+    for (let dz = -1; dz <= 1; dz += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const x = tileX + dx;
+        const z = tileZ + dz;
+        const symbol = getMapTileAt(activeLevel, x, z);
+        const def = symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined;
+        const stairDir = (def as any)?.stairDir as string | undefined;
+        if (!stairDir) {
+          continue;
+        }
+
+        const centerX = x + 0.5;
+        const centerZ = z + 0.5;
+        const dxToStair = player.position.x - centerX;
+        const dzToStair = player.position.z - centerZ;
+        const distance = Math.sqrt(dxToStair * dxToStair + dzToStair * dzToStair);
+
+        if (distance > maxDistanceUnits) {
+          continue;
+        }
+
+        const currentNum = parseLevelNumber(activeLevel);
+        const targetNum = stairDir === "up" ? currentNum + 1 : currentNum - 1;
+        const targetLevel = String(targetNum);
+        if (!mapDataCache?.levels?.[targetLevel]) {
+          continue;
+        }
+
+        if (!best || distance < best.distance) {
+          best = { targetLevel, distance };
+        }
+      }
+    }
+
+    return best ? { targetLevel: best.targetLevel } : null;
   };
 
   // Activate first-person mode if URL contains ?fp=1
@@ -2388,6 +2452,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const isRightClick = pointerInfo.event.button === 2;
     const isLeftClick = pointerInfo.event.button === 0;
 
+    if (isRightClick) {
+      pendingStairInteract = true;
+    }
+
     // S9-T3: in FP mode both left and right click pick from screen center (crosshair aim)
     let pickResult;
     if (isFirstPerson) {
@@ -2482,26 +2550,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     // ── Stair / level transition check ──────────────────────────────────────
     if (stairCooldown > 0) {
       stairCooldown -= deltaSeconds;
-    } else {
-      const tileX = Math.floor(player.position.x);
-      const tileZ = Math.floor(player.position.z);
-      const underSym = getMapTileAt(activeLevel, tileX, tileZ);
-      const underDef = underSym ? mapDataCache?.tileDefinitions?.[underSym] : undefined;
-      const stairDir = (underDef as any)?.stairDir as string | undefined;
+    }
 
-      if (stairDir && !isStairAnimActive) {
-        const currentNum = parseLevelNumber(activeLevel);
-        const targetNum  = stairDir === "up" ? currentNum + 1 : currentNum - 1;
-        const targetKey  = String(targetNum);
+    if (pendingStairInteract && stairCooldown <= 0 && !isStairAnimActive) {
+      const stairTarget = findNearbyStairTarget();
+      pendingStairInteract = false;
 
-        if (mapDataCache?.levels?.[targetKey]) {
-          stairCooldown = stairAnimDuration + 0.5;
-          stairAnimTimer = 0;
-          stairAnimStartY = player.position.y;
-          stairAnimTargetLevel = targetKey;
-          stairAnimTargetY = levelToWorldY(targetKey) + PLAYER_GROUND_OFFSET;
-          isStairAnimActive = true;
-        }
+      if (stairTarget) {
+        stairCooldown = stairAnimDuration + 0.5;
+        stairAnimTimer = 0;
+        stairAnimStartY = player.position.y;
+        stairAnimTargetLevel = stairTarget.targetLevel;
+        stairAnimTargetY = levelToWorldY(stairTarget.targetLevel) + PLAYER_GROUND_OFFSET;
+        isStairAnimActive = true;
       }
     }
 

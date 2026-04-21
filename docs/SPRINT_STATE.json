@@ -1,13 +1,13 @@
 ﻿{
   "version": 1,
   "objective": "Grande versao funcional de RPG mundo aberto continuo, leve, sem loadings de tela e sem teleporte perceptivel",
-  "currentSprint": 9,
-  "sprintName": "Feedback visual de combate FP",
+  "currentSprint": 10,
+  "sprintName": "Paridade combate/sobrevivencia 2D->3D",
   "status": "not-started",
   "startedAt": "2026-04-21",
-  "lastUpdatedAt": "2026-04-21T13:00:00Z",
-  "lastCompletedTask": "Sprint 8 FECHADA (tsc zero erros, 14/14 benchmark): Runas simples v1 no modo 3D — slots equipados, projetil 3D, hotbar HUD",
-  "nextTask": "Iniciar Sprint 9: S7-FP2 (damage HUD coração), S7-FP3 (floating dmg world→screen), S7-FP6 (FP interaction parity)",
+  "lastUpdatedAt": "2026-04-21T16:00:00Z",
+  "lastCompletedTask": "Sprint 9 FECHADA (tsc zero erros, 14/14 benchmark): damage vignette FP, FP raycast interaction parity, escadas por clique direito, inimigos ocultos em andares inativos, menus 3D via event bridge",
+  "nextTask": "Iniciar Sprint 10: paridade comida, formula defesa, tocha no escudo nao soma ataque, ataque desarmado 1-5",
   "owner": "GitHub Copilot",
   "completedSprints": [
     { "sprint": 1, "name": "Streaming continuo base", "completedAt": "2026-04-20", "deliverables": ["CHUNK_BUILD_BUDGET_PER_TICK=10","Nearest-first sort (Chebyshev)","CHUNK_UNLOAD_BUDGET_PER_TICK=8 farthest-first","window.__slice3dChunkStreaming metrics"] },
@@ -17,20 +17,32 @@
     { "sprint": 5, "name": "Esgoto v1 com ratos e mini-boss", "completedAt": "2026-04-21", "deliverables": ["scripts/generate-sewer-map.js (simplex-noise)","public/maps/esgoto_v1.json + _0.bin + _m1.bin (120x120 2 niveis)","Tuneis organicos simplex-noise canal de agua 7 escadas","Ratos tipo A/B e mini-boss skeleton no nivel -1"] },
     { "sprint": 6, "name": "Paridade de combate 2D->3D (nucleo)", "completedAt": "2026-04-21", "deliverables": ["Formulas ja usavam BattleSystem.ts canonico - sem regressao","Sprint incorporada ao Sprint 7"] },
     { "sprint": 7, "name": "Feedback de combate completo + FP polish", "completedAt": "2026-04-21", "deliverables": ["S7-FP1: Crosshair branco em cruz no modo first-person (ThreeDSliceView.tsx)","S7-FP4: Inimigo selecionado pisca em vermelho emissive pulse sine 1.8Hz - torus ring removido","S7-FP5: Camera FP height de 0.72 para 0.55 (ref Morrowind/Daggerfall)","CustomEvent slice3d:cameraModeChanged para comunicacao runtime->React","tsc --noEmit zero erros"] },
-    { "sprint": 8, "name": "Runas simples v1", "completedAt": "2026-04-21", "deliverables": ["S8-T1: RuneDefinition.effect3d (color, radius, speed) adicionado; fire_burst_rune + star_rune populados","S8-T2: castRune3d() — projetil esférico emissive voa ao alvo, impacto com flash wireframe; tecla Q lança, R cicla slot","S8-T3: PlayerState.equippedRuneSlots[3] + getEquippedRuneSlots/setEquippedRuneSlot; exportSnapshot/loadState com migração","S8-T4: ThreeDSliceView rune hotbar HUD (3 slots, slot ativo destacado); tsc zero erros; 14/14 benchmark","Hotfix: advanceEnemyPath Y=0 → enemy.worldPos.y (ratos já não flutuam em níveis subterrâneos)"] }
+    { "sprint": 8, "name": "Runas simples v1", "completedAt": "2026-04-21", "deliverables": ["S8-T1: RuneDefinition.effect3d (color, radius, speed) adicionado; fire_burst_rune + star_rune populados","S8-T2: castRune3d() — projetil esférico emissive voa ao alvo, impacto com flash wireframe; tecla Q lança, R cicla slot","S8-T3: PlayerState.equippedRuneSlots[3] + getEquippedRuneSlots/setEquippedRuneSlot; exportSnapshot/loadState com migração","S8-T4: ThreeDSliceView rune hotbar HUD (3 slots, slot ativo destacado); tsc zero erros; 14/14 benchmark","Hotfix: advanceEnemyPath Y=0 → enemy.worldPos.y (ratos já não flutuam em níveis subterrâneos)"] },
+    { "sprint": 9, "name": "Interacao FP + visibilidade andares + menus 3D", "completedAt": "2026-04-21", "deliverables": ["S9-T1: slice3d:playerHit CustomEvent + vignette vermelho radial 400ms no ThreeDSliceView","S9-T2: ThreeDFloatingText usa scene.activeCamera — floating dmg visivel em FP confirmado","S9-T3: FP raycast center-screen para select/ataque/loot/interacao — pointerObserver usa cx,cy em FP","Camera top-down padrao: beta=0.18 radius=14 alpha=-pi/2 (commit 160defc)","S9-T4: Escadas apenas por clique direito perto (findNearbyStairTarget 1.15u); pendingStairInteract flag; sem loop automatico","S9-T5: SliceEnemy.level field; spawnEnemy recebe level; meshRoot.setEnabled(level===activeLevel); updateEnemyAI oculta/pula inimigos de andares inativos","S9-T6: UIContext.toggleWindow despacha ui:windowToggled CustomEvent; ThreeDSliceView bridge: heroMenu/settings/expandedMap/questLog/cheats → openWindow/closeWindow","tsc zero erros; 14/14 benchmark"] }
   ],
   "progressNotes": [
-    "Sprints 1-8 fechadas. tsc --noEmit zero erros em todos.",
+    "Sprints 1-9 fechadas. tsc --noEmit zero erros em todos.",
     "npm run build pausado por performance - usando tsc --noEmit.",
     "simplex-noise ja estava instalado - reutilizado no generate-sewer-map.js.",
     "Hotfix telhado cidade_suspensa commit 81d3625.",
-    "Hotfix ratos flutuando: advanceEnemyPath target.y corrigido para enemy.worldPos.y."
+    "Hotfix ratos flutuando: advanceEnemyPath target.y corrigido para enemy.worldPos.y.",
+    "Sprint 9: todas issues do playtesting de interacao FP e visibilidade resolvidas."
   ],
   "sprintBacklog": [
-    { "id": "S9-T1", "title": "S7-FP2: Damage HUD coração anima quando jogador recebe hit", "status": "not-started" },
-    { "id": "S9-T2", "title": "S7-FP3: Floating damage numbers do inimigo visíveis no modo FP (world-to-screen)", "status": "not-started" },
-    { "id": "S9-T3", "title": "S7-FP6: FP aim interaction parity — raycast central seleciona, ataca, loota e interage", "status": "not-started" },
-    { "id": "S9-T4", "title": "tsc --noEmit zero erros + 14/14 benchmark", "status": "not-started" }
+    { "id": "S10-T1", "title": "Paridade de comida 2D->3D: hunger/consumo/efeitos exatamente iguais ao 2D", "status": "not-started" },
+    { "id": "S10-T2", "title": "Paridade de defesa 2D->3D: defesa final = arma + escudo + reflexo (mesma formula do 2D)", "status": "not-started" },
+    { "id": "S10-T3", "title": "Tocha: equipavel em mao ou escudo; no slot escudo nao pode somar ataque", "status": "not-started" },
+    { "id": "S10-T4", "title": "Ataque desarmado: minimo 1..5 e alcance levemente menor que espada de madeira", "status": "not-started" },
+    { "id": "S10-T5", "title": "tsc --noEmit zero erros + 14/14 benchmark", "status": "not-started" }
   ],
-  "futureBacklog": []
+  "futureBacklog": [
+    { "sprint": 10, "id": "S10-T1", "title": "Paridade de comida 2D->3D: hunger/consumo/efeitos exatamente iguais ao 2D", "status": "not-started" },
+    { "sprint": 10, "id": "S10-T2", "title": "Paridade de defesa 2D->3D: defesa final = arma + escudo + reflexo (mesma formula do 2D)", "status": "not-started" },
+    { "sprint": 10, "id": "S10-T3", "title": "Tocha: equipavel em mao ou escudo; no slot escudo nao pode somar ataque", "status": "not-started" },
+    { "sprint": 10, "id": "S10-T4", "title": "Ataque desarmado: minimo 1..5 e alcance levemente menor que espada de madeira", "status": "not-started" },
+    { "sprint": 11, "id": "S11-T1", "title": "Grimorio no 3D igual ao 2D: selecionar runa no menu proprio e disparar no inimigo", "status": "not-started" },
+    { "sprint": 11, "id": "S11-T2", "title": "Altar de runas no 3D com mesmo fluxo de criacao do 2D", "status": "not-started" },
+    { "sprint": 11, "id": "S11-T3", "title": "Sistema de sangue e overdamage igual ao 2D", "status": "not-started" },
+    { "sprint": 11, "id": "S11-T4", "title": "Adaptar sprites 2D de heroi/inimigos para render 3D (billboard temporario)", "status": "not-started" }
+  ]
 }
