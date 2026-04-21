@@ -162,18 +162,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const camera = new ArcRotateCamera(
     "slice-camera",
-    -Math.PI / 4,
-    1.08,
-    18,
+    -Math.PI / 2, // top-down: alpha = -90° (south-facing, irrelevant for straight-down)
+    0.18,        // top-down: beta near 0 = camera almost directly above
+    14,          // radius adjusted for top-down field of view
     new Vector3(0, 1.5, 0),
     scene,
   );
-  camera.lowerRadiusLimit = 18;
-  camera.upperRadiusLimit = 18;
-  camera.lowerBetaLimit = 1.08;
-  camera.upperBetaLimit = 1.08;
-  camera.lowerAlphaLimit = -Math.PI / 4;
-  camera.upperAlphaLimit = -Math.PI / 4;
+  camera.lowerRadiusLimit = 14;
+  camera.upperRadiusLimit = 14;
+  camera.lowerBetaLimit = 0.18;
+  camera.upperBetaLimit = 0.18;
+  camera.lowerAlphaLimit = -Math.PI / 2;
+  camera.upperAlphaLimit = -Math.PI / 2;
   camera.wheelPrecision = 1000000;
   camera.panningSensibility = 0;
   camera.attachControl(canvas, true);
@@ -1396,6 +1396,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       });
     }
 
+    // S9-T1: notify React HUD of player taking damage (vignette + heart flash)
+    document.dispatchEvent(
+      new CustomEvent("slice3d:playerHit", { detail: { damage } }),
+    );
+
     playerState.emit("floatingText", {
       x: player.position.x,
       y: player.position.y,
@@ -2380,11 +2385,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
-    if (pointerInfo.event.button !== 2) {
-      return;
+    const isRightClick = pointerInfo.event.button === 2;
+    const isLeftClick = pointerInfo.event.button === 0;
+
+    // S9-T3: in FP mode both left and right click pick from screen center (crosshair aim)
+    let pickResult;
+    if (isFirstPerson) {
+      if (!isLeftClick && !isRightClick) return;
+      const cx = engine.getRenderWidth() / 2;
+      const cy = engine.getRenderHeight() / 2;
+      pickResult = scene.pick(cx, cy);
+    } else {
+      if (!isRightClick) return;
+      pickResult = scene.pick(scene.pointerX, scene.pointerY);
     }
 
-    const pickResult = scene.pick(scene.pointerX, scene.pointerY);
     let enemyUid: string | undefined;
     let currentMesh: any = pickResult?.pickedMesh;
     while (currentMesh) {
@@ -2578,7 +2593,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     camera.setTarget(
       Vector3.Lerp(
         currentTarget,
-        new Vector3(player.position.x, 1.4, player.position.z),
+        new Vector3(player.position.x, player.position.y, player.position.z),
         0.12,
       ),
     );
