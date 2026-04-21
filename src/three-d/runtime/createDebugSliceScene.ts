@@ -1423,7 +1423,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const applyPlayerAttackToEnemy = (enemy: SliceEnemy) => {
     const equippedWeapon = playerState.getEquippedWeapon();
     const isFireAttack = equippedWeapon?.element === "fire";
-    const maxAttack = Math.max(1, Math.floor(playerState.getTotalAttack()));
+    // S10-T4: Unarmed (no weapon) → base roll 1..5, range slightly less than wooden sword.
+    const maxAttack = equippedWeapon
+      ? Math.max(1, Math.floor(playerState.getTotalAttack()))
+      : 5;
     const attackRoll = randomInt(1, maxAttack);
     const enemyDefense = Math.max(1, enemy.definition.defense || 1);
     const defenseRoll = randomInt(1, enemyDefense);
@@ -1567,14 +1570,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           magicId.toLowerCase().includes("fire"),
         ),
       );
-    const shieldDefense = Math.max(
-      0,
-      playerState.getEquippedShield()?.defense || 0,
-    );
-    const defenseRollMax = Math.max(
-      1,
-      Math.floor(shieldDefense + playerState.getDexterityLevel() * 0.3),
-    );
+    // S10-T2: Use full StatManager defense (shield + weapon def + level/reflex bonuses) — 2D parity.
+    const defenseRollMax = Math.max(1, playerState.getTotalDefense());
     const attackDamage = Math.max(1, enemy.definition.damage);
     const attackRoll = randomInt(1, attackDamage);
     const defenseRoll = randomInt(1, defenseRollMax);
@@ -2493,6 +2490,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     syncDroppedItems();
 
     const deltaSeconds = engine.getDeltaTime() / 1000;
+    // S10-T1: Parity with 2D — tick PlayerState for hunger decay, HP regen and buff timers.
+    playerState.update(performance.now(), engine.getDeltaTime());
 
     // Chunk streaming: update at most every CHUNK_UPDATE_INTERVAL seconds
     chunkUpdateTimer += deltaSeconds;

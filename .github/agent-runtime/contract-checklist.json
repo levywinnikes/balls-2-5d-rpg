@@ -1,6 +1,6 @@
 ﻿{
-  "updatedAt": "2026-04-21T14:00:00Z",
-  "task": "Sprint 9: Feedback visual de combate FP — damage HUD coração, floating dmg world→screen, FP aim interaction parity",
+  "updatedAt": "2026-04-21T17:00:00Z",
+  "task": "Sprint 10: Paridade combate/sobrevivencia 2D->3D — food tick, defense formula, torch slot, unarmed attack",
   "contractsRead": [
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
@@ -12,9 +12,9 @@
     "docs/contracts/LOCALIZATION_CONTRACT.md"
   ],
   "phaseStatus": "In progress",
-  "understanding": "Corrigir bug de movimento vertical indevido de inimigos no nivel subterraneo (Y drift para 0 durante chase). Registrar no sprint o uso de ferramenta externa para gerar biomas mais estruturados.",
-  "riskConflict": "Alterar path movement pode afetar lookAt e smoothness. Mitigacao: manter deslocamento em X/Z e fixar Y no spawnPos.y do inimigo para preservar o nivel.",
-  "objectiveQuestion": "Nenhuma pendencia bloqueante.",
+  "understanding": "S10-T1: playerState.update() nao chamado no 3D = sem hunger decay nem regen. S10-T2: defesa usa shieldDefense+dex*0.3 mas 2D usa getTotalDefense() via StatManager. S10-T3: StatManager adiciona def.damage para TODOS os slots, tocha no OFF_HAND some ataque. S10-T4: ataque desarmado deve ser 1..5.",
+  "riskConflict": "StatManager.ts mudanca para ataque apenas em MAIN_HAND pode quebrar items com damage em outros slots - verificar WeaponRegistry. getTotalDefense() usa StatManager que inclui nivel/reflexo - pode inflar demais a defesa se items ausentes.",
+  "objectiveQuestion": "Nenhuma pendencia bloqueante - todos os pontos sao bugs claros com solucao direta.",
   "documentationIndexChecked": true,
   "impactedModules": [
     "global-workflow",

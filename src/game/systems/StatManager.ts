@@ -796,8 +796,9 @@ export class StatManager {
           }
 
           // Weapon Attack (Generic "attack")
-          // Since Base is now 0, we treat Weapon Damage as a FLAT Modifier
-          if (statName === "attack" && def.damage) {
+          // S10-T3: Only MAIN_HAND contributes attack damage.
+          // OFF_HAND (shield slot) items like torch must NOT add to attack.
+          if (statName === "attack" && def.damage && slot === EquipmentSlot.MAIN_HAND) {
             modifiers.push({
               source: translatedName,
               attr: "attack",
