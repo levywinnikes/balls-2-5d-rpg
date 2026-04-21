@@ -1327,8 +1327,13 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (def && def.consumable && def.type === "food" && def.hungerValue) {
-          // Check Overflow
-          if (PlayerState.getInstance().getHunger() + def.hungerValue > 2000) {
+          const itemName =
+            t_game(`item_${def.id}` as any) || t_game("generic_item");
+          const didEat = PlayerState.getInstance().tryEatFood(
+            def.hungerValue,
+            t_game("msg_consumed_item").replace("{item}", itemName),
+          );
+          if (!didEat) {
             this.showFloatingText(
               worldX,
               worldY,
@@ -1337,7 +1342,6 @@ export default class GameScene extends Phaser.Scene {
             );
             return;
           }
-          PlayerState.getInstance().eatFood(def.hungerValue);
 
           // Stack Logic
           if (topItem.count > 1) {
@@ -3649,14 +3653,16 @@ export default class GameScene extends Phaser.Scene {
           const def = WeaponRegistry.getWeaponDefinition(item.weaponId);
           if (def && def.consumable && def.type === "food") {
             const val = def.hungerValue || 0;
-            if (PlayerState.getInstance().getHunger() + val > 2000) {
-              PlayerState.getInstance().emit("uiNotification", {
-                type: "warning",
-                message: t_game("msg_hunger_full"),
-              });
+            const itemName = def
+              ? t_game(`item_${def.id}` as any)
+              : t_game("generic_item");
+            const didEat = PlayerState.getInstance().tryEatFood(
+              val,
+              t_game("msg_consumed_item").replace("{item}", itemName),
+            );
+            if (!didEat) {
               return;
             }
-            PlayerState.getInstance().eatFood(val);
             if (item.count > 1) {
               item.count--;
               const pItems =
@@ -3665,16 +3671,6 @@ export default class GameScene extends Phaser.Scene {
                 );
               const pItem = pItems.find((i) => i.itemId === item.itemId);
               if (pItem) pItem.count = item.count;
-              const itemName = def
-                ? t_game(`item_${def.id}` as any)
-                : t_game("generic_item");
-              PlayerState.getInstance().emit("uiNotification", {
-                type: "info",
-                message: t_game("msg_consumed_item").replace(
-                  "{item}",
-                  itemName,
-                ),
-              });
             } else {
               PlayerState.getInstance().removePersistentDroppedItem(
                 this.currentLevel,

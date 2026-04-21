@@ -52,6 +52,8 @@
     { "sprint": 12, "id": "S12-T2", "title": "Ocultacao suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "not-started" },
     { "sprint": 12, "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima nao relevantes e recarregar ao sair da cobertura", "status": "not-started" },
     { "sprint": 12, "id": "S12-T4", "title": "Padronizar semantica de camadas dos mapas (ex: esgoto 0, cidade suspensa 1, telhados/andares superiores)", "status": "not-started" },
-    { "sprint": 12, "id": "S12-T5", "title": "Manter outros modos de visao apenas como debug interno durante a migracao; produto e mapas pensados somente para top-down", "status": "not-started" }
+    { "sprint": 12, "id": "S12-T5", "title": "Manter outros modos de visao apenas como debug interno durante a migracao; produto e mapas pensados somente para top-down", "status": "not-started" },
+    { "sprint": 12, "id": "S12-BUG1", "title": "[BUG] Minimap eixo Y invertido: mover para cima no jogo desce no minimap e vice-versa", "status": "not-started", "type": "bug", "area": "ui/minimap", "description": "No modo top-down o eixo Y do minimap esta invertido em relacao ao movimento do jogador. Mover para cima no jogo faz o ponto descer no minimap. Prover mapa que reflita fielmente a direcao do movimento (Y do mapa = Y do mundo, mesmo sinal)." },
+    { "sprint": 12, "id": "S12-BUG2", "title": "[BUG] buildRoofMesh: meshOrGeometry.setVerticesData is not a function (VertexData.applyToMesh falha em telhados)", "status": "not-started", "type": "bug", "area": "3d/chunk-builder", "description": "Erro de runtime no Babylon: VertexData.applyToMesh chama setVerticesData em um objeto que nao e AbstractMesh (provavelmente recebe null/undefined ou um objeto incorreto em buildRoofMesh). Rastrear o argumento passado para buildRoofMesh em buildChunk e garantir que o mesh foi criado antes de aplicar os vertices." }
   ]
 }

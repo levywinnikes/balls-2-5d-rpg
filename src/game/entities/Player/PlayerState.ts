@@ -3619,6 +3619,31 @@ export class PlayerState extends EventEmitter {
     this.log("msg_ate_food", { amount }, "#10b981");
   }
 
+  public tryEatFood(amount: number, successMessage?: string): boolean {
+    if (amount <= 0) {
+      return false;
+    }
+
+    if (this.hunger + amount > 2000) {
+      const fullMessage = t_game("msg_hunger_full");
+      this.emit("message", fullMessage);
+      this.emit("uiNotification", {
+        type: "warning",
+        message: fullMessage,
+      });
+      return false;
+    }
+
+    this.eatFood(amount);
+    this.emit("uiNotification", {
+      type: "info",
+      message:
+        successMessage ||
+        t_game("msg_ate_food").replace("{amount}", amount.toString()),
+    });
+    return true;
+  }
+
   public consumeItem(uid: string): boolean {
     const item = this.getInventoryItem(uid);
     if (!item) return false;
@@ -3626,16 +3651,13 @@ export class PlayerState extends EventEmitter {
     const def = WeaponRegistry.getWeaponDefinition(item.itemId);
     if (!def || !def.consumable || def.type !== "food") return false;
 
-    // Check Max Hunger Overflow
     const val = def.hungerValue || 0;
-    if (this.hunger + val > 2000) {
-      this.emit("message", t_game("msg_hunger_full"));
+    const success = this.tryEatFood(
+      val,
+      t_game("msg_ate_food").replace("{amount}", val.toString()),
+    );
+    if (!success) {
       return false;
-    }
-
-    // Consume logic
-    if (val > 0) {
-      this.eatFood(val);
     }
 
     // Decrease count or Remove

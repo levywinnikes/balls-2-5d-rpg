@@ -98,7 +98,7 @@ type EnemySpawnData = {
 
 type SliceEnemy = {
   uid: string;
-  spawnKey: string;  // deterministic key for persistence (level_type_index)
+  spawnKey: string; // deterministic key for persistence (level_type_index)
   level: string;
   enemyType: string;
   definition: EnemyDefinition;
@@ -164,8 +164,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const camera = new ArcRotateCamera(
     "slice-camera",
     -Math.PI / 2, // top-down: alpha = -90° (south-facing, irrelevant for straight-down)
-    0.18,        // top-down: beta near 0 = camera almost directly above
-    14,          // radius adjusted for top-down field of view
+    0.18, // top-down: beta near 0 = camera almost directly above
+    14, // radius adjusted for top-down field of view
     new Vector3(0, 1.5, 0),
     scene,
   );
@@ -257,8 +257,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   // Chunk streaming constants
   const CHUNK_SIZE = 16; // tiles per chunk side
   const DRAW_RADIUS_CHUNKS = 5; // chunks kept loaded around player
-  const CHUNK_BUILD_BUDGET_PER_TICK = 10;   // max new chunks to build each update tick
-  const CHUNK_UNLOAD_BUDGET_PER_TICK = 8;   // max chunks to unload each update tick
+  const CHUNK_BUILD_BUDGET_PER_TICK = 10; // max new chunks to build each update tick
+  const CHUNK_UNLOAD_BUDGET_PER_TICK = 8; // max chunks to unload each update tick
   const chunkMeshes = new Map<string, Mesh[]>();
   const chunkLoading = new Set<string>();
   const tileMaterials = new Map<string, StandardMaterial>();
@@ -445,10 +445,20 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       ];
       stones.forEach(([x, y, width, height, tone]) => {
         ctx.fillStyle = shadeColor(baseColor, tone as number);
-        ctx.fillRect(x as number, y as number, width as number, height as number);
+        ctx.fillRect(
+          x as number,
+          y as number,
+          width as number,
+          height as number,
+        );
         ctx.strokeStyle = shadeColor(baseColor, 0.45);
         ctx.lineWidth = 2;
-        ctx.strokeRect(x as number, y as number, width as number, height as number);
+        ctx.strokeRect(
+          x as number,
+          y as number,
+          width as number,
+          height as number,
+        );
       });
     } else if (kind === "roof") {
       ctx.fillStyle = shadeColor(baseColor, 0.82);
@@ -796,26 +806,48 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   ): Mesh => {
     const group = new TransformNode(name, scene);
 
-    const x0 = tx, x1 = tx + 1;
-    const z0 = tz, z1 = tz + 1;
-    const xM = tx + 0.5, zM = tz + 0.5;
-    const yBase = baseY, yRidge = baseY + ridgeH;
+    const x0 = tx,
+      x1 = tx + 1;
+    const z0 = tz,
+      z1 = tz + 1;
+    const xM = tx + 0.5,
+      zM = tz + 0.5;
+    const yBase = baseY,
+      yRidge = baseY + ridgeH;
 
     const vd = new VertexData();
 
     const positions = [
-      x0, yBase, z0,    // 0 front-left
-      x1, yBase, z0,    // 1 front-right
-      x1, yBase, z1,    // 2 back-right
-      x0, yBase, z1,    // 3 back-left
-      xM, yRidge, zM,   // 4 peak
+      x0,
+      yBase,
+      z0, // 0 front-left
+      x1,
+      yBase,
+      z0, // 1 front-right
+      x1,
+      yBase,
+      z1, // 2 back-right
+      x0,
+      yBase,
+      z1, // 3 back-left
+      xM,
+      yRidge,
+      zM, // 4 peak
     ];
 
     const indices = [
-      0, 4, 1,  // front
-      1, 4, 2,  // right
-      2, 4, 3,  // back
-      3, 4, 0,  // left
+      0,
+      4,
+      1, // front
+      1,
+      4,
+      2, // right
+      2,
+      4,
+      3, // back
+      3,
+      4,
+      0, // left
     ];
 
     const normals: number[] = new Array(positions.length).fill(0);
@@ -870,7 +902,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       { width: groundW, height: groundH, subdivisions: 1 },
       scene,
     );
-    ground.position.set(startX + groundW / 2, levelOffsetY, startY + groundH / 2);
+    ground.position.set(
+      startX + groundW / 2,
+      levelOffsetY,
+      startY + groundH / 2,
+    );
     ground.material = getTileMaterial(null, { id: "grass", color: "#6a9f36" });
     ground.parent = mapRoot;
     meshes.push(ground);
@@ -1230,7 +1266,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     // S7-FP4: clear emissive on all enemies when deselecting all
     enemies.forEach((e) => {
       e.meshRoot.getChildMeshes().forEach((m) => {
-        const mat = m.material as import("@babylonjs/core").StandardMaterial | null;
+        const mat = m.material as
+          | import("@babylonjs/core").StandardMaterial
+          | null;
         if (mat) mat.emissiveColor = new Color3(0, 0, 0);
       });
     });
@@ -1242,7 +1280,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const prev = enemies.get(selectedEnemyUid);
       if (prev) {
         prev.meshRoot.getChildMeshes().forEach((m) => {
-          const mat = m.material as import("@babylonjs/core").StandardMaterial | null;
+          const mat = m.material as
+            | import("@babylonjs/core").StandardMaterial
+            | null;
           if (mat) mat.emissiveColor = new Color3(0, 0, 0);
         });
       }
@@ -1431,30 +1471,60 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const enemyDefense = Math.max(1, enemy.definition.defense || 1);
     const defenseRoll = randomInt(1, enemyDefense);
 
-    if (attackRoll <= defenseRoll && !isFireAttack) {
-      playerState.emit("floatingText", {
-        x: enemy.worldPos.x,
-        y: enemy.worldPos.y,
-        z: enemy.worldPos.z,
-        message: "🛡️",
-        customColor: "#00FFFF",
-      });
-      playerState.log(
-        "combat_blocked_enemy",
-        { target: enemy.enemyType },
-        "#aaaaaa",
-      );
-      audioManager.playBlock();
-      return;
+    // S10-T2: parity with 2D — fire has partial block, normal has full block
+    let damageMitigation = 0;
+    if (attackRoll <= defenseRoll) {
+      if (isFireAttack) {
+        damageMitigation = Math.max(
+          0,
+          Math.min(1, enemy.definition.defenseResistances?.fire ?? 0),
+        );
+        playerState.emit("floatingText", {
+          x: enemy.worldPos.x,
+          y: enemy.worldPos.y,
+          z: enemy.worldPos.z,
+          message: "🛡️",
+          customColor: "#00FFFF",
+        });
+        playerState.log(
+          "combat_partially_blocked",
+          { target: enemy.enemyType },
+          "#aaaaaa",
+        );
+        if (damageMitigation >= 1) {
+          audioManager.playBlock();
+          return;
+        }
+      } else {
+        playerState.emit("floatingText", {
+          x: enemy.worldPos.x,
+          y: enemy.worldPos.y,
+          z: enemy.worldPos.z,
+          message: "🛡️",
+          customColor: "#00FFFF",
+        });
+        playerState.log(
+          "combat_blocked_enemy",
+          { target: enemy.enemyType },
+          "#aaaaaa",
+        );
+        audioManager.playBlock();
+        return;
+      }
     }
 
-    const initialDamage = attackRoll - defenseRoll / 2;
+    // S10-T2: parity with 2D — base damage is a fresh roll, not attackRoll - defenseRoll/2
+    const initialDamage = randomInt(1, maxAttack);
     const armor = Math.max(0, enemy.definition.armor || 0);
     const minReduction = armor > 0 ? Math.max(1, Math.ceil(armor * 0.1)) : 0;
     const armorReduction =
       armor > 0 ? randomInt(minReduction, Math.max(minReduction, armor)) : 0;
 
+    // S10-T2: apply fire partial-block mitigation (parity with 2D)
     let damage = Math.max(0, Math.floor(initialDamage - armorReduction));
+    if (damageMitigation > 0) {
+      damage = Math.max(1, Math.round(damage * (1 - damageMitigation)));
+    }
 
     if (damage <= 0) {
       playerState.emit("floatingText", {
@@ -1473,12 +1543,23 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
+    // S10-T2: parity with 2D — fire elemental resistance applied after base damage
+    if (isFireAttack) {
+      const fireRes = Math.max(
+        -0.95,
+        Math.min(0.95, enemy.definition.resistances?.fire ?? 0),
+      );
+      damage = Math.max(1, Math.round(damage * (1 - fireRes)));
+    }
+
     const critChance = playerState.getCriticalChance();
     const isCritical = Math.random() * 100 <= critChance;
     if (isCritical) {
-      const critMultiplier =
-        1 + Math.max(0, playerState.getCriticalDamageMultiplier());
-      damage = Math.max(1, Math.round(damage * critMultiplier));
+      // S10-T2: crit parity with 2D — min=maxAttack, max=maxAttack*(1+critMult)
+      const critMult = Math.max(0, playerState.getCriticalDamageMultiplier());
+      const minCrit = maxAttack;
+      const maxCrit = Math.max(minCrit, Math.floor(maxAttack * (1 + critMult)));
+      damage = randomInt(minCrit, maxCrit);
       playerState.gainStrengthExperience(100);
       playerState.gainDexterityExperience(100);
       audioManager.playCritical();
@@ -2143,14 +2224,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const playerGroundY = 0.8;
   let isGrounded = true;
   let chunkUpdateTimer = 0;
-  let stairCooldown = 0;          // seconds until next level transition is allowed
-  let stairAnimTimer = 0;          // seconds elapsed during stair animation
-  let stairAnimDuration = 2.0;     // total time to climb/descend stairs
+  let stairCooldown = 0; // seconds until next level transition is allowed
+  let stairAnimTimer = 0; // seconds elapsed during stair animation
+  let stairAnimDuration = 2.0; // total time to climb/descend stairs
   let stairAnimStartY = 0;
   let stairAnimTargetY = 0;
   const CHUNK_UPDATE_INTERVAL = 0.2;
-  let stairAnimTargetLevel = "0";  // target level to switch to after animation
-  let isStairAnimActive = false;   // true only while a stair transition is playing
+  let stairAnimTargetLevel = "0"; // target level to switch to after animation
+  let isStairAnimActive = false; // true only while a stair transition is playing
   let pendingStairInteract = false; // set by right-click; consumed by stair transition gate
 
   const requestPointerLockIfPossible = () => {
@@ -2171,7 +2252,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   ) => {
     isFirstPerson = firstPerson;
     // S7-FP1: notify React overlay (crosshair) of camera mode change
-    document.dispatchEvent(new CustomEvent("slice3d:cameraModeChanged", { detail: { firstPerson } }));
+    document.dispatchEvent(
+      new CustomEvent("slice3d:cameraModeChanged", { detail: { firstPerson } }),
+    );
 
     if (isFirstPerson) {
       camera.detachControl();
@@ -2209,7 +2292,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         const x = tileX + dx;
         const z = tileZ + dz;
         const symbol = getMapTileAt(activeLevel, x, z);
-        const def = symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined;
+        const def = symbol
+          ? mapDataCache?.tileDefinitions?.[symbol]
+          : undefined;
         const stairDir = (def as any)?.stairDir as string | undefined;
         if (!stairDir) {
           continue;
@@ -2219,7 +2304,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         const centerZ = z + 0.5;
         const dxToStair = player.position.x - centerX;
         const dzToStair = player.position.z - centerZ;
-        const distance = Math.sqrt(dxToStair * dxToStair + dzToStair * dzToStair);
+        const distance = Math.sqrt(
+          dxToStair * dxToStair + dzToStair * dzToStair,
+        );
 
         if (distance > maxDistanceUnits) {
           continue;
@@ -2317,8 +2404,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       if (dist < 0.2) {
         // Impact: apply damage
         const playerInt = playerState.getIntelligenceData().level;
-        const dmg = RuneRegistry.calculateDamage(runeId, playerState.getLevel(), playerInt);
-        const damage = Math.max(1, dmg.min + Math.floor(Math.random() * (dmg.max - dmg.min + 1)));
+        const dmg = RuneRegistry.calculateDamage(
+          runeId,
+          playerState.getLevel(),
+          playerInt,
+        );
+        const damage = Math.max(
+          1,
+          dmg.min + Math.floor(Math.random() * (dmg.max - dmg.min + 1)),
+        );
         finalTarget.health = Math.max(0, finalTarget.health - damage);
         finalTarget.isProvoked = true;
         playerState.emit("floatingText", {
@@ -2362,7 +2456,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
 
       const step = speed * dt;
-      proj.position.addInPlace(toTarget.normalize().scale(Math.min(step, dist)));
+      proj.position.addInPlace(
+        toTarget.normalize().scale(Math.min(step, dist)),
+      );
     });
 
     playerState.log("action_cast_rune", { runeId }, "#ff8800");
@@ -2560,7 +2656,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         stairAnimTimer = 0;
         stairAnimStartY = player.position.y;
         stairAnimTargetLevel = stairTarget.targetLevel;
-        stairAnimTargetY = levelToWorldY(stairTarget.targetLevel) + PLAYER_GROUND_OFFSET;
+        stairAnimTargetY =
+          levelToWorldY(stairTarget.targetLevel) + PLAYER_GROUND_OFFSET;
         isStairAnimActive = true;
       }
     }
@@ -2569,14 +2666,20 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (isStairAnimActive) {
       stairAnimTimer += deltaSeconds;
       const progress = Math.min(1, stairAnimTimer / stairAnimDuration);
-      const easeProgress = progress < 0.5
-        ? 2 * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      const easeProgress =
+        progress < 0.5
+          ? 2 * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
 
-      player.position.y = stairAnimStartY + (stairAnimTargetY - stairAnimStartY) * easeProgress;
+      player.position.y =
+        stairAnimStartY + (stairAnimTargetY - stairAnimStartY) * easeProgress;
 
       // At midpoint: load target level geometry
-      if (progress >= 0.45 && progress < 0.55 && activeLevel !== stairAnimTargetLevel) {
+      if (
+        progress >= 0.45 &&
+        progress < 0.55 &&
+        activeLevel !== stairAnimTargetLevel
+      ) {
         void ensureMapLevelReady(stairAnimTargetLevel);
       }
 
@@ -2607,9 +2710,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         setSelectedEnemy(null);
       } else {
         // sine wave: oscillates between 0 and 0.45 at ~1.8 Hz
-        const pulse = (Math.sin(enemyHighlightPulseT * Math.PI * 1.8) * 0.5 + 0.5) * 0.45;
+        const pulse =
+          (Math.sin(enemyHighlightPulseT * Math.PI * 1.8) * 0.5 + 0.5) * 0.45;
         selectedEnemy.meshRoot.getChildMeshes().forEach((m) => {
-          const mat = m.material as import("@babylonjs/core").StandardMaterial | null;
+          const mat = m.material as
+            | import("@babylonjs/core").StandardMaterial
+            | null;
           if (mat) mat.emissiveColor = new Color3(pulse, 0, 0);
         });
       }
@@ -2619,7 +2725,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (!isStairAnimActive) {
       verticalVelocity += gravity * deltaSeconds;
       player.position.y += verticalVelocity * deltaSeconds;
-      const levelGroundY = levelToWorldY(activeLevelNumber) + PLAYER_GROUND_OFFSET;
+      const levelGroundY =
+        levelToWorldY(activeLevelNumber) + PLAYER_GROUND_OFFSET;
       if (player.position.y <= levelGroundY) {
         player.position.y = levelGroundY;
         verticalVelocity = 0;

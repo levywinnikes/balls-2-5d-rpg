@@ -1,6 +1,6 @@
 ﻿{
-  "updatedAt": "2026-04-21T18:15:00Z",
-  "task": "Planejamento: incluir paridade de notificacao EXP 2D->3D e nova direcao top-down por camadas no backlog de sprint",
+  "updatedAt": "2026-04-21T20:00:00Z",
+  "task": "S10-T2: Paridade formula de defesa/dano 3D vs 2D em createDebugSliceScene.ts",
   "contractsRead": [
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
@@ -13,7 +13,7 @@
   ],
   "phaseStatus": "In progress",
   "understanding": "Registrar no backlog: (1) paridade de notificacao de EXP no 3D igual 2D (toast exp + barra/progresso visivel), (2) nova direcao de arquitetura top-down por camadas com ocultacao suave de andares superiores e possivel descarte de memoria quando nao relevantes.",
-  "riskConflict": "Ha divergencia entre a direcao solicitada (top-down por camadas como padrao, com outros modos apenas para debug interno) e docs canonicos atuais de perspectiva que ainda descrevem 3D como direcao estrategica com fallback 2D temporario.",
+  "riskConflict": "Diretriz confirmada e propagada para a documentacao canonica: top-down por camadas e a unica direcao de produto; modos alternativos permanecem apenas para debug interno.",
   "objectiveQuestion": "Respondida: manter outros modos de visao apenas para debug interno durante a transicao; produto e mapas devem ser concebidos somente para top-down.",
   "documentationIndexChecked": true,
   "impactedModules": [
@@ -37,15 +37,11 @@
     "docs/SPRINT_MASTER_PLAN.md",
     "docs/SPRINT_STATE.json"
   ],
-  "docsCoverageStatus": "divergent",
-  "divergenceDetected": true,
-  "divergenceNotes": "PERSPECTIVE_MODE_MASTER_PLAN.md e PERSPECTIVE_MODE_CONTRACT.md apontam 3D como direcao estrategica, enquanto a nova solicitacao prioriza top-down por camadas como padrao de produto.",
-  "docUpdatesRequired": [
-    "Atualizar docs/PERSPECTIVE_MODE_MASTER_PLAN.md com direcao top-down por camadas como padrao",
-    "Atualizar docs/contracts/PERSPECTIVE_MODE_CONTRACT.md com politica de transicao: outros modos apenas para debug interno",
-    "Atualizar docs/ARCHITECTURE_OVERVIEW.md com modelo de visibilidade vertical smooth hide/show por camadas"
-  ],
-  "docUpdatesCompleted": false,
+  "docsCoverageStatus": "covered",
+  "divergenceDetected": false,
+  "divergenceNotes": "",
+  "docUpdatesRequired": [],
+  "docUpdatesCompleted": true,
   "validationResults": {
     "pending": false
   }

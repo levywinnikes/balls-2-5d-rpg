@@ -348,9 +348,15 @@ export class StatManager {
         baseVal = 0;
         break; // New Stat
 
-      case "attack":
-        baseVal = 0;
-        break; // Strict: Weapon is Modifier
+      case "attack": {
+        // S10-T4: Unarmed base = 5 (range 1..5 via BattleSystem roll).
+        // If a weapon is equipped in MAIN_HAND, base stays 0 (weapon FLAT modifier drives the value).
+        const unarmedSlotItem = state.getEquippedItemInSlot(
+          EquipmentSlot.MAIN_HAND,
+        );
+        baseVal = unarmedSlotItem ? 0 : 5;
+        break;
+      }
       case "defense":
         baseVal = 0;
         break; // Strict: Shield is Modifier
@@ -798,7 +804,11 @@ export class StatManager {
           // Weapon Attack (Generic "attack")
           // S10-T3: Only MAIN_HAND contributes attack damage.
           // OFF_HAND (shield slot) items like torch must NOT add to attack.
-          if (statName === "attack" && def.damage && slot === EquipmentSlot.MAIN_HAND) {
+          if (
+            statName === "attack" &&
+            def.damage &&
+            slot === EquipmentSlot.MAIN_HAND
+          ) {
             modifiers.push({
               source: translatedName,
               attr: "attack",

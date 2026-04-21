@@ -42,10 +42,8 @@ export class ConsumableManager {
   private applyEffect(effect: ItemEffect): boolean {
     switch (effect.type) {
       case "HEAL":
-        // Logic: For food items, restore hunger instead of healing HP
-        // Food items are mapped to HEAL type in adaptToConsumable
-        this.playerState.eatFood(effect.value);
-        return true;
+        // Food uses the canonical hunger/overflow/notification flow in PlayerState.
+        return this.playerState.tryEatFood(effect.value);
 
       case "SATURATION":
         // Logic: Feed Player
