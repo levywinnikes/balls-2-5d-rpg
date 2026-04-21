@@ -140,10 +140,12 @@ export interface PlayerSnapshot {
   persistentItems?: [string, any[]][]; // Map level -> dropped items
   containers?: [string, any[]][]; // Map container ID -> items inside
   visitedLevels?: string[]; // Levels visited by player
+  deadEnemies3d?: Record<string, string[]>; // 3D world: killed enemy spawn keys per level
 
   // --- Altar & Magic ---
   altarStorage?: [string, any[]][]; // Map altar ID -> items stored
   enchantedRunes?: Array<{ runeId: string; count: number }>;
+  equippedRuneSlots?: string[]; // Up to 3 rune IDs in hotbar slots (empty string = empty slot)
 
   // --- Quests & Status ---
   quests?: any; // QuestManager save data (delegates to QuestManager.getSaveData())

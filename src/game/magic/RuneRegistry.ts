@@ -15,6 +15,12 @@ export interface RuneDefinition {
   };
   enchantSound?: string; // Audio key for enchantment (e.g., "fire", "ice", "energy", "star")
   singleTargetOnly?: boolean; // If true, only fires on enemy click, not ground
+  /** Visual descriptor used by the 3D runtime projectile effect */
+  effect3d?: {
+    color: string;   // CSS hex color for emissive material
+    radius: number;  // Impact flash radius in world units
+    speed: number;   // Projectile speed in world units/sec
+  };
 }
 
 export class RuneRegistry {
@@ -34,7 +40,8 @@ export class RuneRegistry {
         baseMax: 50,
         area: 120 // 3-4 tiles radius
       },
-      enchantSound: "fire"
+      enchantSound: "fire",
+      effect3d: { color: "#ff5500", radius: 1.5, speed: 14 }
     },
     "star_rune": {
       id: "star_rune",
@@ -52,7 +59,8 @@ export class RuneRegistry {
         area: 0 // Single target
       },
       enchantSound: "star",
-      singleTargetOnly: true
+      singleTargetOnly: true,
+      effect3d: { color: "#ffffaa", radius: 0.8, speed: 18 }
     }
   };
 

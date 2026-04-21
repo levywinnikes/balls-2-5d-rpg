@@ -1,6 +1,6 @@
 ﻿{
-  "updatedAt": "2026-04-21T10:30:00Z",
-  "task": "Hotfix combate 3D: dano fisico variavel 1..ataqueMax para inimigos + backlog de interacoes da mira FP",
+  "updatedAt": "2026-04-21T12:00:00Z",
+  "task": "Sprint 8: Runas simples v1 + hotfix ratos flutuando + commit telhado cidade_suspensa",
   "contractsRead": [
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
@@ -12,8 +12,8 @@
     "docs/contracts/LOCALIZATION_CONTRACT.md"
   ],
   "phaseStatus": "In progress",
-  "understanding": "Corrigir divergencia com formula 2D: ataque fisico nunca pode ser fixo. Em 3D, inimigo deve usar rolagem 1..ataqueMax no calculo final de dano. Registrar backlog da mira FP para suportar interacoes equivalentes ao mouse da terceira pessoa.",
-  "riskConflict": "Mudanca de formula altera balanceamento de dano percebido. Mitigacao: manter mesma estrutura do BattleSystem (attackRoll - defenseRoll/2, armor reduction) e validar com tsc sem alterar API publica.",
+  "understanding": "Corrigir bug de movimento vertical indevido de inimigos no nivel subterraneo (Y drift para 0 durante chase). Registrar no sprint o uso de ferramenta externa para gerar biomas mais estruturados.",
+  "riskConflict": "Alterar path movement pode afetar lookAt e smoothness. Mitigacao: manter deslocamento em X/Z e fixar Y no spawnPos.y do inimigo para preservar o nivel.",
   "objectiveQuestion": "Nenhuma pendencia bloqueante.",
   "documentationIndexChecked": true,
   "impactedModules": [

@@ -13,6 +13,7 @@ import {
   UniversalCamera,
   Vector3,
   VertexData,
+  Animation,
 } from "@babylonjs/core";
 import {
   DroppedItemData,
@@ -34,6 +35,7 @@ import {
 import { PathfindingManager } from "../../game/systems/PathfindingManager";
 import { WorldMapService } from "../../services/WorldMapService";
 import { createEnemyVisual } from "./ThreeDEnemyVisualRegistry";
+import { RuneRegistry } from "../../game/magic/RuneRegistry";
 
 type SliceRuntime = {
   engine: Engine;
@@ -236,6 +238,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const enemies = new Map<string, SliceEnemy>();
   let selectedEnemyUid: string | null = null;
   let lastPlayerAttackAt = 0;
+  let activeRuneSlotIndex = 0;
+  let lastRuneCastAt = 0;
   const seededEnemyLevels = new Set<string>();
   let mapDataCache: SliceMapData | null = null;
   let worldMapReady = false;
@@ -1823,7 +1827,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const waypoint = enemy.currentPath[enemy.currentPathIndex];
     const target = new Vector3(
       gridToWorld(waypoint.x, navigationGridOrigin),
-      0,
+      enemy.worldPos.y, // preserve enemy's current level Y — fixes floating in underground levels
       gridToWorld(waypoint.y, navigationGridOrigin),
     );
 
@@ -2176,6 +2180,128 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     setCameraMode(true, false);
   }
 
+  // S8-T2: dispatch rune slot state to React HUD
+  const dispatchRuneSlotUpdate = () => {
+    const slots = playerState.getEquippedRuneSlots();
+    document.dispatchEvent(
+      new CustomEvent("slice3d:runeSlotChanged", {
+        detail: { slots, activeIndex: activeRuneSlotIndex },
+      }),
+    );
+  };
+
+  // S8-T2: 3D rune projectile cast — fires at selectedEnemy or forward if no target
+  const castRune3d = () => {
+    const now = Date.now();
+    if (now - lastRuneCastAt < 1000) return; // 1s cooldown
+
+    const slots = playerState.getEquippedRuneSlots();
+    const runeId = slots[activeRuneSlotIndex];
+    if (!runeId) return;
+
+    const def = RuneRegistry.getRune(runeId);
+    if (!def) return;
+
+    // Find target enemy
+    let targetEnemy: SliceEnemy | null = null;
+    if (selectedEnemyUid) {
+      targetEnemy = enemies.get(selectedEnemyUid) || null;
+      if (targetEnemy?.isDead) targetEnemy = null;
+    }
+    if (!targetEnemy) {
+      // pick nearest alive enemy within 8 units
+      let nearestDist = 8;
+      enemies.forEach((e) => {
+        if (e.isDead) return;
+        const d = Vector3.Distance(player.position, e.worldPos);
+        if (d < nearestDist) {
+          nearestDist = d;
+          targetEnemy = e;
+        }
+      });
+    }
+    if (!targetEnemy) return; // no valid target
+
+    lastRuneCastAt = now;
+
+    // Build projectile mesh
+    const hexColor = def.effect3d?.color ?? "#ff5500";
+    const projMat = new StandardMaterial("rune_proj_mat_" + now, scene);
+    projMat.emissiveColor = Color3.FromHexString(hexColor);
+    projMat.disableLighting = true;
+
+    const proj = MeshBuilder.CreateSphere(
+      "rune_proj_" + now,
+      { diameter: 0.18, segments: 4 },
+      scene,
+    );
+    proj.material = projMat;
+    proj.position = player.position.clone();
+    proj.position.y += 0.3;
+
+    const speed = def.effect3d?.speed ?? 14;
+    const impactRadius = def.effect3d?.radius ?? 1.0;
+
+    // Animate projectile frame-by-frame using onBeforeRender
+    const finalTarget = targetEnemy; // capture in closure
+    const removeObs = scene.onBeforeRenderObservable.add(() => {
+      const dt = scene.getEngine().getDeltaTime() / 1000;
+      const toTarget = finalTarget.worldPos.subtract(proj.position);
+      const dist = toTarget.length();
+      if (dist < 0.2) {
+        // Impact: apply damage
+        const playerInt = playerState.getIntelligenceData().level;
+        const dmg = RuneRegistry.calculateDamage(runeId, playerState.getLevel(), playerInt);
+        const damage = Math.max(1, dmg.min + Math.floor(Math.random() * (dmg.max - dmg.min + 1)));
+        finalTarget.health = Math.max(0, finalTarget.health - damage);
+        finalTarget.isProvoked = true;
+        playerState.emit("floatingText", {
+          x: finalTarget.worldPos.x,
+          y: finalTarget.worldPos.y,
+          z: finalTarget.worldPos.z,
+          damage: -damage,
+          isCritical: false,
+        });
+
+        // Impact flash: scale-up then dispose
+        const flashMat = new StandardMaterial("rune_flash_" + now, scene);
+        flashMat.emissiveColor = Color3.FromHexString(hexColor);
+        flashMat.wireframe = true;
+        const flash = MeshBuilder.CreateSphere(
+          "rune_flash_mesh_" + now,
+          { diameter: impactRadius * 2, segments: 4 },
+          scene,
+        );
+        flash.material = flashMat;
+        flash.position = finalTarget.worldPos.clone();
+        let flashAge = 0;
+        const flashObs = scene.onBeforeRenderObservable.add(() => {
+          flashAge += scene.getEngine().getDeltaTime() / 1000;
+          flash.scaling.setAll(1 + flashAge * 4);
+          const alpha = Math.max(0, 1 - flashAge / 0.3);
+          flashMat.emissiveColor = Color3.FromHexString(hexColor).scale(alpha);
+          if (flashAge > 0.3) {
+            flash.dispose();
+            flashMat.dispose();
+            scene.onBeforeRenderObservable.remove(flashObs);
+          }
+        });
+
+        proj.dispose();
+        projMat.dispose();
+        scene.onBeforeRenderObservable.remove(removeObs);
+
+        // Kill check handled by regular AI loop (health <= 0)
+        return;
+      }
+
+      const step = speed * dt;
+      proj.position.addInPlace(toTarget.normalize().scale(Math.min(step, dist)));
+    });
+
+    playerState.log("action_cast_rune", { runeId }, "#ff8800");
+  };
+
   const onKeyDown = (event: KeyboardEvent) => {
     void ensureAudioReady();
 
@@ -2193,6 +2319,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     if (key === "v" && !event.repeat) {
       setCameraMode(!isFirstPerson, !isFirstPerson);
+    }
+
+    // S8-T2: Q = cast active rune; R = cycle active rune slot
+    if (key === "q" && !event.repeat) {
+      castRune3d();
+    }
+
+    if (key === "r" && !event.repeat) {
+      activeRuneSlotIndex = (activeRuneSlotIndex + 1) % 3;
+      dispatchRuneSlotUpdate();
     }
 
     if (key === "e" && !event.repeat) {
@@ -2226,6 +2362,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   playerState.on("dropItem", handleDropItem);
   playerState.on("requestPickup", handleRequestPickup);
   playerState.on("spawnDroppedItem", addDroppedItemFromEvent);
+  // S8-T2: emit initial rune slot state so React HUD can show slots on load
+  dispatchRuneSlotUpdate();
 
   const onCanvasContextMenu = (event: MouseEvent) => {
     event.preventDefault();

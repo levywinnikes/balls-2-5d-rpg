@@ -429,6 +429,8 @@ export class PlayerState extends EventEmitter {
 
   // --- MAGIC & MEMORY SYSTEM ---
   public enchantedRunes: Array<{ runeId: string; count: number }> = [];
+  /** 3 hotbar rune slots for quick-cast in 3D mode. Empty string = empty slot. */
+  public equippedRuneSlots: string[] = ["fire_burst_rune", "", ""];
   public baseMemory: number = 10;
   // Map<AltarID, Array<{ runeId: string, count: number }>>
   private altarStorage: Map<string, Array<{ runeId: string; count: number }>> =
@@ -479,6 +481,9 @@ export class PlayerState extends EventEmitter {
 
   // Level Visit Tracking (Prevent Duplicate Map Item Spawning)
   private visitedLevels: Set<string> = new Set();
+
+  // 3D world sector persistence: enemies killed in 3D runtime, keyed by level
+  private deadEnemies3d: Map<string, Set<string>> = new Map();
 
   private _debugCollision: boolean = false;
   private _cloudShadowsEnabled: boolean = true;
@@ -1105,6 +1110,16 @@ export class PlayerState extends EventEmitter {
 
   public getEnchantedRunes() {
     return this.enchantedRunes;
+  }
+
+  public getEquippedRuneSlots(): string[] {
+    return this.equippedRuneSlots;
+  }
+
+  public setEquippedRuneSlot(index: number, runeId: string): void {
+    if (index < 0 || index >= 3) return;
+    this.equippedRuneSlots[index] = runeId;
+    this.emit("runeSlotChanged", { slots: [...this.equippedRuneSlots] });
   }
 
   public getMemoryCapacity(): number {
@@ -2657,12 +2672,36 @@ export class PlayerState extends EventEmitter {
     mapWidth: number,
     mapHeight: number,
   ): void {
-    if (!this.exploredAreas.has(level)) {
-      const grid = Array(mapHeight)
+    if (mapWidth <= 0 || mapHeight <= 0) {
+      return;
+    }
+
+    const existingGrid = this.exploredAreas.get(level);
+    const existingHeight = existingGrid?.length || 0;
+    const existingWidth = existingGrid?.[0]?.length || 0;
+    const needsResize =
+      !existingGrid ||
+      existingHeight !== mapHeight ||
+      existingWidth !== mapWidth;
+
+    if (needsResize) {
+      const resizedGrid = Array(mapHeight)
         .fill(false)
         .map(() => Array(mapWidth).fill(false));
-      this.exploredAreas.set(level, grid);
+
+      if (existingGrid) {
+        const copyHeight = Math.min(existingHeight, mapHeight);
+        const copyWidth = Math.min(existingWidth, mapWidth);
+        for (let y = 0; y < copyHeight; y++) {
+          for (let x = 0; x < copyWidth; x++) {
+            resizedGrid[y][x] = Boolean(existingGrid[y]?.[x]);
+          }
+        }
+      }
+
+      this.exploredAreas.set(level, resizedGrid);
     }
+
     const grid = this.exploredAreas.get(level)!;
     let changed = false;
     for (let y = centerY - radius; y <= centerY + radius; y++) {
@@ -2872,6 +2911,34 @@ export class PlayerState extends EventEmitter {
     this.visitedLevels = new Set(levels);
   }
 
+  public markEnemy3dDead(level: string, spawnKey: string): void {
+    let set = this.deadEnemies3d.get(level);
+    if (!set) {
+      set = new Set<string>();
+      this.deadEnemies3d.set(level, set);
+    }
+    set.add(spawnKey);
+  }
+
+  public isEnemy3dDead(level: string, spawnKey: string): boolean {
+    return this.deadEnemies3d.get(level)?.has(spawnKey) ?? false;
+  }
+
+  public getDeadEnemies3dSnapshot(): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    this.deadEnemies3d.forEach((set, level) => {
+      out[level] = Array.from(set);
+    });
+    return out;
+  }
+
+  public loadDeadEnemies3d(data: Record<string, string[]>): void {
+    this.deadEnemies3d.clear();
+    Object.entries(data).forEach(([level, keys]) => {
+      this.deadEnemies3d.set(level, new Set(keys));
+    });
+  }
+
   public loadState(data: any, saveTimestamp?: number) {
     // saveTimestamp added
     if (!data) return;
@@ -2880,6 +2947,12 @@ export class PlayerState extends EventEmitter {
       this.visitedLevels = new Set(data.visitedLevels);
     } else {
       this.visitedLevels.clear();
+    }
+
+    if (data.deadEnemies3d) {
+      this.loadDeadEnemies3d(data.deadEnemies3d);
+    } else {
+      this.deadEnemies3d.clear();
     }
 
     if (data.characterName) this.characterName = data.characterName;
@@ -3108,6 +3181,12 @@ export class PlayerState extends EventEmitter {
       this.enchantedRunes = data.enchantedRunes;
     } else {
       this.enchantedRunes = [];
+    }
+
+    if (Array.isArray(data.equippedRuneSlots)) {
+      this.equippedRuneSlots = data.equippedRuneSlots.slice(0, 3);
+      // pad to length 3
+      while (this.equippedRuneSlots.length < 3) this.equippedRuneSlots.push("");
     }
 
     // Force UI Update
@@ -3469,10 +3548,12 @@ export class PlayerState extends EventEmitter {
       persistentItems: Array.from(this.droppedItems.entries()),
       containers: Array.from(this.containers.entries()),
       visitedLevels: Array.from(this.visitedLevels),
+      deadEnemies3d: this.getDeadEnemies3dSnapshot(),
 
       // --- Altar & Magic ---
       altarStorage: Array.from(this.altarStorage.entries()),
       enchantedRunes: [...this.enchantedRunes],
+      equippedRuneSlots: [...this.equippedRuneSlots],
 
       // --- Quests & Status ---
       quests: QuestManager.getInstance().getSaveData(),
