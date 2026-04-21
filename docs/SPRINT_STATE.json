@@ -1,13 +1,13 @@
 ﻿{
   "version": 1,
   "objective": "Grande versao funcional de RPG mundo aberto continuo, leve, sem loadings de tela e sem teleporte perceptivel",
-  "currentSprint": 13,
-  "sprintName": "Ilhas v1 (3 ilhas)",
+  "currentSprint": 14,
+  "sprintName": "Dungeons terreo v1",
   "status": "completed",
-  "startedAt": "2026-04-21",
-  "lastUpdatedAt": "2026-04-22T00:20:00Z",
-  "lastCompletedTask": "Sprint 13 FECHADA: ilhas_v1 em BMS com 3 ilhas conectadas, spawn no nivel 1 e patamares superiores no nivel 2",
-  "nextTask": "Iniciar Sprint 14",
+  "startedAt": "2026-04-22",
+  "lastUpdatedAt": "2026-04-22T01:00:00Z",
+  "lastCompletedTask": "Sprint 14 FECHADA: 7 dungeons terreo BMS gerados (dungeon_t01..t07) com 2 niveis cada",
+  "nextTask": "Iniciar Sprint 15",
   "owner": "GitHub Copilot",
   "completedSprints": [
     { "sprint": 1, "name": "Streaming continuo base", "completedAt": "2026-04-20", "deliverables": ["CHUNK_BUILD_BUDGET_PER_TICK=10","Nearest-first sort (Chebyshev)","CHUNK_UNLOAD_BUDGET_PER_TICK=8 farthest-first","window.__slice3dChunkStreaming metrics"] },
@@ -21,11 +21,13 @@
     { "sprint": 10, "name": "Paridade comida/defesa/tocha/desarmado 2D->3D", "completedAt": "2026-04-21", "deliverables": ["S10-T1: hunger/consumo/efeitos idênticos ao 2D","S10-T2: defesa final = arma+escudo+reflexo mesma fórmula 2D","S10-T3: tocha equipável em mão ou escudo; slot escudo não soma ataque","S10-T4: ataque desarmado mínimo 1..5 alcance menor que espada de madeira","S10-T5: tsc zero erros"] },
     { "sprint": 11, "name": "Grimório 3D, Altar parity, blood, billboard sprites", "completedAt": "2026-04-21", "deliverables": ["S11-T1: GrimórioContent window + targeting mode + castRuneAtTarget em createDebugSliceScene","S11-T2: tryPickupPersistentItem verifica ContainerRegistry — abre container em vez de pickup","S11-T3: emitBloodBurst() + destroyEnemy com contexto finishingDamage/isFireKill + partículas físicas","S11-T4: ThreeDEnemyVisualRegistry billboard sprites rat/orc/dragon; herói billboard hero_peasant.png, player.visibility=0.01","S11-T5: EXP suppress removido em NotificationSystem 3D — notificação XP por kill igual ao 2D","tsc --noEmit zero erros"] },
     { "sprint": 12, "name": "Top-down por camadas + bugs de combate", "completedAt": "2026-04-21", "deliverables": ["S12-T1/T4: semântica de camadas documentada (-1 esgoto, 0 térreo, +1 ilhas, +2 telhados)","S12-T2: roof fade ao entrar sob cobertura","S12-T3: política de streaming por nível documentada","S12-BUG1..4: minimap Y, Mesh em buildRoofMesh, debounce Tone.js, reflex XP em bloqueio","tsc --noEmit zero erros"] },
-    { "sprint": 13, "name": "Ilhas v1 (3 ilhas)", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-islands-v1-map.js","public/maps/ilhas_v1.json + _0.bin + _1.bin + _2.bin (140x110 3 níveis)","Arquipélago único com 3 ilhas conectadas por passarelas no nível 1","Patamares superiores e lookouts no nível 2; spawn inicial no nível 1"] }
+    { "sprint": 13, "name": "Ilhas v1 (3 ilhas)", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-islands-v1-map.js","public/maps/ilhas_v1.json + _0.bin + _1.bin + _2.bin (140x110 3 níveis)","Arquipélago único com 3 ilhas conectadas por passarelas no nível 1","Patamares superiores e lookouts no nível 2; spawn inicial no nível 1"] },
+    { "sprint": 14, "name": "Dungeons terreo v1", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-dungeons-terreo-v1.js","public/maps/dungeon_t01..t07.json + _0.bin + _1.bin (7 dungeons 2 niveis cada)","T01 Ruinas Antigas (60x60)","T02 Fortaleza Abandonada (80x80)","T03 Acampamento Goblin (70x70)","T04 Forte de Pedra (65x65)","T05 Templo Maldito (75x75)","T06 Covil de Bandidos (60x50)","T07 Mansao Assombrada (70x65)"] }
   ],
   "progressNotes": [
-    "Sprints 1-13 fechadas. tsc --noEmit zero erros em todos.",
+    "Sprints 1-14 fechadas. tsc --noEmit zero erros em todos.",
     "npm run build removido do fluxo obrigatório por diretriz do usuário — usando apenas tsc --noEmit.",
+    "Sprint 14: scripts/generate-dungeons-terreo-v1.js — 7 dungeons terreo distintos: T01 Ruinas Antigas, T02 Fortaleza Abandonada, T03 Acampamento Goblin, T04 Forte de Pedra, T05 Templo Maldito, T06 Covil de Bandidos, T07 Mansao Assombrada. Cada dungeon: 2 niveis BMS (terreo+alto), tamanhos entre 60x50 e 80x80, inimigos goblin/orc, escadas stu/std para nivel 1.",
     "Sprint 13: scripts/generate-islands-v1-map.js gerado; public/maps/ilhas_v1.json + _0.bin + _1.bin + _2.bin (140x110, 3 niveis). Arquipelago com 3 ilhas (west/north/east) conectadas por passarelas bal no nivel 1; lookouts no nivel 2 com escadas-para-baixo. Inimigos goblin/orc distribuidos. Spawn inicial no nivel 1, praca central da ilha norte.",
     "simplex-noise já estava instalado - reutilizado no generate-sewer-map.js.",
     "Hotfix telhado cidade_suspensa commit 81d3625.",
@@ -36,9 +38,9 @@
     "Diretriz confirmada pelo usuário: produto e mapas pensados exclusivamente para perspectiva top-down. Outros modos apenas como debug interno."
   ],
   "sprintBacklog": [
-    { "id": "S13-T1", "title": "Gerar mapa BMS unico com 3 ilhas conectadas por passarelas (nivel 1 = ilhas, nivel 2 = lookouts)", "status": "completed" },
-    { "id": "S13-T2", "title": "Inimigos distribuidos nas 3 ilhas (goblin/orc) nos niveis 1 e 2", "status": "completed" },
-    { "id": "S13-T3", "title": "Escadas stu/std conectando niveis 1<->2 em cada ilha", "status": "completed" }
+    { "id": "S14-T1", "title": "Criar gerador BMS para 7 dungeons terreo distintos", "status": "completed" },
+    { "id": "S14-T2", "title": "Inimigos goblin/orc em cada dungeon (nivel 0 e nivel 1)", "status": "completed" },
+    { "id": "S14-T3", "title": "Escadas stu/std conectando nivel 0 <-> nivel 1 em cada dungeon", "status": "completed" }
   ],
     { "id": "S12-T2", "title": "Ocultação suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "completed" },
     { "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima não relevantes e recarregar ao sair da cobertura", "status": "completed" },

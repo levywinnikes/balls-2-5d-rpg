@@ -1,0 +1,287 @@
+{
+  "mapName": "dungeon_t04",
+  "tileSize": 32,
+  "width": 65,
+  "height": 65,
+  "config": {
+    "startLevel": "0",
+    "mapName": "dungeon_t04"
+  },
+  "tileAtlas": [
+    "...",
+    "cob",
+    "wal",
+    "bwl",
+    "flr",
+    "rof",
+    "grs",
+    "stn",
+    "mkt",
+    "pil",
+    "fnt",
+    "tre",
+    "dwl",
+    "arc",
+    "sdw",
+    "stu",
+    "std",
+    "swl",
+    "sfl",
+    "cfl",
+    "cwl",
+    "wtr",
+    "bal"
+  ],
+  "tileDefinitions": {
+    "...": {
+      "color": 0,
+      "height": 0,
+      "renderAs": "empty",
+      "block": false
+    },
+    "cob": {
+      "color": 8947840,
+      "height": 0.15,
+      "renderAs": "floor",
+      "block": false
+    },
+    "wal": {
+      "color": 7364688,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "bwl": {
+      "color": 9127187,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "flr": {
+      "color": 10064016,
+      "height": 0.15,
+      "renderAs": "floor",
+      "block": false
+    },
+    "rof": {
+      "color": 5914152,
+      "height": 0.3,
+      "renderAs": "roof",
+      "block": false
+    },
+    "grs": {
+      "color": 4881471,
+      "height": 0.2,
+      "renderAs": "floor",
+      "block": false
+    },
+    "stn": {
+      "color": 8421504,
+      "height": 0.25,
+      "renderAs": "floor",
+      "block": false
+    },
+    "mkt": {
+      "color": 13934615,
+      "height": 0.2,
+      "renderAs": "floor",
+      "block": false
+    },
+    "pil": {
+      "color": 6316128,
+      "height": 2.5,
+      "renderAs": "wall",
+      "block": true
+    },
+    "fnt": {
+      "color": 4231360,
+      "height": 0.5,
+      "renderAs": "floor",
+      "block": false
+    },
+    "tre": {
+      "color": 2254370,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "dwl": {
+      "color": 10514512,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "arc": {
+      "color": 9474192,
+      "height": 2.2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "sdw": {
+      "color": 4210752,
+      "height": 0.05,
+      "renderAs": "floor",
+      "block": false
+    },
+    "stu": {
+      "color": 13152320,
+      "height": 0.5,
+      "renderAs": "floor",
+      "block": false,
+      "stairDir": "up"
+    },
+    "std": {
+      "color": 13144128,
+      "height": 0.5,
+      "renderAs": "floor",
+      "block": false,
+      "stairDir": "down"
+    },
+    "swl": {
+      "color": 5263456,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "sfl": {
+      "color": 6318200,
+      "height": 0.15,
+      "renderAs": "floor",
+      "block": false
+    },
+    "cfl": {
+      "color": 5588036,
+      "height": 0.15,
+      "renderAs": "floor",
+      "block": false
+    },
+    "cwl": {
+      "color": 4469555,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "wtr": {
+      "color": 2121888,
+      "height": 0.1,
+      "renderAs": "floor",
+      "block": false
+    },
+    "bal": {
+      "color": 9465952,
+      "height": 0.2,
+      "renderAs": "floor",
+      "block": false
+    }
+  },
+  "entityTemplates": {
+    "gob": {
+      "type": "enemy",
+      "id": "goblin"
+    },
+    "orc": {
+      "type": "enemy",
+      "id": "orc"
+    }
+  },
+  "levels": {
+    "0": {
+      "binFile": "dungeon_t04_0.bin",
+      "playerPos": {
+        "x": 1040,
+        "y": 112
+      },
+      "entities": [
+        {
+          "symbol": "gob",
+          "x": 59,
+          "y": 46
+        },
+        {
+          "symbol": "gob",
+          "x": 18,
+          "y": 50
+        },
+        {
+          "symbol": "gob",
+          "x": 56,
+          "y": 47
+        },
+        {
+          "symbol": "gob",
+          "x": 37,
+          "y": 6
+        },
+        {
+          "symbol": "gob",
+          "x": 44,
+          "y": 63
+        },
+        {
+          "symbol": "gob",
+          "x": 23,
+          "y": 55
+        },
+        {
+          "symbol": "orc",
+          "x": 50,
+          "y": 28
+        },
+        {
+          "symbol": "gob",
+          "x": 46,
+          "y": 3
+        },
+        {
+          "symbol": "orc",
+          "x": 9,
+          "y": 11
+        },
+        {
+          "symbol": "gob",
+          "x": 52,
+          "y": 10
+        },
+        {
+          "symbol": "gob",
+          "x": 3,
+          "y": 52
+        },
+        {
+          "symbol": "gob",
+          "x": 43,
+          "y": 5
+        }
+      ]
+    },
+    "1": {
+      "binFile": "dungeon_t04_1.bin",
+      "playerPos": {
+        "x": 1040,
+        "y": 112
+      },
+      "entities": [
+        {
+          "symbol": "gob",
+          "x": 34,
+          "y": 31
+        },
+        {
+          "symbol": "gob",
+          "x": 31,
+          "y": 30
+        },
+        {
+          "symbol": "gob",
+          "x": 32,
+          "y": 30
+        },
+        {
+          "symbol": "gob",
+          "x": 28,
+          "y": 30
+        }
+      ]
+    }
+  }
+}
