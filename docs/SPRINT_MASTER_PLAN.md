@@ -118,3 +118,12 @@ Sprint 11 (paridade de magia e feedback visual):
 2. Altar de runas com mesmo fluxo de criacao do 2D.
 3. Sistema de sangue e overdamage igual ao 2D.
 4. Adaptacao temporaria de sprites 2D para heroi/inimigos no 3D via billboarding, ate substituicao artistica definitiva.
+5. Paridade de EXP no 3D com o 2D: notificacao de XP por kill + barra de progresso visivel no HUD (sem suppress de tipo exp no fluxo 3D).
+
+Sprint 12 (diretriz top-down por camadas):
+
+1. Formalizar arquitetura top-down por camadas como padrao de produto (ownership entre PlayerState, LevelRenderer, TransitionSystem e runtime 3D).
+2. Implementar ocultacao suave (fade) de andares/estruturas acima do player quando ele estiver sob cobertura.
+3. Definir e aplicar politica de memoria por camada: descarregar andares superiores nao relevantes e recarregar quando voltarem a ser visiveis.
+4. Padronizar semantica de camadas dos mapas para cenarios compostos (exemplo: esgoto no nivel base local, cidade suspensa acima, telhados/andares superiores em niveis seguintes).
+5. Definir politica do toggle de perspectiva durante migracao: remover do player-facing ou manter apenas para debug interno.

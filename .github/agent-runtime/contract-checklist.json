@@ -1,6 +1,6 @@
 ﻿{
-  "updatedAt": "2026-04-21T17:00:00Z",
-  "task": "Sprint 10: Paridade combate/sobrevivencia 2D->3D — food tick, defense formula, torch slot, unarmed attack",
+  "updatedAt": "2026-04-21T18:15:00Z",
+  "task": "Planejamento: incluir paridade de notificacao EXP 2D->3D e nova direcao top-down por camadas no backlog de sprint",
   "contractsRead": [
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
@@ -12,9 +12,9 @@
     "docs/contracts/LOCALIZATION_CONTRACT.md"
   ],
   "phaseStatus": "In progress",
-  "understanding": "S10-T1: playerState.update() nao chamado no 3D = sem hunger decay nem regen. S10-T2: defesa usa shieldDefense+dex*0.3 mas 2D usa getTotalDefense() via StatManager. S10-T3: StatManager adiciona def.damage para TODOS os slots, tocha no OFF_HAND some ataque. S10-T4: ataque desarmado deve ser 1..5.",
-  "riskConflict": "StatManager.ts mudanca para ataque apenas em MAIN_HAND pode quebrar items com damage em outros slots - verificar WeaponRegistry. getTotalDefense() usa StatManager que inclui nivel/reflexo - pode inflar demais a defesa se items ausentes.",
-  "objectiveQuestion": "Nenhuma pendencia bloqueante - todos os pontos sao bugs claros com solucao direta.",
+  "understanding": "Registrar no backlog: (1) paridade de notificacao de EXP no 3D igual 2D (toast exp + barra/progresso visivel), (2) nova direcao de arquitetura top-down por camadas com ocultacao suave de andares superiores e possivel descarte de memoria quando nao relevantes.",
+  "riskConflict": "Ha divergencia entre a direcao solicitada (top-down por camadas como padrao) e docs canonicos atuais de perspectiva que ainda descrevem 3D como direcao estrategica com fallback 2D temporario.",
+  "objectiveQuestion": "Definir no planejamento se o toggle de perspectiva sera removido por completo ou mantido apenas para debug durante transicao.",
   "documentationIndexChecked": true,
   "impactedModules": [
     "global-workflow",
@@ -37,11 +37,15 @@
     "docs/SPRINT_MASTER_PLAN.md",
     "docs/SPRINT_STATE.json"
   ],
-  "docsCoverageStatus": "covered",
-  "divergenceDetected": false,
-  "divergenceNotes": "",
-  "docUpdatesRequired": [],
-  "docUpdatesCompleted": true,
+  "docsCoverageStatus": "divergent",
+  "divergenceDetected": true,
+  "divergenceNotes": "PERSPECTIVE_MODE_MASTER_PLAN.md e PERSPECTIVE_MODE_CONTRACT.md apontam 3D como direcao estrategica, enquanto a nova solicitacao prioriza top-down por camadas como padrao de produto.",
+  "docUpdatesRequired": [
+    "Atualizar docs/PERSPECTIVE_MODE_MASTER_PLAN.md com direcao top-down por camadas como padrao",
+    "Atualizar docs/contracts/PERSPECTIVE_MODE_CONTRACT.md com politica de transicao do toggle de perspectiva",
+    "Atualizar docs/ARCHITECTURE_OVERVIEW.md com modelo de visibilidade vertical smooth hide/show por camadas"
+  ],
+  "docUpdatesCompleted": false,
   "validationResults": {
     "pending": false
   }

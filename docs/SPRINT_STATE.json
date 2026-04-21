@@ -5,7 +5,7 @@
   "sprintName": "Paridade combate/sobrevivencia 2D->3D",
   "status": "not-started",
   "startedAt": "2026-04-21",
-  "lastUpdatedAt": "2026-04-21T16:00:00Z",
+  "lastUpdatedAt": "2026-04-21T18:20:00Z",
   "lastCompletedTask": "Sprint 9 FECHADA (tsc zero erros, 14/14 benchmark): damage vignette FP, FP raycast interaction parity, escadas por clique direito, inimigos ocultos em andares inativos, menus 3D via event bridge",
   "nextTask": "Iniciar Sprint 10: paridade comida, formula defesa, tocha no escudo nao soma ataque, ataque desarmado 1-5",
   "owner": "GitHub Copilot",
@@ -26,7 +26,9 @@
     "simplex-noise ja estava instalado - reutilizado no generate-sewer-map.js.",
     "Hotfix telhado cidade_suspensa commit 81d3625.",
     "Hotfix ratos flutuando: advanceEnemyPath target.y corrigido para enemy.worldPos.y.",
-    "Sprint 9: todas issues do playtesting de interacao FP e visibilidade resolvidas."
+    "Sprint 9: todas issues do playtesting de interacao FP e visibilidade resolvidas.",
+    "Analise 2D EXP: NotificationSystem recebe uiNotification type=exp com barra (startProgress/endProgress), mas ThreeDSliceView suprime exp em NotificationSystem suppressTypes=['exp']; issue incluida no Sprint 11.",
+    "Nova direcao de produto registrada: top-down por camadas como padrao; backlog tecnico adicionado no Sprint 12 para visibilidade vertical smooth e politica de memoria de andares acima."
   ],
   "sprintBacklog": [
     { "id": "S10-T1", "title": "Paridade de comida 2D->3D: hunger/consumo/efeitos exatamente iguais ao 2D", "status": "not-started" },
@@ -43,6 +45,12 @@
     { "sprint": 11, "id": "S11-T1", "title": "Grimorio no 3D igual ao 2D: selecionar runa no menu proprio e disparar no inimigo", "status": "not-started" },
     { "sprint": 11, "id": "S11-T2", "title": "Altar de runas no 3D com mesmo fluxo de criacao do 2D", "status": "not-started" },
     { "sprint": 11, "id": "S11-T3", "title": "Sistema de sangue e overdamage igual ao 2D", "status": "not-started" },
-    { "sprint": 11, "id": "S11-T4", "title": "Adaptar sprites 2D de heroi/inimigos para render 3D (billboard temporario)", "status": "not-started" }
+    { "sprint": 11, "id": "S11-T4", "title": "Adaptar sprites 2D de heroi/inimigos para render 3D (billboard temporario)", "status": "not-started" },
+    { "sprint": 11, "id": "S11-T5", "title": "Paridade de EXP no 3D: notificacao de XP por kill + barra de progresso igual ao 2D (NotificationSystem/SkillProgressHUD)", "status": "not-started" },
+    { "sprint": 12, "id": "S12-T1", "title": "Arquitetura top-down por camadas como padrao: definir ownership e regra de visibilidade vertical", "status": "not-started" },
+    { "sprint": 12, "id": "S12-T2", "title": "Ocultacao suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "not-started" },
+    { "sprint": 12, "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima nao relevantes e recarregar ao sair da cobertura", "status": "not-started" },
+    { "sprint": 12, "id": "S12-T4", "title": "Padronizar semantica de camadas dos mapas (ex: esgoto 0, cidade suspensa 1, telhados/andares superiores)", "status": "not-started" },
+    { "sprint": 12, "id": "S12-T5", "title": "Definir politica do toggle de perspectiva (remocao ou debug-only) durante migracao top-down", "status": "not-started" }
   ]
 }
