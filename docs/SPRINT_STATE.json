@@ -1,13 +1,13 @@
 ﻿{
   "version": 1,
   "objective": "Grande versao funcional de RPG mundo aberto continuo, leve, sem loadings de tela e sem teleporte perceptivel",
-  "currentSprint": 14,
-  "sprintName": "Dungeons terreo v1",
+  "currentSprint": 15,
+  "sprintName": "Dungeons subterraneas v1",
   "status": "completed",
   "startedAt": "2026-04-22",
-  "lastUpdatedAt": "2026-04-22T01:00:00Z",
-  "lastCompletedTask": "Sprint 14 FECHADA: 7 dungeons terreo BMS gerados (dungeon_t01..t07) com 2 niveis cada",
-  "nextTask": "Iniciar Sprint 15",
+  "lastUpdatedAt": "2026-04-22T02:00:00Z",
+  "lastCompletedTask": "Sprint 15 FECHADA: 7 dungeons subterraneas BMS (dungeon_s01..s07) — total 14 dungeons",
+  "nextTask": "Iniciar Sprint 16",
   "owner": "GitHub Copilot",
   "completedSprints": [
     { "sprint": 1, "name": "Streaming continuo base", "completedAt": "2026-04-20", "deliverables": ["CHUNK_BUILD_BUDGET_PER_TICK=10","Nearest-first sort (Chebyshev)","CHUNK_UNLOAD_BUDGET_PER_TICK=8 farthest-first","window.__slice3dChunkStreaming metrics"] },
@@ -22,11 +22,13 @@
     { "sprint": 11, "name": "Grimório 3D, Altar parity, blood, billboard sprites", "completedAt": "2026-04-21", "deliverables": ["S11-T1: GrimórioContent window + targeting mode + castRuneAtTarget em createDebugSliceScene","S11-T2: tryPickupPersistentItem verifica ContainerRegistry — abre container em vez de pickup","S11-T3: emitBloodBurst() + destroyEnemy com contexto finishingDamage/isFireKill + partículas físicas","S11-T4: ThreeDEnemyVisualRegistry billboard sprites rat/orc/dragon; herói billboard hero_peasant.png, player.visibility=0.01","S11-T5: EXP suppress removido em NotificationSystem 3D — notificação XP por kill igual ao 2D","tsc --noEmit zero erros"] },
     { "sprint": 12, "name": "Top-down por camadas + bugs de combate", "completedAt": "2026-04-21", "deliverables": ["S12-T1/T4: semântica de camadas documentada (-1 esgoto, 0 térreo, +1 ilhas, +2 telhados)","S12-T2: roof fade ao entrar sob cobertura","S12-T3: política de streaming por nível documentada","S12-BUG1..4: minimap Y, Mesh em buildRoofMesh, debounce Tone.js, reflex XP em bloqueio","tsc --noEmit zero erros"] },
     { "sprint": 13, "name": "Ilhas v1 (3 ilhas)", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-islands-v1-map.js","public/maps/ilhas_v1.json + _0.bin + _1.bin + _2.bin (140x110 3 níveis)","Arquipélago único com 3 ilhas conectadas por passarelas no nível 1","Patamares superiores e lookouts no nível 2; spawn inicial no nível 1"] },
-    { "sprint": 14, "name": "Dungeons terreo v1", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-dungeons-terreo-v1.js","public/maps/dungeon_t01..t07.json + _0.bin + _1.bin (7 dungeons 2 niveis cada)","T01 Ruinas Antigas (60x60)","T02 Fortaleza Abandonada (80x80)","T03 Acampamento Goblin (70x70)","T04 Forte de Pedra (65x65)","T05 Templo Maldito (75x75)","T06 Covil de Bandidos (60x50)","T07 Mansao Assombrada (70x65)"] }
+    { "sprint": 14, "name": "Dungeons terreo v1", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-dungeons-terreo-v1.js","public/maps/dungeon_t01..t07.json + _0.bin + _1.bin (7 dungeons 2 niveis cada)","T01 Ruinas Antigas (60x60)","T02 Fortaleza Abandonada (80x80)","T03 Acampamento Goblin (70x70)","T04 Forte de Pedra (65x65)","T05 Templo Maldito (75x75)","T06 Covil de Bandidos (60x50)","T07 Mansao Assombrada (70x65)"] },
+    { "sprint": 15, "name": "Dungeons subterraneas v1", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-dungeons-sub-v1.js","public/maps/dungeon_s01..s07.json + _0.bin + _m1.bin (7 dungeons 2 niveis cada)","S01 Caverna dos Ratos (65x65): tuneis organicos","S02 Minas Abandonadas (80x55): corredores ortogonais","S03 Catacumbas Antigas (70x70): saloes cruciformes","S04 Gruta Inundada (75x60): plataformas sobre agua","S05 Ninho de Orcs (80x65): saloes circulares","S06 Abismo dos Magos (65x65): plataformas sobre vazio","S07 Cripta do Lich (75x75): labirinto simetrico","Total acumulado: 14 dungeons (Sprint 14+15)"] }
   ],
   "progressNotes": [
-    "Sprints 1-14 fechadas. tsc --noEmit zero erros em todos.",
+    "Sprints 1-15 fechadas. tsc --noEmit zero erros em todos.",
     "npm run build removido do fluxo obrigatório por diretriz do usuário — usando apenas tsc --noEmit.",
+    "Sprint 15: scripts/generate-dungeons-sub-v1.js — 7 dungeons subterraneas: S01 Caverna dos Ratos (tuneis organicos random-walk), S02 Minas Abandonadas (corredores ortogonais), S03 Catacumbas Antigas (saloes cruciformes, nichos), S04 Gruta Inundada (plataformas sobre agua), S05 Ninho de Orcs (saloes circulares, sala do chefe), S06 Abismo dos Magos (plataformas sobre vazio, pontes bal), S07 Cripta do Lich (labirinto de aneis concentricos). Total: 14 dungeons acumulados.",
     "Sprint 14: scripts/generate-dungeons-terreo-v1.js — 7 dungeons terreo distintos: T01 Ruinas Antigas, T02 Fortaleza Abandonada, T03 Acampamento Goblin, T04 Forte de Pedra, T05 Templo Maldito, T06 Covil de Bandidos, T07 Mansao Assombrada. Cada dungeon: 2 niveis BMS (terreo+alto), tamanhos entre 60x50 e 80x80, inimigos goblin/orc, escadas stu/std para nivel 1.",
     "Sprint 13: scripts/generate-islands-v1-map.js gerado; public/maps/ilhas_v1.json + _0.bin + _1.bin + _2.bin (140x110, 3 niveis). Arquipelago com 3 ilhas (west/north/east) conectadas por passarelas bal no nivel 1; lookouts no nivel 2 com escadas-para-baixo. Inimigos goblin/orc distribuidos. Spawn inicial no nivel 1, praca central da ilha norte.",
     "simplex-noise já estava instalado - reutilizado no generate-sewer-map.js.",
@@ -38,9 +40,9 @@
     "Diretriz confirmada pelo usuário: produto e mapas pensados exclusivamente para perspectiva top-down. Outros modos apenas como debug interno."
   ],
   "sprintBacklog": [
-    { "id": "S14-T1", "title": "Criar gerador BMS para 7 dungeons terreo distintos", "status": "completed" },
-    { "id": "S14-T2", "title": "Inimigos goblin/orc em cada dungeon (nivel 0 e nivel 1)", "status": "completed" },
-    { "id": "S14-T3", "title": "Escadas stu/std conectando nivel 0 <-> nivel 1 em cada dungeon", "status": "completed" }
+    { "id": "S15-T1", "title": "Criar gerador BMS para 7 dungeons subterraneas distintas", "status": "completed" },
+    { "id": "S15-T2", "title": "Inimigos goblin/orc distribuidos (nivel m1 subterraneo)", "status": "completed" },
+    { "id": "S15-T3", "title": "Escadas std/stu conectando nivel 0 <-> nivel m1 em cada dungeon", "status": "completed" }
   ],
     { "id": "S12-T2", "title": "Ocultação suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "completed" },
     { "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima não relevantes e recarregar ao sair da cobertura", "status": "completed" },

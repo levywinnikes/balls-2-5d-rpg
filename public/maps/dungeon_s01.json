@@ -1,0 +1,296 @@
+{
+  "mapName": "dungeon_s01",
+  "tileSize": 32,
+  "width": 65,
+  "height": 65,
+  "config": {
+    "startLevel": "0",
+    "mapName": "dungeon_s01"
+  },
+  "tileAtlas": [
+    "...",
+    "cob",
+    "wal",
+    "bwl",
+    "flr",
+    "rof",
+    "grs",
+    "stn",
+    "mkt",
+    "pil",
+    "fnt",
+    "tre",
+    "dwl",
+    "arc",
+    "sdw",
+    "stu",
+    "std",
+    "swl",
+    "sfl",
+    "cfl",
+    "cwl",
+    "wtr",
+    "bal"
+  ],
+  "tileDefinitions": {
+    "...": {
+      "color": 0,
+      "height": 0,
+      "renderAs": "empty",
+      "block": false
+    },
+    "cob": {
+      "color": 8947840,
+      "height": 0.15,
+      "renderAs": "floor",
+      "block": false
+    },
+    "wal": {
+      "color": 7364688,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "bwl": {
+      "color": 9127187,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "flr": {
+      "color": 10064016,
+      "height": 0.15,
+      "renderAs": "floor",
+      "block": false
+    },
+    "rof": {
+      "color": 5914152,
+      "height": 0.3,
+      "renderAs": "roof",
+      "block": false
+    },
+    "grs": {
+      "color": 4881471,
+      "height": 0.2,
+      "renderAs": "floor",
+      "block": false
+    },
+    "stn": {
+      "color": 8421504,
+      "height": 0.25,
+      "renderAs": "floor",
+      "block": false
+    },
+    "mkt": {
+      "color": 13934615,
+      "height": 0.2,
+      "renderAs": "floor",
+      "block": false
+    },
+    "pil": {
+      "color": 6316128,
+      "height": 2.5,
+      "renderAs": "wall",
+      "block": true
+    },
+    "fnt": {
+      "color": 4231360,
+      "height": 0.5,
+      "renderAs": "floor",
+      "block": false
+    },
+    "tre": {
+      "color": 2254370,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "dwl": {
+      "color": 10514512,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "arc": {
+      "color": 9474192,
+      "height": 2.2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "sdw": {
+      "color": 4210752,
+      "height": 0.05,
+      "renderAs": "floor",
+      "block": false
+    },
+    "stu": {
+      "color": 13152320,
+      "height": 0.5,
+      "renderAs": "floor",
+      "block": false,
+      "stairDir": "up"
+    },
+    "std": {
+      "color": 13144128,
+      "height": 0.5,
+      "renderAs": "floor",
+      "block": false,
+      "stairDir": "down"
+    },
+    "swl": {
+      "color": 5263456,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "sfl": {
+      "color": 6318200,
+      "height": 0.15,
+      "renderAs": "floor",
+      "block": false
+    },
+    "cfl": {
+      "color": 5588036,
+      "height": 0.15,
+      "renderAs": "floor",
+      "block": false
+    },
+    "cwl": {
+      "color": 4469555,
+      "height": 2,
+      "renderAs": "wall",
+      "block": true
+    },
+    "wtr": {
+      "color": 2121888,
+      "height": 0.1,
+      "renderAs": "floor",
+      "block": false
+    },
+    "bal": {
+      "color": 9465952,
+      "height": 0.2,
+      "renderAs": "floor",
+      "block": false
+    }
+  },
+  "entityTemplates": {
+    "gob": {
+      "type": "enemy",
+      "id": "goblin"
+    },
+    "orc": {
+      "type": "enemy",
+      "id": "orc"
+    }
+  },
+  "levels": {
+    "0": {
+      "binFile": "dungeon_s01_0.bin",
+      "playerPos": {
+        "x": 1040,
+        "y": 1040
+      },
+      "entities": []
+    },
+    "m1": {
+      "binFile": "dungeon_s01_m1.bin",
+      "playerPos": {
+        "x": 1040,
+        "y": 1040
+      },
+      "entities": [
+        {
+          "symbol": "orc",
+          "x": 28,
+          "y": 40
+        },
+        {
+          "symbol": "gob",
+          "x": 34,
+          "y": 42
+        },
+        {
+          "symbol": "gob",
+          "x": 22,
+          "y": 42
+        },
+        {
+          "symbol": "gob",
+          "x": 37,
+          "y": 54
+        },
+        {
+          "symbol": "gob",
+          "x": 30,
+          "y": 27
+        },
+        {
+          "symbol": "gob",
+          "x": 35,
+          "y": 38
+        },
+        {
+          "symbol": "gob",
+          "x": 25,
+          "y": 18
+        },
+        {
+          "symbol": "gob",
+          "x": 32,
+          "y": 47
+        },
+        {
+          "symbol": "gob",
+          "x": 12,
+          "y": 35
+        },
+        {
+          "symbol": "gob",
+          "x": 21,
+          "y": 16
+        },
+        {
+          "symbol": "gob",
+          "x": 12,
+          "y": 27
+        },
+        {
+          "symbol": "gob",
+          "x": 45,
+          "y": 23
+        },
+        {
+          "symbol": "gob",
+          "x": 19,
+          "y": 32
+        },
+        {
+          "symbol": "gob",
+          "x": 36,
+          "y": 13
+        },
+        {
+          "symbol": "gob",
+          "x": 26,
+          "y": 29
+        },
+        {
+          "symbol": "gob",
+          "x": 32,
+          "y": 10
+        },
+        {
+          "symbol": "gob",
+          "x": 55,
+          "y": 33
+        },
+        {
+          "symbol": "orc",
+          "x": 14,
+          "y": 31
+        }
+      ]
+    }
+  }
+}
