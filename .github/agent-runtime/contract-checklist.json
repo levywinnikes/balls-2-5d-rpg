@@ -1,30 +1,41 @@
 ﻿{
-  "updatedAt": "2026-04-18T15:45:00Z",
-  "task": "Feature: seeding automatico de itens de mapa no slice 3D por nivel",
+  "updatedAt": "2026-04-21T10:30:00Z",
+  "task": "Hotfix combate 3D: dano fisico variavel 1..ataqueMax para inimigos + backlog de interacoes da mira FP",
   "contractsRead": [
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
-    "docs/contracts/BENCHMARK_CONTRACT.md",
+    "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
+    "docs/contracts/BATTLE_SYSTEM_CONTRACT.md",
+    "docs/contracts/UI_DESIGN_CONTRACT.md",
     "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
     "docs/contracts/PLAYER_STATE_CONTRACT.md",
+    "docs/contracts/SAVE_SYSTEM_CONTRACT.md",
     "docs/contracts/LOCALIZATION_CONTRACT.md"
   ],
-  "phaseStatus": "Feature in progress",
-  "understanding": "Fazer o runtime 3D semear entidades de item do mapa no primeiro acesso ao nivel, escrevendo os dropped items persistentes no PlayerState e mantendo o pickup por UID sem estado paralelo.",
-  "riskConflict": "Risco de duplicar itens se o seeding rodar mais de uma vez por nivel ou se ignorar visitedLevels. Risco de divergencia com o fluxo 2D se o parsing de entidades-item nao respeitar entityTemplates e coordenadas em tiles (32px).",
-  "objectiveQuestion": "O slice 3D consegue semear itens de mapa por nivel no PlayerState e continuar com build + benchmark sem regressao?",
+  "phaseStatus": "In progress",
+  "understanding": "Corrigir divergencia com formula 2D: ataque fisico nunca pode ser fixo. Em 3D, inimigo deve usar rolagem 1..ataqueMax no calculo final de dano. Registrar backlog da mira FP para suportar interacoes equivalentes ao mouse da terceira pessoa.",
+  "riskConflict": "Mudanca de formula altera balanceamento de dano percebido. Mitigacao: manter mesma estrutura do BattleSystem (attackRoll - defenseRoll/2, armor reduction) e validar com tsc sem alterar API publica.",
+  "objectiveQuestion": "Nenhuma pendencia bloqueante.",
   "documentationIndexChecked": true,
-  "impactedModules": ["architecture-map", "perspective", "player-state", "localization", "benchmark"],
+  "impactedModules": [
+    "global-workflow",
+    "architecture-map",
+    "perspective",
+    "map-bms"
+  ],
   "docsRead": [
-    "docs/AI_READ_FIRST.md",
-    "docs/PROJECT_CONTRACT.md",
+    "docs/PROJECT_DOCUMENTATION_INDEX.md",
+    "docs/PROJECT_DOCUMENTATION_INDEX.json",
     "docs/AI_RUNBOOK.md",
     "docs/VALIDATION_MATRIX.md",
-    "docs/PROJECT_DOCUMENTATION_INDEX.json",
+    "docs/ARCHITECTURE_MAP.md",
+    "docs/ARCHITECTURE_OVERVIEW.md",
+    "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
     "docs/PERSPECTIVE_MODE_MASTER_PLAN.md",
-    "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/SYSTEM_BMS.md",
-    "docs/contracts/PLAYER_STATE_CONTRACT.md",
-    "docs/contracts/LOCALIZATION_CONTRACT.md"
+    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
+    "docs/contracts/MAP_SYSTEM_CONTRACT.md",
+    "docs/SPRINT_MASTER_PLAN.md",
+    "docs/SPRINT_STATE.json"
   ],
   "docsCoverageStatus": "covered",
   "divergenceDetected": false,
@@ -32,8 +43,6 @@
   "docUpdatesRequired": [],
   "docUpdatesCompleted": true,
   "validationResults": {
-    "pending": false,
-    "build": "pass",
-    "benchmarkE2E": "pass (14/14)"
+    "pending": false
   }
 }

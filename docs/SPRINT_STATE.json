@@ -1,0 +1,38 @@
+﻿{
+  "version": 1,
+  "objective": "Grande versao funcional de RPG mundo aberto continuo, leve, sem loadings de tela e sem teleporte perceptivel",
+  "currentSprint": 8,
+  "sprintName": "Runas simples v1",
+  "status": "not-started",
+  "startedAt": "2026-04-21",
+  "lastUpdatedAt": "2026-04-21T03:00:00Z",
+  "lastCompletedTask": "Sprint 7 FECHADA (tsc --noEmit zero erros): FP crosshair, emissive enemy pulse, camera height 0.55, sewer map gerado",
+  "nextTask": "Iniciar Sprint 8: Runas simples v1 - primeiras 2 runas funcionais no modo 3D",
+  "owner": "GitHub Copilot",
+  "completedSprints": [
+    { "sprint": 1, "name": "Streaming continuo base", "completedAt": "2026-04-20", "deliverables": ["CHUNK_BUILD_BUDGET_PER_TICK=10","Nearest-first sort (Chebyshev)","CHUNK_UNLOAD_BUDGET_PER_TICK=8 farthest-first","window.__slice3dChunkStreaming metrics"] },
+    { "sprint": 2, "name": "Persistencia por setor", "completedAt": "2026-04-20", "deliverables": ["PlayerState.deadEnemies3d + PlayerSnapshot.deadEnemies3d","SliceEnemy.spawnKey (level_type_index)","spawnEnemy: skip if dead; destroyEnemy: persist kill","exportSnapshot/loadState roundtrip"] },
+    { "sprint": 3, "name": "Navegacao vertical continua", "completedAt": "2026-04-20", "deliverables": ["isStairAnimActive flag: trigger guard correto","Movimento horizontal bloqueado durante animacao","Gravidade bypassada durante animacao","Ground clamp level-aware: levelToWorldY + PLAYER_GROUND_OFFSET","Seed de inimigos e itens ao entrar em novo nivel via escada"] },
+    { "sprint": 4, "name": "Cidade suspensa inicial v1", "completedAt": "2026-04-20", "deliverables": ["scripts/generate-city-suspensa-map.js","public/maps/cidade_suspensa.json + _0.bin + _1.bin (100x100 2 niveis)","Ilha flutuante circular ruas edificios praca central escadas","20 inimigos nivel 0 8 nivel 1"] },
+    { "sprint": 5, "name": "Esgoto v1 com ratos e mini-boss", "completedAt": "2026-04-21", "deliverables": ["scripts/generate-sewer-map.js (simplex-noise)","public/maps/esgoto_v1.json + _0.bin + _m1.bin (120x120 2 niveis)","Tuneis organicos simplex-noise canal de agua 7 escadas","Ratos tipo A/B e mini-boss skeleton no nivel -1"] },
+    { "sprint": 6, "name": "Paridade de combate 2D->3D (nucleo)", "completedAt": "2026-04-21", "deliverables": ["Formulas ja usavam BattleSystem.ts canonico - sem regressao","Sprint incorporada ao Sprint 7"] },
+    { "sprint": 7, "name": "Feedback de combate completo + FP polish", "completedAt": "2026-04-21", "deliverables": ["S7-FP1: Crosshair branco em cruz no modo first-person (ThreeDSliceView.tsx)","S7-FP4: Inimigo selecionado pisca em vermelho emissive pulse sine 1.8Hz - torus ring removido","S7-FP5: Camera FP height de 0.72 para 0.55 (ref Morrowind/Daggerfall)","CustomEvent slice3d:cameraModeChanged para comunicacao runtime->React","tsc --noEmit zero erros"] }
+  ],
+  "progressNotes": [
+    "Sprints 1-7 fechadas. tsc --noEmit zero erros em todos.",
+    "npm run build pausado por performance - usando tsc --noEmit.",
+    "simplex-noise ja estava instalado - reutilizado no generate-sewer-map.js.",
+    "S7-FP2 (coracao de dano HUD) e S7-FP3 (floating dmg FP projetado) pendentes para proximo sprint."
+  ],
+  "sprintBacklog": [
+    { "id": "S8-T1", "title": "Definir 2 runas iniciais (esquema de dados e registro)", "status": "not-started" },
+    { "id": "S8-T2", "title": "Efeito visual de runa ativada no modo 3D", "status": "not-started" },
+    { "id": "S8-T3", "title": "Integracao com PlayerState (slots de runa equipados)", "status": "not-started" },
+    { "id": "S8-T4", "title": "tsc --noEmit zero erros", "status": "not-started" }
+  ],
+  "futureBacklog": [
+    { "sprint": 8, "id": "S7-FP2", "title": "FP-DamageHud: coracao de dano proximo ao HUD de vida no modo FP", "notes": "Anima quando jogador recebe hit." },
+    { "sprint": 8, "id": "S7-FP3", "title": "FP-FloatingDmgEnemy: damage numbers do inimigo visiveis no modo FP", "notes": "Projetar posicao world-to-screen." },
+    { "sprint": 8, "id": "S7-FP6", "title": "FP-AimInteractionParity: mira em FP deve permitir selecionar, atacar, lootar e interagir como mouse em 3a pessoa", "notes": "Raycast central (crosshair) para alvo prioritario, interacao de containers/NPC/itens, e fallback de selecao equivalente ao clique em terceira pessoa." }
+  ]
+}
