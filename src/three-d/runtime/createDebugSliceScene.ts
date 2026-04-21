@@ -154,6 +154,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     "perspective_debug";
   const LEVEL_HEIGHT_UNITS = 3.2;
   const PLAYER_GROUND_OFFSET = 0.8;
+
+  // ── S12-T1/T4: Layer Semantics & Ownership (canonical, top-down is the product mode) ───────────
+  // Layer conventions:
+  //   -1 = underground / sewers (esgoto)
+  //    0 = ground floor (main streets, dungeon floor)
+  //   +1 = first upper floor / floating islands (cidade suspensa)
+  //   +2 = rooftops / open sky structures
+  // Ownership rules:
+  //   - LevelRenderer (buildChunk) owns all 3D tile geometry for activeLevel.
+  //   - Chunks are per-level: clearing all chunks on level change is the S12-T3 layer-streaming policy.
+  //   - Roofs (isRoofTile) on the active level are faded when the player is under them (S12-T2).
+  //   - All map/tile decisions use top-down perspective as the canonical product view.
+  // ────────────────────────────────────────────────────────────────────────────────────────────────
   const parseLevelNumber = (level: string) => Number.parseInt(level, 10) || 0;
   const levelToWorldY = (level: string | number) => {
     const levelNumber =
@@ -288,7 +301,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let enemyHighlightPulseT = 0; // accumulator for sine pulse (seconds)
 
   const mapRoot = new TransformNode("slice-map-root", scene);
-  // Chunk streaming constants
+  // Chunk streaming constants (S12-T3: one level loaded at a time; clearAllChunks on level change)
   const CHUNK_SIZE = 16; // tiles per chunk side
   const DRAW_RADIUS_CHUNKS = 5; // chunks kept loaded around player
   const CHUNK_BUILD_BUDGET_PER_TICK = 10; // max new chunks to build each update tick
@@ -297,6 +310,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const chunkLoading = new Set<string>();
   const tileMaterials = new Map<string, StandardMaterial>();
   const levelBinaryCache = new Map<string, Uint8Array>();
+  // S12-T2: track roof meshes for coverage-fade (top-down: fade when player enters under roof)
+  const roofMeshes = new Set<Mesh>();
 
   let mapMinX = 0;
   let mapMaxX = 24;
@@ -761,13 +776,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const clearChunk = (key: string) => {
     const meshes = chunkMeshes.get(key);
     if (meshes) {
-      meshes.forEach((m) => m.dispose());
+      meshes.forEach((m) => {
+        roofMeshes.delete(m);
+        m.dispose();
+      });
       chunkMeshes.delete(key);
     }
   };
 
   const clearAllChunks = () => {
-    chunkMeshes.forEach((meshes) => meshes.forEach((m) => m.dispose()));
+    chunkMeshes.forEach((meshes) => meshes.forEach((m) => {
+      roofMeshes.delete(m);
+      m.dispose();
+    }));
     chunkMeshes.clear();
     chunkLoading.clear();
   };
@@ -838,7 +859,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     baseY: number,
     ridgeH: number,
   ): Mesh => {
-    const group = new TransformNode(name, scene);
+    // S12-BUG2: must be Mesh (not TransformNode) so vd.applyToMesh works
+    const group = new Mesh(name, scene);
 
     const x0 = tx,
       x1 = tx + 1;
@@ -890,9 +912,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     vd.positions = positions;
     vd.indices = indices;
     vd.normals = normals;
-    vd.applyToMesh(group as any as Mesh);
+    vd.applyToMesh(group);
 
-    return group as any as Mesh;
+    return group;
   };
 
   // Build (or skip) one 16×16-tile chunk at chunk-grid position (cx, cy).
@@ -978,6 +1000,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             );
             roofMesh.material = getTileMaterial(symbol, tileDef, "#8b3a2a");
             roofMesh.parent = mapRoot;
+            roofMeshes.add(roofMesh); // S12-T2: register for coverage-fade
             meshes.push(roofMesh);
           } else {
             const tileHeight = blocking
@@ -1809,6 +1832,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           return;
         }
       } else {
+        // S12-BUG4: gain reflex XP on full block (parity with 2D BattleSystem)
+        const defenseExp = Math.max(1, enemy.definition.defense || 1);
+        const totalReflexXp = defenseExp + attackRoll;
+        playerState.gainReflexExperience(totalReflexXp);
         playerState.emit("floatingText", {
           x: player.position.x,
           y: player.position.y,
@@ -1818,7 +1845,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         });
         playerState.log(
           "combat_blocked_player",
-          { target: enemy.enemyType },
+          { target: enemy.enemyType, xp: totalReflexXp },
           "#aaaaff",
         );
         audioManager.playBlock();
@@ -2746,6 +2773,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (key === "v" && !event.repeat) {
+      // S12-T5: FP mode is DEBUG ONLY — product is always top-down. V = debug toggle.
+      if (!isFirstPerson) {
+        // eslint-disable-next-line no-console
+        console.warn("[DEBUG] Entering first-person mode — debug-only camera. Top-down is the product view.");
+      }
       setCameraMode(!isFirstPerson, !isFirstPerson);
     }
 
@@ -2906,6 +2938,22 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (chunkUpdateTimer >= CHUNK_UPDATE_INTERVAL) {
       chunkUpdateTimer = 0;
       updateChunks();
+      // S12-T2: fade roofs when player is under cover (top-down product mode)
+      // Determine if player is "under" a roof tile by checking nearby blocking tiles above player
+      if (!isFirstPerson && roofMeshes.size > 0) {
+        const px = player.position.x;
+        const pz = player.position.z;
+        const playerWorldY = player.position.y;
+        roofMeshes.forEach((rm) => {
+          if (!rm || rm.isDisposed()) return;
+          const dx = Math.abs(rm.position.x - px);
+          const dz = Math.abs(rm.position.z - pz);
+          // Under roof: horizontally close and roof Y is above player
+          const underRoof = dx < 2.5 && dz < 2.5 && rm.position.y > playerWorldY;
+          const targetVis = underRoof ? 0.08 : 1.0;
+          rm.visibility = rm.visibility + (targetVis - rm.visibility) * 0.25;
+        });
+      }
     }
     const speed = 4.5;
     let moveForward = 0;
@@ -3063,7 +3111,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       playerState.recordPlayerPosition(
         activeLevel,
         player.position.x * 32,
-        player.position.z * 32,
+        // S12-BUG1: 3D +Z = visual up; buffer row 0 = Z=0 = bottom → invert so minimap Y matches screen
+        (currentMapHeight - player.position.z) * 32,
       );
       return;
     }
@@ -3089,7 +3138,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerState.recordPlayerPosition(
       activeLevel,
       player.position.x * 32,
-      player.position.z * 32,
+      // S12-BUG1: 3D +Z = visual up; buffer row 0 = Z=0 = bottom → invert so minimap Y matches screen
+      (currentMapHeight - player.position.z) * 32,
     );
   });
 

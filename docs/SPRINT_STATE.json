@@ -3,11 +3,11 @@
   "objective": "Grande versao funcional de RPG mundo aberto continuo, leve, sem loadings de tela e sem teleporte perceptivel",
   "currentSprint": 12,
   "sprintName": "Top-down por camadas + bugs de combate",
-  "status": "not-started",
+  "status": "completed",
   "startedAt": "2026-04-21",
-  "lastUpdatedAt": "2026-04-21T23:00:00Z",
-  "lastCompletedTask": "Sprint 11 FECHADA (tsc zero erros): Grimório 3D targeting mode, Altar parity container open, blood/overdamage burst, billboard sprites inimigos e herói, EXP 3D parity",
-  "nextTask": "Iniciar Sprint 12: top-down por camadas, bugs S12-BUG1..4",
+  "lastUpdatedAt": "2026-04-21T23:30:00Z",
+  "lastCompletedTask": "Sprint 12 FECHADA (tsc zero erros): layer semantics, roof fade, streaming policy, minimap Y fix, Tone.js debounce, reflex XP, buildRoofMesh crash fix",
+  "nextTask": "Iniciar Sprint 13",
   "owner": "GitHub Copilot",
   "completedSprints": [
     { "sprint": 1, "name": "Streaming continuo base", "completedAt": "2026-04-20", "deliverables": ["CHUNK_BUILD_BUDGET_PER_TICK=10","Nearest-first sort (Chebyshev)","CHUNK_UNLOAD_BUDGET_PER_TICK=8 farthest-first","window.__slice3dChunkStreaming metrics"] },
@@ -22,25 +22,26 @@
     { "sprint": 11, "name": "Grimório 3D, Altar parity, blood, billboard sprites", "completedAt": "2026-04-21", "deliverables": ["S11-T1: GrimórioContent window + targeting mode + castRuneAtTarget em createDebugSliceScene","S11-T2: tryPickupPersistentItem verifica ContainerRegistry — abre container em vez de pickup","S11-T3: emitBloodBurst() + destroyEnemy com contexto finishingDamage/isFireKill + partículas físicas","S11-T4: ThreeDEnemyVisualRegistry billboard sprites rat/orc/dragon; herói billboard hero_peasant.png, player.visibility=0.01","S11-T5: EXP suppress removido em NotificationSystem 3D — notificação XP por kill igual ao 2D","tsc --noEmit zero erros"] }
   ],
   "progressNotes": [
-    "Sprints 1-11 fechadas. tsc --noEmit zero erros em todos.",
+    "Sprints 1-12 fechadas. tsc --noEmit zero erros em todos.",
     "npm run build removido do fluxo obrigatório por diretriz do usuário — usando apenas tsc --noEmit.",
     "simplex-noise já estava instalado - reutilizado no generate-sewer-map.js.",
     "Hotfix telhado cidade_suspensa commit 81d3625.",
     "Hotfix ratos flutuando: advanceEnemyPath target.y corrigido para enemy.worldPos.y.",
     "Sprint 9: todas issues do playtesting de interação FP e visibilidade resolvidas.",
     "Sprint 11: Grimório 3D targeting mode completo; billboard sprites herói e inimigos; blood burst em overkill; altar parity via ContainerRegistry.",
+    "Sprint 12: layer semantics constants + ownership docs; roof fade (S12-T2); streaming policy (S12-T3); minimap Y invertido (S12-BUG1); buildRoofMesh usa Mesh não TransformNode (S12-BUG2); Tone.js debounce 80ms (S12-BUG3); reflex XP em bloqueio 3D (S12-BUG4); FP marcado debug-only (S12-T5).",
     "Diretriz confirmada pelo usuário: produto e mapas pensados exclusivamente para perspectiva top-down. Outros modos apenas como debug interno."
   ],
   "sprintBacklog": [
-    { "id": "S12-T1", "title": "Arquitetura top-down por camadas como padrão: definir ownership e regra de visibilidade vertical", "status": "not-started" },
-    { "id": "S12-T2", "title": "Ocultação suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "not-started" },
-    { "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima não relevantes e recarregar ao sair da cobertura", "status": "not-started" },
-    { "id": "S12-T4", "title": "Padronizar semântica de camadas dos mapas (ex: esgoto 0, cidade suspensa 1, telhados/andares superiores)", "status": "not-started" },
-    { "id": "S12-T5", "title": "Manter outros modos de visão apenas como debug interno durante a migração", "status": "not-started" },
-    { "id": "S12-BUG1", "title": "[BUG] Minimap eixo Y invertido", "status": "not-started" },
-    { "id": "S12-BUG2", "title": "[BUG] buildRoofMesh: setVerticesData is not a function", "status": "not-started" },
-    { "id": "S12-BUG3", "title": "[BUG] Tone.js assert: Start time must be strictly greater than previous start time", "status": "not-started" },
-    { "id": "S12-BUG4", "title": "[BUG] Bloqueio sem ganho de EXP de reflexo", "status": "not-started" }
+    { "id": "S12-T1", "title": "Arquitetura top-down por camadas como padrão: definir ownership e regra de visibilidade vertical", "status": "completed" },
+    { "id": "S12-T2", "title": "Ocultação suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "completed" },
+    { "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima não relevantes e recarregar ao sair da cobertura", "status": "completed" },
+    { "id": "S12-T4", "title": "Padronizar semântica de camadas dos mapas (ex: esgoto 0, cidade suspensa 1, telhados/andares superiores)", "status": "completed" },
+    { "id": "S12-T5", "title": "Manter outros modos de visão apenas como debug interno durante a migração", "status": "completed" },
+    { "id": "S12-BUG1", "title": "[BUG] Minimap eixo Y invertido", "status": "completed" },
+    { "id": "S12-BUG2", "title": "[BUG] buildRoofMesh: setVerticesData is not a function", "status": "completed" },
+    { "id": "S12-BUG3", "title": "[BUG] Tone.js assert: Start time must be strictly greater than previous start time", "status": "completed" },
+    { "id": "S12-BUG4", "title": "[BUG] Bloqueio sem ganho de EXP de reflexo", "status": "completed" }
   ],
   "futureBacklog": [
     { "sprint": 10, "id": "S10-T1", "title": "Paridade de comida 2D->3D: hunger/consumo/efeitos exatamente iguais ao 2D", "status": "completed" },
@@ -52,14 +53,14 @@
     { "sprint": 11, "id": "S11-T3", "title": "Sistema de sangue e overdamage igual ao 2D", "status": "completed" },
     { "sprint": 11, "id": "S11-T4", "title": "Adaptar sprites 2D de heroi/inimigos para render 3D (billboard temporario)", "status": "completed" },
     { "sprint": 11, "id": "S11-T5", "title": "Paridade de EXP no 3D: notificacao de XP por kill + barra de progresso igual ao 2D (NotificationSystem/SkillProgressHUD)", "status": "completed" },
-    { "sprint": 12, "id": "S12-T1", "title": "Arquitetura top-down por camadas como padrao: definir ownership e regra de visibilidade vertical", "status": "not-started" },
-    { "sprint": 12, "id": "S12-T2", "title": "Ocultacao suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "not-started" },
-    { "sprint": 12, "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima nao relevantes e recarregar ao sair da cobertura", "status": "not-started" },
-    { "sprint": 12, "id": "S12-T4", "title": "Padronizar semantica de camadas dos mapas (ex: esgoto 0, cidade suspensa 1, telhados/andares superiores)", "status": "not-started" },
-    { "sprint": 12, "id": "S12-T5", "title": "Manter outros modos de visao apenas como debug interno durante a migracao; produto e mapas pensados somente para top-down", "status": "not-started" },
-    { "sprint": 12, "id": "S12-BUG1", "title": "[BUG] Minimap eixo Y invertido: mover para cima no jogo desce no minimap e vice-versa", "status": "not-started", "type": "bug", "area": "ui/minimap", "description": "No modo top-down o eixo Y do minimap esta invertido em relacao ao movimento do jogador. Mover para cima no jogo faz o ponto descer no minimap. Prover mapa que reflita fielmente a direcao do movimento (Y do mapa = Y do mundo, mesmo sinal)." },
-    { "sprint": 12, "id": "S12-BUG2", "title": "[BUG] buildRoofMesh: meshOrGeometry.setVerticesData is not a function (VertexData.applyToMesh falha em telhados)", "status": "not-started", "type": "bug", "area": "3d/chunk-builder", "description": "Erro de runtime no Babylon: VertexData.applyToMesh chama setVerticesData em um objeto que nao e AbstractMesh (provavelmente recebe null/undefined ou um objeto incorreto em buildRoofMesh). Rastrear o argumento passado para buildRoofMesh em buildChunk e garantir que o mesh foi criado antes de aplicar os vertices." },
-    { "sprint": 12, "id": "S12-BUG3", "title": "[BUG] Tone.js assert: Start time must be strictly greater than previous start time", "status": "not-started", "type": "bug", "area": "audio/combat", "description": "Erro intermitente em combate ao tocar SFX de ataque: Noise.start dispara assert de tempo no Tone.js quando playAttack e acionado em alta frequencia dentro de applyEnemyAttackToPlayer/updateEnemyAI. Investigar debounce/rate-limit/reuso de voz para NoiseSynth e garantir monotonicidade do start time." },
-    { "sprint": 12, "id": "S12-BUG4", "title": "[BUG] Bloqueio sem ganho de EXP de reflexo", "status": "not-started", "type": "bug", "area": "combat/xp", "description": "Ao defender/bloquear ataques, o jogador nao esta recebendo experiencia de reflexo como esperado pela regra de combate. Validar fluxo no BattleSystem (2D) e runtime 3D para garantir ganho de reflex XP em bloqueios validos (full/partial block)." }
+    { "sprint": 12, "id": "S12-T1", "title": "Arquitetura top-down por camadas como padrao: definir ownership e regra de visibilidade vertical", "status": "completed" },
+    { "sprint": 12, "id": "S12-T2", "title": "Ocultacao suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "completed" },
+    { "sprint": 12, "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima nao relevantes e recarregar ao sair da cobertura", "status": "completed" },
+    { "sprint": 12, "id": "S12-T4", "title": "Padronizar semantica de camadas dos mapas (ex: esgoto 0, cidade suspensa 1, telhados/andares superiores)", "status": "completed" },
+    { "sprint": 12, "id": "S12-T5", "title": "Manter outros modos de visao apenas como debug interno durante a migracao; produto e mapas pensados somente para top-down", "status": "completed" },
+    { "sprint": 12, "id": "S12-BUG1", "title": "[BUG] Minimap eixo Y invertido: mover para cima no jogo desce no minimap e vice-versa", "status": "completed" },
+    { "sprint": 12, "id": "S12-BUG2", "title": "[BUG] buildRoofMesh: meshOrGeometry.setVerticesData is not a function (VertexData.applyToMesh falha em telhados)", "status": "completed" },
+    { "sprint": 12, "id": "S12-BUG3", "title": "[BUG] Tone.js assert: Start time must be strictly greater than previous start time", "status": "completed" },
+    { "sprint": 12, "id": "S12-BUG4", "title": "[BUG] Bloqueio sem ganho de EXP de reflexo", "status": "completed" }
   ]
 }
