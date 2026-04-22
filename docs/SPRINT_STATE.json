@@ -1,13 +1,13 @@
-﻿{
+{
   "version": 1,
   "objective": "Grande versao funcional de RPG mundo aberto continuo, leve, sem loadings de tela e sem teleporte perceptivel",
-  "currentSprint": 15,
-  "sprintName": "Dungeons subterraneas v1",
+  "currentSprint": 16,
+  "sprintName": "Torres v1",
   "status": "completed",
   "startedAt": "2026-04-22",
-  "lastUpdatedAt": "2026-04-22T02:00:00Z",
-  "lastCompletedTask": "Sprint 15 FECHADA: 7 dungeons subterraneas BMS (dungeon_s01..s07) — total 14 dungeons",
-  "nextTask": "Iniciar Sprint 16",
+  "lastUpdatedAt": "2026-04-22T03:00:00Z",
+  "lastCompletedTask": "Sprint 16 FECHADA: torres_v1 em BMS com 3 torres conectadas (niveis 0, 1 e 2)",
+  "nextTask": "Iniciar Sprint 17",
   "owner": "GitHub Copilot",
   "completedSprints": [
     { "sprint": 1, "name": "Streaming continuo base", "completedAt": "2026-04-20", "deliverables": ["CHUNK_BUILD_BUDGET_PER_TICK=10","Nearest-first sort (Chebyshev)","CHUNK_UNLOAD_BUDGET_PER_TICK=8 farthest-first","window.__slice3dChunkStreaming metrics"] },
@@ -23,11 +23,13 @@
     { "sprint": 12, "name": "Top-down por camadas + bugs de combate", "completedAt": "2026-04-21", "deliverables": ["S12-T1/T4: semântica de camadas documentada (-1 esgoto, 0 térreo, +1 ilhas, +2 telhados)","S12-T2: roof fade ao entrar sob cobertura","S12-T3: política de streaming por nível documentada","S12-BUG1..4: minimap Y, Mesh em buildRoofMesh, debounce Tone.js, reflex XP em bloqueio","tsc --noEmit zero erros"] },
     { "sprint": 13, "name": "Ilhas v1 (3 ilhas)", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-islands-v1-map.js","public/maps/ilhas_v1.json + _0.bin + _1.bin + _2.bin (140x110 3 níveis)","Arquipélago único com 3 ilhas conectadas por passarelas no nível 1","Patamares superiores e lookouts no nível 2; spawn inicial no nível 1"] },
     { "sprint": 14, "name": "Dungeons terreo v1", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-dungeons-terreo-v1.js","public/maps/dungeon_t01..t07.json + _0.bin + _1.bin (7 dungeons 2 niveis cada)","T01 Ruinas Antigas (60x60)","T02 Fortaleza Abandonada (80x80)","T03 Acampamento Goblin (70x70)","T04 Forte de Pedra (65x65)","T05 Templo Maldito (75x75)","T06 Covil de Bandidos (60x50)","T07 Mansao Assombrada (70x65)"] },
-    { "sprint": 15, "name": "Dungeons subterraneas v1", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-dungeons-sub-v1.js","public/maps/dungeon_s01..s07.json + _0.bin + _m1.bin (7 dungeons 2 niveis cada)","S01 Caverna dos Ratos (65x65): tuneis organicos","S02 Minas Abandonadas (80x55): corredores ortogonais","S03 Catacumbas Antigas (70x70): saloes cruciformes","S04 Gruta Inundada (75x60): plataformas sobre agua","S05 Ninho de Orcs (80x65): saloes circulares","S06 Abismo dos Magos (65x65): plataformas sobre vazio","S07 Cripta do Lich (75x75): labirinto simetrico","Total acumulado: 14 dungeons (Sprint 14+15)"] }
+    { "sprint": 15, "name": "Dungeons subterraneas v1", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-dungeons-sub-v1.js","public/maps/dungeon_s01..s07.json + _0.bin + _m1.bin (7 dungeons 2 niveis cada)","S01 Caverna dos Ratos (65x65): tuneis organicos","S02 Minas Abandonadas (80x55): corredores ortogonais","S03 Catacumbas Antigas (70x70): saloes cruciformes","S04 Gruta Inundada (75x60): plataformas sobre agua","S05 Ninho de Orcs (80x65): saloes circulares","S06 Abismo dos Magos (65x65): plataformas sobre vazio","S07 Cripta do Lich (75x75): labirinto simetrico","Total acumulado: 14 dungeons (Sprint 14+15)"] },
+    { "sprint": 16, "name": "Torres v1 (3)", "completedAt": "2026-04-22", "deliverables": ["scripts/generate-towers-v1-map.js","public/maps/torres_v1.json + _0.bin + _1.bin + _2.bin (150x120, 3 niveis)","Mapa unico com 3 torres (west/north/east) conectadas por caminhos e pontes altas","Nivel 0 base das torres + praca central; nivel 1 andares medios com bridges; nivel 2 topos/mirantes","Escadas stu/std funcionais entre niveis e inimigos goblin/orc distribuidos"] }
   ],
   "progressNotes": [
-    "Sprints 1-15 fechadas. tsc --noEmit zero erros em todos.",
+    "Sprints 1-16 fechadas. tsc --noEmit zero erros em todos.",
     "npm run build removido do fluxo obrigatório por diretriz do usuário — usando apenas tsc --noEmit.",
+    "Sprint 16: scripts/generate-towers-v1-map.js gerado; public/maps/torres_v1.json + _0.bin + _1.bin + _2.bin (150x120, 3 niveis). Mapa unico com 3 torres conectadas, base no nivel 0, andares medios no nivel 1 e mirantes no nivel 2 com bridges bal. Spawn na praca central e inimigos goblin/orc distribuidos.",
     "Sprint 15: scripts/generate-dungeons-sub-v1.js — 7 dungeons subterraneas: S01 Caverna dos Ratos (tuneis organicos random-walk), S02 Minas Abandonadas (corredores ortogonais), S03 Catacumbas Antigas (saloes cruciformes, nichos), S04 Gruta Inundada (plataformas sobre agua), S05 Ninho de Orcs (saloes circulares, sala do chefe), S06 Abismo dos Magos (plataformas sobre vazio, pontes bal), S07 Cripta do Lich (labirinto de aneis concentricos). Total: 14 dungeons acumulados.",
     "Sprint 14: scripts/generate-dungeons-terreo-v1.js — 7 dungeons terreo distintos: T01 Ruinas Antigas, T02 Fortaleza Abandonada, T03 Acampamento Goblin, T04 Forte de Pedra, T05 Templo Maldito, T06 Covil de Bandidos, T07 Mansao Assombrada. Cada dungeon: 2 niveis BMS (terreo+alto), tamanhos entre 60x50 e 80x80, inimigos goblin/orc, escadas stu/std para nivel 1.",
     "Sprint 13: scripts/generate-islands-v1-map.js gerado; public/maps/ilhas_v1.json + _0.bin + _1.bin + _2.bin (140x110, 3 niveis). Arquipelago com 3 ilhas (west/north/east) conectadas por passarelas bal no nivel 1; lookouts no nivel 2 com escadas-para-baixo. Inimigos goblin/orc distribuidos. Spawn inicial no nivel 1, praca central da ilha norte.",
@@ -40,18 +42,9 @@
     "Diretriz confirmada pelo usuário: produto e mapas pensados exclusivamente para perspectiva top-down. Outros modos apenas como debug interno."
   ],
   "sprintBacklog": [
-    { "id": "S15-T1", "title": "Criar gerador BMS para 7 dungeons subterraneas distintas", "status": "completed" },
-    { "id": "S15-T2", "title": "Inimigos goblin/orc distribuidos (nivel m1 subterraneo)", "status": "completed" },
-    { "id": "S15-T3", "title": "Escadas std/stu conectando nivel 0 <-> nivel m1 em cada dungeon", "status": "completed" }
-  ],
-    { "id": "S12-T2", "title": "Ocultação suave de estruturas acima do player (fade in/out) quando ele entra sob cobertura", "status": "completed" },
-    { "id": "S12-T3", "title": "Streaming por camadas: descarregar andares acima não relevantes e recarregar ao sair da cobertura", "status": "completed" },
-    { "id": "S12-T4", "title": "Padronizar semântica de camadas dos mapas (ex: esgoto 0, cidade suspensa 1, telhados/andares superiores)", "status": "completed" },
-    { "id": "S12-T5", "title": "Manter outros modos de visão apenas como debug interno durante a migração", "status": "completed" },
-    { "id": "S12-BUG1", "title": "[BUG] Minimap eixo Y invertido", "status": "completed" },
-    { "id": "S12-BUG2", "title": "[BUG] buildRoofMesh: setVerticesData is not a function", "status": "completed" },
-    { "id": "S12-BUG3", "title": "[BUG] Tone.js assert: Start time must be strictly greater than previous start time", "status": "completed" },
-    { "id": "S12-BUG4", "title": "[BUG] Bloqueio sem ganho de EXP de reflexo", "status": "completed" }
+    { "id": "S16-T1", "title": "Gerar mapa BMS unico com 3 torres conectadas (base, meio e topo)", "status": "completed" },
+    { "id": "S16-T2", "title": "Distribuir inimigos goblin/orc nos niveis 0, 1 e 2", "status": "completed" },
+    { "id": "S16-T3", "title": "Escadas stu/std funcionais entre os niveis das torres", "status": "completed" }
   ],
   "futureBacklog": [
     { "sprint": 10, "id": "S10-T1", "title": "Paridade de comida 2D->3D: hunger/consumo/efeitos exatamente iguais ao 2D", "status": "completed" },
