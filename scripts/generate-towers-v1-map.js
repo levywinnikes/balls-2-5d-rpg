@@ -191,9 +191,9 @@ function decorateTowerTop(grid, tower, random) {
 function generateLevel0(random) {
   const grid = makeGrid("grs");
   const towers = [
-    { id: "west", cx: 30, cy: 66, baseRadius: 12, midRadius: 9, topRadius: 7 },
-    { id: "north", cx: 75, cy: 34, baseRadius: 13, midRadius: 10, topRadius: 8 },
-    { id: "east", cx: 120, cy: 68, baseRadius: 12, midRadius: 9, topRadius: 7 },
+    { id: "west", cx: 30, cy: 66, baseRadius: 12, midRadius: 12, topRadius: 12 },
+    { id: "north", cx: 75, cy: 34, baseRadius: 13, midRadius: 13, topRadius: 13 },
+    { id: "east", cx: 120, cy: 68, baseRadius: 12, midRadius: 12, topRadius: 12 },
   ];
 
   // Praca central conectando as torres

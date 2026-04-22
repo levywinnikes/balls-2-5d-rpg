@@ -1,25 +1,24 @@
 ﻿{
-  "updatedAt": "2026-04-22T02:20:00Z",
-  "task": "Sprint 16 — Torres v1 (3 torres) em mapa BMS unico",
+  "updatedAt": "2026-04-22T03:50:00Z",
+  "task": "Tuning visual 3D: reduzir espacamento vertical entre andares para pilha contínua",
   "contractsRead": [
+    "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
+    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
     "docs/SYSTEM_BMS.md"
   ],
-  "understanding": "Gerar um mapa BMS unico com 3 torres conectadas, com niveis por altura, escadas funcionais e entidades goblin/orc, depois atualizar SPRINT_STATE e commitar.",
-  "riskConflict": "Preciso manter tileSize=32, atlas compativel, niveis superiores com default void ('...') e nao acessar dados de mapa fora de MapLoader no runtime. Benchmark/build seguem fora do fluxo atual por diretriz do usuario.",
-  "objectiveQuestion": "Sem bloqueio: assumir torres v1 como mapa unico com 3 torres conectadas, alinhado ao padrao de sprint anterior.",
+  "understanding": "Ajustar apenas a distancia vertical entre niveis no renderer 3D para que andares empilhem visualmente como torre contínua, preservando a logica de oclusao por cobertura.",
+  "riskConflict": "Diminuir demais a altura entre niveis pode causar sobreposicao visual entre teto/chao ou clipping de camera; ajuste deve manter legibilidade e navegacao entre escadas.",
+  "objectiveQuestion": "Sem bloqueio: aplicar tuning no LEVEL_HEIGHT_UNITS em createDebugSliceScene.ts e validar com tsc.",
   "documentationIndexChecked": true,
   "impactedModules": [
-    "map-system",
-    "bms",
-    "scripts",
-    "public-maps",
-    "sprint-state"
+    "three-d-runtime"
   ],
   "docsRead": [
+    "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
+    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
-    "docs/SYSTEM_BMS.md",
-    "docs/SPRINT_MASTER_PLAN.md"
+    "docs/SYSTEM_BMS.md"
   ],
   "docsCoverageStatus": "covered",
   "divergenceDetected": false,

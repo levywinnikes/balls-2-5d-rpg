@@ -152,7 +152,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     searchParams.get("map") ||
     searchParams.get("mapName") ||
     "perspective_debug";
-  const LEVEL_HEIGHT_UNITS = 3.2;
+  // Match standard wall height to remove visible seams between stacked floors.
+  const LEVEL_HEIGHT_UNITS = 2.0;
   const PLAYER_GROUND_OFFSET = 0.8;
 
   // ── S12-T1/T4: Layer Semantics & Ownership (canonical, top-down is the product mode) ───────────
@@ -162,9 +163,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   //   +1 = first upper floor / floating islands (cidade suspensa)
   //   +2 = rooftops / open sky structures
   // Ownership rules:
-  //   - LevelRenderer (buildChunk) owns all 3D tile geometry for activeLevel.
-  //   - Chunks are per-level: clearing all chunks on level change is the S12-T3 layer-streaming policy.
-  //   - Roofs (isRoofTile) on the active level are faded when the player is under them (S12-T2).
+  //   - LevelRenderer (buildChunk) owns all 3D tile geometry for visible levels around activeLevel.
+  //   - Chunks are rebuilt on level change to keep visual stack and currentLevel state synchronized.
+  //   - Roofs (isRoofTile) are faded when the player is under them (S12-T2).
   //   - All map/tile decisions use top-down perspective as the canonical product view.
   // ────────────────────────────────────────────────────────────────────────────────────────────────
   const parseLevelNumber = (level: string) => Number.parseInt(level, 10) || 0;
@@ -301,7 +302,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let enemyHighlightPulseT = 0; // accumulator for sine pulse (seconds)
 
   const mapRoot = new TransformNode("slice-map-root", scene);
-  // Chunk streaming constants (S12-T3: one level loaded at a time; clearAllChunks on level change)
+  // Chunk streaming constants (S16 parity fix: render visible levels together; keep clearAllChunks on level change)
   const CHUNK_SIZE = 16; // tiles per chunk side
   const DRAW_RADIUS_CHUNKS = 5; // chunks kept loaded around player
   const CHUNK_BUILD_BUDGET_PER_TICK = 10; // max new chunks to build each update tick
@@ -310,6 +311,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const chunkLoading = new Set<string>();
   const tileMaterials = new Map<string, StandardMaterial>();
   const levelBinaryCache = new Map<string, Uint8Array>();
+  const meshLevelByMesh = new Map<Mesh, string>();
+  const levelMeshes = new Map<string, Set<Mesh>>();
   // S12-T2: track roof meshes for coverage-fade (top-down: fade when player enters under roof)
   const roofMeshes = new Set<Mesh>();
 
@@ -778,6 +781,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (meshes) {
       meshes.forEach((m) => {
         roofMeshes.delete(m);
+        const levelKey = meshLevelByMesh.get(m);
+        if (levelKey) {
+          const set = levelMeshes.get(levelKey);
+          set?.delete(m);
+          if (set && set.size === 0) {
+            levelMeshes.delete(levelKey);
+          }
+          meshLevelByMesh.delete(m);
+        }
         m.dispose();
       });
       chunkMeshes.delete(key);
@@ -787,6 +799,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const clearAllChunks = () => {
     chunkMeshes.forEach((meshes) => meshes.forEach((m) => {
       roofMeshes.delete(m);
+      const levelKey = meshLevelByMesh.get(m);
+      if (levelKey) {
+        const set = levelMeshes.get(levelKey);
+        set?.delete(m);
+        if (set && set.size === 0) {
+          levelMeshes.delete(levelKey);
+        }
+        meshLevelByMesh.delete(m);
+      }
       m.dispose();
     }));
     chunkMeshes.clear();
@@ -919,6 +940,80 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   // Build (or skip) one 16×16-tile chunk at chunk-grid position (cx, cy).
   // lod 0 = full detail, 1 = walls-only, 2 = ground-only
+  const getRenderableLevels = (): string[] => {
+    const mapData = mapDataCache;
+    if (!mapData?.levels) {
+      return [activeLevel];
+    }
+
+    // Render all available levels to preserve the 2D-like "see-through void" behavior.
+    return Object.keys(mapData.levels).sort(
+      (a, b) => parseLevelNumber(a) - parseLevelNumber(b),
+    );
+  };
+
+  const registerMeshForLevel = (levelKey: string, mesh: Mesh) => {
+    let set = levelMeshes.get(levelKey);
+    if (!set) {
+      set = new Set<Mesh>();
+      levelMeshes.set(levelKey, set);
+    }
+    set.add(mesh);
+    meshLevelByMesh.set(mesh, levelKey);
+  };
+
+  const findUpperOcclusionLevel = (): number | null => {
+    const mapData = mapDataCache;
+    if (!mapData?.levels) {
+      return null;
+    }
+
+    const currentNum = parseLevelNumber(activeLevel);
+    const playerTileX = Math.floor(player.position.x);
+    const playerTileY = Math.floor(player.position.z);
+
+    const upperLevels = Object.keys(mapData.levels)
+      .filter((levelKey) => parseLevelNumber(levelKey) > currentNum)
+      .sort((a, b) => parseLevelNumber(a) - parseLevelNumber(b));
+
+    for (const levelKey of upperLevels) {
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const symbol = getMapTileAt(levelKey, playerTileX + ox, playerTileY + oy);
+          if (symbol && symbol !== "...") {
+            return parseLevelNumber(levelKey);
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const updateUpperLevelVisibility = (deltaSeconds: number) => {
+    if (isFirstPerson || levelMeshes.size === 0) {
+      return;
+    }
+
+    const occlusionStartLevel = findUpperOcclusionLevel();
+    const lerpFactor = Math.min(1, deltaSeconds * 8);
+
+    levelMeshes.forEach((meshes, levelKey) => {
+      const levelNum = parseLevelNumber(levelKey);
+      const shouldHide =
+        occlusionStartLevel !== null && levelNum >= occlusionStartLevel;
+      const targetVisibility = shouldHide ? 0.0 : 1.0;
+
+      meshes.forEach((mesh) => {
+        if (!mesh || mesh.isDisposed()) {
+          return;
+        }
+        mesh.visibility =
+          mesh.visibility + (targetVisibility - mesh.visibility) * lerpFactor;
+      });
+    });
+  };
+
   const buildChunk = (cx: number, cy: number, lod: 0 | 1 | 2) => {
     const key = `${cx}_${cy}`;
     if (chunkMeshes.has(key) || chunkLoading.has(key)) {
@@ -930,8 +1025,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
-    // Binary data must already be cached (loaded by renderMapLevel)
-    if (!levelBinaryCache.has(activeLevel)) {
+    const renderableLevels = getRenderableLevels().filter((levelKey) =>
+      levelBinaryCache.has(levelKey),
+    );
+    if (renderableLevels.length === 0) {
       return;
     }
 
@@ -947,75 +1044,65 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
-    const levelOffsetY = levelToWorldY(activeLevel);
-    const groundW = endX - startX;
-    const groundH = endY - startY;
     const meshes: Mesh[] = [];
 
-    // Ground plane for this chunk
-    const ground = MeshBuilder.CreateGround(
-      `chunk-gnd-${key}`,
-      { width: groundW, height: groundH, subdivisions: 1 },
-      scene,
-    );
-    ground.position.set(
-      startX + groundW / 2,
-      levelOffsetY,
-      startY + groundH / 2,
-    );
-    ground.material = getTileMaterial(null, { id: "grass", color: "#6a9f36" });
-    ground.parent = mapRoot;
-    meshes.push(ground);
+    // Render tile geometry for all visible levels.
+    // This keeps "..." transparent in upper floors and preserves exterior stack readability.
+    for (const renderLevel of renderableLevels) {
+      const levelOffsetY = levelToWorldY(renderLevel);
 
-    // Wall / floor tiles (skipped in lod 2 = ground-only)
-    if (lod < 2) {
-      for (let y = startY; y < endY; y++) {
-        for (let x = startX; x < endX; x++) {
-          const symbol = getMapTileAt(activeLevel, x, y);
-          if (!symbol || symbol === "...") {
-            continue;
-          }
+      // Wall / floor tiles (skipped in lod 2 = ground-only)
+      if (lod < 2) {
+        for (let y = startY; y < endY; y++) {
+          for (let x = startX; x < endX; x++) {
+            const symbol = getMapTileAt(renderLevel, x, y);
+            if (!symbol || symbol === "...") {
+              continue;
+            }
 
-          const tileDef = mapData.tileDefinitions?.[symbol];
-          const blocking = isBlockingTile(symbol, tileDef);
+            const tileDef = mapData.tileDefinitions?.[symbol];
+            const blocking = isBlockingTile(symbol, tileDef);
 
-          // lod 1 = mid-distance: only render blocking (wall) tiles
-          if (!blocking && lod === 1) {
-            continue;
-          }
+            // lod 1 = mid-distance: only render blocking (wall) tiles
+            if (!blocking && lod === 1) {
+              continue;
+            }
 
-          const tileId = (tileDef?.id || symbol || "").toLowerCase();
-          const isRoofTile = tileId.includes("roof");
+            const tileId = (tileDef?.id || symbol || "").toLowerCase();
+            const isRoofTile = tileId.includes("roof");
 
-          if (isRoofTile) {
-            // Pitched gable roof sitting on top of standard walls
-            const wallBaseH = Math.max(0.4, tileDef?.height ?? 2.2);
-            const ridgeH = 0.65;
-            const roofMesh = buildRoofMesh(
-              `ct-${key}-${x}-${y}`,
-              x,
-              y,
-              levelOffsetY + wallBaseH,
-              ridgeH,
-            );
-            roofMesh.material = getTileMaterial(symbol, tileDef, "#8b3a2a");
-            roofMesh.parent = mapRoot;
-            roofMeshes.add(roofMesh); // S12-T2: register for coverage-fade
-            meshes.push(roofMesh);
-          } else {
-            const tileHeight = blocking
-              ? Math.max(0.4, tileDef?.height ?? 2.2)
-              : Math.max(0.03, tileDef?.height ?? 0.08);
+            if (isRoofTile) {
+              // Pitched gable roof sitting on top of standard walls
+              const wallBaseH = Math.max(0.4, tileDef?.height ?? 2.2);
+              const ridgeH = 0.65;
+              const roofMesh = buildRoofMesh(
+                `ct-${renderLevel}-${key}-${x}-${y}`,
+                x,
+                y,
+                levelOffsetY + wallBaseH,
+                ridgeH,
+              );
+              roofMesh.material = getTileMaterial(symbol, tileDef, "#8b3a2a");
+              roofMesh.parent = mapRoot;
+              roofMeshes.add(roofMesh); // S12-T2: register for coverage-fade
+              registerMeshForLevel(renderLevel, roofMesh);
+              meshes.push(roofMesh);
+            } else {
+              const tileHeight = blocking
+                ? Math.max(0.4, tileDef?.height ?? 2.2)
+                : Math.max(0.03, tileDef?.height ?? 0.08);
 
-            const mesh = MeshBuilder.CreateBox(
-              `ct-${key}-${x}-${y}`,
-              { width: 1, depth: 1, height: tileHeight },
-              scene,
-            );
-            mesh.position.set(x + 0.5, levelOffsetY + tileHeight / 2, y + 0.5);
-            mesh.material = getTileMaterial(symbol, tileDef, "#6a9f36");
-            mesh.parent = mapRoot;
-            meshes.push(mesh);
+              const mesh = MeshBuilder.CreateBox(
+                `ct-${renderLevel}-${key}-${x}-${y}`,
+                { width: 1, depth: 1, height: tileHeight },
+                scene,
+              );
+              mesh.position.set(x + 0.5, levelOffsetY + tileHeight / 2, y + 0.5);
+              mesh.material = getTileMaterial(symbol, tileDef, "#6a9f36");
+              mesh.parent = mapRoot;
+              registerMeshForLevel(renderLevel, mesh);
+              meshes.push(mesh);
+            }
           }
         }
       }
@@ -2938,23 +3025,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (chunkUpdateTimer >= CHUNK_UPDATE_INTERVAL) {
       chunkUpdateTimer = 0;
       updateChunks();
-      // S12-T2: fade roofs when player is under cover (top-down product mode)
-      // Determine if player is "under" a roof tile by checking nearby blocking tiles above player
-      if (!isFirstPerson && roofMeshes.size > 0) {
-        const px = player.position.x;
-        const pz = player.position.z;
-        const playerWorldY = player.position.y;
-        roofMeshes.forEach((rm) => {
-          if (!rm || rm.isDisposed()) return;
-          const dx = Math.abs(rm.position.x - px);
-          const dz = Math.abs(rm.position.z - pz);
-          // Under roof: horizontally close and roof Y is above player
-          const underRoof = dx < 2.5 && dz < 2.5 && rm.position.y > playerWorldY;
-          const targetVis = underRoof ? 0.08 : 1.0;
-          rm.visibility = rm.visibility + (targetVis - rm.visibility) * 0.25;
-        });
-      }
     }
+
+    // 2D parity: when player enters below an upper structure, hide that full level and above.
+    // Also keep fade smooth for readability.
+    updateUpperLevelVisibility(deltaSeconds);
+
     const speed = 4.5;
     let moveForward = 0;
     let moveRight = 0;
