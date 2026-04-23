@@ -193,6 +193,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   camera.upperBetaLimit = 0.18;
   camera.lowerAlphaLimit = -Math.PI / 2;
   camera.upperAlphaLimit = -Math.PI / 2;
+  camera.maxZ = 42;
   camera.wheelPrecision = 1000000;
   camera.panningSensibility = 0;
   camera.attachControl(canvas, true);
@@ -203,6 +204,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     scene,
   );
   firstPersonCamera.minZ = 0.05;
+  firstPersonCamera.maxZ = 30;
   firstPersonCamera.inertia = 0.05;
   firstPersonCamera.angularSensibility = 800; // ~CS:GO/Valorant default feel
   firstPersonCamera.speed = 0;
@@ -306,10 +308,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let enemyHighlightPulseT = 0; // accumulator for sine pulse (seconds)
 
   const mapRoot = new TransformNode("slice-map-root", scene);
-  // Chunk streaming constants (S16 parity fix: render visible levels together; keep clearAllChunks on level change)
+  // Chunk streaming constants (visual profile depends on camera mode; gameplay state remains global)
   const CHUNK_SIZE = 16; // tiles per chunk side
-  const DRAW_RADIUS_CHUNKS = 5; // chunks kept loaded around player
-  const CHUNK_BUILD_BUDGET_PER_TICK = 10; // max new chunks to build each update tick
+  const TOPDOWN_DRAW_RADIUS_CHUNKS = 3;
+  const FIRST_PERSON_DRAW_RADIUS_CHUNKS = 4;
+  const TOPDOWN_CHUNK_BUILD_BUDGET_PER_TICK = 6;
+  const FIRST_PERSON_CHUNK_BUILD_BUDGET_PER_TICK = 8;
   const CHUNK_UNLOAD_BUDGET_PER_TICK = 8; // max chunks to unload each update tick
   const chunkMeshes = new Map<string, Mesh[]>();
   const chunkLoading = new Set<string>();
@@ -1145,6 +1149,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
+    const drawRadiusChunks = isFirstPerson
+      ? FIRST_PERSON_DRAW_RADIUS_CHUNKS
+      : TOPDOWN_DRAW_RADIUS_CHUNKS;
+    const chunkBuildBudgetPerTick = isFirstPerson
+      ? FIRST_PERSON_CHUNK_BUILD_BUDGET_PER_TICK
+      : TOPDOWN_CHUNK_BUILD_BUDGET_PER_TICK;
+
     const playerCX = Math.floor(player.position.x / CHUNK_SIZE);
     const playerCY = Math.floor(player.position.z / CHUNK_SIZE);
     const maxCX = Math.ceil(mapDataCache.width / CHUNK_SIZE);
@@ -1157,7 +1168,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const cx = Number(parts[0]);
       const cy = Number(parts[1]);
       const dist = Math.max(Math.abs(cx - playerCX), Math.abs(cy - playerCY));
-      if (dist > DRAW_RADIUS_CHUNKS + 1) {
+      if (dist > drawRadiusChunks + 1) {
         toUnload.push({ key, dist });
       }
     });
@@ -1170,8 +1181,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     // Queue load for nearby chunks (near-first, budget-limited)
     const chunkCandidates: Array<{ cx: number; cy: number; dist: number }> = [];
-    for (let dy = -DRAW_RADIUS_CHUNKS; dy <= DRAW_RADIUS_CHUNKS; dy++) {
-      for (let dx = -DRAW_RADIUS_CHUNKS; dx <= DRAW_RADIUS_CHUNKS; dx++) {
+    for (let dy = -drawRadiusChunks; dy <= drawRadiusChunks; dy++) {
+      for (let dx = -drawRadiusChunks; dx <= drawRadiusChunks; dx++) {
         const cx = playerCX + dx;
         const cy = playerCY + dy;
         if (cx < 0 || cy < 0 || cx >= maxCX || cy >= maxCY) {
@@ -1190,7 +1201,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     let builtThisTick = 0;
     for (const candidate of chunkCandidates) {
-      if (builtThisTick >= CHUNK_BUILD_BUDGET_PER_TICK) {
+      if (builtThisTick >= chunkBuildBudgetPerTick) {
         break;
       }
 
@@ -1206,6 +1217,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       loadedChunks: chunkMeshes.size,
       loadingChunks: chunkLoading.size,
       builtThisTick,
+      drawRadiusChunks,
+      chunkBuildBudgetPerTick,
       pendingCandidates: Math.max(0, chunkCandidates.length - builtThisTick),
       unloadedThisTick,
       pendingUnloads,

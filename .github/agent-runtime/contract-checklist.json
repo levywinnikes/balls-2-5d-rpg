@@ -1,16 +1,14 @@
 ﻿{
-  "updatedAt": "2026-04-23T15:45:00Z",
-  "task": "Corrigir safe fall no runtime 3D para bloquear void como parede quando ativo e manter toggle claro para desativacao",
+  "updatedAt": "2026-04-23T16:10:00Z",
+  "task": "Otimizar renderizacao visual no runtime 3D para desenhar apenas o necessario por modo de camera sem afetar simulacao",
   "contractsRead": [
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
-    "docs/contracts/MAP_SYSTEM_CONTRACT.md",
-    "docs/contracts/PLAYER_STATE_CONTRACT.md",
-    "docs/contracts/BATTLE_SYSTEM_CONTRACT.md",
-    "docs/contracts/LOCALIZATION_CONTRACT.md"
+    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
+    "docs/contracts/MAP_SYSTEM_CONTRACT.md"
   ],
-  "understanding": "Com safe fall ligado, o jogador nao deve entrar nem permanecer navegando no void (void se comporta como parede). Com safe fall desligado, queda perigosa permanece habilitada.",
-  "riskConflict": "Bloquear void de forma global pode afetar outras entidades; a regra deve ser aplicada no movimento do player para evitar regressao em IA/pathfinding.",
-  "objectiveQuestion": "Sem bloqueio: tratar void como bloqueio apenas no deslocamento do player quando fall safety estiver ativo e reduzir notificacoes repetitivas.",
+  "understanding": "Ajustar distancia visual de render/chunks por modo de camera para reduzir draw desnecessario, preservando eventos e simulacao fora da tela.",
+  "riskConflict": "Raio visual baixo demais pode gerar pop-in no topdown e prejudicar leitura; preciso manter margem minima para transicao suave.",
+  "objectiveQuestion": "Sem bloqueio: aplicar perfil dinamico (topdown enxuto, primeira pessoa moderado) e clamp de far plane para reduzir custo visual.",
   "documentationIndexChecked": true,
   "impactedModules": [
     "three-d-runtime",
@@ -18,10 +16,8 @@
   ],
   "docsRead": [
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
-    "docs/contracts/MAP_SYSTEM_CONTRACT.md",
-    "docs/contracts/PLAYER_STATE_CONTRACT.md",
-    "docs/contracts/BATTLE_SYSTEM_CONTRACT.md",
-    "docs/contracts/LOCALIZATION_CONTRACT.md"
+    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
+    "docs/contracts/MAP_SYSTEM_CONTRACT.md"
   ],
   "docsCoverageStatus": "covered",
   "divergenceDetected": false,
