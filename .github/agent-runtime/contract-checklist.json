@@ -1,24 +1,27 @@
 ﻿{
-  "updatedAt": "2026-04-22T03:50:00Z",
-  "task": "Tuning visual 3D: reduzir espacamento vertical entre andares para pilha contínua",
+  "updatedAt": "2026-04-23T15:45:00Z",
+  "task": "Corrigir safe fall no runtime 3D para bloquear void como parede quando ativo e manter toggle claro para desativacao",
   "contractsRead": [
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
-    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
-    "docs/SYSTEM_BMS.md"
+    "docs/contracts/PLAYER_STATE_CONTRACT.md",
+    "docs/contracts/BATTLE_SYSTEM_CONTRACT.md",
+    "docs/contracts/LOCALIZATION_CONTRACT.md"
   ],
-  "understanding": "Ajustar apenas a distancia vertical entre niveis no renderer 3D para que andares empilhem visualmente como torre contínua, preservando a logica de oclusao por cobertura.",
-  "riskConflict": "Diminuir demais a altura entre niveis pode causar sobreposicao visual entre teto/chao ou clipping de camera; ajuste deve manter legibilidade e navegacao entre escadas.",
-  "objectiveQuestion": "Sem bloqueio: aplicar tuning no LEVEL_HEIGHT_UNITS em createDebugSliceScene.ts e validar com tsc.",
+  "understanding": "Com safe fall ligado, o jogador nao deve entrar nem permanecer navegando no void (void se comporta como parede). Com safe fall desligado, queda perigosa permanece habilitada.",
+  "riskConflict": "Bloquear void de forma global pode afetar outras entidades; a regra deve ser aplicada no movimento do player para evitar regressao em IA/pathfinding.",
+  "objectiveQuestion": "Sem bloqueio: tratar void como bloqueio apenas no deslocamento do player quando fall safety estiver ativo e reduzir notificacoes repetitivas.",
   "documentationIndexChecked": true,
   "impactedModules": [
-    "three-d-runtime"
+    "three-d-runtime",
+    "player-state"
   ],
   "docsRead": [
     "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
-    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
     "docs/contracts/MAP_SYSTEM_CONTRACT.md",
-    "docs/SYSTEM_BMS.md"
+    "docs/contracts/PLAYER_STATE_CONTRACT.md",
+    "docs/contracts/BATTLE_SYSTEM_CONTRACT.md",
+    "docs/contracts/LOCALIZATION_CONTRACT.md"
   ],
   "docsCoverageStatus": "covered",
   "divergenceDetected": false,

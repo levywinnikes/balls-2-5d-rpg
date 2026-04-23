@@ -362,6 +362,8 @@ export const translations = {
     fall_safety_on_desc: "Prevents falling into void.",
     fall_safety_off_desc: "Allows dangerous falls.",
     fall_safety_active: "Safety Fall Active!",
+    msg_fall_impact:
+      "Hard fall: {floors} floors, -{damage} HP ({percent}% max health).",
 
     // Items
     item_wooden_sword: "Wooden Sword",
@@ -1243,6 +1245,8 @@ export const translations = {
     fall_safety_on_desc: "Previne cair no vazio.",
     fall_safety_off_desc: "Permite quedas perigosas.",
     fall_safety_active: "Segurança de Queda Ativa!",
+    msg_fall_impact:
+      "Queda forte: {floors} andares, -{damage} HP ({percent}% da vida máxima).",
 
     menu_new_game: "Nova Jornada",
     menu_load_game: "Carregar Jornada",

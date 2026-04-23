@@ -39,6 +39,8 @@ import { WorldMapService } from "../../services/WorldMapService";
 import { createEnemyVisual } from "./ThreeDEnemyVisualRegistry";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
 
+type SliceDroppedItem = DroppedItemData & { level: string };
+
 type SliceRuntime = {
   engine: Engine;
   scene: Scene;
@@ -281,6 +283,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     Color3.FromHexString("#ffd166"),
   );
   const droppedItemMeshes = new Map<string, Mesh>();
+  const getDroppedItemMeshKey = (level: string, itemId: string) =>
+    `${level}::${itemId}`;
   const enemies = new Map<string, SliceEnemy>();
   let selectedEnemyUid: string | null = null;
   let lastPlayerAttackAt = 0;
@@ -717,15 +721,22 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return mapData.tileAtlas[atlasIndex] || null;
   };
 
+  const isVoidSymbol = (symbol: string | null) => !symbol || symbol === "...";
+
   const isBlockingTile = (
     symbol: string | null,
     tileDef?: SliceTileDefinition,
   ) => {
-    if (!symbol || symbol === "...") {
+    if (isVoidSymbol(symbol)) {
       return false;
     }
 
-    const tileId = (tileDef?.id || symbol).toLowerCase();
+    const resolvedTileId = tileDef?.id ?? symbol;
+    if (!resolvedTileId) {
+      return false;
+    }
+
+    const tileId = resolvedTileId.toLowerCase();
     if (tileId.includes("roof")) {
       return false;
     }
@@ -745,11 +756,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     worldX: number,
     worldZ: number,
     radius = 0.32,
+    options?: { blockVoidForPlayer?: boolean },
   ) => {
     const mapData = mapDataCache;
     if (!mapData || !mapData.width || !mapData.height) {
       return false;
     }
+
+    const blockVoidForPlayer =
+      Boolean(options?.blockVoidForPlayer) && playerState.isFallSafetyEnabled();
 
     const samplePoints: Array<[number, number]> = [
       [worldX, worldZ],
@@ -767,6 +782,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const tileX = Math.floor(sx);
       const tileY = Math.floor(sz);
       const symbol = getMapTileAt(activeLevel, tileX, tileY);
+      if (blockVoidForPlayer && isVoidSymbol(symbol)) {
+        return true;
+      }
       const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
       if (isBlockingTile(symbol, tileDef)) {
         return true;
@@ -797,19 +815,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const clearAllChunks = () => {
-    chunkMeshes.forEach((meshes) => meshes.forEach((m) => {
-      roofMeshes.delete(m);
-      const levelKey = meshLevelByMesh.get(m);
-      if (levelKey) {
-        const set = levelMeshes.get(levelKey);
-        set?.delete(m);
-        if (set && set.size === 0) {
-          levelMeshes.delete(levelKey);
+    chunkMeshes.forEach((meshes) =>
+      meshes.forEach((m) => {
+        roofMeshes.delete(m);
+        const levelKey = meshLevelByMesh.get(m);
+        if (levelKey) {
+          const set = levelMeshes.get(levelKey);
+          set?.delete(m);
+          if (set && set.size === 0) {
+            levelMeshes.delete(levelKey);
+          }
+          meshLevelByMesh.delete(m);
         }
-        meshLevelByMesh.delete(m);
-      }
-      m.dispose();
-    }));
+        m.dispose();
+      }),
+    );
     chunkMeshes.clear();
     chunkLoading.clear();
   };
@@ -849,8 +869,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (!binData) {
       return;
     }
-
-    clearAllChunks();
 
     currentMapWidth = mapData.width;
     currentMapHeight = mapData.height;
@@ -979,7 +997,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     for (const levelKey of upperLevels) {
       for (let oy = -1; oy <= 1; oy++) {
         for (let ox = -1; ox <= 1; ox++) {
-          const symbol = getMapTileAt(levelKey, playerTileX + ox, playerTileY + oy);
+          const symbol = getMapTileAt(
+            levelKey,
+            playerTileX + ox,
+            playerTileY + oy,
+          );
           if (symbol && symbol !== "...") {
             return parseLevelNumber(levelKey);
           }
@@ -1097,7 +1119,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
                 { width: 1, depth: 1, height: tileHeight },
                 scene,
               );
-              mesh.position.set(x + 0.5, levelOffsetY + tileHeight / 2, y + 0.5);
+              mesh.position.set(
+                x + 0.5,
+                levelOffsetY + tileHeight / 2,
+                y + 0.5,
+              );
               mesh.material = getTileMaterial(symbol, tileDef, "#6a9f36");
               mesh.parent = mapRoot;
               registerMeshForLevel(renderLevel, mesh);
@@ -2264,10 +2290,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const syncDroppedItems = () => {
     const currentLevel = playerState.getCurrentLevel();
     if (currentLevel !== activeLevel) {
-      droppedItemMeshes.forEach((mesh) => mesh.dispose());
-      droppedItemMeshes.clear();
-      clearEnemies();
       activeLevel = currentLevel;
+      activeLevelNumber = parseLevelNumber(currentLevel);
       void ensureMapLevelReady(currentLevel);
       void ensureLevelItemsSeeded(currentLevel);
       void ensureLevelEnemiesSeeded(currentLevel);
@@ -2275,17 +2299,28 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     const persistentItems = playerState.getPersistentDroppedItems(currentLevel);
-    const nextIds = new Set(persistentItems.map((item) => item.itemId));
+    const nextKeys = new Set(
+      persistentItems.map((item) =>
+        getDroppedItemMeshKey(currentLevel, item.itemId),
+      ),
+    );
 
-    droppedItemMeshes.forEach((mesh, itemId) => {
-      if (!nextIds.has(itemId)) {
+    droppedItemMeshes.forEach((mesh, meshKey) => {
+      const item = mesh.metadata as SliceDroppedItem | undefined;
+      const isCurrentLevelMesh = item?.level === currentLevel;
+
+      if (isCurrentLevelMesh && !nextKeys.has(meshKey)) {
         mesh.dispose();
-        droppedItemMeshes.delete(itemId);
+        droppedItemMeshes.delete(meshKey);
+        return;
       }
+
+      mesh.setEnabled(isCurrentLevelMesh);
     });
 
     persistentItems.forEach((item) => {
-      let mesh = droppedItemMeshes.get(item.itemId);
+      const meshKey = getDroppedItemMeshKey(currentLevel, item.itemId);
+      let mesh = droppedItemMeshes.get(meshKey);
       if (!mesh) {
         mesh = MeshBuilder.CreateSphere(
           `slice-dropped-${item.itemId}`,
@@ -2293,7 +2328,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           scene,
         );
         mesh.material = droppedItemMaterial;
-        droppedItemMeshes.set(item.itemId, mesh);
+        droppedItemMeshes.set(meshKey, mesh);
       }
 
       const levelWorldY = levelToWorldY(currentLevel);
@@ -2302,7 +2337,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         levelWorldY + 0.4,
         worldToSliceCoord(item.y),
       );
-      mesh.metadata = item;
+      mesh.metadata = {
+        ...item,
+        level: currentLevel,
+      } satisfies SliceDroppedItem;
+      mesh.setEnabled(true);
     });
 
     hasRealDroppedItems = persistentItems.length > 0;
@@ -2381,7 +2420,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     let nearestDistance = Number.POSITIVE_INFINITY;
 
     droppedItemMeshes.forEach((mesh) => {
-      const item = mesh.metadata as DroppedItemData | undefined;
+      if (!mesh.isEnabled()) return;
+
+      const item = mesh.metadata as SliceDroppedItem | undefined;
       if (!item) return;
 
       const distance = Vector3.Distance(player.position, mesh.position);
@@ -2486,9 +2527,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let isFirstPerson = false;
   let verticalVelocity = 0;
   const gravity = -18;
+  const fallGravity = -32;
+  const fallTerminalVelocity = -28;
   const jumpImpulse = 7.2;
   const playerGroundY = 0.8;
   let isGrounded = true;
+  let isVoidFallActive = false;
+  let voidFallTargetLevel = activeLevel;
+  let voidFallTargetY = player.position.y;
+  let voidFallFloors = 0;
+  let voidFallImpactSpeed = 0;
+  let wasOnVoidWithSafety = false;
+  let lastSafePlayerX = player.position.x;
+  let lastSafePlayerZ = player.position.z;
   let chunkUpdateTimer = 0;
   let stairCooldown = 0; // seconds until next level transition is allowed
   let stairAnimTimer = 0; // seconds elapsed during stair animation
@@ -2592,6 +2643,98 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     return best ? { targetLevel: best.targetLevel } : null;
+  };
+
+  const findVoidFallLanding = (
+    startLevel: string,
+    tileX: number,
+    tileZ: number,
+  ): { landingLevel: string; floors: number } | null => {
+    const mapData = mapDataCache;
+    if (!mapData?.levels) {
+      return null;
+    }
+
+    const levelNumbers = Object.keys(mapData.levels)
+      .map((levelKey) => parseLevelNumber(levelKey))
+      .sort((a, b) => b - a);
+
+    const startNumber = parseLevelNumber(startLevel);
+    let floors = 0;
+
+    for (const levelNumber of levelNumbers) {
+      if (levelNumber >= startNumber) {
+        continue;
+      }
+
+      floors += 1;
+      const candidateLevel = String(levelNumber);
+      const symbol = getMapTileAt(candidateLevel, tileX, tileZ);
+
+      if (!isVoidSymbol(symbol)) {
+        return { landingLevel: candidateLevel, floors };
+      }
+    }
+
+    return null;
+  };
+
+  const calculateFallDamagePercent = (
+    floors: number,
+    impactSpeed: number,
+  ): number => {
+    const perFloor = Math.min(0.72, floors * 0.16);
+    const speedBonus = Math.min(
+      0.18,
+      Math.max(0, Math.abs(impactSpeed) - 9) * 0.012,
+    );
+    return Math.min(0.9, perFloor + speedBonus);
+  };
+
+  const resolveVoidFall = () => {
+    if (voidFallFloors <= 0) {
+      return;
+    }
+
+    const maxHealth = Math.max(1, playerState.getMaxHealth());
+    const damagePercent = calculateFallDamagePercent(
+      voidFallFloors,
+      voidFallImpactSpeed,
+    );
+    const damage = Math.max(1, Math.floor(maxHealth * damagePercent));
+
+    const playerDied = playerState.takeDamage(damage);
+    emitPlayerDamagePopup(
+      `fall:${voidFallTargetLevel}:${voidFallFloors}`,
+      damage,
+      "⚠",
+      "#ff5d5d",
+    );
+
+    const percentText = Math.round(damagePercent * 100).toString();
+    playerState.log(
+      "msg_fall_impact",
+      {
+        floors: voidFallFloors,
+        damage,
+        percent: percentText,
+      },
+      "#ff5d5d",
+    );
+    playerState.emit("uiNotification", {
+      type: "danger",
+      message: t_game("msg_fall_impact")
+        .replace("{floors}", voidFallFloors.toString())
+        .replace("{damage}", damage.toString())
+        .replace("{percent}", percentText),
+    });
+
+    if (playerDied) {
+      playerState.log("msg_willpower_lost", {}, "#ef4444");
+    }
+
+    voidFallFloors = 0;
+    voidFallImpactSpeed = 0;
   };
 
   // Activate first-person mode if URL contains ?fp=1
@@ -2823,7 +2966,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         });
 
         // Remove rune from inventory
-        const rune = playerState.getEnchantedRunes().find((r) => r.runeId === runeId);
+        const rune = playerState
+          .getEnchantedRunes()
+          .find((r) => r.runeId === runeId);
         if (rune && rune.count > 0) {
           rune.count--;
         }
@@ -2863,9 +3008,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       // S12-T5: FP mode is DEBUG ONLY — product is always top-down. V = debug toggle.
       if (!isFirstPerson) {
         // eslint-disable-next-line no-console
-        console.warn("[DEBUG] Entering first-person mode — debug-only camera. Top-down is the product view.");
+        console.warn(
+          "[DEBUG] Entering first-person mode — debug-only camera. Top-down is the product view.",
+        );
       }
       setCameraMode(!isFirstPerson, !isFirstPerson);
+    }
+
+    if (key === "f" && !event.repeat) {
+      const safetyEnabled = playerState.toggleFallSafety();
+      playerState.emit("uiNotification", {
+        type: safetyEnabled ? "info" : "warning",
+        message: t_game(safetyEnabled ? "fall_safety_on" : "fall_safety_off"),
+      });
     }
 
     // S8-T2: Q = cast active rune; R = cycle active rune slot
@@ -3042,7 +3197,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     if (moveForward !== 0 || moveRight !== 0) {
       // Block horizontal movement while a stair transition is in progress (S3-T4)
-      if (!isStairAnimActive) {
+      if (!isStairAnimActive && !isVoidFallActive) {
         let movement = Vector3.Zero();
 
         if (isFirstPerson) {
@@ -3058,11 +3213,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         const nextX = player.position.x + movement.x;
         const nextZ = player.position.z + movement.z;
 
-        if (!isWorldPositionBlocked(nextX, player.position.z)) {
+        if (
+          !isWorldPositionBlocked(nextX, player.position.z, 0.32, {
+            blockVoidForPlayer: true,
+          })
+        ) {
           player.position.x = nextX;
         }
 
-        if (!isWorldPositionBlocked(player.position.x, nextZ)) {
+        if (
+          !isWorldPositionBlocked(player.position.x, nextZ, 0.32, {
+            blockVoidForPlayer: true,
+          })
+        ) {
           player.position.z = nextZ;
         }
 
@@ -3157,16 +3320,83 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
-    // Gravity and ground clamp — bypassed while stair animation is playing
+    // Gravity and fall system (stairs remain non-damaging transitions)
     if (!isStairAnimActive) {
-      verticalVelocity += gravity * deltaSeconds;
+      const tileX = Math.floor(player.position.x);
+      const tileZ = Math.floor(player.position.z);
+      const supportSymbol = getMapTileAt(activeLevel, tileX, tileZ);
+      const onVoidTile = isVoidSymbol(supportSymbol);
+
+      if (!onVoidTile) {
+        lastSafePlayerX = player.position.x;
+        lastSafePlayerZ = player.position.z;
+        wasOnVoidWithSafety = false;
+      }
+
+      if (!isVoidFallActive && isGrounded && onVoidTile) {
+        if (playerState.isFallSafetyEnabled()) {
+          if (!wasOnVoidWithSafety) {
+            wasOnVoidWithSafety = true;
+            playerState.emit("uiNotification", {
+              type: "warning",
+              message: t_game("fall_safety_active"),
+            });
+          }
+
+          player.position.x = lastSafePlayerX;
+          player.position.z = lastSafePlayerZ;
+          verticalVelocity = 0;
+          isGrounded = true;
+        } else {
+          const landing = findVoidFallLanding(activeLevel, tileX, tileZ);
+          if (landing) {
+            isVoidFallActive = true;
+            isGrounded = false;
+            verticalVelocity = Math.min(verticalVelocity, 0);
+            voidFallTargetLevel = landing.landingLevel;
+            voidFallTargetY =
+              levelToWorldY(landing.landingLevel) + PLAYER_GROUND_OFFSET;
+            voidFallFloors = landing.floors;
+
+            void ensureMapLevelReady(landing.landingLevel);
+            void ensureLevelEnemiesSeeded(landing.landingLevel);
+            void ensureLevelItemsSeeded(landing.landingLevel);
+          }
+        }
+      }
+
+      if (isVoidFallActive) {
+        verticalVelocity += fallGravity * deltaSeconds;
+        verticalVelocity = Math.max(verticalVelocity, fallTerminalVelocity);
+      } else {
+        verticalVelocity += gravity * deltaSeconds;
+      }
+
       player.position.y += verticalVelocity * deltaSeconds;
-      const levelGroundY =
-        levelToWorldY(activeLevelNumber) + PLAYER_GROUND_OFFSET;
-      if (player.position.y <= levelGroundY) {
-        player.position.y = levelGroundY;
-        verticalVelocity = 0;
-        isGrounded = true;
+
+      if (isVoidFallActive) {
+        if (player.position.y <= voidFallTargetY) {
+          voidFallImpactSpeed = Math.abs(verticalVelocity);
+          player.position.y = voidFallTargetY;
+          verticalVelocity = 0;
+          isGrounded = true;
+          isVoidFallActive = false;
+
+          if (activeLevel !== voidFallTargetLevel) {
+            void ensureMapLevelReady(voidFallTargetLevel);
+          }
+          activeLevel = voidFallTargetLevel;
+          activeLevelNumber = parseLevelNumber(voidFallTargetLevel);
+          resolveVoidFall();
+        }
+      } else {
+        const levelGroundY =
+          levelToWorldY(activeLevelNumber) + PLAYER_GROUND_OFFSET;
+        if (player.position.y <= levelGroundY) {
+          player.position.y = levelGroundY;
+          verticalVelocity = 0;
+          isGrounded = true;
+        }
       }
     }
 
@@ -3239,6 +3469,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       clearAllChunks();
       mapRoot.dispose();
       tileMaterials.forEach((material) => material.dispose());
+      droppedItemMeshes.forEach((mesh) => mesh.dispose());
+      droppedItemMeshes.clear();
       clearEnemies();
       // S7-FP4: torus marker removed — no dispose needed
       scene.dispose();
