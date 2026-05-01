@@ -6,6 +6,100 @@ import {
   Color3,
 } from "@babylonjs/core";
 
+// Entities that have pre-generated PNG sprites under public/assets/sprites/generated/{id}/
+const GENERATED_SPRITE_ENTITIES = new Set<string>(["goblin_lanceiro"]);
+
+type GeneratedAnimDef = {
+  state: "idle" | "walk" | "attack" | "death";
+  direction: "south" | "north" | "east" | "west";
+  frameCount: number;
+};
+
+const GENERATED_ANIM_DEFS: Record<string, GeneratedAnimDef[]> = {
+  goblin_lanceiro: [
+    { state: "idle",   direction: "south", frameCount: 4 },
+    { state: "walk",   direction: "south", frameCount: 4 },
+    { state: "attack", direction: "south", frameCount: 3 },
+    { state: "death",  direction: "south", frameCount: 9 },
+  ],
+};
+
+const FPS_GENERATED = 8;
+
+function buildGeneratedFrameUrls(entityId: string, anim: GeneratedAnimDef): string[] {
+  const base = `/assets/sprites/generated/${entityId}/${anim.state}_${anim.direction}`;
+  return Array.from({ length: anim.frameCount }, (_, i) =>
+    `${base}/frame_${String(i).padStart(2, "0")}.png`,
+  );
+}
+
+/**
+ * Creates a StandardMaterial that animates through PNG sprite frames.
+ * For generated-sprite entities (e.g. goblin_lanceiro). Starts with idle animation.
+ * The caller can update `mesh.metadata.animState` ("idle"|"walk"|"attack"|"death")
+ * and this function's observer will swap frames accordingly.
+ */
+export function createGeneratedSpriteAnimatedMaterial(
+  scene: Scene,
+  keyPrefix: string,
+  entityId: string,
+): StandardMaterial {
+  const animDefs = GENERATED_ANIM_DEFS[entityId] ?? GENERATED_ANIM_DEFS["goblin_lanceiro"];
+  const interval = 1000 / FPS_GENERATED;
+
+  // Pre-load all textures grouped by state
+  const textureMap = new Map<string, Texture[]>();
+  for (const def of animDefs) {
+    const urls = buildGeneratedFrameUrls(entityId, def);
+    const textures = urls.map((url) => {
+      const t = new Texture(url, scene, false, true, Texture.NEAREST_NEAREST);
+      t.hasAlpha = true;
+      return t;
+    });
+    textureMap.set(def.state, textures);
+  }
+
+  const idleFrames = textureMap.get("idle") ?? textureMap.values().next().value;
+
+  const mat = new StandardMaterial(`${keyPrefix}-mat`, scene);
+  mat.backFaceCulling = false;
+  mat.specularColor = Color3.Black();
+  mat.useAlphaFromDiffuseTexture = true;
+  mat.diffuseTexture = idleFrames[0];
+  mat.opacityTexture = idleFrames[0];
+
+  let currentState = "idle";
+  let frame = 0;
+  let lastFrameAt = 0;
+
+  const obs = scene.onBeforeRenderObservable.add(() => {
+    const now = Date.now();
+    if (now - lastFrameAt < interval) return;
+    lastFrameAt = now;
+
+    const frames = textureMap.get(currentState) ?? idleFrames;
+    frame = (frame + 1) % frames.length;
+    mat.diffuseTexture = frames[frame];
+    mat.opacityTexture = frames[frame];
+  });
+
+  // Expose state setter on metadata so external code can drive animation
+  (mat as any)._setAnimState = (state: string) => {
+    if (state !== currentState) {
+      currentState = state;
+      frame = 0;
+      lastFrameAt = 0;
+    }
+  };
+
+  mat.onDisposeObservable.add(() => {
+    scene.onBeforeRenderObservable.remove(obs);
+    textureMap.forEach((frames) => frames.forEach((t) => t.dispose()));
+  });
+
+  return mat;
+}
+
 type EnemySpriteId =
   | "rat"
   | "skeleton"
@@ -363,6 +457,10 @@ export function createEnemyParitySpriteMaterial(
   keyPrefix: string,
   enemyId: string,
 ): StandardMaterial {
+  if (GENERATED_SPRITE_ENTITIES.has(enemyId)) {
+    return createGeneratedSpriteAnimatedMaterial(scene, keyPrefix, enemyId);
+  }
+
   const normalized = normalizeEnemyId(enemyId);
   const size = normalized === "dragon" ? 64 : 32;
 

@@ -35,7 +35,11 @@ import {
 } from "../../game/entities/EnemyMagicRegistry";
 import { PathfindingManager } from "../../game/systems/PathfindingManager";
 import { WorldMapService } from "../../services/WorldMapService";
-import { createEnemyVisual } from "./ThreeDEnemyVisualRegistry";
+import {
+  createEnemyVisual,
+  setEnemyVisualAnimState,
+  type EnemyVisualAnimState,
+} from "./ThreeDEnemyVisualRegistry";
 import { createHeroParitySpriteMaterial } from "./TwoDParitySpriteFactory";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
 
@@ -121,6 +125,8 @@ type SliceEnemy = {
   isDead: boolean;
   isProvoked: boolean;
   selectionRing: Mesh | null;
+  animState: EnemyVisualAnimState;
+  animLockedUntil: number;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -1574,7 +1580,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       isDead: false,
       isProvoked: false,
       selectionRing,
+      animState: "idle",
+      animLockedUntil: 0,
     };
+
+    setEnemyAnimState(instance, "idle");
 
     meshRoot.setEnabled(level === activeLevel);
     enemies.set(uid, instance);
@@ -1708,6 +1718,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     enemy.isDead = true;
+    setEnemyAnimState(enemy, "death", 250);
     enemy.meshRoot.dispose();
     enemies.delete(enemy.uid);
 
@@ -1779,6 +1790,26 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       icon,
       customColor,
     });
+  };
+
+  const setEnemyAnimState = (
+    enemy: SliceEnemy,
+    nextState: EnemyVisualAnimState,
+    lockMs = 0,
+  ) => {
+    const now = Date.now();
+    if (now < enemy.animLockedUntil && nextState !== "death") {
+      return;
+    }
+
+    if (enemy.animState !== nextState) {
+      enemy.animState = nextState;
+      setEnemyVisualAnimState(enemy.meshRoot, nextState);
+    }
+
+    if (lockMs > 0) {
+      enemy.animLockedUntil = now + lockMs;
+    }
   };
 
   const applyPlayerAttackToEnemy = (enemy: SliceEnemy) => {
@@ -1967,6 +1998,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     enemy.lastAttackAt = now;
+    setEnemyAnimState(enemy, "attack", 320);
 
     const isFireAttack =
       enemy.enemyType === "dragon" ||
@@ -2121,6 +2153,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       enemy.magicCooldowns.set(magicId, now);
       enemy.lastAttackAt = now;
+      setEnemyAnimState(enemy, "attack", 420);
 
       const spellDamage = randomInt(magicDef.minDamage, magicDef.maxDamage);
       const playerDied = playerState.takeDamage(spellDamage);
@@ -2325,6 +2358,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
 
       const targetPos = currentlyChasing ? player.position : enemy.spawnPos;
+      const prevX = enemy.worldPos.x;
+      const prevZ = enemy.worldPos.z;
 
       if (now - enemy.lastPathAt > 1000) {
         enemy.lastPathAt = now;
@@ -2332,6 +2367,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
 
       advanceEnemyPath(enemy, deltaSeconds);
+      const movedSq =
+        (enemy.worldPos.x - prevX) * (enemy.worldPos.x - prevX) +
+        (enemy.worldPos.z - prevZ) * (enemy.worldPos.z - prevZ);
+      if (movedSq > 0.0001) {
+        setEnemyAnimState(enemy, "walk");
+      } else {
+        setEnemyAnimState(enemy, "idle");
+      }
 
       if (
         !currentlyChasing &&

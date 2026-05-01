@@ -189,6 +189,10 @@
       "type": "enemy",
       "id": "goblin"
     },
+    "gla": {
+      "type": "enemy",
+      "id": "goblin_lanceiro"
+    },
     "orc": {
       "type": "enemy",
       "id": "orc"
@@ -214,6 +218,11 @@
         {
           "symbol": "gob",
           "x": 58,
+          "y": 72
+        },
+        {
+          "symbol": "gla",
+          "x": 62,
           "y": 72
         },
         {

@@ -1,43 +1,10 @@
-﻿{
-  "updatedAt": "2026-04-30T21:20:00Z",
-  "task": "Implementar validacao automatica de sprite spec e perfis de frames por tier (trash/elite/boss)",
-  "contractsRead": [
-    "docs/contracts/SPRITE_PIPELINE_CONTRACT.md",
-    "docs/contracts/GENERATOR_CONTRACT.md",
-    "docs/contracts/BIOME_SYSTEM_CONTRACT.md"
-  ],
-  "understanding": "Adicionar validacao de schema no comando generate-pixellab-sprite e formalizar perfis por tier para orientar frames de attack/death.",
-  "riskConflict": "Sem validacao automatica, specs incompletos passam e geram assets fora do padrao; sem perfis por tier, custo visual pode escalar de forma inconsistente.",
-  "objectiveQuestion": "Sem bloqueio: implementar validacao nativa no script, atualizar template/spec/README/contrato e manter backward compatibility.",
-  "documentationIndexChecked": true,
-  "impactedModules": [
-    "global-workflow",
-    "architecture-map",
-    "generator-biome"
-  ],
-  "docsRead": [
-    "docs/AI_READ_FIRST.md",
-    "docs/AI_RUNBOOK.md",
-    "docs/VALIDATION_MATRIX.md",
-    "docs/ARCHITECTURE_MAP.md",
-    "docs/ARCHITECTURE_OVERVIEW.md",
-    "docs/contracts/SPRITE_PIPELINE_CONTRACT.md"
-  ],
-  "docsCoverageStatus": "covered",
-  "divergenceDetected": false,
-  "divergenceNotes": "",
-  "docUpdatesRequired": [
-    "docs/contracts/SPRITE_PIPELINE_CONTRACT.md",
-    "docs/sprites/README.md",
-    "docs/sprites/templates/sprite-spec.template.yaml",
-    "docs/sprites/enemies/goblin-lanceiro.spec.yaml",
-    "docs/sprites/enemies/goblin-lanceiro.spec.json",
-    "scripts/generate-pixellab-sprite.js"
-  ],
-  "docUpdatesCompleted": true,
-  "validationResults": {
-    "pending": false,
-    "notes": "Executado node --check em scripts/generate-pixellab-sprite.js e diagnostics em docs/specs alterados, sem erros.",
-    "markdownDiagnostics": "pass"
-  }
+{
+    "updatedAt": "2026-05-01T10:15:00-03:00",
+    "task": "Corrigir animacao de estado do goblin_lanceiro no runtime 3D (idle/walk/attack/death)",
+    "contractsRead": [
+        "THREE_D_INTEGRATION_BLUEPRINT.md"
+    ],
+    "understanding": "O goblin_lanceiro persegue e ataca, mas o billboard fica em idle; preciso ligar a troca de estado de animacao ao estado real da IA no createDebugSliceScene.",
+    "riskConflict": "Se a troca de estado for baseada em sinais imprecisos, pode haver flicker entre idle/walk e regressao visual em outros inimigos.",
+    "objectiveQuestion": "Nenhuma: aplicarei a troca de estado apenas para materiais que expõem _setAnimState, sem alterar logica de combate."
 }

@@ -1,16 +1,10 @@
 {
-  "phase": "animation",
-  "entityId": "goblin_lanceiro",
-  "action": "death",
+  "animation": "death",
   "direction": "south",
-  "nFrames": 4,
-  "generatedAt": "2026-05-01T02:49:16.537Z",
-  "usdCost": 0.013333129664262136,
-  "frames": [
-    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\death_south\\frame_00.png",
-    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\death_south\\frame_01.png",
-    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\death_south\\frame_02.png",
-    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\death_south\\frame_03.png"
-  ],
-  "endpoint": "https://api.pixellab.ai/v1/animate-with-text"
+  "mode": "v3",
+  "templateId": null,
+  "actionDescription": "dying, collapsing to the ground, death fall",
+  "frameCount": 9,
+  "generatedAt": "2026-05-01T03:41:17.799Z",
+  "characterId": "2a5c271a-2cf4-4cac-93ad-e0b4bbfe72ec"
 }

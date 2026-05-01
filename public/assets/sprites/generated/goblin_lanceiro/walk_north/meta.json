@@ -1,16 +1,10 @@
 {
-  "phase": "animation",
-  "entityId": "goblin_lanceiro",
-  "action": "walk",
+  "animation": "walk",
   "direction": "north",
-  "nFrames": 4,
-  "generatedAt": "2026-05-01T02:44:55.057Z",
-  "usdCost": 0.01306343126296997,
-  "frames": [
-    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\walk_north\\frame_00.png",
-    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\walk_north\\frame_01.png",
-    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\walk_north\\frame_02.png",
-    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\walk_north\\frame_03.png"
-  ],
-  "endpoint": "https://api.pixellab.ai/v1/animate-with-text"
+  "mode": "template",
+  "templateId": "walking-4-frames",
+  "actionDescription": null,
+  "frameCount": 4,
+  "generatedAt": "2026-05-01T03:35:45.560Z",
+  "characterId": "2a5c271a-2cf4-4cac-93ad-e0b4bbfe72ec"
 }

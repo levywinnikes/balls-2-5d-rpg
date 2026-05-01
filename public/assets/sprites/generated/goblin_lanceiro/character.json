@@ -1,0 +1,17 @@
+{
+  "characterId": "2a5c271a-2cf4-4cac-93ad-e0b4bbfe72ec",
+  "createdAt": "2026-05-01T03:15:34.447Z",
+  "entityId": "goblin_lanceiro",
+  "description": "top-down low angle pixel art goblin spearman, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+  "view": "low top-down",
+  "imageSize": {
+    "width": 64,
+    "height": 64
+  },
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\character_rotations\\south.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\character_rotations\\west.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\character_rotations\\east.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\character_rotations\\north.png"
+  }
+}

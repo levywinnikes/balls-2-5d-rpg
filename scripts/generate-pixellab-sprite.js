@@ -4,30 +4,51 @@ const path = require("path");
 const {
   resolveConfig,
   ensureApiKey,
-  generateImage,
-  animateWithText,
+  waitForJob,
+  createCharacter,
+  getCharacter,
+  animateCharacter,
   getBalance,
+  downloadToFile,
   writeBase64ToFile,
 } = require("./pixellab-client");
 
+// ─────────────────────────────────────────────
+// ANIMATION TEMPLATES
+// Consistency strategy:
+//   - template mode: uses stored skeleton on same character_id → max consistency, 1 gen/direction
+//   - v3 mode (action_description): free text, 4-16 frames — used for death (no standard template)
+// ─────────────────────────────────────────────
+const ANIMATION_PLAN = [
+  // template mode (skeleton-based, guaranteed consistent with stored character)
+  { name: "walk",   mode: "template", templateId: "walking-4-frames", directions: ["south", "north", "east", "west"] },
+  { name: "idle",   mode: "template", templateId: "breathing-idle",   directions: ["south", "north", "east", "west"] },
+  { name: "attack", mode: "template", templateId: "lead-jab",         directions: ["south", "north", "east", "west"] },
+  // v3 mode — no official template for death; frame_count gives sequential frames
+  { name: "death",  mode: "v3", actionDescription: "dying, collapsing to the ground, death fall", frameCount: 8, directions: ["south"] },
+];
+
+// ─────────────────────────────────────────────
+// TIER FRAME PROFILES — spec validation only (not sent to API)
+// ─────────────────────────────────────────────
 const TIER_FRAME_PROFILES = {
   trash: {
-    idle: { min: 4, max: 4, target: 4 },
-    walk: { min: 6, max: 6, target: 6 },
-    attack: { min: 6, max: 6, target: 6 },
-    death: { min: 4, max: 6, target: 6 },
+    idle:   { min: 2, max: 6,  target: 4 },
+    walk:   { min: 4, max: 8,  target: 6 },
+    attack: { min: 4, max: 8,  target: 6 },
+    death:  { min: 4, max: 8,  target: 6 },
   },
   elite: {
-    idle: { min: 4, max: 4, target: 4 },
-    walk: { min: 6, max: 6, target: 6 },
-    attack: { min: 6, max: 8, target: 7 },
-    death: { min: 6, max: 8, target: 7 },
+    idle:   { min: 4, max: 8,  target: 6 },
+    walk:   { min: 6, max: 10, target: 8 },
+    attack: { min: 6, max: 10, target: 8 },
+    death:  { min: 6, max: 10, target: 8 },
   },
   boss: {
-    idle: { min: 4, max: 6, target: 4 },
-    walk: { min: 6, max: 8, target: 6 },
+    idle:   { min: 6, max: 12, target: 8 },
+    walk:   { min: 8, max: 12, target: 8 },
     attack: { min: 8, max: 12, target: 8 },
-    death: { min: 8, max: 12, target: 8 },
+    death:  { min: 8, max: 12, target: 8 },
   },
 };
 
@@ -94,7 +115,6 @@ function validateSpecSchema(spec, specPath) {
   const errors = [];
 
   const entityId = asNonEmptyString(spec?.id, "id", errors);
-  const model = asNonEmptyString(spec?.pipeline?.model_primary, "pipeline.model_primary", errors);
   const prompt = asNonEmptyString(
     spec?.production_prompts?.base_generation_prompt,
     "production_prompts.base_generation_prompt",
@@ -133,7 +153,6 @@ function validateSpecSchema(spec, specPath) {
 
   return {
     entityId,
-    model,
     prompt,
     width,
     height,
@@ -154,7 +173,6 @@ function readJsonSpec(specPath) {
   const negativePrompt = json?.production_prompts?.negative_prompt || "";
 
   return {
-    model: validated.model,
     prompt: validated.prompt,
     negativePrompt,
     width: validated.width,
@@ -170,130 +188,206 @@ function readJsonSpec(specPath) {
   };
 }
 
-function ensureRequired(input) {
-  if (!input.prompt || !input.prompt.trim()) {
+function ensureRequired(spec) {
+  if (!spec.prompt || !spec.prompt.trim()) {
     throw new Error("Missing prompt. Use --prompt or --spec with production_prompts.base_generation_prompt.");
   }
 }
 
-function outputPathFromArgs(args, entityId, suffix) {
-  if (args.output && !suffix) {
-    return path.resolve(args.output);
+// ─────────────────────────────────────────────
+// FRAME EXTRACTION
+// Handles both URL-based and base64-based last_response from background jobs.
+// ─────────────────────────────────────────────
+function extractFrames(lastResponse) {
+  if (!lastResponse) return [];
+
+  const raw =
+    lastResponse.images ||
+    lastResponse.frames ||
+    lastResponse.data ||
+    lastResponse.results ||
+    [];
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    console.warn(
+      `[pixellab] ⚠️  extractFrames: no frames array found. Response keys: ${Object.keys(lastResponse).join(", ")}`,
+    );
+    return [];
   }
-  const outDir = path.resolve(args.outDir || path.join("public", "assets", "sprites", "generated"));
-  const filename = suffix ? `${entityId}_${suffix}.png` : `${entityId}.png`;
-  return path.join(outDir, filename);
+
+  return raw
+    .map((f) => {
+      if (!f) return null;
+      if (typeof f === "string") {
+        return f.startsWith("http")
+          ? { type: "url", value: f }
+          : { type: "base64", value: f };
+      }
+      if (f.url) return { type: "url", value: f.url };
+      if (f.image?.base64) return { type: "base64", value: f.image.base64 };
+      if (f.base64) return { type: "base64", value: f.base64 };
+      return null;
+    })
+    .filter(Boolean);
 }
 
-function buildMetaPath(imagePath) {
-  return `${imagePath}.meta.json`;
+async function saveFrameToPath(frame, filePath) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  if (frame.type === "url") {
+    await downloadToFile(frame.value, filePath);
+  } else {
+    writeBase64ToFile(frame.value, filePath);
+  }
 }
 
-// Phase A: generate reference image (static pose)
-async function generateReferenceImage(config, spec, args) {
-  const targetPath = outputPathFromArgs(args, spec.entityId, "reference");
+// ─────────────────────────────────────────────
+// PHASE A — Create character (persistent character_id)
+// ─────────────────────────────────────────────
+async function phaseA(config, spec, outBaseDir) {
+  console.log("\n[pixellab] ═══ Phase A — Create Character ═══");
+  console.log(`[pixellab]   entity      : ${spec.entityId}`);
+  console.log(`[pixellab]   description : ${spec.prompt}`);
+  console.log(`[pixellab]   size        : ${spec.width}×${spec.height}`);
 
-  console.log(`[pixellab] Phase A — generating reference image`);
-  console.log(`[pixellab]   entity  : ${spec.entityId}`);
-  console.log(`[pixellab]   prompt  : ${spec.prompt}`);
-  console.log(`[pixellab]   size    : ${spec.width}x${spec.height}`);
-  console.log(`[pixellab]   output  : ${targetPath}`);
+  const view = spec.rawSpec?.production_prompts?.view || "low top-down";
 
-  const result = await generateImage(config, {
+  const { characterId, backgroundJobId } = await createCharacter(config, {
     description: spec.prompt,
     image_size: { width: spec.width, height: spec.height },
-    no_background: true,
-    negative_description: spec.negativePrompt || undefined,
-    view: spec.rawSpec?.production_prompts?.view || undefined,
-    direction: spec.rawSpec?.production_prompts?.direction || undefined,
-    seed: args.seed ? Number(args.seed) : undefined,
+    view,
+    outline: "single color black outline",
+    shading: "basic shading",
+    detail: "medium detail",
   });
 
-  writeBase64ToFile(result.base64, targetPath);
+  console.log(`[pixellab]   character_id : ${characterId}`);
+  console.log(`[pixellab]   job_id       : ${backgroundJobId}`);
 
-  // Save raw base64 sidecar so Phase B can reuse it without PNG re-encoding
-  // Strip data URI prefix — API expects raw base64 in requests
-  const rawBase64ForSidecar = result.base64.includes(",")
-    ? result.base64.slice(result.base64.indexOf(",") + 1)
-    : result.base64;
-  const b64SidecarPath = `${targetPath}.b64`;
-  fs.mkdirSync(path.dirname(b64SidecarPath), { recursive: true });
-  fs.writeFileSync(b64SidecarPath, rawBase64ForSidecar, "utf8");
+  const creationJob = await waitForJob(config, backgroundJobId, "character creation");
+  process.stdout.write("\n");
+  console.log(`[pixellab] ✓ Character creation job completed`);
 
-  const meta = {
-    phase: "reference",
+  // Fetch full character details to get rotation images
+  const character = await getCharacter(config, characterId);
+  console.log(`[pixellab]   Character response keys: ${Object.keys(character).join(", ")}`);
+
+  // Extract rotation images — field name may vary (rotation_urls, images, rotations)
+  const rotationData =
+    character.rotation_urls ||
+    character.images ||
+    character.rotations ||
+    creationJob.last_response?.rotation_urls ||
+    {};
+
+  const charDir = path.join(outBaseDir, spec.entityId, "character_rotations");
+  fs.mkdirSync(charDir, { recursive: true });
+
+  const savedRotations = {};
+  for (const [dir, urlOrData] of Object.entries(rotationData)) {
+    if (!urlOrData) continue;
+    const imgPath = path.join(charDir, `${dir}.png`);
+    if (typeof urlOrData === "string" && urlOrData.startsWith("http")) {
+      await downloadToFile(urlOrData, imgPath);
+    } else if (typeof urlOrData === "string") {
+      writeBase64ToFile(urlOrData, imgPath);
+    } else if (urlOrData.base64) {
+      writeBase64ToFile(urlOrData.base64, imgPath);
+    } else {
+      console.warn(
+        `[pixellab] ⚠️  Unknown format for rotation '${dir}': ${JSON.stringify(urlOrData).slice(0, 80)}`,
+      );
+      continue;
+    }
+    savedRotations[dir] = imgPath;
+    console.log(`[pixellab] ✓ rotation saved: ${dir} → ${imgPath}`);
+  }
+
+  if (Object.keys(savedRotations).length === 0) {
+    console.warn(
+      "[pixellab] ⚠️  No rotation images extracted. Raw last_response (first 600 chars):\n" +
+        JSON.stringify(creationJob.last_response, null, 2).slice(0, 600),
+    );
+  }
+
+  // Persist character_id to sidecar so phase=animate can resume later
+  const sidecar = {
+    characterId,
+    createdAt: new Date().toISOString(),
     entityId: spec.entityId,
-    generatedAt: new Date().toISOString(),
-    prompt: spec.prompt,
-    negativePrompt: spec.negativePrompt || null,
+    description: spec.prompt,
+    view,
     imageSize: { width: spec.width, height: spec.height },
-    sourceSpec: spec.source || null,
-    tier: spec.tier || null,
-    usdCost: result.usdCost,
-    outputImage: targetPath,
-    endpoint: `${config.baseUrl}/v1/generate-image-pixflux`,
+    rotations: savedRotations,
   };
+  const sidecarPath = path.join(outBaseDir, spec.entityId, "character.json");
+  fs.mkdirSync(path.dirname(sidecarPath), { recursive: true });
+  fs.writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2));
+  console.log(`[pixellab] ✓ character sidecar saved → ${sidecarPath}`);
 
-  const metaPath = buildMetaPath(targetPath);
-  fs.mkdirSync(path.dirname(metaPath), { recursive: true });
-  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
-
-  const cost = result.usdCost != null ? `$${result.usdCost.toFixed(4)}` : "unknown";
-  console.log(`[pixellab] ✓ reference image saved → ${targetPath}`);
-  console.log(`[pixellab] ✓ meta saved            → ${metaPath}`);
-  console.log(`[pixellab] ✓ b64 sidecar saved     → ${b64SidecarPath}`);
-  console.log(`[pixellab] ✓ cost                  → ${cost}`);
-
-  return { imagePath: targetPath, b64SidecarPath, base64: result.base64, usdCost: result.usdCost };
+  return { characterId, sidecarPath, rotations: savedRotations };
 }
 
-// Phase B: animate reference image for one action×direction combo
-async function generateAnimation(config, spec, referenceBase64, action, direction, args) {
-  const suffix = `${action}_${direction}`;
-  const outDir = path.resolve(args.outDir || path.join("public", "assets", "sprites", "generated"));
-  const frameDir = path.join(outDir, spec.entityId, suffix);
-  fs.mkdirSync(frameDir, { recursive: true });
+// ─────────────────────────────────────────────
+// PHASE B — Animate (one ANIMATION_PLAN entry)
+// ─────────────────────────────────────────────
+async function phaseBAnimation(config, spec, characterId, animEntry, outBaseDir) {
+  const { name, mode, templateId, actionDescription, frameCount, directions } = animEntry;
+  console.log(`\n[pixellab] ─── Animation: ${name} (mode: ${mode}) ───`);
 
-  const nFrames = spec.frameTargets?.[action] || 4;
-  const view = spec.rawSpec?.production_prompts?.view || "high top-down";
-
-  console.log(`[pixellab] Phase B — ${action} / ${direction} (${nFrames} frames)`);
-
-  const result = await animateWithText(config, {
-    description: spec.rawSpec?.production_prompts?.animation_description || spec.prompt,
-    action,
-    reference_image: { type: "base64", base64: referenceBase64 },
-    view,
-    direction,
-    n_frames: nFrames,
-    seed: args.seed ? Number(args.seed) : undefined,
-  });
-
-  const savedPaths = result.frames.map((frameBase64, i) => {
-    const framePath = path.join(frameDir, `frame_${String(i).padStart(2, "0")}.png`);
-    writeBase64ToFile(frameBase64, framePath);
-    return framePath;
-  });
-
-  const meta = {
-    phase: "animation",
-    entityId: spec.entityId,
-    action,
-    direction,
-    nFrames: result.frames.length,
-    generatedAt: new Date().toISOString(),
-    usdCost: result.usdCost,
-    frames: savedPaths,
-    endpoint: `${config.baseUrl}/v1/animate-with-text`,
+  const animArgs = {
+    character_id: characterId,
+    animation_name: name,
+    mode,
+    directions,
   };
+  if (mode === "template") {
+    animArgs.template_animation_id = templateId;
+  } else {
+    animArgs.action_description = actionDescription;
+    if (frameCount) animArgs.frame_count = frameCount;
+  }
 
-  const metaPath = path.join(frameDir, "meta.json");
-  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+  const { backgroundJobIds, directions: returnedDirs } = await animateCharacter(config, animArgs);
+  console.log(`[pixellab]   Submitted ${backgroundJobIds.length} job(s)`);
 
-  const cost = result.usdCost != null ? `$${result.usdCost.toFixed(4)}` : "unknown";
-  console.log(`[pixellab] ✓ ${suffix}: ${result.frames.length} frames saved → ${frameDir} (${cost})`);
+  for (let i = 0; i < backgroundJobIds.length; i++) {
+    const jobId = backgroundJobIds[i];
+    const dir = returnedDirs?.[i] || directions[i] || "south";
 
-  return { savedPaths, usdCost: result.usdCost };
+    const job = await waitForJob(config, jobId, `${name}/${dir}`);
+    process.stdout.write("\n");
+
+    const frames = extractFrames(job.last_response);
+    if (frames.length === 0) {
+      console.warn(`[pixellab] ⚠️  No frames found for ${name}/${dir}. Skipping.`);
+      if (job.last_response) {
+        console.warn("  Raw last_response (first 600 chars):");
+        console.warn(JSON.stringify(job.last_response, null, 2).slice(0, 600));
+      }
+      continue;
+    }
+
+    const frameDir = path.join(outBaseDir, spec.entityId, `${name}_${dir}`);
+    fs.mkdirSync(frameDir, { recursive: true });
+
+    for (let fi = 0; fi < frames.length; fi++) {
+      const framePath = path.join(frameDir, `frame_${String(fi).padStart(2, "0")}.png`);
+      await saveFrameToPath(frames[fi], framePath);
+    }
+
+    const meta = {
+      animation: name,
+      direction: dir,
+      mode,
+      templateId: templateId || null,
+      actionDescription: actionDescription || null,
+      frameCount: frames.length,
+      generatedAt: new Date().toISOString(),
+      characterId,
+    };
+    fs.writeFileSync(path.join(frameDir, "meta.json"), JSON.stringify(meta, null, 2));
+    console.log(`[pixellab] ✓ ${name}/${dir}: ${frames.length} frames → ${frameDir}`);
+  }
 }
 
 async function main() {
@@ -307,14 +401,23 @@ async function main() {
     return;
   }
 
-  const spec = args.spec ? readJsonSpec(args.spec) : {};
-
-  const entityId = args.entity || spec.entityId || "sprite_generated";
-  if (!spec.entityId) {
-    spec.entityId = entityId;
-  }
-  if (!spec.prompt && args.prompt) {
-    spec.prompt = args.prompt;
+  let spec;
+  if (args.spec) {
+    spec = readJsonSpec(args.spec);
+  } else {
+    spec = {
+      entityId: args.entity || "sprite_generated",
+      prompt: args.prompt || "",
+      negativePrompt: args["negative-prompt"] || "",
+      width: Number(args.width || 64),
+      height: Number(args.height || 64),
+      tier: args.tier || null,
+      tierProfile: null,
+      deathDirection: "south",
+      rawSpec: {},
+      source: null,
+    };
+    if (spec.tier) spec.tierProfile = TIER_FRAME_PROFILES[spec.tier] || null;
   }
 
   ensureRequired(spec);
@@ -322,59 +425,55 @@ async function main() {
   const config = resolveConfig();
   ensureApiKey(config);
 
-  const phase = args.phase || "reference";
+  const outBaseDir = path.resolve(
+    args.outDir || path.join("public", "assets", "sprites", "generated"),
+  );
+  const phase = args.phase || "all";
 
-  if (phase === "reference" || phase === "all") {
-    const ref = await generateReferenceImage(config, spec, args);
+  let characterId = args["character-id"] || null;
 
-    if (phase === "all") {
-      const directions = ["south", "north", "east", "west"];
-      const actions = ["walk", "attack", "idle"];
-      let totalCost = ref.usdCost || 0;
+  // ── Phase A ────────────────────────────────
+  if (!characterId && (phase === "all" || phase === "character")) {
+    const result = await phaseA(config, spec, outBaseDir);
+    characterId = result.characterId;
+  }
 
-      for (const action of actions) {
-        for (const dir of directions) {
-          const anim = await generateAnimation(config, spec, ref.base64, action, dir, args);
-          totalCost += anim.usdCost || 0;
-        }
-      }
-      // death uses only south (or override)
-      const deathDir = spec.deathDirection || "south";
-      const deathAnim = await generateAnimation(config, spec, ref.base64, "death", deathDir, args);
-      totalCost += deathAnim.usdCost || 0;
-
-      console.log(`\n[pixellab] ✓ All phases complete. Estimated total cost: $${totalCost.toFixed(4)} USD`);
-    }
-  } else if (phase === "animate") {
-    // Animate only — requires --ref-image and --action + --direction
-    if (!args["ref-image"]) {
-      throw new Error("--ref-image <path> is required for phase=animate");
-    }
-    if (!args.action) {
-      throw new Error("--action <action> is required for phase=animate");
-    }
-    const refImagePath = path.resolve(args["ref-image"]);
-    const b64SidecarPath = `${refImagePath}.b64`;
-    let refBase64;
-    if (fs.existsSync(b64SidecarPath)) {
-      // Prefer the sidecar saved during Phase A — avoids binary re-encoding padding issues
-      refBase64 = fs.readFileSync(b64SidecarPath, "utf8").trim();
-      console.log(`[pixellab] Using b64 sidecar: ${b64SidecarPath}`);
+  // ── Load character_id from sidecar if needed ─
+  if (!characterId) {
+    const sidecarPath = path.join(outBaseDir, spec.entityId, "character.json");
+    if (fs.existsSync(sidecarPath)) {
+      characterId = JSON.parse(fs.readFileSync(sidecarPath, "utf8")).characterId;
+      console.log(`[pixellab] Loaded characterId from sidecar: ${characterId}`);
     } else {
-      const refRaw = fs.readFileSync(refImagePath);
-      refBase64 = `data:image/png;base64,${refRaw.toString("base64")}`;
-      console.log(`[pixellab] No sidecar found, re-encoding PNG: ${refImagePath}`);
+      throw new Error(
+        "--character-id required for phase=animate (or run --phase character first).",
+      );
     }
-    const directions = args.direction ? [args.direction] : ["south", "north", "east", "west"];
-    for (const dir of directions) {
-      await generateAnimation(config, spec, refBase64, args.action, dir, args);
+  }
+
+  // ── Phase B ────────────────────────────────
+  if (phase === "all" || phase === "animate") {
+    const animFilter = args.anim ? args.anim.split(",").map((s) => s.trim()) : null;
+    const plan = animFilter
+      ? ANIMATION_PLAN.filter((a) => animFilter.includes(a.name))
+      : ANIMATION_PLAN;
+
+    if (plan.length === 0) {
+      throw new Error(
+        `No animations matched filter '${args.anim}'. Available: ${ANIMATION_PLAN.map((a) => a.name).join(", ")}`,
+      );
     }
-  } else {
-    throw new Error(`Unknown --phase value: ${phase}. Use: reference | animate | all`);
+
+    for (const animEntry of plan) {
+      await phaseBAnimation(config, spec, characterId, animEntry, outBaseDir);
+    }
+
+    console.log(`\n[pixellab] ✓ All animations complete. Character ID: ${characterId}`);
   }
 }
 
 main().catch((error) => {
-  console.error(`[pixellab] error: ${error.message}`);
+  console.error(`\n[pixellab] ERROR: ${error.message}`);
+  if (process.env.DEBUG) console.error(error.stack);
   process.exitCode = 1;
 });

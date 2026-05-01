@@ -17,6 +17,8 @@ export type EnemyVisualProfile = {
   hasHorns?: boolean;
 };
 
+export type EnemyVisualAnimState = "idle" | "walk" | "attack" | "death";
+
 const DEFAULT_PROFILE: EnemyVisualProfile = {
   baseColor: "#8b5a2b",
   accentColor: "#f2d1a8",
@@ -41,6 +43,13 @@ const PROFILE_BY_ENEMY_ID: Record<string, EnemyVisualProfile> = {
     headScale: 0.58,
   },
   goblin: {
+    baseColor: "#3f8f44",
+    accentColor: "#8bd38f",
+    radius: 0.34,
+    height: 1.2,
+    headScale: 0.58,
+  },
+  goblin_lanceiro: {
     baseColor: "#3f8f44",
     accentColor: "#8bd38f",
     radius: 0.34,
@@ -115,6 +124,12 @@ export function createEnemyVisual(
     `${nodeName}-sprite`,
     enemyId,
   );
+  const spriteAnimSetter = (spriteMat as any)._setAnimState;
+  if (typeof spriteAnimSetter === "function") {
+    (root as any)._setAnimState = (state: EnemyVisualAnimState) => {
+      spriteAnimSetter(state);
+    };
+  }
 
   const sprite = MeshBuilder.CreatePlane(
     `${nodeName}-sprite`,
@@ -209,4 +224,14 @@ export function createEnemyVisual(
   marker.position.y = 0.03;
 
   return root;
+}
+
+export function setEnemyVisualAnimState(
+  enemyRoot: TransformNode,
+  state: EnemyVisualAnimState,
+): void {
+  const setter = (enemyRoot as any)._setAnimState;
+  if (typeof setter === "function") {
+    setter(state);
+  }
 }
