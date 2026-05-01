@@ -4,9 +4,9 @@ const path = require("path");
 const {
   resolveConfig,
   ensureApiKey,
-  createJob,
-  resolveGeneration,
-  downloadImageToFile,
+  generateImage,
+  animateWithText,
+  getBalance,
   writeBase64ToFile,
 } = require("./pixellab-client");
 
@@ -176,91 +176,182 @@ function ensureRequired(input) {
   }
 }
 
-function outputPathFromArgs(args, entityId) {
-  if (args.output) {
+function outputPathFromArgs(args, entityId, suffix) {
+  if (args.output && !suffix) {
     return path.resolve(args.output);
   }
   const outDir = path.resolve(args.outDir || path.join("public", "assets", "sprites", "generated"));
-  return path.join(outDir, `${entityId}.png`);
+  const filename = suffix ? `${entityId}_${suffix}.png` : `${entityId}.png`;
+  return path.join(outDir, filename);
 }
 
 function buildMetaPath(imagePath) {
   return `${imagePath}.meta.json`;
 }
 
+// Phase A: generate reference image (static pose)
+async function generateReferenceImage(config, spec, args) {
+  const targetPath = outputPathFromArgs(args, spec.entityId, "reference");
+
+  console.log(`[pixellab] Phase A — generating reference image`);
+  console.log(`[pixellab]   entity  : ${spec.entityId}`);
+  console.log(`[pixellab]   prompt  : ${spec.prompt}`);
+  console.log(`[pixellab]   size    : ${spec.width}x${spec.height}`);
+  console.log(`[pixellab]   output  : ${targetPath}`);
+
+  const result = await generateImage(config, {
+    description: spec.prompt,
+    image_size: { width: spec.width, height: spec.height },
+    no_background: true,
+    negative_description: spec.negativePrompt || undefined,
+    view: spec.rawSpec?.production_prompts?.view || undefined,
+    direction: spec.rawSpec?.production_prompts?.direction || undefined,
+    seed: args.seed ? Number(args.seed) : undefined,
+  });
+
+  writeBase64ToFile(result.base64, targetPath);
+
+  const meta = {
+    phase: "reference",
+    entityId: spec.entityId,
+    generatedAt: new Date().toISOString(),
+    prompt: spec.prompt,
+    negativePrompt: spec.negativePrompt || null,
+    imageSize: { width: spec.width, height: spec.height },
+    sourceSpec: spec.source || null,
+    tier: spec.tier || null,
+    usdCost: result.usdCost,
+    outputImage: targetPath,
+    endpoint: `${config.baseUrl}/v1/generate-image-pixflux`,
+  };
+
+  const metaPath = buildMetaPath(targetPath);
+  fs.mkdirSync(path.dirname(metaPath), { recursive: true });
+  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+
+  const cost = result.usdCost != null ? `$${result.usdCost.toFixed(4)}` : "unknown";
+  console.log(`[pixellab] ✓ reference image saved → ${targetPath}`);
+  console.log(`[pixellab] ✓ meta saved            → ${metaPath}`);
+  console.log(`[pixellab] ✓ cost                  → ${cost}`);
+
+  return { imagePath: targetPath, base64: result.base64, usdCost: result.usdCost };
+}
+
+// Phase B: animate reference image for one action×direction combo
+async function generateAnimation(config, spec, referenceBase64, action, direction, args) {
+  const suffix = `${action}_${direction}`;
+  const outDir = path.resolve(args.outDir || path.join("public", "assets", "sprites", "generated"));
+  const frameDir = path.join(outDir, spec.entityId, suffix);
+  fs.mkdirSync(frameDir, { recursive: true });
+
+  const nFrames = spec.frameTargets?.[action] || 4;
+  const view = spec.rawSpec?.production_prompts?.view || "high top-down";
+
+  console.log(`[pixellab] Phase B — ${action} / ${direction} (${nFrames} frames)`);
+
+  const result = await animateWithText(config, {
+    description: spec.rawSpec?.production_prompts?.animation_description || spec.prompt,
+    action,
+    reference_image: { type: "base64", base64: referenceBase64 },
+    view,
+    direction,
+    n_frames: nFrames,
+    seed: args.seed ? Number(args.seed) : undefined,
+  });
+
+  const savedPaths = result.frames.map((frameBase64, i) => {
+    const framePath = path.join(frameDir, `frame_${String(i).padStart(2, "0")}.png`);
+    writeBase64ToFile(frameBase64, framePath);
+    return framePath;
+  });
+
+  const meta = {
+    phase: "animation",
+    entityId: spec.entityId,
+    action,
+    direction,
+    nFrames: result.frames.length,
+    generatedAt: new Date().toISOString(),
+    usdCost: result.usdCost,
+    frames: savedPaths,
+    endpoint: `${config.baseUrl}/v1/animate-with-text`,
+  };
+
+  const metaPath = path.join(frameDir, "meta.json");
+  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+
+  const cost = result.usdCost != null ? `$${result.usdCost.toFixed(4)}` : "unknown";
+  console.log(`[pixellab] ✓ ${suffix}: ${result.frames.length} frames saved → ${frameDir} (${cost})`);
+
+  return { savedPaths, usdCost: result.usdCost };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
+
+  if (args.balance) {
+    const config = resolveConfig();
+    ensureApiKey(config);
+    const { usd } = await getBalance(config);
+    console.log(`[pixellab] Account balance: $${usd.toFixed(4)} USD`);
+    return;
+  }
+
   const spec = args.spec ? readJsonSpec(args.spec) : {};
 
   const entityId = args.entity || spec.entityId || "sprite_generated";
-  const input = {
-    model: args.model || spec.model || "pixflux",
-    prompt: args.prompt || spec.prompt || "",
-    negativePrompt: args.negative || spec.negativePrompt || "",
-    width: args.width || spec.width || 64,
-    height: args.height || spec.height || 64,
-    seed: args.seed,
-    inputImageUrl: args.inputImage,
-  };
-
-  ensureRequired(input);
-
-  const config = resolveConfig({
-    pollMs: args.pollMs ? Number(args.pollMs) : undefined,
-    timeoutMs: args.timeoutMs ? Number(args.timeoutMs) : undefined,
-  });
-
-  ensureApiKey(config);
-
-  const targetImagePath = outputPathFromArgs(args, entityId);
-  const targetMetaPath = buildMetaPath(targetImagePath);
-
-  console.log(`[pixellab] model=${input.model} entity=${entityId}`);
-  console.log(`[pixellab] createPath=${config.createPath} statusPath=${config.statusPath}`);
-
-  const createResponse = await createJob(config, input);
-  const result = await resolveGeneration(config, createResponse);
-
-  if (result.imageBase64) {
-    writeBase64ToFile(result.imageBase64, targetImagePath);
-  } else if (result.imageUrl) {
-    await downloadImageToFile(result.imageUrl, targetImagePath);
-  } else {
-    throw new Error("Generation finished without image data (url/base64).");
+  if (!spec.entityId) {
+    spec.entityId = entityId;
+  }
+  if (!spec.prompt && args.prompt) {
+    spec.prompt = args.prompt;
   }
 
-  const meta = {
-    entityId,
-    generatedAt: new Date().toISOString(),
-    model: input.model,
-    prompt: input.prompt,
-    negativePrompt: input.negativePrompt,
-    sourceSpec: spec.source || null,
-    tier: spec.tier || null,
-    animationProfile: spec.tier
-      ? {
-          tier: spec.tier,
-          frameTargets: spec.frameTargets,
-          allowedRanges: spec.tierProfile,
-          deathSharedDirection: spec.deathDirection,
-          deathDirectionOverrideReason: spec.deathDirectionOverrideReason,
+  ensureRequired(spec);
+
+  const config = resolveConfig();
+  ensureApiKey(config);
+
+  const phase = args.phase || "reference";
+
+  if (phase === "reference" || phase === "all") {
+    const ref = await generateReferenceImage(config, spec, args);
+
+    if (phase === "all") {
+      const directions = ["south", "north", "east", "west"];
+      const actions = ["walk", "attack", "idle"];
+      let totalCost = ref.usdCost || 0;
+
+      for (const action of actions) {
+        for (const dir of directions) {
+          const anim = await generateAnimation(config, spec, ref.base64, action, dir, args);
+          totalCost += anim.usdCost || 0;
         }
-      : null,
-    outputImage: targetImagePath,
-    pixelLab: {
-      baseUrl: config.baseUrl,
-      createPath: config.createPath,
-      statusPath: config.statusPath,
-      jobId: result.jobId || null,
-      finalStatus: result.status,
-    },
-  };
+      }
+      // death uses only south (or override)
+      const deathDir = spec.deathDirection || "south";
+      const deathAnim = await generateAnimation(config, spec, ref.base64, "death", deathDir, args);
+      totalCost += deathAnim.usdCost || 0;
 
-  fs.mkdirSync(path.dirname(targetMetaPath), { recursive: true });
-  fs.writeFileSync(targetMetaPath, JSON.stringify(meta, null, 2));
-
-  console.log(`[pixellab] generated ${targetImagePath}`);
-  console.log(`[pixellab] generated ${targetMetaPath}`);
+      console.log(`\n[pixellab] ✓ All phases complete. Estimated total cost: $${totalCost.toFixed(4)} USD`);
+    }
+  } else if (phase === "animate") {
+    // Animate only — requires --ref-image and --action + --direction
+    if (!args["ref-image"]) {
+      throw new Error("--ref-image <path> is required for phase=animate");
+    }
+    if (!args.action) {
+      throw new Error("--action <action> is required for phase=animate");
+    }
+    const refRaw = fs.readFileSync(path.resolve(args["ref-image"]));
+    const refBase64 = `data:image/png;base64,${refRaw.toString("base64")}`;
+    const directions = args.direction ? [args.direction] : ["south", "north", "east", "west"];
+    for (const dir of directions) {
+      await generateAnimation(config, spec, refBase64, args.action, dir, args);
+    }
+  } else {
+    throw new Error(`Unknown --phase value: ${phase}. Use: reference | animate | all`);
+  }
 }
 
 main().catch((error) => {

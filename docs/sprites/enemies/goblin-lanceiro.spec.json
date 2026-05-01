@@ -28,6 +28,9 @@
   },
   "production_prompts": {
     "base_generation_prompt": "top-down low angle pixel art goblin spearman, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
-    "negative_prompt": "blurry, noisy, muddy colors, extra limbs, broken spear, inconsistent proportions"
+    "negative_prompt": "blurry, noisy, muddy colors, extra limbs, broken spear, inconsistent proportions",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "goblin spearman"
   }
 }

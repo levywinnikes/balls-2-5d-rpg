@@ -30,6 +30,7 @@ Out of scope:
 2. Runtime import format must be atlas/sheet compatible with the current engine path.
 3. A procedural fallback can remain for debugging and migration safety.
 4. No direct copy/paste of copyrighted third-party artworks; style inspiration is allowed, cloning is not.
+5. All generated sprites must use a transparent background. The generation CLI enforces `no_background: true` on every `generate-image-pixflux` call. Never commit sprites with a solid or opaque background.
 
 ## 4. Visual Direction
 
