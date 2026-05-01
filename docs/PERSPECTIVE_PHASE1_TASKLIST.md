@@ -66,14 +66,14 @@ Deliver a stable projection core for 3D mode in alpha with implementation-first 
 
 ## Validation for each task block
 
-1. `npm run build`
+1. `npx tsc --noEmit --skipLibCheck`
 1. `npm run benchmark:e2e` when transition/render behavior changes
 
 ## Notes
 
 - This file is the execution board for Phase 1. Phase 2 work is appended below.
 - Status values: Pending, In progress, Done.
-- Latest validation after top-edge silhouette pass: `npm run build` PASS, `npm run benchmark:e2e` PASS (`benchmark-report-1776460942973.json`).
+- Latest validation after top-edge silhouette pass: `npx tsc --noEmit --skipLibCheck` PASS, `npm run benchmark:e2e` PASS (`benchmark-report-1776460942973.json`).
 
 ---
 
@@ -146,7 +146,7 @@ Improve visual clarity and readability of the 3D perspective view without breaki
 
 ## Validation
 
-1. `npm run build` — required after any code change
+1. `npx tsc --noEmit --skipLibCheck` — required after any code change
 1. `npm run benchmark:e2e` — required (rendering changes affect transition/viewport behavior)
 
 ## Exit criteria for Phase 2

@@ -37,10 +37,22 @@ Current benchmark assets:
 
 ## 4.1 Execution Commands
 
-- Fast static validation: `npm run smoke:test`
+- Fast validation (default for day-to-day feature tasks): `npm run smoke:test`
 - Full benchmark automation (open app, auto-run, export JSON, enforce exit code): `npm run benchmark:e2e`
 - Combined flow: `npm run smoke:full`
 - E2E report must include `runtimeErrors` with source/message/timestamp.
+
+## 4.2 Validation Levels (Mandatory)
+
+To keep development flow fast without losing release safety, validation is tiered:
+
+1. Fast loop (default per task)
+   - Run `npm run smoke:test` and required static checks (`tsc`, `check:bms`, `check:i18n-ui`) based on impact.
+   - No production build is required in this loop.
+
+2. Full loop (milestone gate)
+   - Run `npm run benchmark:e2e` for PR-final verification, release candidate verification, or benchmark harness/menu-flow changes.
+   - This loop may require production build artifacts and is intentionally slower.
 
 ## 4. Feature Update Policy (Mandatory)
 
@@ -60,7 +72,9 @@ Required updates when impact exists:
 
 1. Update benchmark checkpoints (`smokeTests` metadata and/or in-game benchmark steps).
 2. Update this contract section `"Feature Coverage Matrix"`.
-3. Run benchmark validation (`npm run smoke:test` and/or `npm run benchmark:e2e` depending on impact).
+3. Run benchmark validation:
+   - `npm run smoke:test` for default per-task validation
+   - `npm run benchmark:e2e` only for full-loop triggers in section 4.2
 4. Include benchmark outcome in task/PR summary.
 
 ## 5. Feature Coverage Matrix
@@ -99,7 +113,7 @@ A feature is NOT done unless:
 2. Benchmark impact was assessed.
 3. Benchmark was updated when required.
 4. `npm run smoke:test` passes.
-5. When benchmark runtime path changed, `npm run benchmark:e2e` passes.
+5. `npm run benchmark:e2e` passes when full-loop triggers from section 4.2 apply.
 
 ## 8. Documentation Language
 

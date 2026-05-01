@@ -94,7 +94,8 @@ Checklist refresh triggers (mandatory):
 
 ### Benchmark
 
-- `npm run benchmark:e2e` must pass 14/14 before any task is considered done.
+- Fast loop must avoid build-heavy validation by default; use `npm run smoke:test` for routine task completion.
+- `npm run benchmark:e2e` is mandatory only for PR-final validation, release validation, or when benchmark runtime/harness flow is changed.
 - Any change to `smoke_test.json`, `generate-smoke-map.js`, or transition logic requires running the benchmark.
 - Never remove or rename existing benchmark steps without updating `BENCHMARK_CONTRACT.md`.
 
@@ -120,11 +121,15 @@ Checklist refresh triggers (mandatory):
 
 | Change area               | Required commands                                                               |
 | ------------------------- | ------------------------------------------------------------------------------- |
-| Gameplay, scenes, systems | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`                      |
-| Map / BMS                 | `npm run check:bms`, `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e` |
+| Gameplay, scenes, systems | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                         |
+| Map / BMS                 | `npm run check:bms`, `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`    |
 | UI text / HUD             | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`                      |
-| Save/load                 | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`                      |
+| Save/load                 | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                         |
 | Benchmark harness         | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`                      |
+
+`benchmark:e2e` trigger set:
+- required on PR-final validation and release validation
+- required when benchmark harness/checkpoints/menu benchmark flow is touched
 
 ---
 

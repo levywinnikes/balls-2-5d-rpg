@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteGame: (name) => ipcRenderer.invoke("delete-game", name),
   writeBenchmarkReport: (reportPath, data) =>
     ipcRenderer.invoke("benchmark-write-report", { reportPath, data }),
+  writeRuntimeLog: (data) => ipcRenderer.invoke("runtime-log-write", { data }),
   exitBenchmarkRun: (exitCode) =>
     ipcRenderer.invoke("benchmark-exit", { exitCode }),
 });

@@ -144,6 +144,31 @@ export const PerfMonitor: React.FC = () => {
                             {metrics.totalObjects || 0}
                         </span>
                     </div>
+                    <div className="my-2 border-t border-gray-800/50" />
+                    <div className="flex justify-between text-gray-500 text-[9px]">
+                        <span>Draw Calls</span>
+                        <span className="text-amber-300 font-bold">{metrics.drawCalls || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500 text-[9px]">
+                        <span>Meshes (A/T)</span>
+                        <span className="text-cyan-300 font-bold">{metrics.activeMeshes || 0}/{metrics.totalMeshes || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500 text-[9px]">
+                        <span>Textures</span>
+                        <span className="text-cyan-300 font-bold">{metrics.totalTextures || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500 text-[9px]">
+                        <span>Vertices</span>
+                        <span className="text-cyan-300 font-bold">{metrics.totalVertices || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500 text-[9px]">
+                        <span>JS Heap (MB)</span>
+                        <span className="text-purple-300 font-bold">{metrics.jsHeapUsedMb || 0}/{metrics.jsHeapTotalMb || 0}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500 text-[9px]">
+                        <span>Chunks (L/Q)</span>
+                        <span className="text-emerald-300 font-bold">{metrics.chunkLoaded || 0}/{metrics.chunkLoading || 0}</span>
+                    </div>
                 </div>
             </div>
 

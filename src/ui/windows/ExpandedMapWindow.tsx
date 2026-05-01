@@ -361,7 +361,6 @@ export const ExpandedMapContent: React.FC = () => {
         if (canvas.height !== currentBuffer.height)
           canvas.height = currentBuffer.height;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
         if (prevBuffer && alpha < 1) {
           ctx.globalAlpha = 1 - alpha;
           ctx.drawImage(prevBuffer, 0, 0, canvas.width, canvas.height);

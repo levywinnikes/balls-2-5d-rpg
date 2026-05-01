@@ -33,7 +33,7 @@ Profiles to capture:
 
 1. Ensure local build works:
 
-- `npm run build`
+- `npx tsc --noEmit --skipLibCheck`
 
 2. Ensure benchmark path works:
 
@@ -157,7 +157,7 @@ Phase 0 is complete when all are true:
 Perspective refactor work touches gameplay systems and scenes.
 Mandatory validation set for subsequent phases:
 
-1. `npm run build`
+1. `npx tsc --noEmit --skipLibCheck`
 2. `npm run benchmark:e2e`
 3. `npm run check:i18n-ui` when player-facing UI text changes
 4. `npm run ci` for cross-cutting refactors

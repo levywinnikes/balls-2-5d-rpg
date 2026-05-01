@@ -221,7 +221,7 @@ Auto-destroi após 1.2s
 
 ### Fase 5: Validação
 
-- [ ] `npm run build` → 0 errors
+- [ ] `npx tsc --noEmit --skipLibCheck` → 0 errors
 - [ ] `npm run benchmark:e2e` → 14/14 pass
 - [ ] Testar 3D slice:
   - StatusHUD visível e atualiza
@@ -307,8 +307,8 @@ PlayerState.emit("floatingText", {
 ## 7. Validação Pós-Implementação
 
 ```bash
-# Build
-npm run build
+# Typecheck
+npx tsc --noEmit --skipLibCheck
 # ✓ Should compile with 0 errors
 
 # Benchmark (CRÍTICO)

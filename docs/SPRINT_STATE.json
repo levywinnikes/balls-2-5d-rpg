@@ -28,7 +28,7 @@
   ],
   "progressNotes": [
     "Sprints 1-16 fechadas. tsc --noEmit zero erros em todos.",
-    "npm run build removido do fluxo obrigatório por diretriz do usuário — usando apenas tsc --noEmit.",
+    "Build de produção removido do fluxo obrigatório por diretriz do usuário — usando apenas typecheck (tsc --noEmit).",
     "Sprint 16: scripts/generate-towers-v1-map.js gerado; public/maps/torres_v1.json + _0.bin + _1.bin + _2.bin (150x120, 3 niveis). Mapa unico com 3 torres conectadas, base no nivel 0, andares medios no nivel 1 e mirantes no nivel 2 com bridges bal. Spawn na praca central e inimigos goblin/orc distribuidos.",
     "Sprint 15: scripts/generate-dungeons-sub-v1.js — 7 dungeons subterraneas: S01 Caverna dos Ratos (tuneis organicos random-walk), S02 Minas Abandonadas (corredores ortogonais), S03 Catacumbas Antigas (saloes cruciformes, nichos), S04 Gruta Inundada (plataformas sobre agua), S05 Ninho de Orcs (saloes circulares, sala do chefe), S06 Abismo dos Magos (plataformas sobre vazio, pontes bal), S07 Cripta do Lich (labirinto de aneis concentricos). Total: 14 dungeons acumulados.",
     "Sprint 14: scripts/generate-dungeons-terreo-v1.js — 7 dungeons terreo distintos: T01 Ruinas Antigas, T02 Fortaleza Abandonada, T03 Acampamento Goblin, T04 Forte de Pedra, T05 Templo Maldito, T06 Covil de Bandidos, T07 Mansao Assombrada. Cada dungeon: 2 niveis BMS (terreo+alto), tamanhos entre 60x50 e 80x80, inimigos goblin/orc, escadas stu/std para nivel 1.",

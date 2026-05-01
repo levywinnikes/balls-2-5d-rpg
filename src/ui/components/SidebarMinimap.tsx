@@ -19,7 +19,7 @@ import {
 import { WorldMapService } from "../../services/WorldMapService";
 
 const BASE_TILE_SIZE = 4;
-const VIEW_RANGE = 20;
+const VIEW_RANGE = 25;
 
 export const SidebarMinimap: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -105,27 +105,23 @@ export const SidebarMinimap: React.FC = () => {
       const pGridY = pPos.y / tileSizeGame;
       const centerX = width / 2;
       const centerY = height / 2;
-
       if (buffer) {
-        // Calculate the camera view in world-map-pixels
         const visibleRange = VIEW_RANGE / zoom;
+        // Player-centered minimap (radar): player fixed at center, world moves around.
         const sX = pGridX - visibleRange;
         const sY = pGridY - visibleRange;
         const sW = visibleRange * 2;
         const sH = visibleRange * 2;
 
-        // Target dimensions on the minimap canvas
+        const currentTileSize = BASE_TILE_SIZE * zoom;
         const dW = sW * currentTileSize;
         const dH = sH * currentTileSize;
         const dX = centerX - dW / 2;
         const dY = centerY - dH / 2;
 
-        // Create a temporary canvas for Fog of War masking if needed
-        // Or just draw directly if no fog logic is required at this zoom level
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(buffer, sX, sY, sW, sH, dX, dY, dW, dH);
 
-        // Apply Fog of War mask (Iterate local grid to clear un-explored tiles)
         if (explored) {
           const startX = Math.floor(sX);
           const endX = Math.ceil(sX + sW);
@@ -150,46 +146,43 @@ export const SidebarMinimap: React.FC = () => {
             }
           }
         }
-      }
 
-      // 3. Cruz do Jogador (Só se o andar bater)
-      if (pPos.level === viewLevel) {
-        ctx.fillStyle = "#FFFFFF";
-        const crossSize = 2 * zoom;
-        const length = 8 * zoom;
-        ctx.fillRect(
-          centerX - crossSize / 2,
-          centerY - length / 2,
-          crossSize,
-          length,
-        );
-        ctx.fillRect(
-          centerX - length / 2,
-          centerY - crossSize / 2,
-          length,
-          crossSize,
-        );
-      }
-
-      // 4. Marcações do Usuário
-      const markers = playerState.getMarkers();
-      markers.forEach((m) => {
-        if (String(m.level) === String(viewLevel)) {
-          // Precisão Pixel-at-Center (considerando Zoom)
-          const mx =
-            centerX + ((m.x - pPos.x) / tileSizeGame) * currentTileSize;
-          const my =
-            centerY + ((m.y - pPos.y) / tileSizeGame) * currentTileSize;
-
-          const dotSize = 4 * zoom;
-          ctx.fillStyle = m.color || "#ff0000";
-          ctx.fillRect(mx - dotSize / 2, my - dotSize / 2, dotSize, dotSize);
-
-          ctx.strokeStyle = "#000000";
-          ctx.lineWidth = 0.5 * zoom;
-          ctx.strokeRect(mx - dotSize / 2, my - dotSize / 2, dotSize, dotSize);
+        if (pPos.level === viewLevel) {
+          ctx.fillStyle = "#FFFFFF";
+          const crossSize = 2 * zoom;
+          const length = 8 * zoom;
+          ctx.fillRect(
+            centerX - crossSize / 2,
+            centerY - length / 2,
+            crossSize,
+            length,
+          );
+          ctx.fillRect(
+            centerX - length / 2,
+            centerY - crossSize / 2,
+            length,
+            crossSize,
+          );
         }
-      });
+
+        const markers = playerState.getMarkers();
+        markers.forEach((m) => {
+          if (String(m.level) === String(viewLevel)) {
+            const mx =
+              centerX + ((m.x - pPos.x) / tileSizeGame) * currentTileSize;
+            const my =
+              centerY + ((m.y - pPos.y) / tileSizeGame) * currentTileSize;
+
+            const dotSize = 4 * zoom;
+            ctx.fillStyle = m.color || "#ff0000";
+            ctx.fillRect(mx - dotSize / 2, my - dotSize / 2, dotSize, dotSize);
+
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = 0.5 * zoom;
+            ctx.strokeRect(mx - dotSize / 2, my - dotSize / 2, dotSize, dotSize);
+          }
+        });
+      }
 
       animationFrameId = requestAnimationFrame(render);
     };
@@ -237,17 +230,21 @@ export const SidebarMinimap: React.FC = () => {
           // Game Data
           const tileSizeGame = mapData.tileSize || 32;
           const pPos = playerState.getPosition();
+          const pGridX = pPos.x / tileSizeGame;
+          const pGridY = pPos.y / tileSizeGame;
           const currentTileSize = BASE_TILE_SIZE * zoom;
 
-          // Inverse Math: From canvas back to world grid
-          // centerX is 100
           const gridOffsetX = (mouseX - 100) / currentTileSize;
           const gridOffsetY = (mouseY - 100) / currentTileSize;
 
-          const targetWorldX =
-            (pPos.x / tileSizeGame + gridOffsetX) * tileSizeGame;
-          const targetWorldY =
-            (pPos.y / tileSizeGame + gridOffsetY) * tileSizeGame;
+          const targetGridX = pGridX + gridOffsetX;
+          const targetGridY = pGridY + gridOffsetY;
+
+          const clampedGridX = Math.max(0, Math.min((mapData.width || 1) - 1, targetGridX));
+          const clampedGridY = Math.max(0, Math.min((mapData.height || 1) - 1, targetGridY));
+
+          const targetWorldX = clampedGridX * tileSizeGame;
+          const targetWorldY = clampedGridY * tileSizeGame;
 
           // EXEC COMPATIBILITY: Avoid window.prompt for executable support.
           // Using a default name for now; the user can rename it in the Expanded Map.

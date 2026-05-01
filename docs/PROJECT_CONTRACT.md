@@ -57,7 +57,7 @@ Every feature or bugfix task MUST pass this checklist before merge:
 1. Relevant contracts were reviewed (`docs/PROJECT_CONTRACT.md` + affected files in `docs/contracts/`).
 2. Contract updates were included in the same task when behavior/rules changed.
 3. Benchmark impact was assessed and benchmark coverage was updated when required.
-4. Validation commands were run according to impact (`npm run smoke:test`, `npm run benchmark:e2e`, `npm run build`, and/or `npm run ci`).
+4. Validation commands were run according to impact (`npm run smoke:test`, `npm run benchmark:e2e`, `npx tsc --noEmit --skipLibCheck`, and/or `npm run ci`).
 5. Runtime errors and warnings introduced by the change were addressed or explicitly documented.
 6. Generated local artifacts/logs are not committed unless they are explicitly part of repository policy.
 7. Task summary includes: scope, files touched, validation results, and residual risks.

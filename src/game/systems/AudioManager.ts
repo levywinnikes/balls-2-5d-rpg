@@ -75,6 +75,21 @@ export class AudioManager {
   // S12-BUG3: debounce attack SFX to prevent Tone.js start-time assert in rapid combat
   private _lastAttackSfxAt: number = 0;
   private readonly ATTACK_SFX_MIN_INTERVAL_MS = 80;
+  // Keep footstep/jump scheduling monotonic for Tone timelines.
+  private _lastFootstepSfxAtSec: number = 0;
+  private readonly FOOTSTEP_SFX_MIN_DELTA_SEC = 0.005;
+
+  private nextFootstepSfxTime(jitterMaxSec: number = 0): number {
+    const base = Tone.now();
+    const jitter = jitterMaxSec > 0 ? Math.random() * jitterMaxSec : 0;
+    const candidate = base + jitter;
+    const safeTime = Math.max(
+      candidate,
+      this._lastFootstepSfxAtSec + this.FOOTSTEP_SFX_MIN_DELTA_SEC,
+    );
+    this._lastFootstepSfxAtSec = safeTime;
+    return safeTime;
+  }
 
   // Chords: Bright, upbeat major progressions (C-G-Am-F loop)
   private readonly chords = [
@@ -496,8 +511,8 @@ export class AudioManager {
 
     this.lastStepTime = now;
 
-    // Randomize timing slightly for humanity
-    const time = Tone.now() + Math.random() * 0.02;
+    // Randomize timing slightly but keep it monotonic to avoid Tone timeline asserts.
+    const time = this.nextFootstepSfxTime(0.02);
 
     switch (terrain) {
       case "grass":
@@ -687,7 +702,7 @@ export class AudioManager {
   public playJump() {
     if (!this.sfxEnabled) return;
 
-    const now = Tone.now();
+    const now = this.nextFootstepSfxTime();
     // Ascending pitch sweep for jump (higher, brighter than footstep)
     this.footstepMembrane.triggerAttackRelease("D3", "16n", now, 0.4);
     this.footstepNoise.noise.type = "white";

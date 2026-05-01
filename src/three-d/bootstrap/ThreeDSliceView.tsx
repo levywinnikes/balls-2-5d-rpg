@@ -10,6 +10,7 @@ import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { createDebugSliceScene } from "../runtime/createDebugSliceScene";
 import { MainMenuUI } from "../../ui/screens/MainMenuUI";
 import { t_game } from "../../game/i18n/translations";
+import { PerfMonitor } from "../../ui/components/PerfMonitor";
 
 // Default map for new 3D games. Will become the world map in Phase 3.
 const DEFAULT_3D_MAP = "city_3d_multi";
@@ -378,6 +379,7 @@ export function ThreeDSliceView() {
         engine={runtimeBridge?.engine}
         scene={runtimeBridge?.scene}
       />
+      <PerfMonitor />
         </>
       )}
     </div>

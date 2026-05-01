@@ -137,7 +137,7 @@ For sprite-pipeline-only contract/document updates:
 
 For code-integrated sprite runtime changes:
 
-1. Run build and relevant benchmark checks according to impacted area.
+1. Run `npx tsc --noEmit --skipLibCheck` and relevant benchmark checks according to impacted area.
 2. Verify 2D and 3D visual parity in at least one combat scenario.
 
 ## 13. Initial Production Template (Recommended)

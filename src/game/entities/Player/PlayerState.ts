@@ -506,6 +506,16 @@ export class PlayerState extends EventEmitter {
     poolSize: 0,
     types: {} as Record<string, number>,
     culprits: [] as [string, number][],
+    drawCalls: 0,
+    activeMeshes: 0,
+    totalMeshes: 0,
+    totalMaterials: 0,
+    totalTextures: 0,
+    totalVertices: 0,
+    jsHeapUsedMb: 0,
+    jsHeapTotalMb: 0,
+    chunkLoaded: 0,
+    chunkLoading: 0,
   };
 
   private _diagnosticSettings = {

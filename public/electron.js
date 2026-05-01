@@ -146,6 +146,27 @@ ipcMain.handle(
   },
 );
 
+ipcMain.handle("runtime-log-write", async (event, { data }) => {
+  try {
+    const cwdLogDir = path.join(process.cwd(), "artifacts", "runtime-logs");
+    let targetDir = cwdLogDir;
+
+    try {
+      fs.mkdirSync(targetDir, { recursive: true });
+    } catch {
+      const docPath = app.getPath("documents");
+      targetDir = path.join(docPath, "TibiaReact", "runtime-logs");
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const filePath = path.join(targetDir, "slice3d-latest.json");
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    return { success: true, path: filePath };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle("benchmark-exit", async (event, { exitCode }) => {
   const code = Number.isInteger(exitCode) ? exitCode : 0;
   setTimeout(() => app.exit(code), 50);

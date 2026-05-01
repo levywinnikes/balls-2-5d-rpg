@@ -4,6 +4,7 @@ import {
   DynamicTexture,
   Engine,
   HemisphericLight,
+  Matrix,
   Mesh,
   MeshBuilder,
   PointerEventTypes,
@@ -11,6 +12,7 @@ import {
   StandardMaterial,
   TransformNode,
   UniversalCamera,
+  Vector2,
   Vector3,
   VertexData,
   Texture,
@@ -4203,9 +4205,67 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           const right = new Vector3(forward.z, 0, -forward.x);
           movement = forward.scale(moveForward).add(right.scale(moveRight));
         } else {
-          // Camera is north-side (alpha=π/2, looking south/-Z).
-          // W = screen-up = -Z world; invert moveForward so W=north matches minimap top.
-          movement = new Vector3(moveRight, 0, -moveForward);
+          // Deterministic camera-to-screen mapping: solve which world-space
+          // (X,Z) delta produces desired screen-space delta.
+          // Desired screen axes: right = +Xscreen, up = -Yscreen.
+          const engineRef = scene.getEngine();
+          const viewport = camera.viewport.toGlobal(
+            engineRef.getRenderWidth(),
+            engineRef.getRenderHeight(),
+          );
+          const origin = player.position.clone();
+          const screenOrigin = Vector3.Project(
+            origin,
+            Matrix.Identity(),
+            scene.getTransformMatrix(),
+            viewport,
+          );
+          const screenX = Vector3.Project(
+            origin.add(new Vector3(1, 0, 0)),
+            Matrix.Identity(),
+            scene.getTransformMatrix(),
+            viewport,
+          );
+          const screenZ = Vector3.Project(
+            origin.add(new Vector3(0, 0, 1)),
+            Matrix.Identity(),
+            scene.getTransformMatrix(),
+            viewport,
+          );
+
+          const basisX = new Vector2(
+            screenX.x - screenOrigin.x,
+            screenX.y - screenOrigin.y,
+          );
+          const basisZ = new Vector2(
+            screenZ.x - screenOrigin.x,
+            screenZ.y - screenOrigin.y,
+          );
+          const desired = new Vector2(moveRight, -moveForward);
+
+          const det = basisX.x * basisZ.y - basisX.y * basisZ.x;
+          if (Math.abs(det) > 1e-6) {
+            const worldDX =
+              (desired.x * basisZ.y - desired.y * basisZ.x) / det;
+            const worldDZ =
+              (basisX.x * desired.y - basisX.y * desired.x) / det;
+            movement = new Vector3(worldDX, 0, worldDZ);
+          } else {
+            // Fallback for degenerate projection matrix edge-cases.
+            const cameraForward = camera.target.subtract(camera.position);
+            cameraForward.y = 0;
+            if (cameraForward.lengthSquared() > 1e-6) {
+              cameraForward.normalize();
+              const cameraRight = new Vector3(
+                cameraForward.z,
+                0,
+                -cameraForward.x,
+              );
+              movement = cameraForward
+                .scale(moveForward)
+                .add(cameraRight.scale(moveRight));
+            }
+          }
         }
 
         movement.normalize().scaleInPlace(speed * deltaSeconds);

@@ -21,7 +21,7 @@ This project is an isometric RPG with a Phaser engine, React UI, and a BMS-based
 4. Run the local quality gate:
    - `npm run check:bms`
    - `npm run ci`
-5. If `npm run build` or `npm run ci` reports warnings, fix only the low-risk ones first.
+5. If `npx tsc --noEmit --skipLibCheck` or `npm run ci` reports warnings, fix only the low-risk ones first.
 
 ## High-Risk Areas
 

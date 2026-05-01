@@ -1,13 +1,11 @@
 {
-    "updatedAt": "2026-05-01T18:00:00-03:00",
-    "task": "Fase 3 prep: criar WORLD_MAP_CONTRACT.md com regras de ilha, biomas, telhados, tile atlas e estruturas",
+    "updatedAt": "2026-05-01T18:35:00-03:00",
+    "task": "Reverter regressao de orientacao no minimapa/worldmap (fog e movimento) e consolidar orientacao em fonte unica",
     "contractsRead": [
-        "MAP_SYSTEM_CONTRACT.md",
-        "SYSTEM_BMS.md",
         "THREE_D_INTEGRATION_BLUEPRINT.md",
-        "WORLD_MAP_CONTRACT.md"
+        "UI_DESIGN_CONTRACT.md"
     ],
-    "understanding": "Documentar regras canonicas do mundo: ilha com mar nas bordas, biomas no level 0, modelo Tibia de layers contextuais, bug de telhado (rof no mesmo level das paredes), tile atlas canonico, anatomia de estruturas, regras de validacao.",
-    "riskConflict": "O bug de telhado documentado (rof em level errado) afeta o gerador existente generate-multilevel-3d-map.js e o city_3d_multi. Nenhuma mudanca de codigo nesta sessao — apenas documentacao. Geradores precisarao ser corrigidos na proxima fase.",
-    "objectiveQuestion": "Nenhuma — tarefa e puramente documental. Implementacao do mundo 256x256 vem na proxima iteracao apos confirmacao do contrato."
+    "understanding": "O problema atual e regressivo: flips no UI e compensacoes no runtime foram misturados. Vou remover compensacoes de flip em SidebarMinimap/ExpandedMap e restaurar formulas canonicas de radar para corrigir fog e movimentacao.",
+    "riskConflict": "Se a orientacao percebida na tela ainda divergir apos rollback do UI, o ajuste final deve ocorrer em um unico ponto (runtime de movimento/camera), nunca distribuido entre multiplos componentes de mapa.",
+    "objectiveQuestion": "Nenhuma — executar rollback controlado de UI agora e validar consistencia."
 }
