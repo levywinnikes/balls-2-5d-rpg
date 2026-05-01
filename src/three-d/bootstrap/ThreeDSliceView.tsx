@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { HeroDashboard } from "../../ui/dashboard/HeroDashboard";
 import { NotificationSystem } from "../../ui/components/NotificationSystem";
 import { WindowLayer } from "../../ui/components/window/WindowLayer";
@@ -8,9 +8,15 @@ import { ThreeDFloatingText } from "../runtime/ThreeDFloatingText";
 import { useWindowSystem } from "../../ui/components/window/WindowContext";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { createDebugSliceScene } from "../runtime/createDebugSliceScene";
+import { MainMenuUI } from "../../ui/screens/MainMenuUI";
+
+// Default map for new 3D games. Will become the world map in Phase 3.
+const DEFAULT_3D_MAP = "city_3d_multi";
 
 export function ThreeDSliceView() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const runtimeRef = useRef<ReturnType<typeof createDebugSliceScene> | null>(null);
+  const [isInGame, setIsInGame] = useState(false);
   const [runtimeBridge, setRuntimeBridge] = React.useState<{
     engine: any;
     scene: any;
@@ -30,13 +36,66 @@ export function ThreeDSliceView() {
   const { toggleWindow, closeWindow, isWindowOpen, openWindow } =
     useWindowSystem();
 
+  // ── 1.3: Handle menu start (new game or load) ──────────────────────────────
+  const handleThreeDStart = useCallback((data: any) => {
+    const playerState = PlayerState.getInstance();
+
+    if (data.isNewGame) {
+      playerState.reset();
+      if (data.charName) playerState.setName(data.charName);
+      // Seed the map for createDebugSliceScene via URL param (dev-compatible)
+      const url = new URL(window.location.href);
+      url.searchParams.set("map", data.map || DEFAULT_3D_MAP);
+      window.history.replaceState(null, "", url.toString());
+    } else {
+      // Load game: restore full PlayerState from save
+      if (data.playerState) {
+        playerState.loadState(data.playerState, data.timestamp);
+      }
+      // Restore map/level in URL so createDebugSliceScene picks them up
+      const url = new URL(window.location.href);
+      url.searchParams.set("map", data.map || DEFAULT_3D_MAP);
+      if (data.currentLevel != null) {
+        url.searchParams.set("level", String(data.currentLevel));
+      }
+      window.history.replaceState(null, "", url.toString());
+    }
+
+    setIsInGame(true);
+  }, []);
+
+  // ── 1.4: Return to menu ────────────────────────────────────────────────────
+  const handleReturnToMenu = useCallback(() => {
+    if (runtimeRef.current) {
+      runtimeRef.current.dispose();
+      runtimeRef.current = null;
+    }
+    setRuntimeBridge(null);
+    setIsInGame(false);
+    // Clean up map params so next session starts fresh
+    const url = new URL(window.location.href);
+    url.searchParams.delete("map");
+    url.searchParams.delete("level");
+    window.history.replaceState(null, "", url.toString());
+  }, []);
+
+  // ── Listen for "Return to Title" fired from in-game system menu ───────────
   useEffect(() => {
+    const handler = () => handleReturnToMenu();
+    window.addEventListener("returnToTitle", handler);
+    return () => window.removeEventListener("returnToTitle", handler);
+  }, [handleReturnToMenu]);
+
+  // ── 1.1: Only start Babylon when isInGame = true ──────────────────────────
+  useEffect(() => {
+    if (!isInGame) return;
     const canvas = canvasRef.current;
     if (!canvas) {
       return;
     }
 
     const runtime = createDebugSliceScene(canvas);
+    runtimeRef.current = runtime;
     setRuntimeBridge({ engine: runtime.engine, scene: runtime.scene });
     const handleResize = () => runtime.engine.resize();
     window.addEventListener("resize", handleResize);
@@ -107,7 +166,7 @@ export function ThreeDSliceView() {
       setRuntimeBridge(null);
       runtime.dispose();
     };
-  }, []);
+  }, [isInGame, openWindow, closeWindow]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -182,7 +241,13 @@ export function ThreeDSliceView() {
 
   return (
     <div className="relative w-screen h-screen bg-[#0b0f17] overflow-hidden">
-      <canvas ref={canvasRef} className="w-full h-full block outline-none" />
+      {/* ── 1.2: Main menu overlay — visible until player enters game ── */}
+      {!isInGame && <MainMenuUI onStart={handleThreeDStart} />}
+
+      {/* Canvas is only in the DOM when in game, avoiding premature Babylon init */}
+      {isInGame && (
+        <>
+          <canvas ref={canvasRef} className="w-full h-full block outline-none" />
       {/* S9-T1: damage vignette flash — red radial border when player takes damage */}
       {vignetteActive && (
         <div
@@ -299,6 +364,8 @@ export function ThreeDSliceView() {
         engine={runtimeBridge?.engine}
         scene={runtimeBridge?.scene}
       />
+        </>
+      )}
     </div>
   );
 }

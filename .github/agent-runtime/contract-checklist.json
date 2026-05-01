@@ -1,10 +1,13 @@
 {
-    "updatedAt": "2026-05-01T10:15:00-03:00",
-    "task": "Corrigir animacao de estado do goblin_lanceiro no runtime 3D (idle/walk/attack/death)",
+    "updatedAt": "2026-05-01T14:00:00-03:00",
+    "task": "Fase 1: Modo 3D como padrao - isInGame state, MainMenuUI, New/Load/Return no ThreeDSliceView",
     "contractsRead": [
-        "THREE_D_INTEGRATION_BLUEPRINT.md"
+        "THREE_D_INTEGRATION_BLUEPRINT.md",
+        "SAVE_SYSTEM_CONTRACT.md",
+        "PLAYER_STATE_CONTRACT.md",
+        "UI_DESIGN_CONTRACT.md"
     ],
-    "understanding": "O goblin_lanceiro persegue e ataca, mas o billboard fica em idle; preciso ligar a troca de estado de animacao ao estado real da IA no createDebugSliceScene.",
-    "riskConflict": "Se a troca de estado for baseada em sinais imprecisos, pode haver flicker entre idle/walk e regressao visual em outros inimigos.",
-    "objectiveQuestion": "Nenhuma: aplicarei a troca de estado apenas para materiais que expõem _setAnimState, sem alterar logica de combate."
+    "understanding": "ThreeDSliceView nao tem menu; precisa de isInGame state, renderizar MainMenuUI quando false, inicializar PlayerState com dados do menu, e escutar returnToTitle para voltar ao menu.",
+    "riskConflict": "createDebugSliceScene usa URL params como fonte primaria de mapa; precisamos de um mecanismo para passar o mapa do menu sem quebrar o fluxo de benchmark (legacy2d=1).",
+    "objectiveQuestion": "Nenhuma: o benchmark 2D usa legacy2d=1 e vai para GameLayout, nao ThreeDSliceView, entao a mudanca e isolada."
 }

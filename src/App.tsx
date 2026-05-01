@@ -308,15 +308,13 @@ function App() {
     process.env.REACT_APP_EDITOR === "true" ||
     searchParams.get("editor") === "true";
   const isAutoBenchmark = searchParams.get("autobenchmark") === "1";
+  // legacy2d=1 forces the 2D Phaser engine — only used for the automated 2D benchmark
   const isLegacy2D =
     searchParams.get("legacy2d") === "1" ||
     searchParams.get("mode") === "2d" ||
     isAutoBenchmark;
-  const forceThreeDSlice =
-    searchParams.get("slice3d") === "1" ||
-    searchParams.get("debug_3d") === "1" ||
-    searchParams.get("debug_3d") === "true";
-  const isThreeDSlice = !isEditor && (forceThreeDSlice || !isLegacy2D);
+  // 3D is the default mode; 2D only when explicitly requested
+  const isThreeDSlice = !isEditor && !isLegacy2D;
 
   return (
     <LanguageProvider>
