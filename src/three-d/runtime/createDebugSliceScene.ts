@@ -320,7 +320,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const camera = new ArcRotateCamera(
     "slice-camera",
-    -Math.PI / 2, // top-down: alpha = -90° (south-facing, irrelevant for straight-down)
+    Math.PI / 2, // top-down: alpha = +90° (north-facing, looking south) so +Z = screen-down = minimap south
     0.72,
     14,
     new Vector3(0, 1.5, 0),
@@ -350,8 +350,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       camera.upperBetaLimit = 0.56;
     }
 
-    camera.lowerAlphaLimit = -Math.PI / 2;
-    camera.upperAlphaLimit = -Math.PI / 2;
+    camera.lowerAlphaLimit = Math.PI / 2;
+    camera.upperAlphaLimit = Math.PI / 2;
   };
   applyTopDownCameraPreset(activeTopDownCameraPreset);
   camera.wheelPrecision = 1000000;
@@ -4203,7 +4203,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           const right = new Vector3(forward.z, 0, -forward.x);
           movement = forward.scale(moveForward).add(right.scale(moveRight));
         } else {
-          movement = new Vector3(moveRight, 0, moveForward);
+          // Camera is north-side (alpha=π/2, looking south/-Z).
+          // W = screen-up = -Z world; invert moveForward so W=north matches minimap top.
+          movement = new Vector3(moveRight, 0, -moveForward);
         }
 
         movement.normalize().scaleInPlace(speed * deltaSeconds);
