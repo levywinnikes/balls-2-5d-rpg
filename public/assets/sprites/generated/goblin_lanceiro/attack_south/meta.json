@@ -1,0 +1,16 @@
+{
+  "phase": "animation",
+  "entityId": "goblin_lanceiro",
+  "action": "attack",
+  "direction": "south",
+  "nFrames": 4,
+  "generatedAt": "2026-05-01T02:50:31.355Z",
+  "usdCost": 0.012797344704469044,
+  "frames": [
+    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\attack_south\\frame_00.png",
+    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\attack_south\\frame_01.png",
+    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\attack_south\\frame_02.png",
+    "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\goblin_lanceiro\\attack_south\\frame_03.png"
+  ],
+  "endpoint": "https://api.pixellab.ai/v1/animate-with-text"
+}

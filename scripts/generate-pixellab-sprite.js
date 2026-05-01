@@ -211,6 +211,15 @@ async function generateReferenceImage(config, spec, args) {
 
   writeBase64ToFile(result.base64, targetPath);
 
+  // Save raw base64 sidecar so Phase B can reuse it without PNG re-encoding
+  // Strip data URI prefix — API expects raw base64 in requests
+  const rawBase64ForSidecar = result.base64.includes(",")
+    ? result.base64.slice(result.base64.indexOf(",") + 1)
+    : result.base64;
+  const b64SidecarPath = `${targetPath}.b64`;
+  fs.mkdirSync(path.dirname(b64SidecarPath), { recursive: true });
+  fs.writeFileSync(b64SidecarPath, rawBase64ForSidecar, "utf8");
+
   const meta = {
     phase: "reference",
     entityId: spec.entityId,
@@ -232,9 +241,10 @@ async function generateReferenceImage(config, spec, args) {
   const cost = result.usdCost != null ? `$${result.usdCost.toFixed(4)}` : "unknown";
   console.log(`[pixellab] ✓ reference image saved → ${targetPath}`);
   console.log(`[pixellab] ✓ meta saved            → ${metaPath}`);
+  console.log(`[pixellab] ✓ b64 sidecar saved     → ${b64SidecarPath}`);
   console.log(`[pixellab] ✓ cost                  → ${cost}`);
 
-  return { imagePath: targetPath, base64: result.base64, usdCost: result.usdCost };
+  return { imagePath: targetPath, b64SidecarPath, base64: result.base64, usdCost: result.usdCost };
 }
 
 // Phase B: animate reference image for one action×direction combo
@@ -343,8 +353,18 @@ async function main() {
     if (!args.action) {
       throw new Error("--action <action> is required for phase=animate");
     }
-    const refRaw = fs.readFileSync(path.resolve(args["ref-image"]));
-    const refBase64 = `data:image/png;base64,${refRaw.toString("base64")}`;
+    const refImagePath = path.resolve(args["ref-image"]);
+    const b64SidecarPath = `${refImagePath}.b64`;
+    let refBase64;
+    if (fs.existsSync(b64SidecarPath)) {
+      // Prefer the sidecar saved during Phase A — avoids binary re-encoding padding issues
+      refBase64 = fs.readFileSync(b64SidecarPath, "utf8").trim();
+      console.log(`[pixellab] Using b64 sidecar: ${b64SidecarPath}`);
+    } else {
+      const refRaw = fs.readFileSync(refImagePath);
+      refBase64 = `data:image/png;base64,${refRaw.toString("base64")}`;
+      console.log(`[pixellab] No sidecar found, re-encoding PNG: ${refImagePath}`);
+    }
     const directions = args.direction ? [args.direction] : ["south", "north", "east", "west"];
     for (const dir of directions) {
       await generateAnimation(config, spec, refBase64, args.action, dir, args);

@@ -82,13 +82,21 @@ async function generateImage(config, { description, image_size, no_background, n
 // Constraint: image_size MUST be 64x64
 // Required: image_size, description, action, reference_image { type:"base64", base64: "..." }
 // Optional: view, direction, n_frames (2-20, default 4), seed
+// NOTE: reference_image.base64 must be raw base64 (no "data:image/..." prefix)
 async function animateWithText(config, { description, action, reference_image, view, direction, n_frames, seed }) {
   const url = `${config.baseUrl}/v1/animate-with-text`;
+
+  // Strip data URI prefix if present — API expects raw base64
+  let rawBase64 = reference_image.base64 || "";
+  if (rawBase64.includes(",")) {
+    rawBase64 = rawBase64.slice(rawBase64.indexOf(",") + 1);
+  }
+
   const body = {
     image_size: { width: 64, height: 64 },
     description,
     action,
-    reference_image,
+    reference_image: { type: "base64", base64: rawBase64 },
   };
   if (view) body.view = view;
   if (direction) body.direction = direction;
