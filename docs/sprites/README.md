@@ -64,6 +64,21 @@ Notes:
 
 1. The client supports direct-image responses and async job polling responses.
 2. If your account uses different endpoints, set `PIXELLAB_CREATE_PATH` and `PIXELLAB_STATUS_PATH` accordingly.
+3. The CLI validates JSON specs before generation and fails fast on missing/invalid required fields.
+
+Tier frame profiles:
+
+1. trash: idle 4, walk 6, attack 6, death 4-6 (target 6)
+2. elite: idle 4, walk 6, attack 6-8 (target 7), death 6-8 (target 7)
+3. boss: idle 4-6, walk 6-8, attack 8-12, death 8-12
+
+Spec validation rules (JSON):
+
+1. Required: `id`, `pipeline.model_primary`, `production_prompts.base_generation_prompt`.
+2. Required: `sprite_sheet.source_canvas.width` and `height` as positive integers.
+3. Required: `animation_profile.tier` as `trash`, `elite`, or `boss`.
+4. Required: `animation_profile.frame_targets` (`idle`, `walk`, `attack`, `death`) within tier range.
+5. Required: `sprite_sheet.directions.death_shared_direction`; if not `south`, provide `death_direction_override_reason`.
 
 ## Required Baseline
 

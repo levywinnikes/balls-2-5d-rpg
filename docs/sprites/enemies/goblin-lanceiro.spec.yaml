@@ -48,6 +48,14 @@ sprite_sheet:
       target_frames: 6
       max_frames: 8
 
+animation_profile:
+  tier: "trash"
+  frame_targets:
+    idle: 4
+    walk: 6
+    attack: 6
+    death: 6
+
 combat_space:
   target_world_hitbox_px:
     width: 30

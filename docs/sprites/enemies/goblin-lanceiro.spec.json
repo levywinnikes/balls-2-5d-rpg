@@ -8,6 +8,19 @@
     "source_canvas": {
       "width": 64,
       "height": 64
+    },
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "trash",
+    "frame_targets": {
+      "idle": 4,
+      "walk": 6,
+      "attack": 6,
+      "death": 6
     }
   },
   "pipeline": {

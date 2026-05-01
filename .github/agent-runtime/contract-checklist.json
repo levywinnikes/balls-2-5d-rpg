@@ -1,16 +1,19 @@
 ﻿{
-  "updatedAt": "2026-04-30T21:05:00Z",
-  "task": "Adicionar exemplos validos e invalidos de override de direcao de morte e revisar pendencias antes de commit",
+  "updatedAt": "2026-04-30T21:20:00Z",
+  "task": "Implementar validacao automatica de sprite spec e perfis de frames por tier (trash/elite/boss)",
   "contractsRead": [
-    "docs/contracts/SPRITE_PIPELINE_CONTRACT.md"
+    "docs/contracts/SPRITE_PIPELINE_CONTRACT.md",
+    "docs/contracts/GENERATOR_CONTRACT.md",
+    "docs/contracts/BIOME_SYSTEM_CONTRACT.md"
   ],
-  "understanding": "Documentar exemplos praticos de quando override de death direction e permitido ou proibido e fechar o fluxo de decisao para o time.",
-  "riskConflict": "Sem exemplos concretos, a regra de override pode continuar subjetiva e gerar divergencias entre arte e integracao.",
-  "objectiveQuestion": "Sem bloqueio: incluir exemplos curto de override valido/invalido em docs operacionais e concluir com commit.",
+  "understanding": "Adicionar validacao de schema no comando generate-pixellab-sprite e formalizar perfis por tier para orientar frames de attack/death.",
+  "riskConflict": "Sem validacao automatica, specs incompletos passam e geram assets fora do padrao; sem perfis por tier, custo visual pode escalar de forma inconsistente.",
+  "objectiveQuestion": "Sem bloqueio: implementar validacao nativa no script, atualizar template/spec/README/contrato e manter backward compatibility.",
   "documentationIndexChecked": true,
   "impactedModules": [
     "global-workflow",
-    "architecture-map"
+    "architecture-map",
+    "generator-biome"
   ],
   "docsRead": [
     "docs/AI_READ_FIRST.md",
@@ -24,14 +27,17 @@
   "divergenceDetected": false,
   "divergenceNotes": "",
   "docUpdatesRequired": [
+    "docs/contracts/SPRITE_PIPELINE_CONTRACT.md",
     "docs/sprites/README.md",
     "docs/sprites/templates/sprite-spec.template.yaml",
-    "docs/sprites/enemies/goblin-lanceiro.spec.yaml"
+    "docs/sprites/enemies/goblin-lanceiro.spec.yaml",
+    "docs/sprites/enemies/goblin-lanceiro.spec.json",
+    "scripts/generate-pixellab-sprite.js"
   ],
   "docUpdatesCompleted": true,
   "validationResults": {
     "pending": false,
-    "notes": "Task classificada como docs-only; examples de override adicionados e diagnostics markdown/yaml sem erros.",
+    "notes": "Executado node --check em scripts/generate-pixellab-sprite.js e diagnostics em docs/specs alterados, sem erros.",
     "markdownDiagnostics": "pass"
   }
 }

@@ -73,6 +73,18 @@ Minimum frame targets:
 3. attack: 6
 4. death: 4-8 (target 6)
 
+Tier profile guidance (recommended):
+
+1. trash:
+   - attack: 6
+   - death: 4-6
+2. elite:
+   - attack: 6-8
+   - death: 6-8
+3. boss:
+   - attack: 8-12
+   - death: 8-12
+
 If memory/performance pressure appears, reduce frames before removing a mandatory state.
 
 ## 7. Size and Hitbox Baselines

@@ -16,8 +16,9 @@ Use this checklist before merging any sprite-related implementation.
 3. Death animation can be single-direction for 2D monsters and must contain 4 to 8 frames.
 4. Default death direction is south, unless a per-creature override is documented with readability justification.
 5. Target frame counts are met or explicitly justified.
-6. Attack keyframe communicates impact direction clearly.
-7. Death sequence reads clearly and does not look like idle/walk drift.
+6. Frame targets match the declared tier profile (trash, elite, or boss).
+7. Attack keyframe communicates impact direction clearly.
+8. Death sequence reads clearly and does not look like idle/walk drift.
 
 ## C. Technical Consistency
 

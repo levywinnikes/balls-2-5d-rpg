@@ -10,6 +10,27 @@ const {
   writeBase64ToFile,
 } = require("./pixellab-client");
 
+const TIER_FRAME_PROFILES = {
+  trash: {
+    idle: { min: 4, max: 4, target: 4 },
+    walk: { min: 6, max: 6, target: 6 },
+    attack: { min: 6, max: 6, target: 6 },
+    death: { min: 4, max: 6, target: 6 },
+  },
+  elite: {
+    idle: { min: 4, max: 4, target: 4 },
+    walk: { min: 6, max: 6, target: 6 },
+    attack: { min: 6, max: 8, target: 7 },
+    death: { min: 6, max: 8, target: 7 },
+  },
+  boss: {
+    idle: { min: 4, max: 6, target: 4 },
+    walk: { min: 6, max: 8, target: 6 },
+    attack: { min: 8, max: 12, target: 8 },
+    death: { min: 8, max: 12, target: 8 },
+  },
+};
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 2; i < argv.length; i += 1) {
@@ -29,25 +50,122 @@ function parseArgs(argv) {
   return args;
 }
 
+function asPositiveInt(value, fieldName, errors) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) {
+    errors.push(`${fieldName} must be a positive integer.`);
+    return null;
+  }
+  return n;
+}
+
+function asNonEmptyString(value, fieldName, errors) {
+  if (typeof value !== "string" || !value.trim()) {
+    errors.push(`${fieldName} must be a non-empty string.`);
+    return "";
+  }
+  return value.trim();
+}
+
+function validateFrameTargetsByTier(frameTargets, tier, errors) {
+  const profile = TIER_FRAME_PROFILES[tier];
+  const states = ["idle", "walk", "attack", "death"];
+  const normalized = {};
+
+  states.forEach((state) => {
+    const expected = profile[state];
+    const candidate = asPositiveInt(frameTargets?.[state], `animation_profile.frame_targets.${state}`, errors);
+    if (candidate == null) {
+      return;
+    }
+    if (candidate < expected.min || candidate > expected.max) {
+      errors.push(
+        `animation_profile.frame_targets.${state}=${candidate} is outside tier '${tier}' range ${expected.min}-${expected.max}.`,
+      );
+      return;
+    }
+    normalized[state] = candidate;
+  });
+
+  return normalized;
+}
+
+function validateSpecSchema(spec, specPath) {
+  const errors = [];
+
+  const entityId = asNonEmptyString(spec?.id, "id", errors);
+  const model = asNonEmptyString(spec?.pipeline?.model_primary, "pipeline.model_primary", errors);
+  const prompt = asNonEmptyString(
+    spec?.production_prompts?.base_generation_prompt,
+    "production_prompts.base_generation_prompt",
+    errors,
+  );
+
+  const width = asPositiveInt(spec?.sprite_sheet?.source_canvas?.width, "sprite_sheet.source_canvas.width", errors);
+  const height = asPositiveInt(spec?.sprite_sheet?.source_canvas?.height, "sprite_sheet.source_canvas.height", errors);
+
+  const tier = asNonEmptyString(spec?.animation_profile?.tier, "animation_profile.tier", errors).toLowerCase();
+  if (tier && !TIER_FRAME_PROFILES[tier]) {
+    errors.push("animation_profile.tier must be one of: trash, elite, boss.");
+  }
+
+  const frameTargets = TIER_FRAME_PROFILES[tier]
+    ? validateFrameTargetsByTier(spec?.animation_profile?.frame_targets, tier, errors)
+    : null;
+
+  const deathDirection = asNonEmptyString(
+    spec?.sprite_sheet?.directions?.death_shared_direction,
+    "sprite_sheet.directions.death_shared_direction",
+    errors,
+  ).toLowerCase();
+
+  const overrideReason = typeof spec?.sprite_sheet?.directions?.death_direction_override_reason === "string"
+    ? spec.sprite_sheet.directions.death_direction_override_reason.trim()
+    : "";
+
+  if (deathDirection !== "south" && !overrideReason) {
+    errors.push("sprite_sheet.directions.death_direction_override_reason is required when death_shared_direction is not south.");
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Invalid sprite spec '${specPath}':\n- ${errors.join("\n- ")}`);
+  }
+
+  return {
+    entityId,
+    model,
+    prompt,
+    width,
+    height,
+    tier,
+    frameTargets,
+    tierProfile: TIER_FRAME_PROFILES[tier],
+    deathDirection,
+    deathDirectionOverrideReason: overrideReason,
+  };
+}
+
 function readJsonSpec(specPath) {
   const absolutePath = path.resolve(specPath);
   const raw = fs.readFileSync(absolutePath, "utf8");
   const json = JSON.parse(raw);
+  const validated = validateSpecSchema(json, absolutePath);
 
-  const model = json?.pipeline?.model_primary || json?.pipeline?.model || "pixflux";
-  const prompt = json?.production_prompts?.base_generation_prompt || json?.prompt || "";
-  const negativePrompt = json?.production_prompts?.negative_prompt || json?.negativePrompt || "";
-  const width = json?.sprite_sheet?.source_canvas?.width || 64;
-  const height = json?.sprite_sheet?.source_canvas?.height || 64;
-  const entityId = json?.id || "sprite_generated";
+  const negativePrompt = json?.production_prompts?.negative_prompt || "";
 
   return {
-    model,
-    prompt,
+    model: validated.model,
+    prompt: validated.prompt,
     negativePrompt,
-    width,
-    height,
-    entityId,
+    width: validated.width,
+    height: validated.height,
+    entityId: validated.entityId,
+    tier: validated.tier,
+    frameTargets: validated.frameTargets,
+    tierProfile: validated.tierProfile,
+    deathDirection: validated.deathDirection,
+    deathDirectionOverrideReason: validated.deathDirectionOverrideReason,
+    rawSpec: json,
     source: absolutePath,
   };
 }
@@ -118,6 +236,16 @@ async function main() {
     prompt: input.prompt,
     negativePrompt: input.negativePrompt,
     sourceSpec: spec.source || null,
+    tier: spec.tier || null,
+    animationProfile: spec.tier
+      ? {
+          tier: spec.tier,
+          frameTargets: spec.frameTargets,
+          allowedRanges: spec.tierProfile,
+          deathSharedDirection: spec.deathDirection,
+          deathDirectionOverrideReason: spec.deathDirectionOverrideReason,
+        }
+      : null,
     outputImage: targetImagePath,
     pixelLab: {
       baseUrl: config.baseUrl,
