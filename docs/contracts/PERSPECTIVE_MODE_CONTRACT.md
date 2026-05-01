@@ -1,21 +1,21 @@
-# Perspective Mode Contract (Alpha 3D In Progress)
+# Perspective Mode Contract (Top-Down Product Direction)
 
 ## 1. Purpose
 
-This contract defines perspective behavior during alpha, with active 3D implementation and lightweight governance focused on execution speed.
+This contract defines perspective behavior during alpha-to-migration, with top-down as the only player-facing product direction and alternate view modes retained only for internal debugging and validation.
 
 Scope:
 
-- 2D/3D runtime behavior in alpha.
+- Top-down and alternate debug-view runtime behavior during migration.
 - Rendering projection over multi-level maps.
 - Entity/container synchronization under perspective transforms.
 - Interaction with level transitions and save/load.
 
 Current product status:
 
-- `3D` is in active implementation.
-- Runtime can switch between `2D` and `3D` for development and validation.
-- HUD perspective toggle is enabled in gameplay.
+- Top-down layered presentation is the only product-facing visual direction.
+- Alternate runtime view modes may exist for development and validation only.
+- Perspective/debug switching must not remain exposed as a normal gameplay choice.
 
 Related analysis:
 
@@ -27,13 +27,14 @@ Related analysis:
 
 ### 2.1 Source of Truth
 
-- `PlayerState` owns the runtime mode state via `_perspectiveMode: "2D" | "3D"`.
+- `PlayerState` owns the runtime mode state and any debug-view flags.
 - Mode changes emit `perspectiveModeChanged` with the selected mode.
+- Product-facing map semantics and visibility rules must be authored for top-down first, regardless of any internal debug mode state.
 
 ### 2.2 UI Trigger
 
-- HUD perspective button calls `PlayerState.togglePerspectiveMode()`.
-- Toggle is available in alpha to accelerate 3D iteration.
+- Any perspective toggle must be treated as internal/debug-only UI.
+- Player-facing HUD flows must not depend on perspective switching for normal gameplay.
 
 ### 2.3 Renderer Integration
 
@@ -75,8 +76,8 @@ Related analysis:
 
 ### 4.1 Current Behavior
 
-- Perspective mode is runtime-switchable (`2D` / `3D`) in alpha.
-- Persistence behavior is still provisional and may change while 3D stabilizes.
+- Alternate debug modes may still be runtime-switchable internally.
+- Persistence behavior is still provisional and may change while top-down migration stabilizes.
 
 ### 4.2 Target Behavior
 
@@ -84,10 +85,10 @@ Related analysis:
 
 ## 5. Known Gaps
 
-1. 3D projection path is not production-ready and may present visual/interaction inconsistencies.
-2. Stair readability and combat clarity still need scenario-driven visual tuning in alpha maps.
+1. Top-down migration is not production-ready and may still present visual/interaction inconsistencies.
+2. Stair readability, upper-floor hide/show, and combat clarity still need scenario-driven visual tuning in top-down maps.
 3. Some transition/debug entry points still rely on permissive typing and should be tightened.
-4. Perspective-specific UX expectations (camera feel, readability, combat clarity) are not yet formalized as measurable criteria.
+4. Perspective-specific UX expectations are not yet formalized as measurable criteria for top-down-first validation.
 
 ## 6. Change Direction (Required for Refactor)
 
@@ -95,8 +96,9 @@ When perspective mode is redesigned, implementation must be split into these pha
 
 1. Product intent definition:
 
-- Define expected player experience for 2D and 3D modes.
-- Define per-mode acceptance criteria (visibility, controls, readability).
+- Define expected player experience for top-down mode.
+- Define debug-only expectations for alternate modes without letting them drive player-facing design.
+- Define acceptance criteria for visibility, controls, and readability with top-down as primary baseline.
 
 1. Runtime architecture update:
 
@@ -115,7 +117,7 @@ When perspective mode is redesigned, implementation must be split into these pha
 ## 7. Mandatory Rules for Any Perspective Feature
 
 1. No hardcoded user-facing text; use i18n keys.
-2. Keep `currentLevel` registry, player state level, and renderer level in sync.
+2. Keep `currentLevel` registry, player state level, renderer level, and top-down visibility state in sync.
 3. Any behavior change in projection, transitions, or persistence must update:
 
 - `MAP_SYSTEM_CONTRACT.md`

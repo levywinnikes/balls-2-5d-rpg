@@ -2,7 +2,7 @@
 
 ## 1. Plan intent
 
-This plan is designed for a no-deadline, quality-first evolution of perspective rendering, with 3D as strategic target and 2D as controlled fallback.
+This plan is designed for a no-deadline, quality-first evolution of perspective rendering, with top-down layered presentation as product target and alternate view modes retained only as controlled internal-debug tools while migration is in progress.
 
 Guiding principles:
 
@@ -12,9 +12,9 @@ Guiding principles:
 
 ## 2. Product direction
 
-1. Strategic mode: 3D/2.5D projection.
-2. Temporary fallback: 2D mode, maintained only while needed for stability/performance parity.
-3. End-state candidate: single robust projection core with profile-based output behavior.
+1. Strategic product mode: top-down layered presentation.
+2. Temporary internal tools: alternate view modes may remain available only for development, validation, and migration debugging.
+3. End-state candidate: single robust world/visibility core optimized first for top-down readability, with any remaining alternate profile treated as non-player-facing debug support.
 
 ## 3. Architecture strategy
 
@@ -53,7 +53,7 @@ Deliverables:
 - Dense object area
 - Combat near elevation boundaries
 
-2. Baseline captures:
+1. Baseline captures:
 
 - Visual screenshots/video references
 - FPS and stutter samples
@@ -62,7 +62,7 @@ Deliverables:
 Exit criteria:
 
 1. Baseline artifact catalog exists and is reproducible.
-2. Performance baseline is recorded for comparison.
+1. Performance baseline is recorded for comparison.
 
 ## Phase 1 - Projection core rewrite (spike to production path)
 
@@ -73,14 +73,14 @@ Goal:
 Deliverables:
 
 1. Projection utility (world -> projected screen) with compact floor height model.
-2. Per-level height stacking rules (no global Y+1 hacks).
-3. Deterministic depth policy for tiles/entities per level.
+1. Per-level height stacking rules (no global Y+1 hacks).
+1. Deterministic depth policy for tiles/entities per level.
 
 Exit criteria:
 
 1. Straight structural edges across floors (no jagged displacement artifacts).
-2. Stable visual alignment between stacked floors.
-3. No transition-induced depth corruption.
+1. Stable visual alignment between stacked floors.
+1. No transition-induced depth corruption.
 
 ## Phase 2 - 3D block visual model
 
@@ -91,14 +91,14 @@ Goal:
 Deliverables:
 
 1. Tile top + side faces rendering path.
-2. Side shading/lighting policy derived from same tile identity.
-3. Visual profile controls (compact height constants, readability tuning).
+1. Side shading/lighting policy derived from same tile identity.
+1. Visual profile controls (compact height constants, readability tuning).
 
 Exit criteria:
 
 1. Building and stair silhouettes remain consistent while player moves.
-2. Compact style maintained (no over-stretched GTA-like vertical scale).
-3. Visual readability improved vs baseline in test scenarios.
+1. Compact style maintained (no over-stretched GTA-like vertical scale).
+1. Visual readability improved vs baseline in test scenarios.
 
 ## Phase 3 - Transition and gameplay coherence hardening
 
@@ -109,36 +109,36 @@ Goal:
 Deliverables:
 
 1. TransitionSystem hardening for stairs/holes with typed and deterministic flow.
-2. Entity/container sync validation across level switches.
-3. Combat and interaction checks near multi-floor overlap zones.
+1. Entity/container sync validation across level switches.
+1. Combat and interaction checks near multi-floor overlap zones.
 
 Exit criteria:
 
 1. No incorrect floor interactions from projection side effects.
-2. No entity ordering glitches at transition boundaries.
-3. Save/load returns to coherent projected state.
+1. No entity ordering glitches at transition boundaries.
+1. Save/load returns to coherent projected state.
 
-## Phase 4 - Performance and decision gate (2D future)
+## Phase 4 - Performance and decision gate (alternate debug modes)
 
 Goal:
 
-- Validate maturity and decide long-term status of 2D fallback.
+- Validate top-down maturity and decide long-term status of any alternate internal debug view.
 
 Deliverables:
 
 1. Benchmark checkpoints expanded for perspective-specific scenarios.
-2. Comparative report:
+1. Comparative report:
 
 - Bug rate by profile
 - Implementation complexity by profile
 - Runtime performance by profile
 
-3. Recommendation memo: keep 2D fallback or retire it.
+1. Recommendation memo: keep any alternate internal debug profile or retire it.
 
 Exit criteria:
 
-1. 3D profile is stable across all priority scenarios.
-2. Decision gate approved with evidence.
+1. Top-down profile is stable across all priority scenarios.
+1. Decision gate approved with evidence.
 
 ## 5. Quality gates (mandatory)
 
@@ -149,36 +149,36 @@ A phase only completes if all relevant gates pass:
 - No jagged level stacking artifacts caused by projection mismatch.
 - Floor and wall continuity preserved under movement.
 
-2. Spatial correctness gate
+1. Spatial correctness gate
 
 - `currentLevel`, renderer state, and entity depth remain consistent.
 - Stair transitions maintain expected world position and ordering.
 
-3. Gameplay correctness gate
+1. Gameplay correctness gate
 
 - Collision, interaction, and combat remain deterministic under projection.
 
-4. Performance gate
+1. Performance gate
 
 - No unacceptable regression in baseline stress scenarios.
 
-5. Contract/documentation gate
+1. Contract/documentation gate
 
 - Contracts and benchmark docs updated with behavior changes.
 
-## 6. Decision framework for 2D mode
+## 6. Decision framework for alternate debug modes
 
-Keep 2D temporary fallback while any of the following is true:
+Keep alternate view modes as internal-debug-only while any of the following is true:
 
-1. 3D profile still has unresolved critical gameplay correctness bugs.
-2. 3D profile has unacceptable performance for target scenarios.
-3. 3D profile lacks parity in key play loops.
+1. They still provide useful validation coverage for top-down migration risks.
+1. They help compare gameplay parity, visibility, or performance behavior.
+1. They are hidden from normal player-facing UX and do not drive map or visual design decisions.
 
-Retire 2D when all are true:
+Retire alternate debug modes when all are true:
 
-1. 3D profile passes all quality gates consistently.
-2. 2D maintenance cost exceeds practical value.
-3. Team/product confirms 3D-only strategic direction.
+1. Top-down mode passes all quality gates consistently.
+1. Debug-only maintenance cost exceeds practical validation value.
+1. Team/product confirms no remaining migration benefit.
 
 ## 7. Risk register
 
@@ -186,23 +186,23 @@ Retire 2D when all are true:
 
 - Mitigation: phase-gated rollout + scenario map regression checks.
 
-2. Risk: Depth ordering becomes brittle with edge entities.
+1. Risk: Depth ordering becomes brittle with edge entities.
 
 - Mitigation: formal depth policy + deterministic tie-break rules.
 
-3. Risk: Performance drops with side-face rendering.
+1. Risk: Performance drops with side-face rendering.
 
 - Mitigation: culling, pooling, and profile-level tuning constants.
 
-4. Risk: Scope drift into full 3D engine migration.
+1. Risk: Scope drift into full 3D engine migration.
 
 - Mitigation: keep Phase 1-4 focused on Phaser-native projection first.
 
 ## 8. Immediate next actions
 
 1. Build Phase 0 baseline map scenarios and artifact checklist.
-2. Implement Phase 1 projection utility and remove Y-offset dependency in 3D path.
-3. Run smoke/build/benchmark checks relevant to perspective path.
+1. Implement top-down-first visibility rules and remove product-facing dependence on alternate view assumptions.
+1. Run smoke/build/benchmark checks relevant to top-down visibility, layer transitions, and debug-only alternate modes.
 
 ## 9. Related docs
 

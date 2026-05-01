@@ -24,6 +24,14 @@ Communication between the Phaser Engine and React UI is handled strictly via the
 - **Phaser -> UI**: Phaser emits events on `PlayerState` (e.g., `inventoryUpdated`). React hooks (`usePlayerState`) subscribe to these events to force re-renders.
 - **UI -> Phaser**: React calls methods on `PlayerState`, which may emit events that `GameScene` listens for (e.g., `spawnDroppedItem`).
 
+## Visual Direction and Layer Ownership
+
+- Top-down layered presentation is the only player-facing visual target for maps and scene readability.
+- Any alternate camera or perspective mode is debug-only and must not dictate map structure, traversal semantics, or UI decisions.
+- `PlayerState` remains the source of truth for runtime view flags and player context.
+- Map structure, current level, and layer visibility decisions must stay coherent across `PlayerState`, scene/runtime state, and renderer ownership.
+- Vertical readability work should prefer smooth hide/show behavior for structures above the player instead of authoring maps around non-top-down viewpoints.
+
 ## Hero Menu / Window Pause Flow
 
 - The **Hero Menu** is a UI window managed by the React window system, not by Phaser scene routing.

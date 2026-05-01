@@ -65,7 +65,7 @@
 ## 2.5 GRAPHICS, HUDS & FEEDBACK
 
 - `src/game/graphics/tiles/**`: procedural tile registry and tile renderers; tile definitions must include step sound, speed modifier, and minimap/world-map color metadata for walkable terrain.
-- `src/game/graphics/PlayerGraphic.ts`: procedural player texture and animation keys.
+- `src/game/graphics/PlayerGraphic.ts`: legacy procedural fallback for player visuals; canonical gameplay sprite policy is in `docs/contracts/SPRITE_PIPELINE_CONTRACT.md`.
 - `src/game/graphics/ItemGraphic.ts`: procedural item texture generator.
 - `src/game/hud/PlayerHud.ts`: cached static/dynamic player bar with animated health and XP rendering.
 - `src/game/hud/EnemyHud.ts`: enemy health bar visibility is controlled by damage state and z-level matching.

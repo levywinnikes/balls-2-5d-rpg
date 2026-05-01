@@ -68,8 +68,20 @@ const TILE_DEFS = {
   dwl: { color: 0xa07050, height: 2.0, renderAs: "wall", block: true },
   arc: { color: 0x909090, height: 2.2, renderAs: "wall", block: true },
   sdw: { color: 0x404040, height: 0.05, renderAs: "floor", block: false },
-  stu: { color: 0xc8b040, height: 0.5, renderAs: "floor", block: false, stairDir: "up" },
-  std: { color: 0xc89040, height: 0.5, renderAs: "floor", block: false, stairDir: "down" },
+  stu: {
+    color: 0xc8b040,
+    height: 0.5,
+    renderAs: "floor",
+    block: false,
+    stairDir: "up",
+  },
+  std: {
+    color: 0xc89040,
+    height: 0.5,
+    renderAs: "floor",
+    block: false,
+    stairDir: "down",
+  },
   swl: { color: 0x505060, height: 2.0, renderAs: "wall", block: true },
   sfl: { color: 0x606878, height: 0.15, renderAs: "floor", block: false },
   cfl: { color: 0x554444, height: 0.15, renderAs: "floor", block: false },
@@ -125,20 +137,23 @@ function generateLevel0(rng) {
   const roofRects = [];
 
   // Raio da ilha principal
-  const cx = 50, cy = 50, radius = 28;
+  const cx = 50,
+    cy = 50,
+    radius = 28;
 
   // Preencher base da ilha com stone
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
-      const dx = x - cx, dy = y - cy;
-      if (dx * dx + dy * dy <= radius * radius)
-        set(grid, x, y, "stn");
+      const dx = x - cx,
+        dy = y - cy;
+      if (dx * dx + dy * dy <= radius * radius) set(grid, x, y, "stn");
     }
 
   // Borda da ilha — cobblestone como calçada de beira
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
-      const dx = x - cx, dy = y - cy;
+      const dx = x - cx,
+        dy = y - cy;
       const r2 = dx * dx + dy * dy;
       if (r2 <= radius * radius && r2 >= (radius - 2) * (radius - 2))
         set(grid, x, y, "cob");
@@ -177,7 +192,8 @@ function generateLevel0(rng) {
     // Verifica que o bloco esta dentro da ilha
     const midX = Math.floor((x0 + x1) / 2);
     const midY = Math.floor((y0 + y1) / 2);
-    const dx = midX - cx, dy = midY - cy;
+    const dx = midX - cx,
+      dy = midY - cy;
     if (dx * dx + dy * dy > (radius - 3) * (radius - 3)) return;
 
     const wallSym = wallTypes[i % wallTypes.length];
@@ -213,17 +229,23 @@ function generateLevel0(rng) {
       if (dx * dx + dy * dy <= plazaR * plazaR)
         set(grid, cx + dx, cy + dy, "cob");
   set(grid, cx, cy, "fnt");
-  [[-3, -3], [3, -3], [-3, 3], [3, 3]].forEach(([dx, dy]) =>
-    set(grid, cx + dx, cy + dy, "tre")
-  );
+  [
+    [-3, -3],
+    [3, -3],
+    [-3, 3],
+    [3, 3],
+  ].forEach(([dx, dy]) => set(grid, cx + dx, cy + dy, "tre"));
 
   // Mercado no quadrante nordeste
   fill(grid, cx + 3, cy - 10, cx + 10, cy - 3, "mkt");
 
   // Arcos na entrada da praca
-  [[cx - 6, cy], [cx + 6, cy], [cx, cy - 6], [cx, cy + 6]].forEach(
-    ([ax, ay]) => set(grid, ax, ay, "arc")
-  );
+  [
+    [cx - 6, cy],
+    [cx + 6, cy],
+    [cx, cy - 6],
+    [cx, cy + 6],
+  ].forEach(([ax, ay]) => set(grid, ax, ay, "arc"));
 
   return { grid, stairUpPositions, roofRects };
 }
@@ -264,11 +286,14 @@ function generateLevel1(rng, stairUpPositions, roofRects) {
 
     // Passarela conectando torres proximas
     if (rng() < 0.5 && stairUpPositions.length > 1) {
-      const other = stairUpPositions[Math.floor(rng() * stairUpPositions.length)];
+      const other =
+        stairUpPositions[Math.floor(rng() * stairUpPositions.length)];
       if (other.x !== x || other.y !== y) {
         // Passarela horizontal depois vertical
-        const px0 = Math.min(x, other.x), px1 = Math.max(x, other.x);
-        const py0 = Math.min(y, other.y), py1 = Math.max(y, other.y);
+        const px0 = Math.min(x, other.x),
+          px1 = Math.max(x, other.x);
+        const py0 = Math.min(y, other.y),
+          py1 = Math.max(y, other.y);
         fill(grid, px0, y - 0, px1, y + 0, "bal");
         fill(grid, other.x, py0, other.x, py1, "bal");
       }
@@ -304,7 +329,8 @@ function buildOutput() {
   const binFile1 = writeLevel("1", grid1);
 
   // Spawn do jogador no cobblestone da praca central
-  const cx = 50, cy = 50;
+  const cx = 50,
+    cy = 50;
   let playerX = cx * 32 + 16;
   let playerY = cy * 32 + 16;
   outer: for (let r = 0; r < 10; r++)
@@ -362,13 +388,18 @@ function buildOutput() {
   };
 
   const jsonFile = `${MAP_NAME}.json`;
-  fs.writeFileSync(path.join(OUTPUT_DIR, jsonFile), JSON.stringify(meta, null, 2));
+  fs.writeFileSync(
+    path.join(OUTPUT_DIR, jsonFile),
+    JSON.stringify(meta, null, 2),
+  );
   console.log(`  Written ${jsonFile}`);
   console.log(`  Player spawn: x=${playerX} y=${playerY}`);
   console.log(`  Stairs-up: ${stairUpPositions.length}`);
   console.log(`  Open: ?slice3d=1&map=${MAP_NAME}&fp=1`);
 }
 
-console.log(`[generate-city-suspensa] Generating ${MAP_NAME} (${W}x${H}, 2 levels)...`);
+console.log(
+  `[generate-city-suspensa] Generating ${MAP_NAME} (${W}x${H}, 2 levels)...`,
+);
 buildOutput();
 console.log("[generate-city-suspensa] Done.");

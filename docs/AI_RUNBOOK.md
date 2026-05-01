@@ -44,7 +44,19 @@ Use the highest-impact classification when in doubt.
 4. Implement the smallest safe change.
 5. Run required validations.
 6. Update contracts/docs if any rule or behavior changed.
-7. Summarize scope, module impact, validations, and residual risk in the task output.
+7. If behavior changed, append a mechanics delta entry using [MECHANICS_DELTA_TEMPLATE.md](./MECHANICS_DELTA_TEMPLATE.md).
+8. Summarize scope, module impact, validations, and residual risk in the task output.
+
+## Mechanics Delta Protocol
+
+When a task changes runtime behavior, interactions, or constraints, record a short delta entry using [MECHANICS_DELTA_TEMPLATE.md](./MECHANICS_DELTA_TEMPLATE.md).
+
+Rules:
+
+- Keep entries compact and searchable.
+- Use one entry per behavior change.
+- Include affected modules and validation evidence.
+- If no behavior changed, state `No mechanics delta` in task output.
 
 ## Required Task Output
 

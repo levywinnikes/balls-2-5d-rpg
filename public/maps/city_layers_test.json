@@ -1,0 +1,211 @@
+{
+  "mapName": "city_layers_test",
+  "tileSize": 32,
+  "width": 64,
+  "height": 64,
+  "config": {
+    "startLevel": "0",
+    "mapName": "Layer Stress City"
+  },
+  "tileAtlas": [
+    "...",
+    "grs",
+    "pav",
+    "cob",
+    "flr",
+    "wal",
+    "rof",
+    "sup",
+    "sdn",
+    "hol",
+    "dfn",
+    "dwl",
+    "wat",
+    "gob",
+    "rak",
+    "chs",
+    "tre"
+  ],
+  "tileDefinitions": {
+    "grs": {
+      "id": "grass",
+      "color": "#4ade80",
+      "height": 0.05,
+      "renderAs": "floor"
+    },
+    "pav": {
+      "id": "pavement",
+      "color": "#9ca3af",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "cob": {
+      "id": "cobblestone",
+      "color": "#64748b",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "flr": {
+      "id": "floor",
+      "color": "#78350f",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "wal": {
+      "id": "wall",
+      "block": true,
+      "color": "#4b5563",
+      "height": 2.6,
+      "renderAs": "block"
+    },
+    "rof": {
+      "id": "red-roof",
+      "color": "#ef4444",
+      "height": 0.15,
+      "renderAs": "floor"
+    },
+    "sup": {
+      "id": "stair_up",
+      "transition": "up",
+      "color": "#f59e0b",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "sdn": {
+      "id": "stair_down",
+      "transition": "down",
+      "color": "#0ea5e9",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "hol": {
+      "id": "hole",
+      "transition": "down",
+      "color": "#111827",
+      "height": 0.02,
+      "renderAs": "floor"
+    },
+    "dfn": {
+      "id": "sewer-floor",
+      "color": "#1e293b",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "dwl": {
+      "id": "dungeon-wall",
+      "block": true,
+      "color": "#0f172a",
+      "height": 2.4,
+      "renderAs": "block"
+    },
+    "wat": {
+      "id": "water",
+      "block": true,
+      "color": "#0ea5e9",
+      "height": 0.12,
+      "renderAs": "block"
+    }
+  },
+  "entityTemplates": {
+    "gob": {
+      "type": "enemy",
+      "id": "goblin"
+    },
+    "rak": {
+      "type": "enemy",
+      "id": "rat"
+    },
+    "chs": {
+      "type": "item",
+      "id": "light_torch",
+      "contents": [
+        {
+          "id": "light_torch",
+          "count": 3
+        },
+        {
+          "id": "wooden_sword",
+          "count": 1
+        }
+      ]
+    },
+    "tre": {
+      "type": "decoration",
+      "id": "tree"
+    }
+  },
+  "levels": {
+    "0": {
+      "binFile": "city_layers_test_0.bin",
+      "playerPos": {
+        "x": 1024,
+        "y": 1024
+      },
+      "entities": [
+        {
+          "x": 33,
+          "y": 26,
+          "symbol": "gob"
+        },
+        {
+          "x": 50,
+          "y": 49,
+          "symbol": "chs"
+        },
+        {
+          "x": 8,
+          "y": 8,
+          "symbol": "tre"
+        },
+        {
+          "x": 55,
+          "y": 8,
+          "symbol": "tre"
+        }
+      ]
+    },
+    "1": {
+      "binFile": "city_layers_test_1.bin",
+      "playerPos": {
+        "x": 1024,
+        "y": 960
+      },
+      "entities": []
+    },
+    "2": {
+      "binFile": "city_layers_test_2.bin",
+      "playerPos": {
+        "x": 1024,
+        "y": 960
+      },
+      "entities": []
+    },
+    "3": {
+      "binFile": "city_layers_test_3.bin",
+      "playerPos": {
+        "x": 1408,
+        "y": 672
+      },
+      "entities": []
+    },
+    "-1": {
+      "binFile": "city_layers_test_-1.bin",
+      "playerPos": {
+        "x": 1024,
+        "y": 1024
+      },
+      "entities": [
+        {
+          "x": 19,
+          "y": 19,
+          "symbol": "rak"
+        },
+        {
+          "x": 44,
+          "y": 19,
+          "symbol": "rak"
+        }
+      ]
+    }
+  }
+}

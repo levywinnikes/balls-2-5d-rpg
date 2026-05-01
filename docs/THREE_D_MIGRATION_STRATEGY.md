@@ -287,6 +287,7 @@ Control mapping in the isolated slice:
 6. `V`: toggle third-person / first-person camera
 7. First-person mode: look around with mouse
 8. `E`: pickup nearby item (torch orb test), syncing to `PlayerState` inventory
+9. `I` / `Tab`: open the reused `HeroDashboard` inventory UI on top of the 3D slice
 
 Recent stabilization fixes for this phase:
 
@@ -295,9 +296,58 @@ Recent stabilization fixes for this phase:
 3. W/S movement inversion corrected in the Babylon debug slice runtime
 4. first 2D gameplay mechanic attached to 3D slice: proximity pickup via `PlayerState.addItem(...)`
 5. dropped items in the 3D slice now consume the real per-level persistent item list from `PlayerState`, preserving item UID/count/stars/attributes on pickup
+6. the existing `HeroDashboard` from the 2D UI stack is now reused directly in the 3D slice as the first visual inventory proof, instead of rebuilding a new inventory overlay
 
 Current limitation:
 
 1. the isolated 3D slice now reads real persistent dropped items and also seeds first-visit item entities from map JSON metadata (`entityTemplates` + `levels[level].entities`) into `PlayerState`
 2. non-item entities remain outside this slice scope; enemy/container behavior still depends on broader migration phases
 3. when no persistent dropped item exists for the current level, the torch orb fallback remains available only as an empty-state debug pickup
+
+## Bulk Compatible Migration Sweep (single-pass before next validation)
+
+Applied in this batch:
+
+1. reused existing window stack pieces directly in 3D: `WindowLayer` + `HeroDashboard` + `NotificationSystem`
+2. keyboard bridge in the 3D slice for old menu flow compatibility:
+	- `I` / `Tab`: `hero_menu`
+	- `J` / `L`: `questLog`
+	- `O`: `settings`
+	- `M`: `expandedMap`
+3. container/altar window bridge through `PlayerState` events (`windowOpened`, `containerClosed`)
+4. runtime bridge in Babylon for inventory/drop mechanics that were previously GameScene-bound:
+	- listens to `dropItem` and materializes dropped items in 3D persistence
+	- listens to `requestPickup` and resolves pickup by UID/count
+	- listens to `spawnDroppedItem` (equipment/container flows) and persists it in current level
+5. audio compatibility baseline in 3D runtime:
+	- lazy `AudioManager.init()` on first interaction
+	- pickup SFX on successful item pickup
+	- footstep SFX while moving
+
+Deferred intentionally (not plug-and-play in this batch):
+
+1. full combat loop migration (`BattleSystem` still depends on GameScene entities, hitboxes, and damage feedback pipes)
+2. 2D tile renderer/tile graphics migration (Babylon slice is not using Phaser tile procedural pipeline)
+3. enemy AI/pathfinding/full transition parity
+
+## Enemy 3D Visual Pattern (current alpha baseline)
+
+To unblock combat migration in 3D while keeping enemy data centralized:
+
+1. gameplay stats remain in `EnemyRegistry` (`health`, `damage`, `defense`, `armor`, `aggroRange`, `chaseRange`, `attackRange`, `loot`, `exp`)
+2. visual shape in Babylon comes from procedural profile mapping in `src/three-d/runtime/ThreeDEnemyVisualRegistry.ts`
+3. map entity templates keep enemy IDs unchanged (`entityTemplates[*].type = "enemy"`, `id = "goblin"|...`)
+4. runtime bridge resolves enemy in two steps:
+	- data: `EnemyRegistry.getEnemyDefinition(enemyType)`
+	- visual: `createEnemyVisual(scene, enemyType, nodeName)`
+
+Current visual profile fields:
+
+1. `baseColor`
+2. `accentColor`
+3. `radius`
+4. `height`
+5. `headScale`
+6. `hasHorns`
+
+This pattern intentionally decouples combat/balance data from visual representation so that a future contract can replace procedural meshes with authored assets without changing enemy stat/storage semantics.

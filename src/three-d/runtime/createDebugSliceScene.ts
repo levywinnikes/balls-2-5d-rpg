@@ -13,7 +13,6 @@ import {
   UniversalCamera,
   Vector3,
   VertexData,
-  Animation,
   Texture,
 } from "@babylonjs/core";
 import {
@@ -37,6 +36,7 @@ import {
 import { PathfindingManager } from "../../game/systems/PathfindingManager";
 import { WorldMapService } from "../../services/WorldMapService";
 import { createEnemyVisual } from "./ThreeDEnemyVisualRegistry";
+import { createHeroParitySpriteMaterial } from "./TwoDParitySpriteFactory";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
 
 type SliceDroppedItem = DroppedItemData & { level: string };
@@ -46,6 +46,8 @@ type SliceRuntime = {
   scene: Scene;
   dispose: () => void;
 };
+
+type TopDownCameraPreset = "safe" | "cinematic";
 
 function createMaterial(
   scene: Scene,
@@ -118,6 +120,7 @@ type SliceEnemy = {
   magicCooldowns: Map<string, number>;
   isDead: boolean;
   isProvoked: boolean;
+  selectionRing: Mesh | null;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -178,22 +181,44 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
   let activeLevel = playerState.getCurrentLevel();
   let activeLevelNumber = parseLevelNumber(activeLevel);
+  let activeTopDownCameraPreset: TopDownCameraPreset = "safe";
 
   const camera = new ArcRotateCamera(
     "slice-camera",
     -Math.PI / 2, // top-down: alpha = -90° (south-facing, irrelevant for straight-down)
-    0.18, // top-down: beta near 0 = camera almost directly above
-    14, // radius adjusted for top-down field of view
+    0.72,
+    14,
     new Vector3(0, 1.5, 0),
     scene,
   );
-  camera.lowerRadiusLimit = 14;
-  camera.upperRadiusLimit = 14;
-  camera.lowerBetaLimit = 0.18;
-  camera.upperBetaLimit = 0.18;
-  camera.lowerAlphaLimit = -Math.PI / 2;
-  camera.upperAlphaLimit = -Math.PI / 2;
-  camera.maxZ = 42;
+  const applyTopDownCameraPreset = (preset: TopDownCameraPreset) => {
+    activeTopDownCameraPreset = preset;
+    if (preset === "safe") {
+      // Safe preset: higher readability for combat/navigation.
+      camera.beta = 0.72; // ~49° from ground
+      camera.radius = 14;
+      camera.fov = 0.95;
+      camera.maxZ = 52;
+      camera.lowerRadiusLimit = 14;
+      camera.upperRadiusLimit = 14;
+      camera.lowerBetaLimit = 0.72;
+      camera.upperBetaLimit = 0.72;
+    } else {
+      // Cinematic preset: slightly steeper depth feel.
+      camera.beta = 0.56; // ~58° from ground
+      camera.radius = 16;
+      camera.fov = 1.1;
+      camera.maxZ = 58;
+      camera.lowerRadiusLimit = 16;
+      camera.upperRadiusLimit = 16;
+      camera.lowerBetaLimit = 0.56;
+      camera.upperBetaLimit = 0.56;
+    }
+
+    camera.lowerAlphaLimit = -Math.PI / 2;
+    camera.upperAlphaLimit = -Math.PI / 2;
+  };
+  applyTopDownCameraPreset(activeTopDownCameraPreset);
   camera.wheelPrecision = 1000000;
   camera.panningSensibility = 0;
   camera.attachControl(canvas, true);
@@ -224,7 +249,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
   const player = MeshBuilder.CreateCapsule(
     "slice-player",
-    { radius: 0.42, height: 1.6, tessellation: 8 },
+    // Height ~= 2*radius keeps the capsule visually close to a sphere (yellow ball look).
+    { radius: 0.42, height: 0.84, tessellation: 12 },
     scene,
   );
   player.position = new Vector3(
@@ -234,21 +260,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
   player.material = playerMaterial;
 
-  // S11-T4: temporary 2D billboard sprite for hero in 3D runtime.
-  const heroSpriteMat = new StandardMaterial("slice-player-sprite-mat", scene);
-  const heroSpriteTex = new Texture(
-    "/assets/sprites/hero_peasant.png",
-    scene,
-    true,
-    false,
-  );
-  heroSpriteTex.hasAlpha = true;
-  heroSpriteTex.updateSamplingMode(Texture.NEAREST_NEAREST);
-  heroSpriteMat.diffuseTexture = heroSpriteTex;
-  heroSpriteMat.opacityTexture = heroSpriteTex;
-  heroSpriteMat.useAlphaFromDiffuseTexture = true;
-  heroSpriteMat.backFaceCulling = false;
-  heroSpriteMat.specularColor = Color3.Black();
+  // Keep hero visual in parity with 2D PlayerGraphic (procedural sprite).
+  const heroSpriteMat = createHeroParitySpriteMaterial(scene, "slice-player");
 
   const heroBillboard = MeshBuilder.CreatePlane(
     "slice-player-sprite",
@@ -257,10 +270,32 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
   heroBillboard.material = heroSpriteMat;
   heroBillboard.parent = player;
-  heroBillboard.position = new Vector3(0, 0.78, 0);
+  // Keep feet closer to the ground plane to avoid apparent floating.
+  heroBillboard.position = new Vector3(0, 0.66, 0);
   heroBillboard.billboardMode = Mesh.BILLBOARDMODE_Y;
+  heroBillboard.setEnabled(true);
 
-  // Hide procedural body to prioritize sprite silhouette.
+  const heroShadowMat = new StandardMaterial("slice-player-shadow-mat", scene);
+  heroShadowMat.diffuseColor = Color3.Black();
+  heroShadowMat.specularColor = Color3.Black();
+  heroShadowMat.alpha = 0.32;
+  heroShadowMat.disableLighting = true;
+
+  const heroShadow = MeshBuilder.CreateDisc(
+    "slice-player-shadow",
+    { radius: 0.34, tessellation: 24 },
+    scene,
+  );
+  heroShadow.material = heroShadowMat;
+  heroShadow.position = new Vector3(
+    player.position.x,
+    levelToWorldY(activeLevelNumber) + 0.02,
+    player.position.z,
+  );
+  heroShadow.rotation.x = Math.PI / 2;
+  heroShadow.isPickable = false;
+
+  // Keep physics body hidden when sprite billboard is active.
   player.visibility = 0.01;
 
   // Fallback pickup kept only for empty-state debugging while 3D begins consuming
@@ -1468,6 +1503,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             | null;
           if (mat) mat.emissiveColor = new Color3(0, 0, 0);
         });
+        prev.selectionRing?.setEnabled(false);
       }
     }
     selectedEnemyUid = enemyUid;
@@ -1478,6 +1514,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       selectedEnemyUid = null;
       return;
     }
+
+    enemy.selectionRing?.setEnabled(true);
   };
 
   const spawnEnemy = (
@@ -1510,6 +1548,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
     meshRoot.position = worldPos.clone();
     meshRoot.metadata = { sliceEnemyUid: uid };
+    const selectionRing =
+      (meshRoot
+        .getChildMeshes()
+        .find((m) => m.name.endsWith("-selection-ring")) as Mesh | undefined) ||
+      null;
+    selectionRing?.setEnabled(false);
 
     const instance: SliceEnemy = {
       uid,
@@ -1529,6 +1573,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       magicCooldowns: new Map<string, number>(),
       isDead: false,
       isProvoked: false,
+      selectionRing,
     };
 
     meshRoot.setEnabled(level === activeLevel);
@@ -2221,9 +2266,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     enemy.worldPos.x = clamp(enemy.worldPos.x, mapMinX + 0.5, mapMaxX);
     enemy.worldPos.z = clamp(enemy.worldPos.z, mapMinZ + 0.5, mapMaxZ);
     enemy.meshRoot.position = enemy.worldPos;
-    enemy.meshRoot.lookAt(
-      new Vector3(player.position.x, enemy.worldPos.y, player.position.z),
-    );
   };
 
   const updateEnemyAI = (deltaSeconds: number) => {
@@ -2543,7 +2585,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const fallGravity = -32;
   const fallTerminalVelocity = -28;
   const jumpImpulse = 7.2;
-  const playerGroundY = 0.8;
   let isGrounded = true;
   let isVoidFallActive = false;
   let voidFallTargetLevel = activeLevel;
@@ -2587,6 +2628,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
 
     if (isFirstPerson) {
+      heroBillboard.setEnabled(false);
       camera.detachControl();
       firstPersonCamera.position.set(
         player.position.x,
@@ -2605,6 +2647,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     firstPersonCamera.detachControl();
     document.exitPointerLock?.();
+    heroBillboard.setEnabled(true);
     scene.activeCamera = camera;
     camera.attachControl(canvas, true);
   };
@@ -3028,6 +3071,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       setCameraMode(!isFirstPerson, !isFirstPerson);
     }
 
+    if (key === "c" && !event.repeat) {
+      if (isFirstPerson) {
+        return;
+      }
+      const nextPreset: TopDownCameraPreset =
+        activeTopDownCameraPreset === "safe" ? "cinematic" : "safe";
+      applyTopDownCameraPreset(nextPreset);
+    }
+
     if (key === "f" && !event.repeat) {
       const safetyEnabled = playerState.toggleFallSafety();
       playerState.emit("uiNotification", {
@@ -3414,6 +3466,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (isFirstPerson) {
+      heroBillboard.setEnabled(false);
+      heroShadow.setEnabled(false);
       firstPersonCamera.position.set(
         player.position.x,
         player.position.y + 0.55, // S7-FP5: eye height (see setCameraMode comment)
@@ -3435,6 +3489,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       );
       return;
     }
+
+    heroBillboard.setEnabled(true);
+    heroShadow.setEnabled(true);
+    heroShadow.position.set(
+      player.position.x,
+      levelToWorldY(activeLevelNumber) + 0.02,
+      player.position.z,
+    );
 
     const currentTarget = camera.target;
     camera.setTarget(

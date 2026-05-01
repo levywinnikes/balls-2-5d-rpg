@@ -4,10 +4,9 @@ import {
   MeshBuilder,
   Scene,
   StandardMaterial,
-  Texture,
   TransformNode,
-  Vector3,
 } from "@babylonjs/core";
+import { createEnemyParitySpriteMaterial } from "./TwoDParitySpriteFactory";
 
 export type EnemyVisualProfile = {
   baseColor: string;
@@ -88,12 +87,6 @@ const PROFILE_BY_ENEMY_ID: Record<string, EnemyVisualProfile> = {
   },
 };
 
-const BILLBOARD_SPRITE_BY_ENEMY_ID: Record<string, string> = {
-  rat: "/assets/enemies/rat.png",
-  orc: "/assets/enemies/orc.png",
-  dragon: "/assets/enemies/dragon.png",
-};
-
 function createLitMaterial(
   scene: Scene,
   name: string,
@@ -117,89 +110,90 @@ export function createEnemyVisual(
   const profile = getEnemyVisualProfile(enemyId);
   const root = new TransformNode(nodeName, scene);
 
-  const spritePath = BILLBOARD_SPRITE_BY_ENEMY_ID[enemyId];
-  if (spritePath) {
-    const spriteMat = new StandardMaterial(`${nodeName}-sprite-mat`, scene);
-    const spriteTex = new Texture(spritePath, scene, true, false);
-    spriteTex.hasAlpha = true;
-    spriteTex.updateSamplingMode(Texture.NEAREST_NEAREST);
-    spriteMat.diffuseTexture = spriteTex;
-    spriteMat.opacityTexture = spriteTex;
-    spriteMat.useAlphaFromDiffuseTexture = true;
-    spriteMat.backFaceCulling = false;
-    spriteMat.specularColor = Color3.Black();
-
-    const sprite = MeshBuilder.CreatePlane(
-      `${nodeName}-sprite`,
-      {
-        width: Math.max(0.8, profile.radius * 3.2),
-        height: Math.max(1.0, profile.height * 1.35),
-      },
-      scene,
-    );
-    sprite.material = spriteMat;
-    sprite.parent = root;
-    sprite.position.y = Math.max(0.45, profile.height * 0.55);
-    sprite.billboardMode = Mesh.BILLBOARDMODE_Y;
-
-    const markerMat = createLitMaterial(
-      scene,
-      `${nodeName}-marker-mat`,
-      profile.accentColor,
-    );
-    const marker = MeshBuilder.CreateCylinder(
-      `${nodeName}-marker`,
-      {
-        diameterTop: Math.max(0.08, profile.radius * 0.4),
-        diameterBottom: Math.max(0.08, profile.radius * 0.4),
-        height: 0.06,
-        tessellation: 8,
-      },
-      scene,
-    );
-    marker.material = markerMat;
-    marker.parent = root;
-    marker.position.y = 0.03;
-
-    return root;
-  }
-
-  const bodyMaterial = createLitMaterial(
+  const spriteMat = createEnemyParitySpriteMaterial(
     scene,
-    `${nodeName}-body-mat`,
-    profile.baseColor,
+    `${nodeName}-sprite`,
+    enemyId,
   );
-  const accentMaterial = createLitMaterial(
+
+  const sprite = MeshBuilder.CreatePlane(
+    `${nodeName}-sprite`,
+    {
+      width: Math.max(0.8, profile.radius * 3.2),
+      height: Math.max(1.0, profile.height * 1.35),
+    },
     scene,
-    `${nodeName}-accent-mat`,
+  );
+  sprite.material = spriteMat;
+  sprite.parent = root;
+  sprite.position.y = Math.max(0.45, profile.height * 0.55);
+  sprite.billboardMode = Mesh.BILLBOARDMODE_Y;
+
+  const shadowMat = new StandardMaterial(`${nodeName}-shadow-mat`, scene);
+  shadowMat.diffuseColor = Color3.Black();
+  shadowMat.specularColor = Color3.Black();
+  shadowMat.alpha = 0.26;
+  shadowMat.disableLighting = true;
+
+  const groundShadow = MeshBuilder.CreateDisc(
+    `${nodeName}-ground-shadow`,
+    { radius: Math.max(0.2, profile.radius * 0.95), tessellation: 20 },
+    scene,
+  );
+  groundShadow.material = shadowMat;
+  groundShadow.parent = root;
+  groundShadow.position.y = 0.02;
+  groundShadow.rotation.x = Math.PI / 2;
+  groundShadow.isPickable = false;
+
+  const selectionRingMat = new StandardMaterial(
+    `${nodeName}-selection-ring-mat`,
+    scene,
+  );
+  selectionRingMat.diffuseColor = Color3.FromHexString("#ffd54a");
+  selectionRingMat.emissiveColor = Color3.FromHexString("#f59e0b").scale(0.5);
+  selectionRingMat.specularColor = Color3.Black();
+  selectionRingMat.alpha = 0.95;
+
+  const selectionRing = MeshBuilder.CreateTorus(
+    `${nodeName}-selection-ring`,
+    {
+      diameter: Math.max(0.6, profile.radius * 2.9),
+      thickness: 0.05,
+      tessellation: 24,
+    },
+    scene,
+  );
+  selectionRing.material = selectionRingMat;
+  selectionRing.parent = root;
+  selectionRing.position.y = 0.04;
+  selectionRing.rotation.x = Math.PI / 2;
+  selectionRing.isPickable = false;
+  selectionRing.setEnabled(false);
+
+  const pickProxy = MeshBuilder.CreatePlane(
+    `${nodeName}-pick-proxy`,
+    {
+      width: Math.max(1.2, profile.radius * 3.8),
+      height: Math.max(1.15, profile.height * 1.55),
+    },
+    scene,
+  );
+  const pickProxyMat = new StandardMaterial(`${nodeName}-pick-proxy-mat`, scene);
+  pickProxyMat.alpha = 0;
+  pickProxyMat.backFaceCulling = false;
+  pickProxyMat.disableLighting = true;
+  pickProxy.material = pickProxyMat;
+  pickProxy.parent = root;
+  pickProxy.position.y = Math.max(0.52, profile.height * 0.58);
+  pickProxy.billboardMode = Mesh.BILLBOARDMODE_Y;
+  pickProxy.isPickable = true;
+
+  const markerMat = createLitMaterial(
+    scene,
+    `${nodeName}-marker-mat`,
     profile.accentColor,
   );
-
-  const body = MeshBuilder.CreateCapsule(
-    `${nodeName}-body`,
-    {
-      radius: profile.radius,
-      height: profile.height,
-      tessellation: 8,
-    },
-    scene,
-  );
-  body.material = bodyMaterial;
-  body.parent = root;
-  body.position.y = profile.height * 0.5;
-
-  const head = MeshBuilder.CreateSphere(
-    `${nodeName}-head`,
-    {
-      diameter: Math.max(0.28, profile.radius * 2 * profile.headScale),
-      segments: 10,
-    },
-    scene,
-  );
-  head.material = accentMaterial;
-  head.parent = root;
-  head.position.y = profile.height + profile.radius * 0.28;
-
   const marker = MeshBuilder.CreateCylinder(
     `${nodeName}-marker`,
     {
@@ -210,30 +204,9 @@ export function createEnemyVisual(
     },
     scene,
   );
-  marker.material = accentMaterial;
+  marker.material = markerMat;
   marker.parent = root;
   marker.position.y = 0.03;
-
-  if (profile.hasHorns) {
-    const leftHorn = MeshBuilder.CreateCylinder(
-      `${nodeName}-horn-left`,
-      { diameterTop: 0.01, diameterBottom: 0.1, height: 0.24, tessellation: 6 },
-      scene,
-    );
-    leftHorn.material = bodyMaterial;
-    leftHorn.parent = root;
-    leftHorn.position = new Vector3(
-      -profile.radius * 0.46,
-      profile.height + 0.05,
-      0.06,
-    );
-    leftHorn.rotation.z = Math.PI / 5;
-
-    const rightHorn = leftHorn.clone(`${nodeName}-horn-right`) as Mesh;
-    rightHorn.parent = root;
-    rightHorn.position.x = profile.radius * 0.46;
-    rightHorn.rotation.z = -Math.PI / 5;
-  }
 
   return root;
 }

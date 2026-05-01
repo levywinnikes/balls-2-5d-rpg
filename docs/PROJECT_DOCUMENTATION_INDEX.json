@@ -36,9 +36,10 @@
     {
       "id": "perspective",
       "name": "Perspective / 2.5D-3D",
-      "pathPrefixes": ["src/game/maps/LevelRenderer.ts", "src/game/maps/PerspectiveProjection.ts", "docs/PERSPECTIVE_"],
+      "pathPrefixes": ["src/game/maps/LevelRenderer.ts", "src/game/maps/PerspectiveProjection.ts", "src/three-d/", "docs/PERSPECTIVE_"],
       "docsRequired": [
-        "docs/PERSPECTIVE_MODE_MASTER_PLAN.md"
+        "docs/PERSPECTIVE_MODE_MASTER_PLAN.md",
+        "docs/THREE_D_INTEGRATION_BLUEPRINT.md"
       ],
       "contractsRequired": [
         "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md"

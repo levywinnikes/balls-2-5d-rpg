@@ -5,6 +5,7 @@ import * as EasyStar from "easystarjs";
 const ctx: Worker = self as any;
 
 const easystar = new EasyStar.js();
+let isGridConfigured = false;
 
 // Interfaces matching those in PathfindingManager
 interface PathRequest {
@@ -34,10 +35,25 @@ ctx.addEventListener("message", (event: MessageEvent<WorkerMessage>) => {
       easystar.setAcceptableTiles([0]);
       easystar.enableDiagonals();
       easystar.disableCornerCutting();
+      isGridConfigured = true;
       break;
 
     case "FIND_PATH":
       const req = payload as PathRequest;
+      if (!isGridConfigured) {
+        ctx.postMessage({
+          type: "PATH_FOUND",
+          payload: {
+            id: req.id,
+            path: null,
+          },
+        });
+        break;
+      }
+
+      // Safety net against race conditions where EasyStar internal state
+      // may be reset before a queued path request is processed.
+      easystar.setAcceptableTiles([0]);
       // Start calculation
       easystar.findPath(req.startX, req.startY, req.endX, req.endY, (path) => {
         // Send result back

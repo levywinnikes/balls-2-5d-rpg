@@ -1,0 +1,352 @@
+{
+  "mapName": "giant_city_3d",
+  "tileSize": 32,
+  "width": 200,
+  "height": 200,
+  "config": {
+    "startLevel": "0",
+    "mapName": "Giant City 3D"
+  },
+  "tileAtlas": [
+    "...",
+    "cob",
+    "wal",
+    "bwl",
+    "flr",
+    "rof",
+    "grs",
+    "stn",
+    "mkt",
+    "pil",
+    "fnt",
+    "tre",
+    "dwl",
+    "arc",
+    "sdw"
+  ],
+  "tileDefinitions": {
+    "...": {
+      "id": "void",
+      "color": "#6a9f36",
+      "height": 0.02,
+      "renderAs": "floor"
+    },
+    "cob": {
+      "id": "cobblestone",
+      "color": "#64748b",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "wal": {
+      "id": "city-wall",
+      "color": "#78716c",
+      "block": true,
+      "height": 4,
+      "renderAs": "block"
+    },
+    "bwl": {
+      "id": "building-wall",
+      "color": "#94a3b8",
+      "block": true,
+      "height": 2.6,
+      "renderAs": "block"
+    },
+    "flr": {
+      "id": "wood-floor",
+      "color": "#92400e",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "rof": {
+      "id": "roof-tile",
+      "color": "#b91c1c",
+      "height": 0.12,
+      "renderAs": "floor"
+    },
+    "grs": {
+      "id": "grass",
+      "color": "#4ade80",
+      "height": 0.05,
+      "renderAs": "floor"
+    },
+    "stn": {
+      "id": "stone-plaza",
+      "color": "#9ca3af",
+      "height": 0.07,
+      "renderAs": "floor"
+    },
+    "mkt": {
+      "id": "market-floor",
+      "color": "#ca8a04",
+      "height": 0.07,
+      "renderAs": "floor"
+    },
+    "pil": {
+      "id": "pillar",
+      "color": "#d1d5db",
+      "block": true,
+      "height": 3,
+      "renderAs": "block"
+    },
+    "fnt": {
+      "id": "fountain",
+      "color": "#38bdf8",
+      "block": true,
+      "height": 0.8,
+      "renderAs": "block"
+    },
+    "tre": {
+      "id": "tree",
+      "color": "#15803d",
+      "block": true,
+      "height": 3.2,
+      "renderAs": "block"
+    },
+    "dwl": {
+      "id": "dark-wall",
+      "color": "#374151",
+      "block": true,
+      "height": 2.8,
+      "renderAs": "block"
+    },
+    "arc": {
+      "id": "archway",
+      "color": "#a8a29e",
+      "block": true,
+      "height": 3.8,
+      "renderAs": "block"
+    },
+    "sdw": {
+      "id": "stone-dark-wall",
+      "color": "#44403c",
+      "block": true,
+      "height": 5,
+      "renderAs": "block"
+    }
+  },
+  "entityTemplates": {
+    "gob": {
+      "type": "enemy",
+      "id": "goblin"
+    },
+    "orc": {
+      "type": "enemy",
+      "id": "orc"
+    },
+    "swd": {
+      "type": "item",
+      "id": "wooden_sword"
+    }
+  },
+  "levels": {
+    "0": {
+      "binFile": "giant_city_3d_0.bin",
+      "playerPos": {
+        "x": 1200,
+        "y": 336
+      },
+      "entities": [
+        {
+          "symbol": "orc",
+          "x": 47,
+          "y": 63
+        },
+        {
+          "symbol": "gob",
+          "x": 178,
+          "y": 160
+        },
+        {
+          "symbol": "gob",
+          "x": 129,
+          "y": 77
+        },
+        {
+          "symbol": "orc",
+          "x": 80,
+          "y": 174
+        },
+        {
+          "symbol": "gob",
+          "x": 31,
+          "y": 91
+        },
+        {
+          "symbol": "gob",
+          "x": 162,
+          "y": 188
+        },
+        {
+          "symbol": "orc",
+          "x": 113,
+          "y": 105
+        },
+        {
+          "symbol": "gob",
+          "x": 64,
+          "y": 22
+        },
+        {
+          "symbol": "gob",
+          "x": 15,
+          "y": 119
+        },
+        {
+          "symbol": "orc",
+          "x": 146,
+          "y": 36
+        },
+        {
+          "symbol": "gob",
+          "x": 97,
+          "y": 133
+        },
+        {
+          "symbol": "gob",
+          "x": 48,
+          "y": 50
+        },
+        {
+          "symbol": "orc",
+          "x": 179,
+          "y": 147
+        },
+        {
+          "symbol": "gob",
+          "x": 130,
+          "y": 64
+        },
+        {
+          "symbol": "gob",
+          "x": 81,
+          "y": 161
+        },
+        {
+          "symbol": "orc",
+          "x": 32,
+          "y": 78
+        },
+        {
+          "symbol": "gob",
+          "x": 163,
+          "y": 175
+        },
+        {
+          "symbol": "gob",
+          "x": 114,
+          "y": 92
+        },
+        {
+          "symbol": "orc",
+          "x": 65,
+          "y": 189
+        },
+        {
+          "symbol": "gob",
+          "x": 16,
+          "y": 106
+        },
+        {
+          "symbol": "gob",
+          "x": 147,
+          "y": 23
+        },
+        {
+          "symbol": "orc",
+          "x": 98,
+          "y": 120
+        },
+        {
+          "symbol": "gob",
+          "x": 49,
+          "y": 37
+        },
+        {
+          "symbol": "gob",
+          "x": 180,
+          "y": 134
+        },
+        {
+          "symbol": "orc",
+          "x": 131,
+          "y": 51
+        },
+        {
+          "symbol": "gob",
+          "x": 82,
+          "y": 148
+        },
+        {
+          "symbol": "gob",
+          "x": 33,
+          "y": 65
+        },
+        {
+          "symbol": "orc",
+          "x": 164,
+          "y": 162
+        },
+        {
+          "symbol": "gob",
+          "x": 115,
+          "y": 79
+        },
+        {
+          "symbol": "gob",
+          "x": 66,
+          "y": 176
+        },
+        {
+          "symbol": "orc",
+          "x": 17,
+          "y": 93
+        },
+        {
+          "symbol": "gob",
+          "x": 148,
+          "y": 10
+        },
+        {
+          "symbol": "gob",
+          "x": 99,
+          "y": 107
+        },
+        {
+          "symbol": "orc",
+          "x": 50,
+          "y": 24
+        },
+        {
+          "symbol": "gob",
+          "x": 181,
+          "y": 121
+        },
+        {
+          "symbol": "gob",
+          "x": 132,
+          "y": 38
+        },
+        {
+          "symbol": "orc",
+          "x": 83,
+          "y": 135
+        },
+        {
+          "symbol": "gob",
+          "x": 34,
+          "y": 52
+        },
+        {
+          "symbol": "gob",
+          "x": 165,
+          "y": 149
+        },
+        {
+          "symbol": "orc",
+          "x": 116,
+          "y": 66
+        }
+      ]
+    }
+  }
+}

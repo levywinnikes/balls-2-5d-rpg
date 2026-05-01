@@ -69,9 +69,22 @@ export const GrimiorioContent: React.FC = () => {
       </div>
 
       {/* Rune List */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, 1fr)",
+          gap: 8,
+        }}
+      >
         {runes.length === 0 ? (
-          <div style={{ gridColumn: "1 / -1", textAlign: "center", color: "#666", fontSize: 12 }}>
+          <div
+            style={{
+              gridColumn: "1 / -1",
+              textAlign: "center",
+              color: "#666",
+              fontSize: 12,
+            }}
+          >
             {t_game("msg_no_runes")}
           </div>
         ) : (
@@ -99,23 +112,29 @@ export const GrimiorioContent: React.FC = () => {
                 }}
                 onMouseEnter={(e) => {
                   if (!isOverloaded) {
-                    (e.currentTarget as any).style.background = "rgba(68, 102, 255, 0.2)";
-                    (e.currentTarget as any).style.borderColor = "rgba(68, 102, 255, 0.5)";
+                    (e.currentTarget as any).style.background =
+                      "rgba(68, 102, 255, 0.2)";
+                    (e.currentTarget as any).style.borderColor =
+                      "rgba(68, 102, 255, 0.5)";
                   }
                 }}
                 onMouseLeave={(e) => {
-                  (e.currentTarget as any).style.background = "rgba(26, 26, 26, 0.9)";
-                  (e.currentTarget as any).style.borderColor = "rgba(255, 255, 255, 0.1)";
+                  (e.currentTarget as any).style.background =
+                    "rgba(26, 26, 26, 0.9)";
+                  (e.currentTarget as any).style.borderColor =
+                    "rgba(255, 255, 255, 0.1)";
                 }}
               >
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>
                   {runeDef.name}
                 </div>
                 <div style={{ fontSize: 10, color: "#aaa", marginBottom: 6 }}>
-                  {t_game("label_memory")}: {runeDef.memoryCost} x {runeEntry.count}
+                  {t_game("label_memory")}: {runeDef.memoryCost} x{" "}
+                  {runeEntry.count}
                 </div>
                 <div style={{ fontSize: 10, color: "#ff8844" }}>
-                  {runeDef.damage?.element} {runeDef.damage?.baseMin}-{runeDef.damage?.baseMax}
+                  {runeDef.damage?.element} {runeDef.damage?.baseMin}-
+                  {runeDef.damage?.baseMax}
                 </div>
               </button>
             );

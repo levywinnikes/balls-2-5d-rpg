@@ -1,0 +1,26 @@
+{
+  "file": "hero_functional_sheet.png",
+  "frameSize": 32,
+  "columns": 8,
+  "rows": 16,
+  "directions": [
+    "down",
+    "left",
+    "right",
+    "up"
+  ],
+  "states": [
+    "idle",
+    "walk",
+    "attack",
+    "death"
+  ],
+  "frameCounts": {
+    "idle": 4,
+    "walk": 6,
+    "attack": 6,
+    "death": 8
+  },
+  "rowOrder": "direction-major",
+  "rowIndexFormula": "row = directionIndex * states.length + stateIndex"
+}

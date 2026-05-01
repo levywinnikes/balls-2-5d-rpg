@@ -22,7 +22,9 @@ function readStdinSync() {
 
 function safeJsonParse(raw) {
   try {
-    return raw ? JSON.parse(raw) : {};
+    if (!raw) return {};
+    const normalized = String(raw).replace(/^\uFEFF/, "");
+    return JSON.parse(normalized);
   } catch {
     return {};
   }
@@ -226,12 +228,12 @@ function loadChecklist(repoRoot) {
   }
 
   const ageMs = Date.now() - updatedAt.getTime();
-  const maxAgeMs = 12 * 60 * 60 * 1000;
+  const maxAgeMs = 7 * 24 * 60 * 60 * 1000; // 7 days
   if (ageMs > maxAgeMs) {
     return {
       ok: false,
       reason:
-        "Checklist is stale (>12h). Refresh understanding/risk/question before editing.",
+        "Checklist is stale (>7d). Refresh understanding/risk/question before editing.",
     };
   }
 

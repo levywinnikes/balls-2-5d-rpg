@@ -70,20 +70,40 @@ export const ExpandedMapContent: React.FC = () => {
     setViewLevel(currentPlayerLevel);
   }, [currentPlayerLevel]);
 
-  // Carrega mapa (Only if not already in service)
+  // Load active map metadata from service first, then fallback to the current URL map.
   useEffect(() => {
-    if (WorldMapService.getMapData()) {
-      setMapData(WorldMapService.getMapData());
-      return;
+    const onData = (data: any) => setMapData(data);
+    const onBuffers = () => {
+      const freshData = WorldMapService.getMapData();
+      if (freshData) {
+        setMapData({ ...freshData });
+      }
+    };
+
+    const cached = WorldMapService.getMapData();
+    if (cached) {
+      setMapData(cached);
+    } else {
+      const searchParams = new URLSearchParams(window.location.search);
+      const activeMapName =
+        searchParams.get("map") || searchParams.get("mapName") || "newmap";
+
+      fetch(`/maps/${activeMapName}.json?v=${Date.now()}`)
+        .then((res) => res.json())
+        .then((data) => {
+          WorldMapService.setMapData(data);
+          setMapData(data);
+          setViewLevel(playerState.getCurrentLevel());
+        });
     }
 
-    fetch("newmap.json?v=" + Date.now())
-      .then((res) => res.json())
-      .then((data) => {
-        WorldMapService.setMapData(data);
-        setMapData(data);
-        setViewLevel(playerState.getCurrentLevel());
-      });
+    WorldMapService.emitter.on("mapDataUpdated", onData);
+    WorldMapService.emitter.on("buffersReady", onBuffers);
+
+    return () => {
+      WorldMapService.emitter.off("mapDataUpdated", onData);
+      WorldMapService.emitter.off("buffersReady", onBuffers);
+    };
   }, [playerState]);
 
   const handleLevelChange = (newLevel: string) => {

@@ -117,13 +117,13 @@ Checklist refresh triggers (mandatory):
 
 ## Validation commands by impact area
 
-| Change area               | Required commands                                                      |
-| ------------------------- | ---------------------------------------------------------------------- |
-| Gameplay, scenes, systems | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`             |
+| Change area               | Required commands                                                               |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| Gameplay, scenes, systems | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`                      |
 | Map / BMS                 | `npm run check:bms`, `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e` |
-| UI text / HUD             | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`             |
-| Save/load                 | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`             |
-| Benchmark harness         | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`             |
+| UI text / HUD             | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`                      |
+| Save/load                 | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`                      |
+| Benchmark harness         | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`                      |
 
 ---
 

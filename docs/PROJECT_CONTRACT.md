@@ -2,8 +2,8 @@
 
 ## 1. Core Vision
 
-- **Aesthetic**: Procedural minimalism. No external PNGs for gameplay entities.
-- **Graphic Engine**: "Balls & Shapes" - everything is generated via `Phaser.Graphics`.
+- **Aesthetic**: Vibrant adventure readability with authored sprite pipeline for gameplay actors/enemies and procedural tiles for map foundations.
+- **Graphic Engine**: Hybrid policy - map tile foundations remain procedural (`Phaser.Graphics`), while gameplay entities follow `SPRITE_PIPELINE_CONTRACT.md`.
 - **Scaling**: 32x32 standard grid (HD 128x128 mode is deprecated).
 - **Architecture**: 2.5D Oblique Projection (Tibia-style) using dynamic layering.
 
@@ -31,6 +31,7 @@
 Additional domain contract:
 
 - **Localization**: Translation policy for items, quests, dialogues, and player-facing text in [LOCALIZATION_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/LOCALIZATION_CONTRACT.md).
+- **Sprite Pipeline**: Gameplay sprite standards, animation states, sizing, and 2D/3D parity in [SPRITE_PIPELINE_CONTRACT.md](file:///c:/Users/kifit/OneDrive/Documentos/GitHub/balls-2-5d2-rpg/docs/contracts/SPRITE_PIPELINE_CONTRACT.md).
 
 ## Operational Guides
 
