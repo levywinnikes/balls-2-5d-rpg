@@ -20,6 +20,7 @@ Before writing or modifying any code, you MUST:
 | Any player-facing text, labels, notifications                         | `docs/contracts/LOCALIZATION_CONTRACT.md`                                                        |
 | Combat, BattleSystem, damage, XP                                      | `docs/contracts/BATTLE_SYSTEM_CONTRACT.md`                                                       |
 | Benchmark, smoke test, smoke_test.json, generate-smoke-map.js         | `docs/contracts/BENCHMARK_CONTRACT.md`                                                           |
+| **World map, island layout, biomes, tile atlas, structure rules, map generators** | **`docs/contracts/WORLD_MAP_CONTRACT.md`** (ler ANTES de qualquer gerador de mapa) |
 | Cross-cutting / multiple domains                                      | All contracts above that apply                                                                   |
 
 After reading, state: "Li o contrato X. A restrição relevante para esta tarefa é Y."

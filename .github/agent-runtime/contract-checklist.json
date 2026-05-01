@@ -1,13 +1,13 @@
 {
-    "updatedAt": "2026-05-01T14:00:00-03:00",
-    "task": "Fase 1: Modo 3D como padrao - isInGame state, MainMenuUI, New/Load/Return no ThreeDSliceView",
+    "updatedAt": "2026-05-01T18:00:00-03:00",
+    "task": "Fase 3 prep: criar WORLD_MAP_CONTRACT.md com regras de ilha, biomas, telhados, tile atlas e estruturas",
     "contractsRead": [
+        "MAP_SYSTEM_CONTRACT.md",
+        "SYSTEM_BMS.md",
         "THREE_D_INTEGRATION_BLUEPRINT.md",
-        "SAVE_SYSTEM_CONTRACT.md",
-        "PLAYER_STATE_CONTRACT.md",
-        "UI_DESIGN_CONTRACT.md"
+        "WORLD_MAP_CONTRACT.md"
     ],
-    "understanding": "ThreeDSliceView nao tem menu; precisa de isInGame state, renderizar MainMenuUI quando false, inicializar PlayerState com dados do menu, e escutar returnToTitle para voltar ao menu.",
-    "riskConflict": "createDebugSliceScene usa URL params como fonte primaria de mapa; precisamos de um mecanismo para passar o mapa do menu sem quebrar o fluxo de benchmark (legacy2d=1).",
-    "objectiveQuestion": "Nenhuma: o benchmark 2D usa legacy2d=1 e vai para GameLayout, nao ThreeDSliceView, entao a mudanca e isolada."
+    "understanding": "Documentar regras canonicas do mundo: ilha com mar nas bordas, biomas no level 0, modelo Tibia de layers contextuais, bug de telhado (rof no mesmo level das paredes), tile atlas canonico, anatomia de estruturas, regras de validacao.",
+    "riskConflict": "O bug de telhado documentado (rof em level errado) afeta o gerador existente generate-multilevel-3d-map.js e o city_3d_multi. Nenhuma mudanca de codigo nesta sessao — apenas documentacao. Geradores precisarao ser corrigidos na proxima fase.",
+    "objectiveQuestion": "Nenhuma — tarefa e puramente documental. Implementacao do mundo 256x256 vem na proxima iteracao apos confirmacao do contrato."
 }

@@ -33,6 +33,7 @@ Before any code change:
 | Benchmark and smoke harness  | `docs/contracts/BENCHMARK_CONTRACT.md`                                                                                         | `scripts/run-benchmark-e2e.js`, `public/maps/smoke_test.json`, benchmark runners             |
 | Editor                       | `docs/contracts/EDITOR_CONTRACT.md`                                                                                            | `src/editor/**`, editor scenes and save flow                                                 |
 | Generation / biome / tooling | `docs/contracts/GENERATOR_CONTRACT.md`, `docs/contracts/BIOME_SYSTEM_CONTRACT.md`                                              | map generation scripts and biome logic                                                       |
+| **World map / island / biomes** | **`docs/contracts/WORLD_MAP_CONTRACT.md`**                                                                                  | `scripts/generate-*.js`, `public/maps/city_3d_multi.*`, tile atlas, structure rules         |
 
 Additional canonical domain:
 
