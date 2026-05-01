@@ -1697,8 +1697,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         if (!mesh || mesh.isDisposed()) {
           return;
         }
-        mesh.visibility =
-          mesh.visibility + (targetVisibility - mesh.visibility) * lerpFactor;
+        if (targetVisibility >= 1.0) {
+          // Snap to fully visible immediately — lerping from 0→1 causes Babylon.js
+          // to render the mesh in alpha/transparency mode, producing broken-looking
+          // blocks with incorrect face ordering. Instant show avoids this artifact.
+          mesh.visibility = 1.0;
+          mesh.setEnabled(true);
+        } else {
+          // Fade out: lerp to 0 (user confirmed this direction looks fine)
+          const next = mesh.visibility + (targetVisibility - mesh.visibility) * lerpFactor;
+          mesh.visibility = next;
+          if (next <= 0.01) {
+            mesh.visibility = 0;
+            mesh.setEnabled(false);
+          }
+        }
       });
     });
   };
@@ -1765,9 +1778,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           const isStairTile = (tileDef as any)?.stairDir !== undefined;
 
           const tileHeight = isRoofTile
-            ? Math.max(0.4, tileDef?.height ?? 2.2)
+            ? Math.max(0.4, tileDef?.height ?? LEVEL_HEIGHT_UNITS)
             : blocking
-            ? Math.max(0.4, tileDef?.height ?? 2.2)
+            ? Math.max(0.4, tileDef?.height ?? LEVEL_HEIGHT_UNITS)
             : Math.max(0.03, tileDef?.height ?? 0.08);
 
           // Resolve material key on main thread (getTileMaterial caches anyway)
@@ -1837,6 +1850,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
         if (entry.isRoof) roofMeshes.add(mesh);
         registerMeshForLevel(entry.levelKey, mesh);
+
+        // If this level is currently occluded, start the mesh hidden so it
+        // doesn't flash visible for one frame before updateUpperLevelVisibility runs.
+        const meshLevelNum = parseLevelNumber(entry.levelKey);
+        const occlusionAtRegister = findUpperOcclusionLevel();
+        if (occlusionAtRegister !== null && meshLevelNum >= occlusionAtRegister) {
+          mesh.visibility = 0;
+          mesh.setEnabled(false);
+        }
+
         meshes.push(mesh);
       }
 
