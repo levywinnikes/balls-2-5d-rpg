@@ -4734,8 +4734,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       playerState.recordPlayerPosition(
         activeLevel,
         player.position.x * 32,
-        // S12-BUG1: 3D +Z = visual up; buffer row 0 = Z=0 = bottom → invert so minimap Y matches screen
-        (currentMapHeight - player.position.z) * 32,
+        player.position.z * 32,
       );
       return;
     }
@@ -4769,8 +4768,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerState.recordPlayerPosition(
       activeLevel,
       player.position.x * 32,
-      // S12-BUG1: 3D +Z = visual up; buffer row 0 = Z=0 = bottom → invert so minimap Y matches screen
-      (currentMapHeight - player.position.z) * 32,
+      player.position.z * 32,
     );
   });
 
