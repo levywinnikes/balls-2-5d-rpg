@@ -1,0 +1,89 @@
+version: 1
+id: "replace-with-entity-id"
+name: "Replace With Display Name"
+category: "enemy" # actor | enemy | npc | prop
+family: "replace-with-family"
+
+visual_direction:
+  style_keywords:
+    - "vibrant"
+    - "clean silhouette"
+    - "high contrast"
+  inspiration_note: "Describe style language without copying third-party art"
+  readability_priority: "top-down-first"
+
+camera:
+  primary_view: "low top-down"
+  secondary_views:
+    - "high top-down"
+  notes: "Billboard readability required in 3D slice"
+
+sprite_sheet:
+  source_canvas:
+    width: 64
+    height: 64
+  output_background: "transparent"
+  directions:
+    count: 4
+    order:
+      - "south"
+      - "west"
+      - "east"
+      - "north"
+    death_shared_direction: "south"
+    death_direction_override_reason: "" # keep empty for south default; required when death_shared_direction is not south
+  states:
+    idle:
+      min_frames: 4
+      target_frames: 4
+    walk:
+      min_frames: 6
+      target_frames: 6
+    attack:
+      min_frames: 6
+      target_frames: 6
+    death:
+      directions: 1
+      min_frames: 4
+      target_frames: 6
+      max_frames: 8
+
+combat_space:
+  target_world_hitbox_px:
+    width: 32
+    height: 32
+  collision_profile: "standard"
+
+palette:
+  outline: "#0B1220"
+  base_primary: "#000000"
+  base_secondary: "#000000"
+  accent: "#000000"
+  shadow: "#000000"
+  highlight: "#000000"
+  shading_bands_max: 3
+
+production_prompts:
+  base_generation_prompt: "Replace with production prompt"
+  inpaint_prompt: "Replace with correction prompt"
+  rotate_prompt: "Replace with directional consistency prompt"
+  negative_prompt: "blurry, noisy, low-contrast silhouette, extra limbs"
+
+pipeline:
+  model_primary: "pixflux"
+  model_refine: "inpaint"
+  model_optional_direction: "rotate"
+  async_job_poll_seconds: 5
+
+acceptance:
+  silhouette_clear_at_zoom: false
+  palette_consistent_across_states: false
+  four_directions_consistent: false
+  attack_readability_clear: false
+  death_pose_readable: false
+  transparent_background_clean: false
+  two_d_parity_checked: false
+  three_d_parity_checked: false
+
+notes:
+  - "Document decisions and unresolved risks here"

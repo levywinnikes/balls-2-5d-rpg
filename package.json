@@ -21,6 +21,7 @@
     "lucide-react": "^0.562.0",
     "phaser": "^3.90.0",
     "phaser3-rex-plugins": "^1.80.20",
+    "pngjs": "^7.0.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-rnd": "^10.5.2",
@@ -47,7 +48,11 @@
     "dist": "npm run build && electron-builder",
     "build-installer": "npm run build && electron-builder --win nsis",
     "editor-server": "node scripts/map-server.js",
-    "editor": "concurrently \"cross-env REACT_APP_EDITOR=true npm run web\" \"npm run editor-server\""
+    "editor": "concurrently \"cross-env REACT_APP_EDITOR=true npm run web\" \"npm run editor-server\"",
+    "generate:city-layers": "node scripts/generate-city-layers-map.js",
+    "generate:giant-3d": "node scripts/generate-giant-3d-map.js",
+    "generate:hero-sprite": "node scripts/generate-hero-functional-sprite.js",
+    "generate:pixellab-sprite": "node scripts/generate-pixellab-sprite.js"
   },
   "build": {
     "appId": "com.balls.balls-2-5d-rpg",

@@ -1,30 +1,37 @@
 ﻿{
-  "updatedAt": "2026-04-23T16:10:00Z",
-  "task": "Otimizar renderizacao visual no runtime 3D para desenhar apenas o necessario por modo de camera sem afetar simulacao",
+  "updatedAt": "2026-04-30T21:05:00Z",
+  "task": "Adicionar exemplos validos e invalidos de override de direcao de morte e revisar pendencias antes de commit",
   "contractsRead": [
-    "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
-    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
-    "docs/contracts/MAP_SYSTEM_CONTRACT.md"
+    "docs/contracts/SPRITE_PIPELINE_CONTRACT.md"
   ],
-  "understanding": "Ajustar distancia visual de render/chunks por modo de camera para reduzir draw desnecessario, preservando eventos e simulacao fora da tela.",
-  "riskConflict": "Raio visual baixo demais pode gerar pop-in no topdown e prejudicar leitura; preciso manter margem minima para transicao suave.",
-  "objectiveQuestion": "Sem bloqueio: aplicar perfil dinamico (topdown enxuto, primeira pessoa moderado) e clamp de far plane para reduzir custo visual.",
+  "understanding": "Documentar exemplos praticos de quando override de death direction e permitido ou proibido e fechar o fluxo de decisao para o time.",
+  "riskConflict": "Sem exemplos concretos, a regra de override pode continuar subjetiva e gerar divergencias entre arte e integracao.",
+  "objectiveQuestion": "Sem bloqueio: incluir exemplos curto de override valido/invalido em docs operacionais e concluir com commit.",
   "documentationIndexChecked": true,
   "impactedModules": [
-    "three-d-runtime",
-    "player-state"
+    "global-workflow",
+    "architecture-map"
   ],
   "docsRead": [
-    "docs/THREE_D_INTEGRATION_BLUEPRINT.md",
-    "docs/contracts/PERSPECTIVE_MODE_CONTRACT.md",
-    "docs/contracts/MAP_SYSTEM_CONTRACT.md"
+    "docs/AI_READ_FIRST.md",
+    "docs/AI_RUNBOOK.md",
+    "docs/VALIDATION_MATRIX.md",
+    "docs/ARCHITECTURE_MAP.md",
+    "docs/ARCHITECTURE_OVERVIEW.md",
+    "docs/contracts/SPRITE_PIPELINE_CONTRACT.md"
   ],
   "docsCoverageStatus": "covered",
   "divergenceDetected": false,
   "divergenceNotes": "",
-  "docUpdatesRequired": [],
+  "docUpdatesRequired": [
+    "docs/sprites/README.md",
+    "docs/sprites/templates/sprite-spec.template.yaml",
+    "docs/sprites/enemies/goblin-lanceiro.spec.yaml"
+  ],
   "docUpdatesCompleted": true,
   "validationResults": {
-    "pending": true
+    "pending": false,
+    "notes": "Task classificada como docs-only; examples de override adicionados e diagnostics markdown/yaml sem erros.",
+    "markdownDiagnostics": "pass"
   }
 }

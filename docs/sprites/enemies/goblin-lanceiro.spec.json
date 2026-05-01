@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "id": "goblin_lanceiro",
+  "name": "Goblin Spearman",
+  "category": "enemy",
+  "family": "goblin",
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 64,
+      "height": 64
+    }
+  },
+  "pipeline": {
+    "model_primary": "pixflux"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "top-down low angle pixel art goblin spearman, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+    "negative_prompt": "blurry, noisy, muddy colors, extra limbs, broken spear, inconsistent proportions"
+  }
+}

@@ -1,0 +1,103 @@
+version: 1
+id: "goblin_lanceiro"
+name: "Goblin Spearman"
+category: "enemy"
+family: "goblin"
+
+visual_direction:
+  style_keywords:
+    - "vibrant"
+    - "clean silhouette"
+    - "adventure readable"
+  inspiration_note: "Kurzgesagt-inspired clarity only, adapted for game pixel readability"
+  readability_priority: "top-down-first"
+
+camera:
+  primary_view: "low top-down"
+  secondary_views:
+    - "high top-down"
+  notes: "Main silhouette cue is diagonal spear and oversized head"
+
+sprite_sheet:
+  source_canvas:
+    width: 64
+    height: 64
+  output_background: "transparent"
+  directions:
+    count: 4
+    order:
+      - "south"
+      - "west"
+      - "east"
+      - "north"
+    death_shared_direction: "south"
+    death_direction_override_reason: ""
+  states:
+    idle:
+      min_frames: 4
+      target_frames: 4
+    walk:
+      min_frames: 6
+      target_frames: 6
+    attack:
+      min_frames: 6
+      target_frames: 6
+    death:
+      directions: 1
+      min_frames: 4
+      target_frames: 6
+      max_frames: 8
+
+combat_space:
+  target_world_hitbox_px:
+    width: 30
+    height: 30
+  collision_profile: "standard-light"
+
+palette:
+  outline: "#0B1220"
+  base_primary: "#5FAF3C"
+  base_secondary: "#10B8B8"
+  accent: "#F28C28"
+  shadow: "#1F3A5F"
+  highlight: "#FFD166"
+  shading_bands_max: 3
+
+shape_language:
+  head_to_body_ratio: "1:1.4"
+  shoulders: "narrow"
+  weapon_pose: "spear diagonal with forward readability"
+  walk_cycle_focus: "spear swing + torso bob"
+  attack_cycle_focus: "forward thrust with clear keyframe"
+  death_cycle_focus: "single-direction side fall with strong silhouette readability"
+
+production_prompts:
+  base_generation_prompt: "top-down low angle pixel art goblin spearman, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64"
+  inpaint_prompt: "preserve palette and silhouette, refine spear readability, clean edges, improve frame consistency"
+  rotate_prompt: "keep same character identity and proportions, consistent weapon length and head size across four directions"
+  negative_prompt: "blurry, noisy, muddy colors, extra limbs, broken spear, inconsistent proportions"
+
+pipeline:
+  model_primary: "pixflux"
+  model_refine: "inpaint"
+  model_optional_direction: "rotate"
+  async_job_poll_seconds: 5
+
+acceptance:
+  silhouette_clear_at_zoom: true
+  palette_consistent_across_states: true
+  four_directions_consistent: true
+  attack_readability_clear: true
+  death_pose_readable: true
+  transparent_background_clean: true
+  two_d_parity_checked: false
+  three_d_parity_checked: false
+
+integration_notes:
+  enemy_registry_id: "goblin"
+  expected_scale_hint: "1.3 to 1.5 in legacy 2D runtime until full sprite migration"
+  three_d_visual_profile_alignment: "update ThreeDEnemyVisualRegistry color profile after final art approval"
+
+notes:
+  - "Pilot spec for first full pipeline run"
+  - "Use as baseline for elite and miniboss variants"
