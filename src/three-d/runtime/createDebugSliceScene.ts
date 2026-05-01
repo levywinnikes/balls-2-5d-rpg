@@ -1777,10 +1777,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           const isRoofTile = tileId.includes("roof");
           const isStairTile = (tileDef as any)?.stairDir !== undefined;
 
+          // Use LEVEL_HEIGHT_UNITS - 0.001 as default wall height to leave a
+          // sub-millimetre gap between the top face of level N and the bottom
+          // face of level N+1. Without this gap the two faces are coplanar and
+          // the GPU alternates between them each frame (z-fighting / shimmer).
+          const DEFAULT_WALL_H = LEVEL_HEIGHT_UNITS - 0.001;
           const tileHeight = isRoofTile
-            ? Math.max(0.4, tileDef?.height ?? LEVEL_HEIGHT_UNITS)
+            ? Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H)
             : blocking
-            ? Math.max(0.4, tileDef?.height ?? LEVEL_HEIGHT_UNITS)
+            ? Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H)
             : Math.max(0.03, tileDef?.height ?? 0.08);
 
           // Resolve material key on main thread (getTileMaterial caches anyway)
