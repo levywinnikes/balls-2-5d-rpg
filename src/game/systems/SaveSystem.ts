@@ -400,7 +400,7 @@ export class SaveSystem {
 
   private createInitialSaveData(name: string): GameSaveData {
     return {
-      map: "newmap",
+      map: "city_3d_multi",
       currentLevel: "0",
       playerPos: { x: 320, y: 320 },
       playerState: {
@@ -440,5 +440,48 @@ export class SaveSystem {
 
   public hasSaveData(): boolean {
     return !!this.memorySaveData;
+  }
+
+  /**
+   * saveGameDirect — save path for the 3D engine.
+   * Does NOT require a Phaser.Scene; caller provides position/level/map context.
+   * All player progression comes from PlayerState.exportSnapshot().
+   */
+  public async saveGameDirect(context: {
+    map: string;
+    currentLevel: string;
+    playerPos: { x: number; y: number };
+    deadEnemies?: DeadEnemy[];
+    activeEnemies?: ActiveEnemyState[];
+  }): Promise<boolean> {
+    const playerState = PlayerState.getInstance();
+    const characterName =
+      playerState.getName() || this.currentCharacterName || "Unknown";
+    this.currentCharacterName = characterName;
+
+    const saveData: GameSaveData = {
+      map: context.map,
+      currentLevel: context.currentLevel,
+      playerPos: context.playerPos,
+      playerState: playerState.exportSnapshot(),
+      deadEnemies: context.deadEnemies ?? [],
+      activeEnemies: context.activeEnemies ?? [],
+      timestamp: Date.now(),
+      version: this.SAVE_VERSION,
+    };
+
+    if (this.isNative()) {
+      const result = await window.electronAPI!.saveGame(characterName, saveData);
+      if (result.success) {
+        console.log(`[SaveSystem] 3D save OK: ${characterName}`);
+        return true;
+      }
+      console.error(`[SaveSystem] 3D save failed:`, result.error);
+      return false;
+    } else {
+      this.warnBrowserFallback("saveGameDirect");
+      this.memorySaveData = saveData;
+      return true;
+    }
   }
 }

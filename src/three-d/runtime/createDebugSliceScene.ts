@@ -42,12 +42,14 @@ import {
 } from "./ThreeDEnemyVisualRegistry";
 import { createHeroParitySpriteMaterial } from "./TwoDParitySpriteFactory";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
+import { SaveSystem } from "../../game/systems/SaveSystem";
 
 type SliceDroppedItem = DroppedItemData & { level: string };
 
 type SliceRuntime = {
   engine: Engine;
   scene: Scene;
+  save: () => Promise<boolean>;
   dispose: () => void;
 };
 
@@ -3567,6 +3569,41 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
   });
 
+  // ── Fase 2 (2.2): SaveSystem instance for 3D save/load ─────────────────────
+  // SaveSystem constructor still requires a Phaser.Scene for legacy 2D flows.
+  // For 3D we use saveGameDirect() which bypasses the Phaser dependency.
+  // We pass a minimal stub so the constructor doesn't crash.
+  const saveSystem = new SaveSystem({} as any);
+  let autoSaveTimer = 0;
+  const AUTO_SAVE_INTERVAL = 60; // seconds
+
+  // Periodic auto-save (2.4)
+  scene.onBeforeRenderObservable.add(() => {
+    autoSaveTimer += engine.getDeltaTime() / 1000;
+    if (autoSaveTimer >= AUTO_SAVE_INTERVAL) {
+      autoSaveTimer = 0;
+      void saveSystem.saveGameDirect({
+        map: sliceMapName,
+        currentLevel: activeLevel,
+        playerPos: {
+          x: Math.round(player.position.x * 32 * 100) / 100,
+          y: Math.round(player.position.z * 32 * 100) / 100,
+        },
+      });
+    }
+  });
+
+  // ── save() — callable from UI (F5, system menu) ──────────────────────────────
+  const save = () =>
+    saveSystem.saveGameDirect({
+      map: sliceMapName,
+      currentLevel: activeLevel,
+      playerPos: {
+        x: Math.round(player.position.x * 32 * 100) / 100,
+        y: Math.round(player.position.z * 32 * 100) / 100,
+      },
+    });
+
   engine.runRenderLoop(() => {
     scene.render();
   });
@@ -3574,6 +3611,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   return {
     engine,
     scene,
+    save,
     dispose: () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);

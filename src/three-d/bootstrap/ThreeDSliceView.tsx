@@ -9,6 +9,7 @@ import { useWindowSystem } from "../../ui/components/window/WindowContext";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 import { createDebugSliceScene } from "../runtime/createDebugSliceScene";
 import { MainMenuUI } from "../../ui/screens/MainMenuUI";
+import { t_game } from "../../game/i18n/translations";
 
 // Default map for new 3D games. Will become the world map in Phase 3.
 const DEFAULT_3D_MAP = "city_3d_multi";
@@ -203,6 +204,19 @@ export function ThreeDSliceView() {
       if (key === "escape" && isWindowOpen("hero_menu")) {
         event.preventDefault();
         closeWindow("hero_menu");
+      }
+
+      // F5 — manual save (2.5)
+      if (event.key === "F5") {
+        event.preventDefault();
+        if (runtimeRef.current?.save) {
+          void runtimeRef.current.save().then((ok) => {
+            PlayerState.getInstance().emit("uiNotification", {
+              type: ok ? "success" : "error",
+              message: ok ? t_game("msg_quick_saved") : t_game("msg_save_failed"),
+            });
+          });
+        }
       }
     };
 
