@@ -1781,11 +1781,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           // sub-millimetre gap between the top face of level N and the bottom
           // face of level N+1. Without this gap the two faces are coplanar and
           // the GPU alternates between them each frame (z-fighting / shimmer).
+          // Also CLAMP any explicit tileDef.height to this maximum: map heights
+          // were authored for the 2D renderer and can exceed 2.0 (e.g. "wal":4.5),
+          // causing level 0 tiles to visually invade level 1 in 3D.
           const DEFAULT_WALL_H = LEVEL_HEIGHT_UNITS - 0.001;
           const tileHeight = isRoofTile
-            ? Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H)
+            ? Math.min(Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H), DEFAULT_WALL_H)
             : blocking
-            ? Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H)
+            ? Math.min(Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H), DEFAULT_WALL_H)
             : Math.max(0.03, tileDef?.height ?? 0.08);
 
           // Resolve material key on main thread (getTileMaterial caches anyway)
