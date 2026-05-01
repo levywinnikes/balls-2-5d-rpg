@@ -146,27 +146,32 @@ Todo gerador que emite tiles `rof` deve verificar:
 ### Casa 1 Andar (mínimo)
 ```
 Level 0 (todos os tiles da casa são aqui):
+
   bwl bwl bwl bwl bwl
   bwl flr flr flr bwl
-  bwl flr flr flr bwl
-  bwl flr flr flr bwl
-  bwl bwl [door] bwl bwl   ← door = tile de chão (cob/grs), não muro
-  rof rof  rof  rof rof    ← mesmo level, mesma posição X/Z da casa
+  bwl flr flr flr bwl   ← interior navegável
+  bwl bwl [dr] bwl bwl  ← door = 1 tile bwl removido + substituído por cob/grs
+  rof rof  rof  rof rof ← telhado cobre TODA a planta (paredes + interior)
 ```
-- Porta: remova 1 tile `bwl` da parede sul e substitua por `cob`/`grs`
-- Telhado cobre TODA a planta (incluindo paredes externas)
-- Escada **dentro** da casa → `stu` em level 0 → entra em level 1
+- Porta: remova 1 tile `bwl` da parede e substitua por `cob`/`grs`
+- **Sem escada** — casa 1 andar não tem `stu`
+- Level 1 em cima: apenas `...` (void)
 
 ### Casa 2 Andares
 ```
-Level 0: bwl bwl bwl → interior flr → door em sul
-         [stu] em algum tile interno
+Level 0 — Térreo:
+  bwl bwl bwl bwl bwl
+  bwl flr flr flr bwl
+  bwl flr stu flr bwl   ← stu: jogador sobe pressionando W (norte)
+  bwl flr flr flr bwl   ← 1 tile livre ao sul da escada (abordagem)
+  bwl bwl [dr] bwl bwl  ← porta ao sul
 
-Level 1 (2º andar):
-         bwl bwl bwl (mesmas posições X/Z das paredes do térreo)
-         flr flr flr (interior)
-         [std] na posição do stu de level 0
-         rof rof rof (mesmas posições X/Z que as paredes de level 1)
+Level 1 — Segundo andar:
+  bwl bwl bwl bwl bwl
+  bwl flr flr flr bwl
+  bwl flr std flr bwl   ← std: MESMA posição X/Z do stu do level 0
+  bwl flr flr flr bwl
+  rof rof rof rof rof   ← telhado cobre este andar (mesma posição das paredes de level 1)
 
 Level 2: apenas ... (void)
 ```
@@ -239,10 +244,131 @@ Todo mapa do mundo principal deve ter esses tiles no `tileAtlas`. Símbolo → r
 
 ## 7. Regras de Escadas (Stairs)
 
+### Como funciona no runtime (3D)
+A animação de escada é **walkthrough** — o personagem caminha diagonalmente (X/Z + Y simultâneo) durante 1,5 segundos. Não é um elevador. O personagem move na direção que o jogador estava se movendo ao ativar a escada.
+
+- `stairAnimDuration = 1.5s`
+- `STAIR_HORIZ_SPEED = 1.0` tile/s → ~1,5 tiles de avanço horizontal durante a subida
+- O level switch ocorre no ponto médio da animação (progress = 0.5)
+- Movimento do jogador fica bloqueado durante a animação
+
+### Visual (buildStairMesh)
+O tile `stu`/`std` gera automaticamente um mesh de 4 degraus físicos (não um piso plano):
+- Degrau 0 = mais ao sul (+Z), mais baixo (baseY + riserH/4)
+- Degrau 3 = mais ao norte (-Z), mais alto (baseY + LEVEL_HEIGHT_UNITS)
+- Todos os degraus compartilham o mesmo material colorido (cor areia/madeira)
+
+### Regras de layout no mapa
 1. **Par obrigatório:** cada `stu` em level `N` deve ter `std` na **mesma posição X/Z** em level `N+1`.
-2. **Não empilhar:** nunca `stu` imediatamente adjacente a `std` no mesmo level (causa loop de transição).
-3. **Espaço de chegada:** os 4 tiles ao redor do `std` de chegada devem ser navegáveis (não `wal`/`bwl`).
-4. **Posição dentro do contexto:** escadas sempre dentro ou imediatamente adjacentes à estrutura que conectam.
+2. **Corredor mínimo:** a escada deve ter pelo menos **2 tiles de chão livre** em frente (na direção que o jogador sobe) para o personagem completar o avanço horizontal sem colidir com a parede.
+3. **Não empilhar:** nunca `stu` imediatamente adjacente a `std` no mesmo level (causa loop).
+4. **Espaço de chegada:** os 4 tiles ao redor do `std` de chegada devem ser navegáveis.
+5. **Orientação recomendada:** jogador sobe caminhando para **norte** (pressionando W). Posicione a escada com a porta/entrada ao sul.
+
+### Anatomia de uma escada interna (casa 2 andares)
+```
+Level 0 — Planta baixa (N = norte, S = sul, E = leste, W = oeste):
+
+    W───────────────E
+    │  bwl bwl bwl  │  ← parede norte
+    │  flr flr flr  │
+    │  flr stu flr  │  ← stu: jogador pressiona W aqui para subir
+    │  flr flr flr  │  ← 2 tiles de chão livre ao sul da escada (espaço de abordagem)
+    │  bwl [dr] bwl │  ← porta ao sul
+    S───────────────S
+
+Level 1 — Segundo andar (mesma planta):
+
+    W───────────────E
+    │  bwl bwl bwl  │
+    │  flr flr flr  │
+    │  flr std flr  │  ← std na mesma posição X/Z do stu de level 0
+    │  flr flr flr  │  ← personagem chega aqui após subir
+    │  rof rof rof  │  ← telhado cobre a parede sul (mesma posição, level 1)
+    S───────────────S
+
+Level 2: apenas ... (void)
+```
+
+---
+
+## 8. Anatomia de Entradas de Caverna
+
+Uma caverna no mundo tem **duas partes**: a boca visível na superfície (level 0) e o interior subterrâneo (level -1 em diante).
+
+### Boca de caverna (level 0)
+```
+Ao redor: bioma floresta ou montanha (grs + tre + rok)
+
+    ...  rok  rok  rok  rok  ...
+    ...  rok  cwl  cwl  rok  ...
+    ...  cwl  hol  cwl  ...  ...   ← hol = queda automática para level -1
+    ...  rok  cwl  cwl  rok  ...
+    ...  rok  rok  rok  rok  ...
+```
+- `rok` = pedras/rochas em volta (blocking)
+- `cwl` = paredes de caverna formando a "moldura" da entrada
+- `hol` = buraco de queda automática (transition: "down") — o tile **não tem mesh de degraus**, é visualmente escuro
+- Alternativa: `std` em vez de `hol` para entrada **voluntária** (jogador right-clica)
+
+### Quando usar `hol` vs `std` na entrada
+| Tipo | Tile | Ativação | Uso |
+|------|------|----------|-----|
+| Buraco no chão | `hol` | Automático ao pisар | Poço, fenda, abismo, cova de dungeon |
+| Escada/Rampa para baixo | `std` | Right-click | Escada de pedra, rampa, descida controlada |
+| Descida de caverna com degraus | `std` | Right-click | Entrada de gruta com rampa esculpida na rocha |
+
+### Interior da caverna (level -1)
+```
+Fill padrão: cwl (paredes de caverna — não usar grs nem ...)
+
+    cwl cwl cwl cwl cwl cwl cwl
+    cwl cfl cfl cfl cfl cfl cwl   ← corredor mínimo 3 tiles largura
+    cwl cfl stu cfl cfl cfl cwl   ← stu = escada de volta à superfície (mesmo X/Z do hol/std acima)
+    cwl cfl cfl cfl cfl cfl cwl
+    cwl cwl cwl cwl cwl cwl cwl
+```
+- Nunca usar `...` (void) como fill em cavernas — só em levels aéreos
+- `wtr` em poças isoladas (máx. 20% do chão de uma caverna)
+- Inimigos subterrâneos: morcegos, slimes, esqueletos
+
+---
+
+## 9. Anatomia de Entradas de Dungeon
+
+Dungeons têm **aparência construída** (não natural), geralmente com portão de pedra ou arco.
+
+### Entrada de dungeon (level 0)
+```
+Ao redor: bioma campo ou floresta
+
+    ...  grs  grs  grs  grs  ...
+    ...  grs  dwl  dwl  grs  ...
+    ...  dwl  arc  dwl  ...  ...   ← arc = arco de entrada (blocking, alto = 3.8)
+    ...  grs  std  grs  ...  ...   ← std DENTRO do arco — jogador desce voluntariamente
+    ...  grs  grs  grs  grs  ...
+
+Opcional: 2 pilares (pil) flanqueando o arco:
+    ...  pil  arc  pil  ...
+```
+- O `std` fica DENTRO da silhueta do arco (mesma posição Z, 1 tile ao sul do `arc`)
+- `dwl` forma as paredes curtas que sustentam o arco
+- Sinalização visual: textura escura + possivelmente inimigos ao redor
+
+### Interior da dungeon (level -1)
+```
+Fill padrão: dwl (paredes de dungeon — pedra escura)
+
+    dwl dwl dwl dwl dwl dwl dwl
+    dwl dfn dfn dfn dfn dfn dwl   ← dfn = piso de dungeon (pedra fria)
+    dwl dfn stu dfn dfn dfn dwl   ← stu = volta à superfície
+    dwl dfn dfn dfn dwl dfn dwl   ← can have interior walls/rooms
+    dwl dwl dwl dwl dwl dwl dwl
+```
+- Mínimo 3 tiles de largura em corredores
+- Salas: 5×5 a 8×8, conectadas por corredores de 3 de largura
+- Armadilhas: `hol` em salas com buracos visuais (queda para level -2)
+- Inimigos: esqueletos, orcs guardas, magos sombrios
 
 ---
 

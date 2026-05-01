@@ -1003,6 +1003,60 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return group;
   };
 
+  // Build a 4-step staircase mesh for a single 1×1-tile footprint.
+  // Steps run south→north (low at +Z, high at -Z) matching the default wall
+  // orientation. The total rise equals LEVEL_HEIGHT_UNITS so the top step
+  // visually aligns with the floor of the level above.
+  const buildStairMesh = (
+    name: string,
+    tx: number,
+    tz: number,
+    baseY: number,
+  ): Mesh => {
+    const mesh = new Mesh(name, scene);
+    const STEP_COUNT = 4;
+    const stepDepth = 1.0 / STEP_COUNT;          // Z depth per step  (0.25)
+    const stepRise = LEVEL_HEIGHT_UNITS / STEP_COUNT; // Y rise per step (0.5)
+
+    const allPositions: number[] = [];
+    const allIndices: number[] = [];
+
+    for (let i = 0; i < STEP_COUNT; i++) {
+      // Step 0 = southernmost (+Z side), lowest
+      // Step 3 = northernmost (-Z side), highest
+      const x0 = tx;
+      const x1 = tx + 1;
+      const z0 = tz + (STEP_COUNT - 1 - i) * stepDepth; // north edge of this step
+      const z1 = tz + (STEP_COUNT - i) * stepDepth;     // south edge of this step
+      const y0 = baseY;
+      const y1 = baseY + (i + 1) * stepRise;
+
+      const base = allPositions.length / 3;
+      // 8 vertices — shared per step (ComputeNormals averages them; fine for steps)
+      allPositions.push(
+        x0, y0, z1,  x1, y0, z1,  x1, y0, z0,  x0, y0, z0, // bottom
+        x0, y1, z1,  x1, y1, z1,  x1, y1, z0,  x0, y1, z0, // top
+      );
+      allIndices.push(
+        base+4, base+7, base+6,  base+4, base+6, base+5, // top face (visible)
+        base+0, base+1, base+2,  base+0, base+2, base+3, // bottom (hidden)
+        base+0, base+4, base+5,  base+0, base+5, base+1, // south riser (+Z)
+        base+3, base+2, base+6,  base+3, base+6, base+7, // north face
+        base+1, base+5, base+6,  base+1, base+6, base+2, // east side
+        base+0, base+3, base+7,  base+0, base+7, base+4, // west side
+      );
+    }
+
+    const normals: number[] = new Array(allPositions.length).fill(0);
+    VertexData.ComputeNormals(allPositions, allIndices, normals);
+    const vd2 = new VertexData();
+    vd2.positions = allPositions;
+    vd2.indices = allIndices;
+    vd2.normals = normals;
+    vd2.applyToMesh(mesh);
+    return mesh;
+  };
+
   // Build (or skip) one 16×16-tile chunk at chunk-grid position (cx, cy).
   // lod 0 = full detail, 1 = walls-only, 2 = ground-only
   const getRenderableLevels = (): string[] => {
@@ -1139,6 +1193,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
             const tileId = (tileDef?.id || symbol || "").toLowerCase();
             const isRoofTile = tileId.includes("roof");
+            const isStairTile = (tileDef as any)?.stairDir !== undefined;
 
             if (isRoofTile) {
               // Pitched gable roof sitting on top of standard walls
@@ -1156,6 +1211,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
               roofMeshes.add(roofMesh); // S12-T2: register for coverage-fade
               registerMeshForLevel(renderLevel, roofMesh);
               meshes.push(roofMesh);
+            } else if (isStairTile) {
+              // 4-step staircase mesh — base sits on the level floor, top step
+              // aligns with the floor of the next level (LEVEL_HEIGHT_UNITS above).
+              const stairMesh = buildStairMesh(
+                `ct-${renderLevel}-${key}-${x}-${y}`,
+                x,
+                y,
+                levelOffsetY,
+              );
+              stairMesh.material = getTileMaterial(symbol, tileDef, "#c4a07a");
+              stairMesh.parent = mapRoot;
+              registerMeshForLevel(renderLevel, stairMesh);
+              meshes.push(stairMesh);
             } else {
               const tileHeight = blocking
                 ? Math.max(0.4, tileDef?.height ?? 2.2)
@@ -2642,13 +2710,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let chunkUpdateTimer = 0;
   let stairCooldown = 0; // seconds until next level transition is allowed
   let stairAnimTimer = 0; // seconds elapsed during stair animation
-  let stairAnimDuration = 2.0; // total time to climb/descend stairs
+  let stairAnimDuration = 1.5; // total time to walk up/down stairs (reduced from 2.0 — feels more natural)
   let stairAnimStartY = 0;
   let stairAnimTargetY = 0;
   const CHUNK_UPDATE_INTERVAL = 0.2;
   let stairAnimTargetLevel = "0"; // target level to switch to after animation
   let isStairAnimActive = false; // true only while a stair transition is playing
   let pendingStairInteract = false; // set by right-click; consumed by stair transition gate
+  // Direction the player walks during stair animation (unit vector in XZ).
+  // Captured from player movement at trigger time so the character visually
+  // walks through the staircase instead of floating like an elevator.
+  let stairAnimDirX = 0;
+  let stairAnimDirZ = -1; // default: north
+  const STAIR_HORIZ_SPEED = 1.0; // tiles/second of forward movement during climb
 
   const requestPointerLockIfPossible = () => {
     if (!isFirstPerson || document.pointerLockElement === canvas) {
@@ -3367,6 +3441,31 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         stairAnimTargetLevel = stairTarget.targetLevel;
         stairAnimTargetY =
           levelToWorldY(stairTarget.targetLevel) + PLAYER_GROUND_OFFSET;
+
+        // Capture movement direction so the character walks *through* the stairs.
+        // Prefer the key the player is currently holding; fall back to the vector
+        // from the player toward the stair tile center.
+        let dirX = 0;
+        let dirZ = 0;
+        if (pressedKeys.has("w") || pressedKeys.has("arrowup")) dirZ -= 1;
+        if (pressedKeys.has("s") || pressedKeys.has("arrowdown")) dirZ += 1;
+        if (pressedKeys.has("a") || pressedKeys.has("arrowleft")) dirX -= 1;
+        if (pressedKeys.has("d") || pressedKeys.has("arrowright")) dirX += 1;
+        const keyDist = Math.sqrt(dirX * dirX + dirZ * dirZ);
+        if (keyDist > 0) {
+          stairAnimDirX = dirX / keyDist;
+          stairAnimDirZ = dirZ / keyDist;
+        } else {
+          // No key held — use vector toward stair tile center
+          const cx = Math.floor(player.position.x) + 0.5;
+          const cz = Math.floor(player.position.z) + 0.5;
+          const fdx = cx - player.position.x;
+          const fdz = cz - player.position.z;
+          const fd = Math.sqrt(fdx * fdx + fdz * fdz);
+          stairAnimDirX = fd > 0.05 ? fdx / fd : 0;
+          stairAnimDirZ = fd > 0.05 ? fdz / fd : -1;
+        }
+
         isStairAnimActive = true;
       }
     }
@@ -3382,6 +3481,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       player.position.y =
         stairAnimStartY + (stairAnimTargetY - stairAnimStartY) * easeProgress;
+
+      // Walk forward through the staircase (horizontal movement during climb).
+      // This gives the "walking up step by step" feel instead of a vertical elevator.
+      player.position.x += stairAnimDirX * STAIR_HORIZ_SPEED * deltaSeconds;
+      player.position.z += stairAnimDirZ * STAIR_HORIZ_SPEED * deltaSeconds;
 
       // At midpoint: load target level geometry
       if (
