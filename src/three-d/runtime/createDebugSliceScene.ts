@@ -43,6 +43,11 @@ import {
 import { createHeroParitySpriteMaterial } from "./TwoDParitySpriteFactory";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
 import { SaveSystem } from "../../game/systems/SaveSystem";
+import type {
+  GeometryWorkerRequest,
+  GeometryWorkerResponse,
+  GeometryGroupBuffer,
+} from "../../workers/geometry.worker";
 
 type SliceDroppedItem = DroppedItemData & { level: string };
 
@@ -51,6 +56,128 @@ type SliceRuntime = {
   scene: Scene;
   save: () => Promise<boolean>;
   dispose: () => void;
+};
+
+type Slice3DLogSample = {
+  ts: number;
+  elapsedSec: number;
+  activeLevel: string;
+  player: {
+    x: number;
+    y: number;
+    z: number;
+    tileX: number;
+    tileZ: number;
+    chunkX: number;
+    chunkZ: number;
+  };
+  perf: {
+    fps: number;
+    frameMs: number;
+    drawCalls: number;
+    activeMeshes: number;
+    totalMeshes: number;
+    totalTextures: number;
+    totalVertices: number;
+    jsHeapUsedMb?: number;
+    jsHeapTotalMb?: number;
+    heapDeltaMb?: number;
+  };
+  chunks: {
+    loaded: number;
+    loading: number;
+    pendingCandidates: number;
+    pendingUnloads: number;
+    builtThisTick: number;
+    unloadedThisTick: number;
+  };
+  enemies: {
+    activeOnLevel: number;
+    visibleOnLevel: number;
+    aiActiveOnLevel: number;
+    selectedEnemyUid: string | null;
+  };
+  items: {
+    streamedDroppedItems: number;
+    hasRealDroppedItems: boolean;
+  };
+  pathfinding: {
+    requests: number;
+    success: number;
+    failed: number;
+    errors: number;
+    inFlight: number;
+    avgMs: number;
+    maxMs: number;
+    lastMs: number;
+    lastPathLen: number;
+  };
+};
+
+type Slice3DLogEvent = {
+  ts: number;
+  elapsedSec: number;
+  type: string;
+  payload?: Record<string, unknown>;
+};
+
+type Slice3DSessionLog = {
+  version: 1;
+  mapName: string;
+  startedAt: string;
+  sessionId: string;
+  samples: Slice3DLogSample[];
+  events: Slice3DLogEvent[];
+  counters: {
+    samplesDropped: number;
+    eventsDropped: number;
+    exportCount: number;
+  };
+};
+
+type Slice3DHotspot = {
+  key: string;
+  level: string;
+  chunkX: number;
+  chunkZ: number;
+  samples: number;
+  avgFrameMs: number;
+  avgDrawCalls: number;
+  avgActiveMeshes: number;
+  avgVertices: number;
+  maxHeapUsedMb: number;
+  maxPathMs: number;
+  score: number;
+};
+
+type Slice3DSummary = {
+  sampleCount: number;
+  eventCount: number;
+  uptimeSec: number;
+  frameMs: {
+    p50: number;
+    p95: number;
+    p99: number;
+  };
+  pathMs: {
+    p50: number;
+    p95: number;
+    p99: number;
+  };
+  heap: {
+    currentMb?: number;
+    slopeMbPerSec?: number;
+    unloadRecoveryFailures: number;
+  };
+  chunk: {
+    avgPendingCandidates: number;
+    avgPendingUnloads: number;
+  };
+  leakRisk: {
+    level: "low" | "medium" | "high";
+    reasons: string[];
+  };
+  sessionHealthScore: number;
 };
 
 type TopDownCameraPreset = "safe" | "cinematic";
@@ -355,17 +482,436 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const CHUNK_SIZE = 16; // tiles per chunk side
   const TOPDOWN_DRAW_RADIUS_CHUNKS = 3;
   const FIRST_PERSON_DRAW_RADIUS_CHUNKS = 4;
-  const TOPDOWN_CHUNK_BUILD_BUDGET_PER_TICK = 6;
-  const FIRST_PERSON_CHUNK_BUILD_BUDGET_PER_TICK = 8;
+  // Build 2 chunks per tick in top-down and 3 in first-person.
+  // Lower values distribute geometry work across more frames, reducing stalls
+  // from ~1600ms to ≤300ms per tick (tested 2026-05-01 via runtime logs).
+  const TOPDOWN_CHUNK_BUILD_BUDGET_PER_TICK = 2;
+  const FIRST_PERSON_CHUNK_BUILD_BUDGET_PER_TICK = 3;
   const CHUNK_UNLOAD_BUDGET_PER_TICK = 8; // max chunks to unload each update tick
+  let isFirstPerson = false;
+  const DROP_SYNC_INTERVAL = 0.2;
+  const DROPPED_ITEM_STREAM_RADIUS_UNITS =
+    CHUNK_SIZE * (TOPDOWN_DRAW_RADIUS_CHUNKS + 2);
   const chunkMeshes = new Map<string, Mesh[]>();
   const chunkLoading = new Set<string>();
+
+  // ─── Geometry Worker ────────────────────────────────────────────────────────
+  // Chunk geometry is computed off the main thread to eliminate frame stalls.
+  // The worker returns transferable Float32Array/Uint32Array buffers; the main
+  // thread only creates Mesh objects and uploads to GPU (<1ms per chunk).
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const geometryWorker: Worker = new Worker(
+    new URL("../../workers/geometry.worker.ts", import.meta.url),
+  );
+  // Pending requests: requestId → resolve callback
+  const pendingChunkRequests = new Map<
+    string,
+    (response: GeometryWorkerResponse) => void
+  >();
+  geometryWorker.onmessage = (evt: MessageEvent<GeometryWorkerResponse>) => {
+    const { requestId } = evt.data;
+    const resolve = pendingChunkRequests.get(requestId);
+    if (resolve) {
+      pendingChunkRequests.delete(requestId);
+      resolve(evt.data);
+    }
+  };
+  geometryWorker.onerror = (e) => {
+    console.error("[GeometryWorker] Error:", e);
+  };
+  // ────────────────────────────────────────────────────────────────────────────
+
+  // LRU tile material cache — cap at 80 entries to bound heap.
+  // When the limit is reached, the oldest entry is disposed and evicted.
+  const TILE_MATERIAL_CACHE_LIMIT = 80;
   const tileMaterials = new Map<string, StandardMaterial>();
+  const tileMaterialLRU: string[] = []; // insertion-order keys for eviction
   const levelBinaryCache = new Map<string, Uint8Array>();
   const meshLevelByMesh = new Map<Mesh, string>();
   const levelMeshes = new Map<string, Set<Mesh>>();
   // S12-T2: track roof meshes for coverage-fade (top-down: fade when player enters under roof)
   const roofMeshes = new Set<Mesh>();
+
+  const LOG_SAMPLE_INTERVAL = 1.0;
+  const LOG_PERSIST_INTERVAL = 5.0;
+  const LOG_MAX_SAMPLES = 7200;
+  const LOG_MAX_EVENTS = 3000;
+  const LOG_SLOW_PATH_MS = 100;
+  const LOG_STORAGE_KEY = "slice3d.runtime.logs.latest";
+  const LOG_FRAME_WINDOW_MAX = 600;
+  const LOG_PATH_WINDOW_MAX = 600;
+  const LOG_HEAP_WINDOW_SECONDS = 300;
+  const LOG_UNLOAD_RECOVERY_GRACE_SECONDS = 25;
+  const LOG_FILE_FLUSH_INTERVAL = 10;
+  let telemetryLogTimer = 0;
+  let telemetryPersistTimer = 0;
+  let telemetryFileFlushTimer = 0;
+  let telemetryEnabled = true;
+  let telemetryFileFlushInFlight = false;
+  let lastRuntimeLogFilePath: string | null = null;
+  let previousHeapUsedMb: number | undefined;
+  // drawCalls is cumulative in Babylon.js — track delta to get per-frame count.
+  let prevDrawCallsTotal = 0;
+  const runtimeStartedAt = Date.now();
+  const frameMsWindow: number[] = [];
+  const pathMsWindow: number[] = [];
+  const heapHistory: Array<{ elapsedSec: number; usedMb: number }> = [];
+  const chunkHotspots = new Map<
+    string,
+    {
+      level: string;
+      chunkX: number;
+      chunkZ: number;
+      samples: number;
+      frameMsAcc: number;
+      drawCallsAcc: number;
+      activeMeshesAcc: number;
+      verticesAcc: number;
+      maxHeapUsedMb: number;
+      maxPathMs: number;
+    }
+  >();
+  const unloadCheckpoints: Array<{
+    atSec: number;
+    heapMb: number;
+    resolved: boolean;
+    succeeded: boolean;
+  }> = [];
+  let chunkUnloadRecoveryFailures = 0;
+  const pathMetrics = {
+    requests: 0,
+    success: 0,
+    failed: 0,
+    errors: 0,
+    totalMs: 0,
+    maxMs: 0,
+    lastMs: 0,
+    lastPathLen: 0,
+    inFlight: 0,
+  };
+
+  const runtimeLog: Slice3DSessionLog = {
+    version: 1,
+    mapName: sliceMapName,
+    startedAt: new Date(runtimeStartedAt).toISOString(),
+    sessionId: `${runtimeStartedAt}-${Math.random().toString(36).slice(2, 8)}`,
+    samples: [],
+    events: [],
+    counters: {
+      samplesDropped: 0,
+      eventsDropped: 0,
+      exportCount: 0,
+    },
+  };
+
+  const getElapsedSec = () =>
+    Math.round(((Date.now() - runtimeStartedAt) / 1000) * 100) / 100;
+
+  const pushBounded = (arr: number[], value: number, maxSize: number) => {
+    arr.push(value);
+    if (arr.length > maxSize) {
+      arr.shift();
+    }
+  };
+
+  const getPercentile = (arr: number[], percentile: number): number => {
+    if (!arr.length) return 0;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const rank = (percentile / 100) * (sorted.length - 1);
+    const low = Math.floor(rank);
+    const high = Math.ceil(rank);
+    if (low === high) {
+      return sorted[low];
+    }
+    const weight = rank - low;
+    return sorted[low] * (1 - weight) + sorted[high] * weight;
+  };
+
+  const clampScore = (value: number, min = 0, max = 100) =>
+    Math.max(min, Math.min(max, value));
+
+  const getHeapSlopeMbPerSec = () => {
+    if (heapHistory.length < 6) {
+      return undefined;
+    }
+
+    const points = heapHistory;
+    const n = points.length;
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumX2 = 0;
+
+    points.forEach((point) => {
+      const x = point.elapsedSec;
+      const y = point.usedMb;
+      sumX += x;
+      sumY += y;
+      sumXY += x * y;
+      sumX2 += x * x;
+    });
+
+    const denominator = n * sumX2 - sumX * sumX;
+    if (Math.abs(denominator) < 1e-6) {
+      return undefined;
+    }
+
+    return (n * sumXY - sumX * sumY) / denominator;
+  };
+
+  const buildHotspots = (limit = 10): Slice3DHotspot[] => {
+    const list: Slice3DHotspot[] = [];
+
+    chunkHotspots.forEach((entry, key) => {
+      if (entry.samples <= 0) {
+        return;
+      }
+
+      const avgFrameMs = entry.frameMsAcc / entry.samples;
+      const avgDrawCalls = entry.drawCallsAcc / entry.samples;
+      const avgActiveMeshes = entry.activeMeshesAcc / entry.samples;
+      const avgVertices = entry.verticesAcc / entry.samples;
+      const score =
+        avgFrameMs * 2.3 +
+        avgDrawCalls * 0.08 +
+        avgActiveMeshes * 0.06 +
+        avgVertices / 50000 +
+        entry.maxHeapUsedMb * 0.12 +
+        entry.maxPathMs * 0.25;
+
+      list.push({
+        key,
+        level: entry.level,
+        chunkX: entry.chunkX,
+        chunkZ: entry.chunkZ,
+        samples: entry.samples,
+        avgFrameMs: Math.round(avgFrameMs * 100) / 100,
+        avgDrawCalls: Math.round(avgDrawCalls * 100) / 100,
+        avgActiveMeshes: Math.round(avgActiveMeshes * 100) / 100,
+        avgVertices: Math.round(avgVertices * 100) / 100,
+        maxHeapUsedMb: Math.round(entry.maxHeapUsedMb * 100) / 100,
+        maxPathMs: Math.round(entry.maxPathMs * 100) / 100,
+        score: Math.round(score * 100) / 100,
+      });
+    });
+
+    return list.sort((a, b) => b.score - a.score).slice(0, limit);
+  };
+
+  const buildSummary = (): Slice3DSummary => {
+    const frameP50 = getPercentile(frameMsWindow, 50);
+    const frameP95 = getPercentile(frameMsWindow, 95);
+    const frameP99 = getPercentile(frameMsWindow, 99);
+    const pathP50 = getPercentile(pathMsWindow, 50);
+    const pathP95 = getPercentile(pathMsWindow, 95);
+    const pathP99 = getPercentile(pathMsWindow, 99);
+    const heapSlope = getHeapSlopeMbPerSec();
+    const currentHeap = heapHistory.length
+      ? heapHistory[heapHistory.length - 1].usedMb
+      : undefined;
+
+    const recentSamples = runtimeLog.samples.slice(-60);
+    const avgPendingCandidates = recentSamples.length
+      ? recentSamples.reduce((acc, s) => acc + s.chunks.pendingCandidates, 0) /
+        recentSamples.length
+      : 0;
+    const avgPendingUnloads = recentSamples.length
+      ? recentSamples.reduce((acc, s) => acc + s.chunks.pendingUnloads, 0) /
+        recentSamples.length
+      : 0;
+
+    const leakReasons: string[] = [];
+    if (heapSlope !== undefined && heapSlope > 0.03) {
+      leakReasons.push(`heap slope positive (${heapSlope.toFixed(3)} MB/s)`);
+    }
+    if (chunkUnloadRecoveryFailures >= 2) {
+      leakReasons.push(
+        `chunk unload recovery failed ${chunkUnloadRecoveryFailures}x`,
+      );
+    }
+
+    let leakRisk: "low" | "medium" | "high" = "low";
+    if (leakReasons.length >= 2) {
+      leakRisk = "high";
+    } else if (leakReasons.length === 1) {
+      leakRisk = "medium";
+    }
+
+    const frameScore = clampScore(100 - (frameP95 - 16.7) * 3.2);
+    const stabilityScore = clampScore(
+      100 - Math.max(0, frameP99 - frameP50) * 2.1,
+    );
+    const pathScore = clampScore(100 - Math.max(0, pathP95 - 25) * 1.8);
+    const backlogScore = clampScore(
+      100 - avgPendingCandidates * 2.2 - avgPendingUnloads * 1.2,
+    );
+    const leakPenalty = leakRisk === "high" ? 30 : leakRisk === "medium" ? 15 : 0;
+
+    const sessionHealthScore = clampScore(
+      frameScore * 0.35 +
+        stabilityScore * 0.2 +
+        pathScore * 0.25 +
+        backlogScore * 0.2 -
+        leakPenalty,
+    );
+
+    return {
+      sampleCount: runtimeLog.samples.length,
+      eventCount: runtimeLog.events.length,
+      uptimeSec: Math.round(getElapsedSec() * 100) / 100,
+      frameMs: {
+        p50: Math.round(frameP50 * 100) / 100,
+        p95: Math.round(frameP95 * 100) / 100,
+        p99: Math.round(frameP99 * 100) / 100,
+      },
+      pathMs: {
+        p50: Math.round(pathP50 * 100) / 100,
+        p95: Math.round(pathP95 * 100) / 100,
+        p99: Math.round(pathP99 * 100) / 100,
+      },
+      heap: {
+        currentMb: currentHeap,
+        slopeMbPerSec:
+          heapSlope !== undefined ? Math.round(heapSlope * 10000) / 10000 : undefined,
+        unloadRecoveryFailures: chunkUnloadRecoveryFailures,
+      },
+      chunk: {
+        avgPendingCandidates: Math.round(avgPendingCandidates * 100) / 100,
+        avgPendingUnloads: Math.round(avgPendingUnloads * 100) / 100,
+      },
+      leakRisk: {
+        level: leakRisk,
+        reasons: leakReasons,
+      },
+      sessionHealthScore: Math.round(sessionHealthScore * 100) / 100,
+    };
+  };
+
+  const pushLogEvent = (
+    type: string,
+    payload?: Record<string, unknown>,
+  ) => {
+    if (!telemetryEnabled) return;
+    if (runtimeLog.events.length >= LOG_MAX_EVENTS) {
+      runtimeLog.events.shift();
+      runtimeLog.counters.eventsDropped += 1;
+    }
+    runtimeLog.events.push({
+      ts: Date.now(),
+      elapsedSec: getElapsedSec(),
+      type,
+      payload,
+    });
+  };
+
+  const persistRuntimeLogs = () => {
+    try {
+      localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(runtimeLog));
+    } catch {
+      // Ignore storage errors (quota/private mode); in-memory logs remain available.
+    }
+  };
+
+  const exportRuntimeLogs = () => {
+    runtimeLog.counters.exportCount += 1;
+    const summary = buildSummary();
+    const hotspots = buildHotspots(20);
+    return {
+      ...runtimeLog,
+      exportedAt: new Date().toISOString(),
+      runtime: {
+        activeLevel,
+        isFirstPerson,
+      },
+      summary,
+      hotspots,
+    };
+  };
+
+  const flushRuntimeLogsToFile = async (force = false) => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.writeRuntimeLog) {
+      return;
+    }
+    if (!force && telemetryFileFlushInFlight) {
+      return;
+    }
+
+    telemetryFileFlushInFlight = true;
+    try {
+      const result = await electronAPI.writeRuntimeLog(exportRuntimeLogs());
+      if (result?.success && result.path) {
+        if (lastRuntimeLogFilePath !== result.path) {
+          pushLogEvent("log.file-path", { path: result.path });
+        }
+        lastRuntimeLogFilePath = result.path;
+      } else if (result?.error) {
+        pushLogEvent("log.file-write-error", { error: result.error });
+      }
+    } catch (error) {
+      pushLogEvent("log.file-write-error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      telemetryFileFlushInFlight = false;
+    }
+  };
+
+  const downloadRuntimeLogs = () => {
+    const payload = JSON.stringify(exportRuntimeLogs(), null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `slice3d-runtime-log-${Date.now()}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    pushLogEvent("log.download");
+  };
+
+  (window as any).__slice3dLogs = {
+    get: () => exportRuntimeLogs(),
+    getSummary: () => buildSummary(),
+    getHotspots: (limit = 10) =>
+      buildHotspots(Math.max(1, Number(limit) || 10)),
+    download: () => downloadRuntimeLogs(),
+    clear: () => {
+      runtimeLog.samples = [];
+      runtimeLog.events = [];
+      runtimeLog.counters.samplesDropped = 0;
+      runtimeLog.counters.eventsDropped = 0;
+      previousHeapUsedMb = undefined;
+      frameMsWindow.length = 0;
+      pathMsWindow.length = 0;
+      heapHistory.length = 0;
+      chunkHotspots.clear();
+      unloadCheckpoints.length = 0;
+      chunkUnloadRecoveryFailures = 0;
+      pushLogEvent("log.clear");
+      persistRuntimeLogs();
+    },
+    mark: (label: string, extra?: Record<string, unknown>) => {
+      pushLogEvent("user.mark", {
+        label,
+        ...(extra || {}),
+      });
+    },
+    setEnabled: (value: boolean) => {
+      telemetryEnabled = !!value;
+      pushLogEvent("log.enabled", { value: telemetryEnabled });
+    },
+    isEnabled: () => telemetryEnabled,
+    getLastFilePath: () => lastRuntimeLogFilePath,
+    flushToFile: () => flushRuntimeLogsToFile(true),
+    storageKey: LOG_STORAGE_KEY,
+  };
+
+  pushLogEvent("session.start", {
+    map: sliceMapName,
+    level: activeLevel,
+  });
 
   let mapMinX = 0;
   let mapMaxX = 24;
@@ -684,6 +1230,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     material.diffuseColor = Color3.White();
     material.specularColor = new Color3(0.06, 0.06, 0.06);
     material.ambientColor = baseColor.scale(0.35);
+    material.backFaceCulling = false;
     return material;
   };
 
@@ -700,7 +1247,20 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const materialKey = `${kind}:${baseHex}`;
     const existing = tileMaterials.get(materialKey);
     if (existing) {
+      // Bump to most-recently-used position
+      const idx = tileMaterialLRU.indexOf(materialKey);
+      if (idx !== -1) tileMaterialLRU.splice(idx, 1);
+      tileMaterialLRU.push(materialKey);
       return existing;
+    }
+
+    // Evict oldest entry if over limit
+    if (tileMaterials.size >= TILE_MATERIAL_CACHE_LIMIT) {
+      const oldest = tileMaterialLRU.shift();
+      if (oldest) {
+        tileMaterials.get(oldest)?.dispose();
+        tileMaterials.delete(oldest);
+      }
     }
 
     const material = createProceduralTileMaterial(
@@ -709,6 +1269,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       safeTileColor(baseHex, fallbackHexColor),
     );
     tileMaterials.set(materialKey, material);
+    tileMaterialLRU.push(materialKey);
     return material;
   };
 
@@ -842,6 +1403,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const clearChunk = (key: string) => {
+    // Cancel any pending worker response for this key so the response
+    // handler doesn't recreate the chunk after it was explicitly cleared.
+    pendingChunkRequests.delete(key);
+    chunkLoading.delete(key);
     const meshes = chunkMeshes.get(key);
     if (meshes) {
       meshes.forEach((m) => {
@@ -862,6 +1427,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const clearAllChunks = () => {
+    pendingChunkRequests.clear();
     chunkMeshes.forEach((meshes) =>
       meshes.forEach((m) => {
         roofMeshes.delete(m);
@@ -1137,7 +1703,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const buildChunk = (cx: number, cy: number, lod: 0 | 1 | 2) => {
+  /**
+   * Collect tile descriptors for a chunk and post them to the geometry worker.
+   * Returns immediately — the worker applies the geometry asynchronously and
+   * the chunk meshes are registered once the response arrives.
+   *
+   * This replaces the previous synchronous buildChunk which blocked the main
+   * thread for up to 1600ms per tick (confirmed by runtime logs 2026-05-01).
+   */
+  const buildChunk = (cx: number, cy: number, lod: 0 | 1 | 2): void => {
     const key = `${cx}_${cy}`;
     if (chunkMeshes.has(key) || chunkLoading.has(key)) {
       return;
@@ -1155,102 +1729,123 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
-    chunkLoading.add(key);
-
     const startX = cx * CHUNK_SIZE;
     const startY = cy * CHUNK_SIZE;
-    const endX = Math.min(startX + CHUNK_SIZE, mapData.width);
-    const endY = Math.min(startY + CHUNK_SIZE, mapData.height);
 
     if (startX >= mapData.width || startY >= mapData.height) {
-      chunkLoading.delete(key);
       return;
     }
 
-    const meshes: Mesh[] = [];
+    const endX = Math.min(startX + CHUNK_SIZE, mapData.width);
+    const endY = Math.min(startY + CHUNK_SIZE, mapData.height);
 
-    // Render tile geometry for all visible levels.
-    // This keeps "..." transparent in upper floors and preserves exterior stack readability.
+    chunkLoading.add(key);
+
+    // ── Collect tile descriptors (main thread reads tile data; no Babylon calls) ──
+    // We compute materialKey here so the worker doesn't need tile definitions.
+    const tiles: GeometryWorkerRequest["tiles"] = [];
+
     for (const renderLevel of renderableLevels) {
+      if (lod >= 2) continue; // lod 2 = ground-only (skipped entirely for now)
+
       const levelOffsetY = levelToWorldY(renderLevel);
 
-      // Wall / floor tiles (skipped in lod 2 = ground-only)
-      if (lod < 2) {
-        for (let y = startY; y < endY; y++) {
-          for (let x = startX; x < endX; x++) {
-            const symbol = getMapTileAt(renderLevel, x, y);
-            if (!symbol || symbol === "...") {
-              continue;
-            }
+      for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < endX; x++) {
+          const symbol = getMapTileAt(renderLevel, x, y);
+          if (!symbol || symbol === "...") continue;
 
-            const tileDef = mapData.tileDefinitions?.[symbol];
-            const blocking = isBlockingTile(symbol, tileDef);
+          const tileDef = mapData.tileDefinitions?.[symbol];
+          const blocking = isBlockingTile(symbol, tileDef);
 
-            // lod 1 = mid-distance: only render blocking (wall) tiles
-            if (!blocking && lod === 1) {
-              continue;
-            }
+          if (!blocking && lod === 1) continue; // lod 1: walls only
 
-            const tileId = (tileDef?.id || symbol || "").toLowerCase();
-            const isRoofTile = tileId.includes("roof");
-            const isStairTile = (tileDef as any)?.stairDir !== undefined;
+          const tileId = (tileDef?.id || symbol || "").toLowerCase();
+          const isRoofTile = tileId.includes("roof");
+          const isStairTile = (tileDef as any)?.stairDir !== undefined;
 
-            if (isRoofTile) {
-              // Pitched gable roof sitting on top of standard walls
-              const wallBaseH = Math.max(0.4, tileDef?.height ?? 2.2);
-              const ridgeH = 0.65;
-              const roofMesh = buildRoofMesh(
-                `ct-${renderLevel}-${key}-${x}-${y}`,
-                x,
-                y,
-                levelOffsetY + wallBaseH,
-                ridgeH,
-              );
-              roofMesh.material = getTileMaterial(symbol, tileDef, "#8b3a2a");
-              roofMesh.parent = mapRoot;
-              roofMeshes.add(roofMesh); // S12-T2: register for coverage-fade
-              registerMeshForLevel(renderLevel, roofMesh);
-              meshes.push(roofMesh);
-            } else if (isStairTile) {
-              // 4-step staircase mesh — base sits on the level floor, top step
-              // aligns with the floor of the next level (LEVEL_HEIGHT_UNITS above).
-              const stairMesh = buildStairMesh(
-                `ct-${renderLevel}-${key}-${x}-${y}`,
-                x,
-                y,
-                levelOffsetY,
-              );
-              stairMesh.material = getTileMaterial(symbol, tileDef, "#c4a07a");
-              stairMesh.parent = mapRoot;
-              registerMeshForLevel(renderLevel, stairMesh);
-              meshes.push(stairMesh);
-            } else {
-              const tileHeight = blocking
-                ? Math.max(0.4, tileDef?.height ?? 2.2)
-                : Math.max(0.03, tileDef?.height ?? 0.08);
+          const tileHeight = isRoofTile
+            ? Math.max(0.4, tileDef?.height ?? 2.2)
+            : blocking
+            ? Math.max(0.4, tileDef?.height ?? 2.2)
+            : Math.max(0.03, tileDef?.height ?? 0.08);
 
-              const mesh = MeshBuilder.CreateBox(
-                `ct-${renderLevel}-${key}-${x}-${y}`,
-                { width: 1, depth: 1, height: tileHeight },
-                scene,
-              );
-              mesh.position.set(
-                x + 0.5,
-                levelOffsetY + tileHeight / 2,
-                y + 0.5,
-              );
-              mesh.material = getTileMaterial(symbol, tileDef, "#6a9f36");
-              mesh.parent = mapRoot;
-              registerMeshForLevel(renderLevel, mesh);
-              meshes.push(mesh);
-            }
-          }
+          // Resolve material key on main thread (getTileMaterial caches anyway)
+          const fallbackHex = isRoofTile ? "#8b3a2a" : isStairTile ? "#c4a07a" : "#6a9f36";
+          const mat = getTileMaterial(symbol, tileDef, fallbackHex);
+          const materialKey = `${renderLevel}::${mat.name}`;
+
+          tiles.push({
+            x,
+            y,
+            symbol,
+            tileId,
+            isBlocking: blocking,
+            isRoof: isRoofTile,
+            isStair: isStairTile,
+            height: tileHeight,
+            levelOffsetY,
+            materialKey,
+          });
         }
       }
     }
 
-    chunkMeshes.set(key, meshes);
-    chunkLoading.delete(key);
+    if (tiles.length === 0) {
+      chunkLoading.delete(key);
+      chunkMeshes.set(key, []);
+      return;
+    }
+
+    // ── Build a materialKey → { mat, levelKey, isRoof } lookup for the response handler ──
+    const matByKey = new Map<
+      string,
+      { mat: StandardMaterial; levelKey: string; isRoof: boolean }
+    >();
+    for (const t of tiles) {
+      if (!matByKey.has(t.materialKey)) {
+        const fallbackHex = t.isRoof ? "#8b3a2a" : t.isStair ? "#c4a07a" : "#6a9f36";
+        const mat = getTileMaterial(t.symbol, mapData.tileDefinitions?.[t.symbol], fallbackHex);
+        // renderLevel is encoded in materialKey as the prefix before "::"
+        const levelKey = t.materialKey.split("::")[0];
+        matByKey.set(t.materialKey, { mat, levelKey, isRoof: t.isRoof });
+      }
+    }
+
+    // ── Register pending request and post to worker ──
+    pendingChunkRequests.set(key, (response: GeometryWorkerResponse) => {
+      // If the chunk was already cleared while the worker was running, discard.
+      if (!chunkLoading.has(key)) return;
+
+      const meshes: Mesh[] = [];
+
+      for (const group of response.groups as GeometryGroupBuffer[]) {
+        const entry = matByKey.get(group.materialKey);
+        if (!entry || group.positions.length === 0) continue;
+
+        const mesh = new Mesh(`chunk-${key}-${group.materialKey}`, scene);
+        mesh.parent = mapRoot;
+
+        const vd = new VertexData();
+        vd.positions = group.positions;
+        vd.indices = group.indices;
+        vd.normals = group.normals;
+        vd.uvs = group.uvs;
+        vd.applyToMesh(mesh);
+
+        mesh.material = entry.mat;
+
+        if (entry.isRoof) roofMeshes.add(mesh);
+        registerMeshForLevel(entry.levelKey, mesh);
+        meshes.push(mesh);
+      }
+
+      chunkMeshes.set(key, meshes);
+      chunkLoading.delete(key);
+    });
+
+    const request: GeometryWorkerRequest = { requestId: key, tiles };
+    geometryWorker.postMessage(request);
   };
 
   // Determine which chunks should be active around the player, load new ones,
@@ -1492,16 +2087,88 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     await renderMapLevel(resolvedLevel);
 
+    const mapWidth = mapData.width ?? 0;
+    const mapHeight = mapData.height ?? 0;
     const initialSpawn = mapData.levels[resolvedLevel]?.playerPos;
-    if (
-      initialSpawn &&
-      startingPosition.x === 0 &&
-      startingPosition.y === 0 &&
-      player.position.x === 6 &&
-      player.position.z === 6
-    ) {
-      player.position.x = worldToSliceCoord(initialSpawn.x);
-      player.position.z = worldToSliceCoord(initialSpawn.y);
+    const isWithinBounds =
+      player.position.x >= 0 &&
+      player.position.z >= 0 &&
+      player.position.x < mapWidth &&
+      player.position.z < mapHeight;
+    const currentTileSymbol = isWithinBounds
+      ? getMapTileAt(
+          resolvedLevel,
+          Math.floor(player.position.x),
+          Math.floor(player.position.z),
+        )
+      : null;
+    const currentTileDef = currentTileSymbol
+      ? mapData.tileDefinitions?.[currentTileSymbol]
+      : undefined;
+    const currentTileBlocked = isBlockingTile(currentTileSymbol, currentTileDef);
+    const hasInvalidSpawn =
+      !isWithinBounds ||
+      isVoidSymbol(currentTileSymbol) ||
+      currentTileBlocked;
+
+    if (hasInvalidSpawn) {
+      const findNearestWalkable = (originX: number, originZ: number) => {
+        const maxRadius = 12;
+        const baseX = Math.floor(originX);
+        const baseZ = Math.floor(originZ);
+
+        for (let radius = 0; radius <= maxRadius; radius++) {
+          for (let dz = -radius; dz <= radius; dz++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+              if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dz) !== radius) {
+                continue;
+              }
+
+              const tx = baseX + dx;
+              const tz = baseZ + dz;
+              if (tx < 0 || tz < 0 || tx >= mapWidth || tz >= mapHeight) {
+                continue;
+              }
+
+              const symbol = getMapTileAt(resolvedLevel, tx, tz);
+              if (isVoidSymbol(symbol)) {
+                continue;
+              }
+
+              const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
+              if (isBlockingTile(symbol, tileDef)) {
+                continue;
+              }
+
+              return { x: tx + 0.5, z: tz + 0.5 };
+            }
+          }
+        }
+
+        return null;
+      };
+
+      if (initialSpawn) {
+        const targetX = worldToSliceCoord(initialSpawn.x);
+        const targetZ = worldToSliceCoord(initialSpawn.y);
+        const walkable = findNearestWalkable(targetX, targetZ);
+        if (walkable) {
+          player.position.x = walkable.x;
+          player.position.z = walkable.z;
+        } else {
+          player.position.x = Math.min(mapWidth - 0.5, Math.max(0.5, targetX));
+          player.position.z = Math.min(mapHeight - 0.5, Math.max(0.5, targetZ));
+        }
+      } else {
+        const walkable = findNearestWalkable(player.position.x, player.position.z);
+        if (walkable) {
+          player.position.x = walkable.x;
+          player.position.z = walkable.z;
+        } else {
+          player.position.x = Math.min(mapWidth - 0.5, Math.max(0.5, player.position.x));
+          player.position.z = Math.min(mapHeight - 0.5, Math.max(0.5, player.position.z));
+        }
+      }
     }
 
     playerState.exploreArea(
@@ -2306,6 +2973,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     enemy: SliceEnemy,
     targetPosition: Vector3,
   ) => {
+    const pathRequestStartedAt = performance.now();
+    pathMetrics.requests += 1;
+    pathMetrics.inFlight += 1;
     const startX = worldToGrid(enemy.worldPos.x, navigationGridOrigin);
     const startY = worldToGrid(enemy.worldPos.z, navigationGridOrigin);
     const endX = worldToGrid(targetPosition.x, navigationGridOrigin);
@@ -2321,21 +2991,64 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       endX >= navigationGridSize ||
       endY >= navigationGridSize
     ) {
+      pathMetrics.failed += 1;
+      pathMetrics.inFlight = Math.max(0, pathMetrics.inFlight - 1);
       return;
     }
 
-    const path = await pathfindingManager.requestPath(
-      startX,
-      startY,
-      endX,
-      endY,
-    );
-    if (!path || path.length === 0 || enemy.isDead) {
-      return;
-    }
+    try {
+      const path = await pathfindingManager.requestPath(
+        startX,
+        startY,
+        endX,
+        endY,
+      );
+      const tookMs = performance.now() - pathRequestStartedAt;
+      pathMetrics.lastMs = Math.round(tookMs * 100) / 100;
+      pathMetrics.maxMs = Math.max(pathMetrics.maxMs, pathMetrics.lastMs);
+      pathMetrics.totalMs += tookMs;
 
-    enemy.currentPath = path;
-    enemy.currentPathIndex = 0;
+      if (!path || path.length === 0 || enemy.isDead) {
+        pathMetrics.failed += 1;
+        if (tookMs >= LOG_SLOW_PATH_MS) {
+          pushLogEvent("pathfinding.slow-empty", {
+            enemyUid: enemy.uid,
+            tookMs: pathMetrics.lastMs,
+            startX,
+            startY,
+            endX,
+            endY,
+          });
+        }
+        return;
+      }
+
+      pathMetrics.success += 1;
+      pathMetrics.lastPathLen = path.length;
+
+      if (tookMs >= LOG_SLOW_PATH_MS) {
+        pushLogEvent("pathfinding.slow", {
+          enemyUid: enemy.uid,
+          tookMs: pathMetrics.lastMs,
+          pathLength: path.length,
+          startX,
+          startY,
+          endX,
+          endY,
+        });
+      }
+
+      enemy.currentPath = path;
+      enemy.currentPathIndex = 0;
+    } catch (error) {
+      pathMetrics.errors += 1;
+      pushLogEvent("pathfinding.error", {
+        enemyUid: enemy.uid,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      pathMetrics.inFlight = Math.max(0, pathMetrics.inFlight - 1);
+    }
   };
 
   const advanceEnemyPath = (enemy: SliceEnemy, deltaSeconds: number) => {
@@ -2376,7 +3089,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     enemies.forEach((enemy) => {
       const onActiveLevel = enemy.level === activeLevel;
-      enemy.meshRoot.setEnabled(onActiveLevel && !enemy.isDead);
+      if (!onActiveLevel || enemy.isDead) {
+        enemy.meshRoot.setEnabled(false);
+      }
 
       if (!onActiveLevel) {
         if (selectedEnemyUid === enemy.uid) {
@@ -2393,6 +3108,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         enemy.worldPos,
         player.position,
       );
+      const enemyVisible = distanceToPlayer <= ENEMY_VISIBILITY_RADIUS_UNITS;
+      enemy.meshRoot.setEnabled(enemyVisible);
+
+      if (!enemyVisible && selectedEnemyUid === enemy.uid) {
+        setSelectedEnemy(null);
+      }
+
+      if (distanceToPlayer > ENEMY_AI_RADIUS_UNITS) {
+        setEnemyAnimState(enemy, "idle");
+        enemy.currentPath = [];
+        return;
+      }
+
       const attackRangeUnits = Math.max(1, enemy.definition.attackRange / 32);
       const aggroRangeUnits = Math.max(2, enemy.definition.aggroRange);
       const chaseRangeUnits = Math.max(4, enemy.definition.chaseRange);
@@ -2432,8 +3160,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const prevZ = enemy.worldPos.z;
 
       if (now - enemy.lastPathAt > 1000) {
-        enemy.lastPathAt = now;
-        void requestEnemyPath(enemy, targetPos);
+        // Skip pathfinding when the enemy is already at (or within 0.8 units of)
+        // its target — prevents hammering the pathfinder with trivially empty paths.
+        const distToTarget = Vector3.Distance(enemy.worldPos, targetPos);
+        if (distToTarget >= 0.8) {
+          enemy.lastPathAt = now;
+          void requestEnemyPath(enemy, targetPos);
+        }
       }
 
       advanceEnemyPath(enemy, deltaSeconds);
@@ -2455,38 +3188,65 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const syncDroppedItems = () => {
+  const syncDroppedItems = (force = false) => {
+    if (!force) {
+      const now = performance.now();
+      const prev = (syncDroppedItems as any)._lastSyncAt as number | undefined;
+      if (prev !== undefined && now - prev < DROP_SYNC_INTERVAL * 1000) {
+        return;
+      }
+      (syncDroppedItems as any)._lastSyncAt = now;
+    }
+
     const currentLevel = playerState.getCurrentLevel();
     if (currentLevel !== activeLevel) {
+      const previousLevel = activeLevel;
       activeLevel = currentLevel;
       activeLevelNumber = parseLevelNumber(currentLevel);
       void ensureMapLevelReady(currentLevel);
       void ensureLevelItemsSeeded(currentLevel);
       void ensureLevelEnemiesSeeded(currentLevel);
       setSelectedEnemy(null);
+      pushLogEvent("level.change", {
+        from: previousLevel,
+        to: currentLevel,
+        playerX: Math.round(player.position.x * 100) / 100,
+        playerZ: Math.round(player.position.z * 100) / 100,
+      });
     }
 
     const persistentItems = playerState.getPersistentDroppedItems(currentLevel);
+    const playerX = player.position.x;
+    const playerZ = player.position.z;
+    const maxDistSq =
+      DROPPED_ITEM_STREAM_RADIUS_UNITS * DROPPED_ITEM_STREAM_RADIUS_UNITS;
+
+    const streamedItems = persistentItems.filter((item) => {
+      const ix = worldToSliceCoord(item.x);
+      const iz = worldToSliceCoord(item.y);
+      const dx = ix - playerX;
+      const dz = iz - playerZ;
+      return dx * dx + dz * dz <= maxDistSq;
+    });
+
     const nextKeys = new Set(
-      persistentItems.map((item) =>
-        getDroppedItemMeshKey(currentLevel, item.itemId),
-      ),
+      streamedItems.map((item) => getDroppedItemMeshKey(currentLevel, item.itemId)),
     );
 
     droppedItemMeshes.forEach((mesh, meshKey) => {
       const item = mesh.metadata as SliceDroppedItem | undefined;
       const isCurrentLevelMesh = item?.level === currentLevel;
 
-      if (isCurrentLevelMesh && !nextKeys.has(meshKey)) {
+      if (!isCurrentLevelMesh || !nextKeys.has(meshKey)) {
         mesh.dispose();
         droppedItemMeshes.delete(meshKey);
         return;
       }
 
-      mesh.setEnabled(isCurrentLevelMesh);
+      mesh.setEnabled(true);
     });
 
-    persistentItems.forEach((item) => {
+    streamedItems.forEach((item) => {
       const meshKey = getDroppedItemMeshKey(currentLevel, item.itemId);
       let mesh = droppedItemMeshes.get(meshKey);
       if (!mesh) {
@@ -2692,7 +3452,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const pressedKeys = new Set<string>();
 
-  let isFirstPerson = false;
   let verticalVelocity = 0;
   const gravity = -18;
   const fallGravity = -32;
@@ -2714,6 +3473,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let stairAnimStartY = 0;
   let stairAnimTargetY = 0;
   const CHUNK_UPDATE_INTERVAL = 0.2;
+  const PERF_PUBLISH_INTERVAL = 0.25;
+  const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
+  const ENEMY_AI_RADIUS_UNITS = 18;
   let stairAnimTargetLevel = "0"; // target level to switch to after animation
   let isStairAnimActive = false; // true only while a stair transition is playing
   let pendingStairInteract = false; // set by right-click; consumed by stair transition gate
@@ -2723,6 +3485,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let stairAnimDirX = 0;
   let stairAnimDirZ = -1; // default: north
   const STAIR_HORIZ_SPEED = 1.0; // tiles/second of forward movement during climb
+  let dropSyncTimer = 0;
+  let perfPublishTimer = 0;
 
   const requestPointerLockIfPossible = () => {
     if (!isFirstPerson || document.pointerLockElement === canvas) {
@@ -3220,7 +3984,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (key === "e" && !event.repeat) {
       const pickedRealItem = tryPickupNearestItem();
       if (pickedRealItem) {
-        syncDroppedItems();
+        syncDroppedItems(true);
         return;
       }
 
@@ -3353,9 +4117,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   });
 
   scene.onBeforeRenderObservable.add(() => {
-    syncDroppedItems();
-
     const deltaSeconds = engine.getDeltaTime() / 1000;
+    dropSyncTimer += deltaSeconds;
+    if (dropSyncTimer >= DROP_SYNC_INTERVAL) {
+      dropSyncTimer = 0;
+      syncDroppedItems();
+    }
+
     // S10-T1: Parity with 2D — tick PlayerState for hunger decay, HP regen and buff timers.
     playerState.update(performance.now(), engine.getDeltaTime());
 
@@ -3364,6 +4132,20 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (chunkUpdateTimer >= CHUNK_UPDATE_INTERVAL) {
       chunkUpdateTimer = 0;
       updateChunks();
+
+      const chunkStats = (window as any).__slice3dChunkStreaming || {};
+      const unloadedThisTick = chunkStats.unloadedThisTick || 0;
+      if (unloadedThisTick > 0 && previousHeapUsedMb !== undefined) {
+        unloadCheckpoints.push({
+          atSec: getElapsedSec(),
+          heapMb: previousHeapUsedMb,
+          resolved: false,
+          succeeded: false,
+        });
+        if (unloadCheckpoints.length > 100) {
+          unloadCheckpoints.shift();
+        }
+      }
     }
 
     // 2D parity: when player enters below an upper structure, hide that full level and above.
@@ -3514,6 +4296,294 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     updateEnemyAI(deltaSeconds);
     tryAutoPlayerAttack(Date.now());
+
+    perfPublishTimer += deltaSeconds;
+    if (perfPublishTimer >= PERF_PUBLISH_INTERVAL) {
+      perfPublishTimer = 0;
+
+      const rawDrawCallsTotal =
+        (engine as any).drawCalls ??
+        (engine as any).drawCallsCounter?.current ??
+        (engine as any)._drawCalls?.current ??
+        0;
+      const drawCalls = Math.max(0, rawDrawCallsTotal - prevDrawCallsTotal);
+      prevDrawCallsTotal = rawDrawCallsTotal;
+      const activeMeshes = scene.getActiveMeshes().length;
+      const totalMeshes = scene.meshes.length;
+      const totalMaterials = scene.materials.length;
+      const totalTextures = scene.textures.length;
+      const totalVertices = scene.getTotalVertices();
+
+      const perfMem = (performance as any).memory;
+      const usedHeapMb = perfMem
+        ? Math.round((perfMem.usedJSHeapSize / (1024 * 1024)) * 10) / 10
+        : undefined;
+      const totalHeapMb = perfMem
+        ? Math.round((perfMem.totalJSHeapSize / (1024 * 1024)) * 10) / 10
+        : undefined;
+
+      const chunkStats = (window as any).__slice3dChunkStreaming || {};
+
+      playerState.updatePerfMetrics({
+        fps: Math.round(engine.getFps()),
+        totalUpdateTime: Math.round(engine.getDeltaTime() * 10) / 10,
+        activeEnemies: Array.from(enemies.values()).filter(
+          (e) => !e.isDead && e.level === activeLevel,
+        ).length,
+        renderedTiles: chunkMeshes.size * CHUNK_SIZE * CHUNK_SIZE,
+        totalObjects: activeMeshes,
+        poolSize: chunkMeshes.size,
+        drawCalls,
+        activeMeshes,
+        totalMeshes,
+        totalMaterials,
+        totalTextures,
+        totalVertices,
+        jsHeapUsedMb: usedHeapMb,
+        jsHeapTotalMb: totalHeapMb,
+        chunkLoaded: chunkStats.loadedChunks || chunkMeshes.size,
+        chunkLoading: chunkStats.loadingChunks || chunkLoading.size,
+      });
+
+      (window as any).__slice3dPerfDiagnostics = {
+        fps: Math.round(engine.getFps()),
+        frameMs: Math.round(engine.getDeltaTime() * 10) / 10,
+        drawCalls,
+        activeMeshes,
+        totalMeshes,
+        totalMaterials,
+        totalTextures,
+        totalVertices,
+        jsHeapUsedMb: usedHeapMb,
+        jsHeapTotalMb: totalHeapMb,
+        chunkLoaded: chunkStats.loadedChunks || chunkMeshes.size,
+        chunkLoading: chunkStats.loadingChunks || chunkLoading.size,
+        pendingChunkCandidates: chunkStats.pendingCandidates || 0,
+        pendingChunkUnloads: chunkStats.pendingUnloads || 0,
+        streamedDroppedItems: droppedItemMeshes.size,
+        activeLevel,
+        ts: Date.now(),
+      };
+    }
+
+    telemetryLogTimer += deltaSeconds;
+    telemetryPersistTimer += deltaSeconds;
+    if (telemetryEnabled && telemetryLogTimer >= LOG_SAMPLE_INTERVAL) {
+      telemetryLogTimer = 0;
+
+      const chunkStats = (window as any).__slice3dChunkStreaming || {};
+      const perfMem = (performance as any).memory;
+      const usedHeapMb = perfMem
+        ? Math.round((perfMem.usedJSHeapSize / (1024 * 1024)) * 10) / 10
+        : undefined;
+      const totalHeapMb = perfMem
+        ? Math.round((perfMem.totalJSHeapSize / (1024 * 1024)) * 10) / 10
+        : undefined;
+      const heapDeltaMb =
+        usedHeapMb !== undefined && previousHeapUsedMb !== undefined
+          ? Math.round((usedHeapMb - previousHeapUsedMb) * 10) / 10
+          : undefined;
+      previousHeapUsedMb = usedHeapMb;
+
+      const rawDCTotal2 =
+        (engine as any).drawCalls ??
+        (engine as any).drawCallsCounter?.current ??
+        (engine as any)._drawCalls?.current ??
+        0;
+      // Use the same prevDrawCallsTotal already updated in the perf-publish block above.
+      // If the telemetry fires in the same tick, delta is 0; that is acceptable.
+      const drawCalls = Math.max(0, rawDCTotal2 - prevDrawCallsTotal);
+
+      let activeEnemies = 0;
+      let visibleEnemies = 0;
+      let aiActiveEnemies = 0;
+      enemies.forEach((enemy) => {
+        if (enemy.isDead || enemy.level !== activeLevel) return;
+        activeEnemies += 1;
+        const distance = Vector3.Distance(enemy.worldPos, player.position);
+        if (distance <= ENEMY_VISIBILITY_RADIUS_UNITS) {
+          visibleEnemies += 1;
+        }
+        if (distance <= ENEMY_AI_RADIUS_UNITS) {
+          aiActiveEnemies += 1;
+        }
+      });
+
+      const sample: Slice3DLogSample = {
+        ts: Date.now(),
+        elapsedSec: getElapsedSec(),
+        activeLevel,
+        player: {
+          x: Math.round(player.position.x * 100) / 100,
+          y: Math.round(player.position.y * 100) / 100,
+          z: Math.round(player.position.z * 100) / 100,
+          tileX: Math.floor(player.position.x),
+          tileZ: Math.floor(player.position.z),
+          chunkX: Math.floor(player.position.x / CHUNK_SIZE),
+          chunkZ: Math.floor(player.position.z / CHUNK_SIZE),
+        },
+        perf: {
+          fps: Math.round(engine.getFps()),
+          frameMs: Math.round(engine.getDeltaTime() * 10) / 10,
+          drawCalls,
+          activeMeshes: scene.getActiveMeshes().length,
+          totalMeshes: scene.meshes.length,
+          totalTextures: scene.textures.length,
+          totalVertices: scene.getTotalVertices(),
+          jsHeapUsedMb: usedHeapMb,
+          jsHeapTotalMb: totalHeapMb,
+          heapDeltaMb,
+        },
+        chunks: {
+          loaded: chunkStats.loadedChunks || chunkMeshes.size,
+          loading: chunkStats.loadingChunks || chunkLoading.size,
+          pendingCandidates: chunkStats.pendingCandidates || 0,
+          pendingUnloads: chunkStats.pendingUnloads || 0,
+          builtThisTick: chunkStats.builtThisTick || 0,
+          unloadedThisTick: chunkStats.unloadedThisTick || 0,
+        },
+        enemies: {
+          activeOnLevel: activeEnemies,
+          visibleOnLevel: visibleEnemies,
+          aiActiveOnLevel: aiActiveEnemies,
+          selectedEnemyUid,
+        },
+        items: {
+          streamedDroppedItems: droppedItemMeshes.size,
+          hasRealDroppedItems,
+        },
+        pathfinding: {
+          requests: pathMetrics.requests,
+          success: pathMetrics.success,
+          failed: pathMetrics.failed,
+          errors: pathMetrics.errors,
+          inFlight: pathMetrics.inFlight,
+          avgMs:
+            pathMetrics.requests > 0
+              ? Math.round((pathMetrics.totalMs / pathMetrics.requests) * 100) /
+                100
+              : 0,
+          maxMs: Math.round(pathMetrics.maxMs * 100) / 100,
+          lastMs: pathMetrics.lastMs,
+          lastPathLen: pathMetrics.lastPathLen,
+        },
+      };
+
+      if (runtimeLog.samples.length >= LOG_MAX_SAMPLES) {
+        runtimeLog.samples.shift();
+        runtimeLog.counters.samplesDropped += 1;
+      }
+      runtimeLog.samples.push(sample);
+
+      pushBounded(frameMsWindow, sample.perf.frameMs, LOG_FRAME_WINDOW_MAX);
+      if (sample.pathfinding.lastMs > 0) {
+        pushBounded(pathMsWindow, sample.pathfinding.lastMs, LOG_PATH_WINDOW_MAX);
+      }
+
+      if (sample.perf.jsHeapUsedMb !== undefined) {
+        heapHistory.push({
+          elapsedSec: sample.elapsedSec,
+          usedMb: sample.perf.jsHeapUsedMb,
+        });
+        const cutoff = sample.elapsedSec - LOG_HEAP_WINDOW_SECONDS;
+        while (heapHistory.length && heapHistory[0].elapsedSec < cutoff) {
+          heapHistory.shift();
+        }
+
+        unloadCheckpoints.forEach((checkpoint) => {
+          if (checkpoint.resolved) {
+            return;
+          }
+
+          const elapsedSinceUnload = sample.elapsedSec - checkpoint.atSec;
+          const droppedEnough = sample.perf.jsHeapUsedMb! <= checkpoint.heapMb - 1;
+          if (droppedEnough) {
+            checkpoint.resolved = true;
+            checkpoint.succeeded = true;
+            return;
+          }
+
+          if (elapsedSinceUnload >= LOG_UNLOAD_RECOVERY_GRACE_SECONDS) {
+            checkpoint.resolved = true;
+            checkpoint.succeeded = false;
+            chunkUnloadRecoveryFailures += 1;
+            pushLogEvent("memory.unload-recovery-failed", {
+              atSec: checkpoint.atSec,
+              baselineHeapMb: checkpoint.heapMb,
+              currentHeapMb: sample.perf.jsHeapUsedMb,
+              elapsedSec: Math.round(elapsedSinceUnload * 100) / 100,
+            });
+          }
+        });
+      }
+
+      const chunkKey = `${sample.activeLevel}:${sample.player.chunkX}_${sample.player.chunkZ}`;
+      const chunkEntry =
+        chunkHotspots.get(chunkKey) ||
+        {
+          level: sample.activeLevel,
+          chunkX: sample.player.chunkX,
+          chunkZ: sample.player.chunkZ,
+          samples: 0,
+          frameMsAcc: 0,
+          drawCallsAcc: 0,
+          activeMeshesAcc: 0,
+          verticesAcc: 0,
+          maxHeapUsedMb: 0,
+          maxPathMs: 0,
+        };
+      chunkEntry.samples += 1;
+      chunkEntry.frameMsAcc += sample.perf.frameMs;
+      chunkEntry.drawCallsAcc += sample.perf.drawCalls;
+      chunkEntry.activeMeshesAcc += sample.perf.activeMeshes;
+      chunkEntry.verticesAcc += sample.perf.totalVertices;
+      chunkEntry.maxHeapUsedMb = Math.max(
+        chunkEntry.maxHeapUsedMb,
+        sample.perf.jsHeapUsedMb || 0,
+      );
+      chunkEntry.maxPathMs = Math.max(
+        chunkEntry.maxPathMs,
+        sample.pathfinding.lastMs,
+      );
+      chunkHotspots.set(chunkKey, chunkEntry);
+
+      if ((sample.perf.heapDeltaMb || 0) <= -8) {
+        pushLogEvent("memory.gc-like-drop", {
+          heapDeltaMb: sample.perf.heapDeltaMb,
+          usedMb: sample.perf.jsHeapUsedMb,
+        });
+      }
+
+      if (sample.chunks.pendingCandidates > 16) {
+        pushLogEvent("chunk.backlog", {
+          pendingCandidates: sample.chunks.pendingCandidates,
+          loaded: sample.chunks.loaded,
+          loading: sample.chunks.loading,
+        });
+      }
+
+      (window as any).__slice3dLogsData = {
+        latestSample: sample,
+        totalSamples: runtimeLog.samples.length,
+        totalEvents: runtimeLog.events.length,
+        counters: runtimeLog.counters,
+        summary: buildSummary(),
+        topHotspots: buildHotspots(5),
+      };
+    }
+
+    if (telemetryEnabled && telemetryPersistTimer >= LOG_PERSIST_INTERVAL) {
+      telemetryPersistTimer = 0;
+      persistRuntimeLogs();
+    }
+
+    if (telemetryEnabled) {
+      telemetryFileFlushTimer += deltaSeconds;
+      if (telemetryFileFlushTimer >= LOG_FILE_FLUSH_INTERVAL) {
+        telemetryFileFlushTimer = 0;
+        void flushRuntimeLogsToFile(false);
+      }
+    }
 
     // S7-FP4: emissive pulse on selected enemy — soft red flicker
     enemyHighlightPulseT += deltaSeconds;
@@ -3717,6 +4787,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     scene,
     save,
     dispose: () => {
+      pushLogEvent("session.dispose", {
+        activeLevel,
+        samples: runtimeLog.samples.length,
+        events: runtimeLog.events.length,
+      });
+      persistRuntimeLogs();
+      void flushRuntimeLogsToFile(true);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       playerState.off("dropItem", handleDropItem);
@@ -3733,6 +4810,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       droppedItemMeshes.clear();
       clearEnemies();
       // S7-FP4: torus marker removed — no dispose needed
+      delete (window as any).__slice3dLogs;
+      delete (window as any).__slice3dLogsData;
+      geometryWorker.terminate();
       scene.dispose();
       engine.dispose();
     },

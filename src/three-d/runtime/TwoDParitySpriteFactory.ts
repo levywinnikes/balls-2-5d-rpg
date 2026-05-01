@@ -166,6 +166,8 @@ function createSpriteMaterialFromDraw(
   material.useAlphaFromDiffuseTexture = true;
   material.backFaceCulling = false;
   material.specularColor = Color3.Black();
+  material.disableLighting = true;
+  material.emissiveColor = Color3.White();
   return material;
 }
 
