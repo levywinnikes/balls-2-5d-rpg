@@ -22,7 +22,12 @@
     "tre",
     "dwl",
     "arc",
-    "sdw"
+    "sdw",
+    "rsn",
+    "rss",
+    "rse",
+    "rsw",
+    "rrd"
   ],
   "tileDefinitions": {
     "...": {
@@ -62,6 +67,36 @@
       "color": "#b91c1c",
       "height": 0.12,
       "renderAs": "floor"
+    },
+    "rsn": {
+      "id": "roof-slope-n",
+      "color": "#c1440e",
+      "height": 0.8,
+      "block": false
+    },
+    "rss": {
+      "id": "roof-slope-s",
+      "color": "#c1440e",
+      "height": 0.8,
+      "block": false
+    },
+    "rse": {
+      "id": "roof-slope-e",
+      "color": "#c1440e",
+      "height": 0.8,
+      "block": false
+    },
+    "rsw": {
+      "id": "roof-slope-w",
+      "color": "#c1440e",
+      "height": 0.8,
+      "block": false
+    },
+    "rrd": {
+      "id": "roof-ridge",
+      "color": "#8c3008",
+      "height": 0.8,
+      "block": false
     },
     "grs": {
       "id": "grass",
@@ -347,6 +382,9 @@
           "y": 66
         }
       ]
+    },
+    "1": {
+      "binFile": "giant_city_3d_1.bin"
     }
   }
 }

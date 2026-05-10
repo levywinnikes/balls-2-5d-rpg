@@ -51,6 +51,15 @@ const ATLAS = [
   "bal", // 22 varanda/passarela
 ];
 
+  // Gable roof tiles (indices 23-27). All ids contain "roof" → isRoofTile=true.
+  ATLAS.push(
+    "rsn", // 23 – roof slope north
+    "rss", // 24 – roof slope south
+    "rse", // 25 – roof slope east
+    "rsw", // 26 – roof slope west
+    "rrd", // 27 – roof ridge cap
+  );
+
 // ─── Tile Definitions ─────────────────────────────────────────────────────────
 const TILE_DEFS = {
   "...": { color: 0x000000, height: 0, renderAs: "empty", block: false },
@@ -59,6 +68,11 @@ const TILE_DEFS = {
   bwl: { color: 0x8b4513, height: 2.0, renderAs: "wall", block: true },
   flr: { color: 0x999090, height: 0.15, renderAs: "floor", block: false },
   rof: { color: 0x5a3e28, height: 0.3, renderAs: "roof", block: false },
+    rsn: { id: "roof-slope-n", color: 0xb84c18, height: 0.8, block: false },
+    rss: { id: "roof-slope-s", color: 0xb84c18, height: 0.8, block: false },
+    rse: { id: "roof-slope-e", color: 0xb84c18, height: 0.8, block: false },
+    rsw: { id: "roof-slope-w", color: 0xb84c18, height: 0.8, block: false },
+    rrd: { id: "roof-ridge",   color: 0x7a3010, height: 0.8, block: false },
   grs: { color: 0x4a7c3f, height: 0.2, renderAs: "floor", block: false },
   stn: { color: 0x808080, height: 0.25, renderAs: "floor", block: false },
   mkt: { color: 0xd4a017, height: 0.2, renderAs: "floor", block: false },
@@ -91,6 +105,27 @@ const TILE_DEFS = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Gable roof helper ───────────────────────────────────────────────────────
+// Fills a rectangle on `grid` with directional slope tiles for a proper gable.
+// See generate-giant-3d-map.js for full documentation.
+function fillGableRoof(grid, x0, y0, x1, y1) {
+  const w = x1 - x0 + 1;
+  const d = y1 - y0 + 1;
+  if (w >= d) {
+    const halfD = Math.floor(d / 2);
+    for (let dy = 0; dy < d; dy++) {
+      const sym = dy < halfD ? "rsn" : dy > d - 1 - halfD ? "rss" : "rrd";
+      for (let dx = 0; dx < w; dx++) set(grid, x0 + dx, y0 + dy, sym);
+    }
+  } else {
+    const halfW = Math.floor(w / 2);
+    for (let dx = 0; dx < w; dx++) {
+      const sym = dx < halfW ? "rsw" : dx > w - 1 - halfW ? "rse" : "rrd";
+      for (let dy = 0; dy < d; dy++) set(grid, x0 + dx, y0 + dy, sym);
+    }
+  }
+}
+
 const IDX = {};
 ATLAS.forEach((sym, i) => (IDX[sym] = i));
 
@@ -257,7 +292,8 @@ function generateLevel1(rng, stairUpPositions, roofRects) {
 
   // Telhados dos edificios do nivel 0 para manter estruturas completas
   for (const { x0, y0, x1, y1 } of roofRects) {
-    fill(grid, x0 + 1, y0 + 1, x1 - 1, y1 - 1, "rof");
+  // Gable roof spanning the full building footprint (including wall tiles)
+  fillGableRoof(grid, x0, y0, x1, y1);
   }
 
   for (const { x, y } of stairUpPositions) {

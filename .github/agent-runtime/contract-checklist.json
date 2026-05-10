@@ -1,13 +1,12 @@
 {
-  "updatedAt": "2026-05-09T23:10:00-03:00",
-  "task": "Restaurar no modo 3D o menu de sistema via Esc com opção funcional de Salvar e Sair, mantendo paridade com o fluxo do 2D",
+  "updatedAt": "2026-05-10T00:00:00-03:00",
+  "task": "Implementar telhados gable/cumeeira 3D para os prédios nos mapas giant_city_3d e cidade_suspensa. Geometry worker recebe novas funções de slope panel e ridge. Geradores de mapa criam nível 1 com tiles de telhado direcional (rsn/rss/rse/rsw/rrd).",
   "contractsRead": [
     "THREE_D_INTEGRATION_BLUEPRINT.md",
-    "UI_DESIGN_CONTRACT.md",
-    "SAVE_SYSTEM_CONTRACT.md",
-    "LOCALIZATION_CONTRACT.md"
+    "MAP_SYSTEM_CONTRACT.md",
+    "PERSPECTIVE_MODE_CONTRACT.md"
   ],
-  "understanding": "No 3D, Esc deve abrir/fechar o menu de sistema e o jogador precisa conseguir salvar e sair para o menu inicial. O fluxo deve reutilizar tradução existente e preservar o comportamento atual do 2D.",
-  "riskConflict": "Hoje o bridge de janelas no 3D mapeia systemMenu para settings, impedindo abrir o menu correto. O SystemMenuUI foi pensado para Phaser/GameScene e pode falhar no 3D se não receber handlers explícitos de save e exit.",
-  "objectiveQuestion": "No 3D, Save and Exit deve retornar ao menu principal da aplicação (sem reload forçado) após salvar com sucesso; seguirei com esse comportamento."
+  "understanding": "Cada prédio retangular no nível 0 receberá telhado no nível 1 com geometria gable (cumeeira): metade norte com painéis inclinados norte, metade sul com painéis sul; cumeeira no centro. O geometry.worker recebe novos tipos (roof-slope-n/s/e/w, roof-ridge) e produz quads inclinados em vez de pirâmides por tile.",
+  "riskConflict": "O mapa giant_city_3d atualmente só tem nível 0; adicionar nível 1 requer regenerar o JSON e os .bin. O campo 'height' dos tiles de telhado é interpretado pelo main thread com min/max clamping - os novos tiles de slope ignoram esse campo no worker (usam constantes ROOF_EAVE_H/ROOF_RIDGE_H). tileId.includes('roof') já garante isRoofTile=true para todos os novos IDs.",
+  "objectiveQuestion": "Nenhuma dúvida pendente. Todos os novos tile IDs contêm 'roof' → isRoofTile=true → fade S12-T2 funciona. Nível 1 default '...' preservado (contrato MAP_SYSTEM_CONTRACT). Sem texturas PNG - geometria procedural."
 }

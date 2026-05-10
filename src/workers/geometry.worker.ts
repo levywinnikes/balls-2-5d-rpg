@@ -57,6 +57,17 @@ const LEVEL_HEIGHT_UNITS = 2.0;
 const STEP_COUNT = 4;
 
 // ---------------------------------------------------------------------------
+// Roof geometry constants (shared by all roof shape functions)
+// ---------------------------------------------------------------------------
+
+/** Height above levelOffsetY where the eave (low edge of a slope panel) sits.
+ *  Matches the current pyramid base height so plain-rof tiles blend naturally. */
+const ROOF_EAVE_H = 0.4;
+
+/** Height above levelOffsetY where the ridge (peak/high edge) sits. */
+const ROOF_RIDGE_H = 1.1;
+
+// ---------------------------------------------------------------------------
 // Per-group geometry accumulator
 // ---------------------------------------------------------------------------
 
@@ -345,6 +356,105 @@ function buildStairVerts(
   return { positions: allPositions, indices: allIndices, uvs: allUvs };
 }
 
+// ---------------------------------------------------------------------------
+// Gable roof — directional slope panel (quad, one edge at eave, one at ridge)
+// ---------------------------------------------------------------------------
+//
+// direction 'n': eave (low) at north (z0), ridge (high) at south (z1)
+//                normal faces north-up  → place in NORTH half of building
+// direction 's': eave at south (z1), ridge at north (z0)
+//                normal faces south-up  → place in SOUTH half
+// direction 'e': eave at east (x1), ridge at west (x0)
+//                normal faces east-up   → place in EAST half (N-S ridge)
+// direction 'w': eave at west (x0), ridge at east (x1)
+//                normal faces west-up   → place in WEST half (N-S ridge)
+//
+// Winding verified so that computeNormals() produces outward-facing normals.
+// ---------------------------------------------------------------------------
+
+function buildRoofSlopePanelVerts(
+  x: number,
+  y: number,
+  levelOffsetY: number,
+  direction: "n" | "s" | "e" | "w",
+): { positions: number[]; indices: number[]; uvs: number[] } {
+  const x0 = x,
+    x1 = x + 1;
+  const z0 = y,
+    z1 = y + 1;
+  const yEave = levelOffsetY + ROOF_EAVE_H;
+  const yRidge = levelOffsetY + ROOF_RIDGE_H;
+
+  let positions: number[];
+
+  if (direction === "n") {
+    // Eave at north (z0=low), ridge at south (z1=high).
+    // Winding NW-eave → SW-ridge → SE-ridge → NE-eave gives normal (0,1,-0.7) ✓
+    positions = [
+      x0, yEave, z0, // 0 NW eave
+      x0, yRidge, z1, // 1 SW ridge
+      x1, yRidge, z1, // 2 SE ridge
+      x1, yEave, z0, // 3 NE eave
+    ];
+  } else if (direction === "s") {
+    // Eave at south (z1=low), ridge at north (z0=high).
+    // Winding SW-eave → SE-eave → NE-ridge → NW-ridge gives normal (0,1,0.7) ✓
+    positions = [
+      x0, yEave, z1, // 0 SW eave
+      x1, yEave, z1, // 1 SE eave
+      x1, yRidge, z0, // 2 NE ridge
+      x0, yRidge, z0, // 3 NW ridge
+    ];
+  } else if (direction === "e") {
+    // Eave at east (x1=low), ridge at west (x0=high).
+    // Winding NW-ridge → SW-ridge → SE-eave → NE-eave gives normal (0.7,1,0) ✓
+    positions = [
+      x0, yRidge, z0, // 0 NW ridge
+      x0, yRidge, z1, // 1 SW ridge
+      x1, yEave, z1, // 2 SE eave
+      x1, yEave, z0, // 3 NE eave
+    ];
+  } else {
+    // direction === 'w'
+    // Eave at west (x0=low), ridge at east (x1=high).
+    // Winding NW-eave → SW-eave → SE-ridge → NE-ridge gives normal (-0.7,1,0) ✓
+    positions = [
+      x0, yEave, z0, // 0 NW eave
+      x0, yEave, z1, // 1 SW eave
+      x1, yRidge, z1, // 2 SE ridge
+      x1, yRidge, z0, // 3 NE ridge
+    ];
+  }
+
+  const indices = [0, 1, 2, 0, 2, 3];
+  const uvs = [0, 0, 0, 1, 1, 1, 1, 0];
+
+  return { positions, indices, uvs };
+}
+
+// ---------------------------------------------------------------------------
+// Gable roof — flat ridge cap (horizontal quad at ridge height)
+// ---------------------------------------------------------------------------
+
+function buildRoofRidgePanelVerts(
+  x: number,
+  y: number,
+  levelOffsetY: number,
+): { positions: number[]; indices: number[]; uvs: number[] } {
+  const x0 = x,
+    x1 = x + 1;
+  const z0 = y,
+    z1 = y + 1;
+  const yTop = levelOffsetY + ROOF_RIDGE_H;
+
+  // CCW from above → normal (0,1,0)
+  const positions = [x0, yTop, z0, x0, yTop, z1, x1, yTop, z1, x1, yTop, z0];
+  const indices = [0, 1, 2, 0, 2, 3];
+  const uvs = [0, 0, 0, 1, 1, 1, 1, 0];
+
+  return { positions, indices, uvs };
+}
+
 function buildFloorQuadVerts(
   x: number,
   y: number,
@@ -448,7 +558,8 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
     const {
       x,
       y,
-      isRoof,
+        tileId,
+        isRoof,
       isStair,
       isBlocking,
       height,
@@ -458,15 +569,43 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
 
     if (isRoof) {
       roofKeys.add(materialKey);
-      const wallBaseH = Math.max(0.4, height);
-      const ridgeH = 0.65;
-      const { positions, indices, uvs } = buildRoofVerts(
-        x,
-        y,
-        levelOffsetY + wallBaseH,
-        ridgeH,
-      );
-      mergeInto(getAccum(materialKey), positions, indices, uvs);
+        if (tileId.includes("slope")) {
+          // Directional gable slope panel: roof-slope-n/s/e/w
+          const dir =
+            tileId.endsWith("-n")
+              ? "n"
+              : tileId.endsWith("-s")
+                ? "s"
+                : tileId.endsWith("-e")
+                  ? "e"
+                  : "w";
+          const { positions, indices, uvs } = buildRoofSlopePanelVerts(
+            x,
+            y,
+            levelOffsetY,
+            dir as "n" | "s" | "e" | "w",
+          );
+          mergeInto(getAccum(materialKey), positions, indices, uvs);
+        } else if (tileId.includes("ridge")) {
+          // Flat ridge cap tile
+          const { positions, indices, uvs } = buildRoofRidgePanelVerts(
+            x,
+            y,
+            levelOffsetY,
+          );
+          mergeInto(getAccum(materialKey), positions, indices, uvs);
+        } else {
+          // Legacy plain pyramid (for old 'rof' tiles)
+          const wallBaseH = Math.max(0.4, height);
+          const ridgeH = 0.65;
+          const { positions, indices, uvs } = buildRoofVerts(
+            x,
+            y,
+            levelOffsetY + wallBaseH,
+            ridgeH,
+          );
+          mergeInto(getAccum(materialKey), positions, indices, uvs);
+        }
     } else if (isStair) {
       const { positions, indices, uvs } = buildStairVerts(x, y, levelOffsetY);
       mergeInto(getAccum(materialKey), positions, indices, uvs);

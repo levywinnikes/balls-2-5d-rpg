@@ -30,7 +30,12 @@
     "cfl",
     "cwl",
     "wtr",
-    "bal"
+    "bal",
+    "rsn",
+    "rss",
+    "rse",
+    "rsw",
+    "rrd"
   ],
   "tileDefinitions": {
     "...": {
@@ -67,6 +72,36 @@
       "color": 5914152,
       "height": 0.3,
       "renderAs": "roof",
+      "block": false
+    },
+    "rsn": {
+      "id": "roof-slope-n",
+      "color": 12078104,
+      "height": 0.8,
+      "block": false
+    },
+    "rss": {
+      "id": "roof-slope-s",
+      "color": 12078104,
+      "height": 0.8,
+      "block": false
+    },
+    "rse": {
+      "id": "roof-slope-e",
+      "color": 12078104,
+      "height": 0.8,
+      "block": false
+    },
+    "rsw": {
+      "id": "roof-slope-w",
+      "color": 12078104,
+      "height": 0.8,
+      "block": false
+    },
+    "rrd": {
+      "id": "roof-ridge",
+      "color": 8007696,
+      "height": 0.8,
       "block": false
     },
     "grs": {
@@ -194,103 +229,103 @@
       "entities": [
         {
           "symbol": "orc",
-          "x": 46,
+          "x": 44,
           "y": 72
         },
         {
           "symbol": "gob",
-          "x": 74,
-          "y": 43
+          "x": 34,
+          "y": 34
+        },
+        {
+          "symbol": "gob",
+          "x": 64,
+          "y": 64
         },
         {
           "symbol": "gob",
           "x": 66,
-          "y": 45
-        },
-        {
-          "symbol": "gob",
-          "x": 55,
-          "y": 31
+          "y": 59
         },
         {
           "symbol": "orc",
-          "x": 57,
-          "y": 60
+          "x": 35,
+          "y": 51
         },
         {
           "symbol": "gob",
-          "x": 44,
+          "x": 66,
           "y": 33
         },
         {
           "symbol": "gob",
-          "x": 34,
-          "y": 53
+          "x": 41,
+          "y": 74
         },
         {
           "symbol": "gob",
-          "x": 66,
+          "x": 58,
+          "y": 27
+        },
+        {
+          "symbol": "orc",
+          "x": 25,
+          "y": 51
+        },
+        {
+          "symbol": "gob",
+          "x": 48,
           "y": 69
         },
         {
-          "symbol": "orc",
-          "x": 31,
-          "y": 48
+          "symbol": "gob",
+          "x": 30,
+          "y": 63
         },
         {
           "symbol": "gob",
-          "x": 47,
-          "y": 45
-        },
-        {
-          "symbol": "gob",
-          "x": 54,
-          "y": 60
-        },
-        {
-          "symbol": "gob",
-          "x": 63,
-          "y": 66
+          "x": 36,
+          "y": 71
         },
         {
           "symbol": "orc",
-          "x": 54,
+          "x": 75,
+          "y": 56
+        },
+        {
+          "symbol": "gob",
+          "x": 32,
           "y": 35
         },
         {
           "symbol": "gob",
-          "x": 45,
+          "x": 28,
           "y": 48
         },
         {
           "symbol": "gob",
-          "x": 40,
-          "y": 60
-        },
-        {
-          "symbol": "gob",
           "x": 41,
-          "y": 30
+          "y": 71
         },
         {
           "symbol": "orc",
-          "x": 71,
-          "y": 46
+          "x": 48,
+          "y": 70
         },
         {
           "symbol": "gob",
-          "x": 68,
-          "y": 50
+          "x": 37,
+          "y": 43
         },
         {
           "symbol": "gob",
-          "x": 59,
-          "y": 44
+          "x": 65,
+          "y": 43
         },
         {
           "symbol": "gob",
-          "x": 59,
-          "y": 37
+          "x": 44,
+          "y": 57
         }
       ]
     },
@@ -303,8 +338,18 @@
       "entities": [
         {
           "symbol": "orc",
-          "x": 54,
-          "y": 32
+          "x": 56,
+          "y": 69
+        },
+        {
+          "symbol": "gob",
+          "x": 55,
+          "y": 34
+        },
+        {
+          "symbol": "gob",
+          "x": 57,
+          "y": 31
         }
       ]
     }

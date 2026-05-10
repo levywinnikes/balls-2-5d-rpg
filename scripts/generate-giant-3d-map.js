@@ -33,6 +33,16 @@ const ATLAS = [
   "sdw", // 14 – stone dark wall (watchtower)
 ];
 
+// Gable roof tile symbols (added at indices 15-19).
+// All have "roof" in their tile definition id → isRoofTile=true in the 3D runtime.
+ATLAS.push(
+  "rsn", // 15 – roof slope north (eave at north, high at south)
+  "rss", // 16 – roof slope south (eave at south, high at north)
+  "rse", // 17 – roof slope east  (eave at east,  high at west)
+  "rsw", // 18 – roof slope west  (eave at west,  high at east)
+  "rrd", // 19 – roof ridge cap   (flat at ridge height)
+);
+
 // ─── Tile definitions ─────────────────────────────────────────────────────────
 const TILE_DEFS = {
   "...": { id: "void", color: "#6a9f36", height: 0.02, renderAs: "floor" },
@@ -53,6 +63,11 @@ const TILE_DEFS = {
   },
   flr: { id: "wood-floor", color: "#92400e", height: 0.08, renderAs: "floor" },
   rof: { id: "roof-tile", color: "#b91c1c", height: 0.12, renderAs: "floor" },
+    rsn: { id: "roof-slope-n", color: "#c1440e", height: 0.8, block: false },
+    rss: { id: "roof-slope-s", color: "#c1440e", height: 0.8, block: false },
+    rse: { id: "roof-slope-e", color: "#c1440e", height: 0.8, block: false },
+    rsw: { id: "roof-slope-w", color: "#c1440e", height: 0.8, block: false },
+    rrd: { id: "roof-ridge",   color: "#8c3008", height: 0.8, block: false },
   grs: { id: "grass", color: "#4ade80", height: 0.05, renderAs: "floor" },
   stn: { id: "stone-plaza", color: "#9ca3af", height: 0.07, renderAs: "floor" },
   mkt: {
@@ -111,6 +126,42 @@ ATLAS.forEach((sym, i) => {
 });
 
 // ─── Grid helpers ─────────────────────────────────────────────────────────────
+// ─── Gable roof helper ───────────────────────────────────────────────────────
+// Fills a rectangle on `grid` with directional slope tiles so that the building
+// gets a proper gable (cumeeira) roof:
+//   – If the building is wider (W≥D): ridge runs E-W, north+south slope panels.
+//   – If the building is deeper (D>W): ridge runs N-S, east+west slope panels.
+//
+// The slope tile at the eave row has its LOW edge at the eave and HIGH edge at
+// the centre; the geometry worker (buildRoofSlopePanelVerts) uses ROOF_EAVE_H
+// and ROOF_RIDGE_H constants — not the height field — so all panels are uniform.
+function fillGableRoof(grid, x0, y0, x1, y1) {
+  const w = x1 - x0 + 1; // tile count E-W
+  const d = y1 - y0 + 1; // tile count N-S
+
+  if (w >= d) {
+    // E-W ridge: north half = rsn, south half = rss, centre (odd d) = rrd
+    const halfD = Math.floor(d / 2);
+    for (let dy = 0; dy < d; dy++) {
+      const sym =
+        dy < halfD ? "rsn" : dy > d - 1 - halfD ? "rss" : "rrd";
+      for (let dx = 0; dx < w; dx++) {
+        set(grid, x0 + dx, y0 + dy, sym);
+      }
+    }
+  } else {
+    // N-S ridge: west half = rsw, east half = rse, centre (odd w) = rrd
+    const halfW = Math.floor(w / 2);
+    for (let dx = 0; dx < w; dx++) {
+      const sym =
+        dx < halfW ? "rsw" : dx > w - 1 - halfW ? "rse" : "rrd";
+      for (let dy = 0; dy < d; dy++) {
+        set(grid, x0 + dx, y0 + dy, sym);
+      }
+    }
+  }
+}
+
 function makeGrid(w, h, fill = 0) {
   return Array.from({ length: h }, () => new Uint8Array(w).fill(fill));
 }
@@ -156,6 +207,8 @@ function makePRNG(seed) {
 function generate() {
   const rng = makePRNG(42);
   const grid = makeGrid(W, H, IDX["cob"]); // cobblestone as default street
+  // Collect all placed building footprints so we can build roofs on level 1.
+  const allBuildingRects = [];
 
   // === 1. Outer border grass ===
   fill(grid, 0, 0, W - 1, H - 1, "cob");
@@ -256,6 +309,9 @@ function generate() {
       const roofStyle = rng() < 0.4 ? "rof" : "flr";
       rect(grid, hx, hy, hx + hw - 1, hy + hh - 1, wallStyle, roofStyle);
 
+  // Record footprint for level-1 roof generation
+  allBuildingRects.push({ x0: hx, y0: hy, x1: hx + hw - 1, y1: hy + hh - 1 });
+
       // Door (1 tile opening in wall)
       const doorSide = Math.floor(rng() * 4);
       if (doorSide === 0) set(grid, hx + Math.floor(hw / 2), hy, "flr");
@@ -341,31 +397,39 @@ function generate() {
     if (rng() < 0.6) set(grid, 103, y, "tre");
   }
 
-  return grid;
+  return { grid, allBuildingRects };
 }
 
 // ─── Build and write output ───────────────────────────────────────────────────
 function buildOutput() {
-  const grid = generate();
+  const { grid, allBuildingRects } = generate();
 
-  // Serialise grid to binary (one byte per tile = atlas index)
+  // Level 0
   const binData = new Uint8Array(W * H);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      binData[y * W + x] = grid[y][x];
-    }
-  }
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) binData[y * W + x] = grid[y][x];
 
-  const binFile = `${MAP_NAME}_0.bin`;
+  const binFile = MAP_NAME + "_0.bin";
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUTPUT_DIR, binFile), binData);
-  console.log(
-    `[generate-giant-3d-map] Written ${binFile} (${W}x${H} = ${binData.length} bytes)`,
-  );
+  console.log("[generate-giant-3d-map] Written " + binFile);
 
-  // Find a good player spawn (first cob tile not too close to walls)
-  let playerX = 100 * 32,
-    playerY = 100 * 32;
+  // Level 1 — void-sky default + gable rooftops (MAP_SYSTEM_CONTRACT upper-floors)
+  const grid1 = makeGrid(W, H, IDX["..."]);
+  for (const { x0, y0, x1, y1 } of allBuildingRects)
+    fillGableRoof(grid1, x0, y0, x1, y1);
+
+  const binData1 = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) binData1[y * W + x] = grid1[y][x];
+
+  const binFile1 = MAP_NAME + "_1.bin";
+  fs.writeFileSync(path.join(OUTPUT_DIR, binFile1), binData1);
+  const roofCount = allBuildingRects.length;
+  console.log("[generate-giant-3d-map] Written " + binFile1 + " (" + roofCount + " gable rooftops)");
+
+  // Player spawn — first cobblestone tile found
+  let playerX = 100 * 32, playerY = 100 * 32;
   outer: for (let y = 10; y < H - 10; y++) {
     for (let x = 10; x < W - 10; x++) {
       if (grid[y][x] === IDX["cob"]) {
@@ -381,10 +445,7 @@ function buildOutput() {
     tileSize: 32,
     width: W,
     height: H,
-    config: {
-      startLevel: "0",
-      mapName: "Giant City 3D",
-    },
+    config: { startLevel: "0", mapName: "Giant City 3D" },
     tileAtlas: ATLAS,
     tileDefinitions: TILE_DEFS,
     entityTemplates: {
@@ -396,30 +457,21 @@ function buildOutput() {
       0: {
         binFile,
         playerPos: { x: playerX, y: playerY },
-        entities: [
-          // Spread goblins and orcs across the map
-          ...Array.from({ length: 40 }, (_, i) => ({
-            symbol: i % 3 === 0 ? "orc" : "gob",
-            x: 10 + Math.floor((i * 131 + 37) % (W - 20)),
-            y: 10 + Math.floor((i * 97 + 53) % (H - 20)),
-          })),
-        ],
+        entities: Array.from({ length: 40 }, (_, i) => ({
+          symbol: i % 3 === 0 ? "orc" : "gob",
+          x: 10 + Math.floor((i * 131 + 37) % (W - 20)),
+          y: 10 + Math.floor((i * 97 + 53) % (H - 20)),
+        })),
       },
+      1: { binFile: binFile1 },
     },
   };
 
-  const jsonFile = `${MAP_NAME}.json`;
-  fs.writeFileSync(
-    path.join(OUTPUT_DIR, jsonFile),
-    JSON.stringify(meta, null, 2),
-  );
-  console.log(`[generate-giant-3d-map] Written ${jsonFile}`);
-  console.log(
-    `[generate-giant-3d-map] Player spawn: x=${playerX} y=${playerY}`,
-  );
-  console.log(
-    `[generate-giant-3d-map] Done. Open with ?slice3d=1&map=${MAP_NAME}&fp=1`,
-  );
+  const jsonFile = MAP_NAME + ".json";
+  fs.writeFileSync(path.join(OUTPUT_DIR, jsonFile), JSON.stringify(meta, null, 2));
+  console.log("[generate-giant-3d-map] Written " + jsonFile);
+  console.log("[generate-giant-3d-map] Player spawn: x=" + playerX + " y=" + playerY);
+  console.log("[generate-giant-3d-map] Done. Open with ?slice3d=1&map=" + MAP_NAME + "&fp=1");
 }
 
 buildOutput();
