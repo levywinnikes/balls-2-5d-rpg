@@ -1,11 +1,13 @@
 {
-    "updatedAt": "2026-05-09T21:20:00-03:00",
-    "task": "Corrigir textura escura persistente em chunks distantes no runtime 3D (upgrade de LOD ao reaproximar)",
+    "updatedAt": "2026-05-09T22:00:00-03:00",
+    "task": "Redesenhar janela de Settings para o runtime 3D, adicionar Render Scale preservando alcance de visão, remover opções não funcionais e investigar hero invisível",
     "contractsRead": [
         "THREE_D_INTEGRATION_BLUEPRINT.md",
-        "MAP_SYSTEM_CONTRACT.md"
+        "UI_DESIGN_CONTRACT.md",
+        "PLAYER_STATE_CONTRACT.md",
+        "LOCALIZATION_CONTRACT.md"
     ],
-    "understanding": "O defeito persistente ocorre porque chunks podem ser criados em LOD reduzido sem piso e não são reconstruídos quando o jogador volta para perto. Vou rastrear LOD por chunk e forçar rebuild apenas quando o LOD desejado ficar mais detalhado.",
-    "riskConflict": "Rebuild excessivo por tick pode causar stutter. A mitigação é manter orçamento existente de build e só promover chunks quando houver ganho real de detalhe.",
-    "objectiveQuestion": "Nenhuma - aplicar correção determinística de promoção de LOD e validar com tsc e smoke:test."
+    "understanding": "Settings vira janela com seções claras (Display, Audio, Gameplay, Language, Debug). Display recebe Render Scale (Babylon engine.setHardwareScalingLevel), Quality Preset, FPS Target, Antialias e Show FPS. Cloud Shadows e Interface Scale saem. Toda string nova usa translation keys. Comunicação React->Babylon segue padrão PlayerState.emit/on.",
+    "riskConflict": "Engine Babylon não é acessível diretamente da UI React; ponte via PlayerState (novo emitter). Render Scale via setHardwareScalingLevel preserva câmera/draw radius. Hero invisível pode ser sprite billboard; investigar e adicionar fallback.",
+    "objectiveQuestion": "Nenhuma — implementar refatoração completa e validar com tsc + smoke:test."
 }

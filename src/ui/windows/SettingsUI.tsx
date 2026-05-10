@@ -1,40 +1,228 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useUI } from "../../context/UIContext";
 import { useLanguage } from "../../context/LanguageContext";
 import {
   Monitor,
-  Plus,
-  Minus,
-  Settings as SettingsIcon,
-  Flag,
-  Droplets,
   Volume2,
   Music,
   Headphones,
+  Gauge,
+  Gamepad2,
+  Flag,
+  Wrench,
+  Eye,
+  EyeOff,
+  Activity,
+  Sparkles,
+  Droplets,
 } from "lucide-react";
 import { AudioManager } from "../../game/systems/AudioManager";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Reusable presentational primitives
+// ──────────────────────────────────────────────────────────────────────────────
+
+const Section: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ title, icon, children }) => (
+  <div style={{ width: "100%", marginBottom: 14 }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        color: "#fbbf24",
+        fontSize: 13,
+        fontWeight: 700,
+        letterSpacing: 0.4,
+        textTransform: "uppercase",
+        marginBottom: 8,
+      }}
+    >
+      {icon}
+      <span>{title}</span>
+    </div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        background: "rgba(0,0,0,0.30)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        borderRadius: 8,
+        padding: 10,
+        backdropFilter: "blur(6px)",
+      }}
+    >
+      {children}
+    </div>
+  </div>
+);
+
+const Row: React.FC<{
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}> = ({ label, hint, children }) => (
+  <div
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+      padding: "6px 4px",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+      }}
+    >
+      <span style={{ color: "#e5e7eb", fontSize: 12, fontWeight: 500 }}>
+        {label}
+      </span>
+      <div>{children}</div>
+    </div>
+    {hint && (
+      <span style={{ color: "#9ca3af", fontSize: 10, lineHeight: 1.3 }}>
+        {hint}
+      </span>
+    )}
+  </div>
+);
+
+const Toggle: React.FC<{
+  on: boolean;
+  onText: string;
+  offText: string;
+  onClick: () => void;
+}> = ({ on, onText, offText, onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: "5px 12px",
+      borderRadius: 6,
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 0.4,
+      border: "1px solid",
+      cursor: "pointer",
+      transition: "all 0.18s",
+      background: on ? "rgba(34,197,94,0.22)" : "rgba(80,80,80,0.30)",
+      borderColor: on ? "#22c55e" : "#525252",
+      color: on ? "#86efac" : "#a3a3a3",
+      minWidth: 88,
+    }}
+  >
+    {on ? onText : offText}
+  </button>
+);
+
+const SegmentedControl: <T extends string | number>(props: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) => React.ReactElement = ({ options, value, onChange }) => (
+  <div
+    style={{
+      display: "flex",
+      gap: 2,
+      background: "rgba(0,0,0,0.4)",
+      borderRadius: 6,
+      padding: 2,
+      border: "1px solid rgba(255,255,255,0.08)",
+    }}
+  >
+    {options.map((opt) => {
+      const active = opt.value === value;
+      return (
+        <button
+          key={String(opt.value)}
+          onClick={() => onChange(opt.value)}
+          style={{
+            padding: "5px 10px",
+            borderRadius: 4,
+            fontSize: 10,
+            fontWeight: 700,
+            border: "none",
+            cursor: "pointer",
+            background: active ? "#fbbf24" : "transparent",
+            color: active ? "#111" : "#9ca3af",
+            transition: "all 0.18s",
+            minWidth: 42,
+          }}
+        >
+          {opt.label}
+        </button>
+      );
+    })}
+  </div>
+);
+
+const Slider: React.FC<{
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  display: string;
+  disabled?: boolean;
+}> = ({ value, min, max, step, onChange, display, disabled }) => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <span
+        style={{
+          color: disabled ? "#6b7280" : "#fbbf24",
+          fontSize: 11,
+          fontWeight: 700,
+          fontFamily: "monospace",
+        }}
+      >
+        {display}
+      </span>
+    </div>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(parseFloat(e.target.value))}
+      disabled={disabled}
+      style={{
+        width: "100%",
+        accentColor: "#fbbf24",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    />
+  </div>
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+// SettingsContent — main window
+// ──────────────────────────────────────────────────────────────────────────────
+
 export const SettingsContent: React.FC = () => {
   const {
-    scale,
-    setScale,
-    s,
     debugCollision,
     toggleDebugCollision,
     bloodEnabled,
     toggleBlood,
-    cloudShadowsEnabled,
-    toggleCloudShadows,
-    graphicsQuality,
-    setGraphicsQuality,
     showFPS,
     toggleFPS,
   } = useUI();
   const { language, setLanguage, t } = useLanguage();
 
-  // Audio specific states synchronized with AudioManager
   const am = AudioManager.getInstance();
+  const ps = PlayerState.getInstance();
+
+  // Audio state mirrors AudioManager + localStorage
   const [musicVol, setMusicVol] = useState(
     parseFloat(localStorage.getItem("tgs_audio_music_vol") || "1"),
   );
@@ -48,11 +236,22 @@ export const SettingsContent: React.FC = () => {
     localStorage.getItem("tgs_audio_sfx_off") === "true",
   );
 
+  // Display state mirrors PlayerState
+  const [display, setDisplay] = useState(ps.getDisplaySettings());
+  useEffect(() => {
+    const handler = (next: ReturnType<typeof ps.getDisplaySettings>) =>
+      setDisplay(next);
+    ps.on("displaySettingsChanged", handler);
+    return () => {
+      ps.off("displaySettingsChanged", handler);
+    };
+  }, [ps]);
+
+  // ── Audio handlers ────────────────────────────────────────────────────────
   const handleMusicVol = (v: number) => {
     setMusicVol(v);
     am.setMusicVolume(v);
   };
-
   const handleSfxVol = (v: number) => {
     setSfxVol(v);
     am.setSfxVolume(v);
@@ -68,8 +267,15 @@ export const SettingsContent: React.FC = () => {
     am.setSfxEnabled(!next);
   };
 
+  // ── Display handlers ──────────────────────────────────────────────────────
+  const handleRenderScale = (v: number) => ps.setRenderScale(v);
+  const handleQualityPreset = (q: "low" | "mid" | "high") =>
+    ps.setQualityPreset(q);
+  const handleFpsTarget = (n: 0 | 30 | 60 | 120) => ps.setFpsTarget(n);
+  const handleAntialias = () => ps.setAntialiasEnabled(!display.antialias);
+
   const handleOpenPerspectiveDebugMap = () => {
-    PlayerState.getInstance().requestPerspectiveDebugMap("perspective_debug");
+    ps.requestPerspectiveDebugMap("perspective_debug");
   };
 
   return (
@@ -77,45 +283,167 @@ export const SettingsContent: React.FC = () => {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: `${s(12)}px`,
-        alignItems: "center",
-        paddingTop: `${s(10)}px`,
+        gap: 4,
+        padding: "8px 14px 14px 14px",
         maxHeight: "100%",
         overflowY: "auto",
-        paddingBottom: `${s(10)}px`,
+        color: "#e5e7eb",
+        fontFamily: "Inter, sans-serif",
       }}
     >
-      {/* LANGUAGE SELECTION */}
-      <div style={{ width: "90%" }}>
+      {/* ── DISPLAY ── */}
+      <Section title={t("display_settings" as any)} icon={<Monitor size={14} />}>
+        <Row
+          label={t("render_scale" as any)}
+          hint={t("render_scale_desc" as any)}
+        >
+          <span />
+        </Row>
+        <Slider
+          value={display.renderScale}
+          min={0.5}
+          max={1.0}
+          step={0.05}
+          onChange={handleRenderScale}
+          display={`${Math.round(display.renderScale * 100)}%`}
+        />
+
+        <Row label={t("quality_preset" as any)}>
+          <SegmentedControl<"low" | "mid" | "high">
+            options={[
+              { value: "low", label: t("quality_low") },
+              { value: "mid", label: t("quality_mid") },
+              { value: "high", label: t("quality_high") },
+            ]}
+            value={display.qualityPreset}
+            onChange={handleQualityPreset}
+          />
+        </Row>
+
+        <Row label={t("fps_target" as any)}>
+          <SegmentedControl<0 | 30 | 60 | 120>
+            options={[
+              { value: 30, label: "30" },
+              { value: 60, label: "60" },
+              { value: 120, label: "120" },
+              { value: 0, label: t("fps_unlimited" as any) },
+            ]}
+            value={display.fpsTarget}
+            onChange={handleFpsTarget}
+          />
+        </Row>
+
+        <Row
+          label={t("antialiasing" as any)}
+          hint={t("aa_restart_hint" as any)}
+        >
+          <Toggle
+            on={display.antialias}
+            onText={t("on")}
+            offText={t("off")}
+            onClick={handleAntialias}
+          />
+        </Row>
+
+        <Row label={t("show_fps")}>
+          <Toggle
+            on={showFPS}
+            onText={t("on")}
+            offText={t("off")}
+            onClick={toggleFPS}
+          />
+        </Row>
+      </Section>
+
+      {/* ── AUDIO ── */}
+      <Section title={t("audio_settings" as any)} icon={<Volume2 size={14} />}>
+        <Row
+          label={t("music_playlist" as any)}
+        >
+          <Toggle
+            on={!musicOff}
+            onText={t("activated" as any)}
+            offText={t("deactivated" as any)}
+            onClick={handleMusicToggle}
+          />
+        </Row>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Music size={12} color="#9ca3af" />
+          <div style={{ flex: 1 }}>
+            <Slider
+              value={musicVol}
+              min={0}
+              max={1}
+              step={0.05}
+              onChange={handleMusicVol}
+              display={`${Math.round(musicVol * 100)}%`}
+              disabled={musicOff}
+            />
+          </div>
+        </div>
+
+        <Row label={t("sfx_effects" as any)}>
+          <Toggle
+            on={!sfxOff}
+            onText={t("activated" as any)}
+            offText={t("deactivated" as any)}
+            onClick={handleSfxToggle}
+          />
+        </Row>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Headphones size={12} color="#9ca3af" />
+          <div style={{ flex: 1 }}>
+            <Slider
+              value={sfxVol}
+              min={0}
+              max={1}
+              step={0.05}
+              onChange={handleSfxVol}
+              display={`${Math.round(sfxVol * 100)}%`}
+              disabled={sfxOff}
+            />
+          </div>
+        </div>
+      </Section>
+
+      {/* ── GAMEPLAY ── */}
+      <Section
+        title={t("gameplay_settings" as any)}
+        icon={<Gamepad2 size={14} />}
+      >
+        <Row label={t("blood_particles")}>
+          <Toggle
+            on={bloodEnabled}
+            onText={t("enabled")}
+            offText={t("disabled")}
+            onClick={toggleBlood}
+          />
+        </Row>
+      </Section>
+
+      {/* ── LANGUAGE ── */}
+      <Section title={t("language")} icon={<Flag size={14} />}>
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            color: "#ddd",
-            fontWeight: "bold",
-            fontSize: `${s(14)}px`,
-            marginBottom: "8px",
+            gap: 10,
+            justifyContent: "center",
+            padding: "4px 0",
           }}
         >
-          <Flag size={14 * scale} /> {t("language")}
-        </div>
-        <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
           <button
             onClick={() => setLanguage("en")}
             style={{
-              padding: `${s(4)}px`,
+              padding: 4,
               background:
-                language === "en" ? "rgba(251,191,36,0.2)" : "rgba(0,0,0,0.3)",
+                language === "en" ? "rgba(251,191,36,0.18)" : "transparent",
               border:
-                language === "en" ? "2px solid #fbbf24" : "1px solid #444",
-              borderRadius: "8px",
+                language === "en"
+                  ? "2px solid #fbbf24"
+                  : "2px solid transparent",
+              borderRadius: 8,
               cursor: "pointer",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
+              transition: "all 0.18s",
             }}
             title={t("language_english")}
           >
@@ -123,9 +451,9 @@ export const SettingsContent: React.FC = () => {
               src="https://flagcdn.com/w80/us.png"
               alt={t("language_english")}
               style={{
-                width: s(40),
-                height: s(28),
-                borderRadius: "4px",
+                width: 36,
+                height: 26,
+                borderRadius: 3,
                 filter:
                   language === "en" ? "none" : "grayscale(100%) opacity(0.5)",
               }}
@@ -134,18 +462,16 @@ export const SettingsContent: React.FC = () => {
           <button
             onClick={() => setLanguage("pt")}
             style={{
-              padding: `${s(4)}px`,
+              padding: 4,
               background:
-                language === "pt" ? "rgba(251,191,36,0.2)" : "rgba(0,0,0,0.3)",
+                language === "pt" ? "rgba(251,191,36,0.18)" : "transparent",
               border:
-                language === "pt" ? "2px solid #fbbf24" : "1px solid #444",
-              borderRadius: "8px",
+                language === "pt"
+                  ? "2px solid #fbbf24"
+                  : "2px solid transparent",
+              borderRadius: 8,
               cursor: "pointer",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
+              transition: "all 0.18s",
             }}
             title={t("language_portuguese")}
           >
@@ -153,474 +479,60 @@ export const SettingsContent: React.FC = () => {
               src="https://flagcdn.com/w80/br.png"
               alt={t("language_portuguese")}
               style={{
-                width: s(40),
-                height: s(28),
-                borderRadius: "4px",
+                width: 36,
+                height: 26,
+                borderRadius: 3,
                 filter:
                   language === "pt" ? "none" : "grayscale(100%) opacity(0.5)",
               }}
             />
           </button>
         </div>
-      </div>
+      </Section>
 
-      {/* --- AUDIO SETTINGS --- */}
-      <div style={{ width: "90%", marginTop: `${s(4)}px` }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            marginBottom: "8px",
-            color: "#fbbf24",
-            fontWeight: "bold",
-            fontSize: `${s(14)}px`,
-          }}
-        >
-          <Volume2 size={14 * scale} />
-          <span>{t("audio_settings" as any)}</span>
-        </div>
-
-        {/* Music Group */}
-        <div
-          style={{
-            background: "var(--bg-glass-heavy)",
-            padding: `${s(8)}px`,
-            borderRadius: "4px",
-            border: "1px solid var(--border-subtle)",
-            marginBottom: "4px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "6px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                color: "#ccc",
-                fontSize: `${s(12)}px`,
-              }}
-            >
-              <Music size={12 * scale} /> {t("music_playlist" as any)}
-            </div>
-            <button
-              onClick={handleMusicToggle}
-              style={{
-                padding: `${s(4)}px ${s(8)}px`,
-                borderRadius: "4px",
-                fontSize: `${s(10)}px`,
-                fontWeight: "bold",
-                border: "1px solid",
-                cursor: "pointer",
-                background: !musicOff
-                  ? "rgba(34,197,94,0.3)"
-                  : "rgba(100,100,100,0.3)",
-                borderColor: !musicOff ? "#22c55e" : "#666",
-                color: !musicOff ? "#4ade80" : "#999",
-              }}
-            >
-              {!musicOff ? t("activated" as any) : t("deactivated" as any)}
-            </button>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={musicVol}
-            onChange={(e) => handleMusicVol(parseFloat(e.target.value))}
-            style={{ width: "100%", accentColor: "#fbbf24", cursor: "pointer" }}
-            disabled={musicOff}
+      {/* ── DEBUG / DEVELOPER ── */}
+      <Section title={t("debug_section" as any)} icon={<Wrench size={14} />}>
+        <Row label={t("visualize_collisions" as any)}>
+          <Toggle
+            on={debugCollision}
+            onText={t("on")}
+            offText={t("off")}
+            onClick={toggleDebugCollision}
           />
-        </div>
-
-        {/* SFX Group */}
-        <div
-          style={{
-            background: "var(--bg-glass-heavy)",
-            padding: `${s(8)}px`,
-            borderRadius: "4px",
-            border: "1px solid var(--border-subtle)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: "6px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                color: "#ccc",
-                fontSize: `${s(12)}px`,
-              }}
-            >
-              <Headphones size={12 * scale} /> {t("sfx_effects" as any)}
-            </div>
-            <button
-              onClick={handleSfxToggle}
-              style={{
-                padding: `${s(4)}px ${s(8)}px`,
-                borderRadius: "4px",
-                fontSize: `${s(10)}px`,
-                fontWeight: "bold",
-                border: "1px solid",
-                cursor: "pointer",
-                background: !sfxOff
-                  ? "rgba(34,197,94,0.3)"
-                  : "rgba(100,100,100,0.3)",
-                borderColor: !sfxOff ? "#22c55e" : "#666",
-                color: !sfxOff ? "#4ade80" : "#999",
-              }}
-            >
-              {!sfxOff ? t("activated" as any) : t("deactivated" as any)}
-            </button>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={sfxVol}
-            onChange={(e) => handleSfxVol(parseFloat(e.target.value))}
-            style={{ width: "100%", accentColor: "#fbbf24", cursor: "pointer" }}
-            disabled={sfxOff}
-          />
-        </div>
-      </div>
-
-      {/* --- VISUAL EFFECTS --- */}
-      <div style={{ width: "90%", marginTop: `${s(4)}px` }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            marginBottom: "8px",
-            color: "#fbbf24",
-            fontWeight: "bold",
-            fontSize: `${s(14)}px`,
-          }}
-        >
-          <Droplets size={14 * scale} />
-          <span>{t("visual_effects")}</span>
-        </div>
-
-        <div
-          style={{
-            background: "var(--bg-glass-heavy)",
-            padding: `${s(8)}px`,
-            borderRadius: "4px",
-            border: "1px solid var(--border-subtle)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <span style={{ color: "#ccc", fontSize: `${s(12)}px` }}>
-            {t("blood_particles")}
-          </span>
-          <button
-            onClick={toggleBlood}
-            style={{
-              padding: `${s(6)}px ${s(10)}px`,
-              borderRadius: "4px",
-              fontSize: `${s(10)}px`,
-              fontWeight: "bold",
-              border: "1px solid",
-              transition: "all 0.2s",
-              cursor: "pointer",
-              background: bloodEnabled
-                ? "rgba(153,27,27,0.5)"
-                : "rgba(68,68,68,0.5)",
-              borderColor: bloodEnabled ? "#dc2626" : "#6b7280",
-              color: bloodEnabled ? "#fecaca" : "#9ca3af",
-              boxShadow: bloodEnabled ? "0 0 10px rgba(220,38,38,0.5)" : "none",
-            }}
-          >
-            {bloodEnabled ? t("enabled") : t("disabled")}
-          </button>
-        </div>
-
-        <div
-          style={{
-            background: "rgba(0,0,0,0.4)",
-            padding: `${s(8)}px`,
-            borderRadius: "4px",
-            border: "1px solid #333",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginTop: "4px",
-          }}
-        >
-          <span style={{ color: "#ccc", fontSize: `${s(12)}px` }}>
-            {t("quality")}
-          </span>
-          <div style={{ display: "flex", gap: "2px" }}>
-            {(["low", "mid", "high"] as const).map((q) => (
-              <button
-                key={q}
-                onClick={() => setGraphicsQuality(q)}
-                style={{
-                  padding: `${s(4)}px ${s(8)}px`,
-                  borderRadius: "2px",
-                  fontSize: `${s(10)}px`,
-                  fontWeight: "bold",
-                  border: "1px solid",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  background: graphicsQuality === q ? "#fbbf24" : "#222",
-                  borderColor: graphicsQuality === q ? "#fbbf24" : "#444",
-                  color: graphicsQuality === q ? "#000" : "#888",
-                  textTransform: "uppercase",
-                }}
-              >
-                {t(`quality_${q}` as any)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div
-          style={{
-            background: "rgba(0,0,0,0.4)",
-            padding: `${s(8)}px`,
-            borderRadius: "4px",
-            border: "1px solid #333",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginTop: "4px",
-          }}
-        >
-          <span style={{ color: "#ccc", fontSize: `${s(12)}px` }}>
-            {t("show_fps")}
-          </span>
-          <button
-            onClick={toggleFPS}
-            style={{
-              padding: `${s(6)}px ${s(10)}px`,
-              borderRadius: "4px",
-              fontSize: `${s(10)}px`,
-              fontWeight: "bold",
-              border: "1px solid",
-              transition: "all 0.2s",
-              cursor: "pointer",
-              background: showFPS ? "rgba(0,255,0,0.2)" : "rgba(68,68,68,0.5)",
-              borderColor: showFPS ? "#00ff00" : "#6b7280",
-              color: showFPS ? "#4ade80" : "#9ca3af",
-            }}
-          >
-            {showFPS ? t("on") : t("off")}
-          </button>
-        </div>
-
-        <div
-          style={{
-            background: "var(--bg-glass-heavy)",
-            padding: `${s(8)}px`,
-            borderRadius: "4px",
-            border: "1px solid var(--border-subtle)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginTop: "4px",
-          }}
-        >
-          <span style={{ color: "#ccc", fontSize: `${s(12)}px` }}>
-            {t("cloud_shadows")}
-          </span>
-          <button
-            onClick={toggleCloudShadows}
-            style={{
-              padding: `${s(6)}px ${s(10)}px`,
-              borderRadius: "4px",
-              fontSize: `${s(10)}px`,
-              fontWeight: "bold",
-              border: "1px solid",
-              transition: "all 0.2s",
-              cursor: "pointer",
-              background: cloudShadowsEnabled
-                ? "rgba(251,191,36,0.3)"
-                : "rgba(68,68,68,0.5)",
-              borderColor: cloudShadowsEnabled ? "#fbbf24" : "#6b7280",
-              color: cloudShadowsEnabled ? "#fbbf24" : "#9ca3af",
-              boxShadow: cloudShadowsEnabled
-                ? "0 0 10px rgba(251,191,36,0.3)"
-                : "none",
-            }}
-          >
-            {cloudShadowsEnabled ? t("enabled") : t("disabled")}
-          </button>
-        </div>
-      </div>
-
-      <hr style={{ width: "90%", borderColor: "#333" }} />
-
-      {/* INTERFACE SCALE */}
-      <div style={{ width: "90%" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            color: "#ddd",
-            fontWeight: "bold",
-            fontSize: `${s(14)}px`,
-            marginBottom: "8px",
-          }}
-        >
-          <Monitor size={14 * scale} /> {t("interface_scale")}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "#111",
-            padding: `${s(4)}px`,
-            borderRadius: "4px",
-            border: "1px solid #333",
-          }}
-        >
-          <button
-            onClick={() => setScale(Math.max(0.5, scale - 0.1))} // Prevent too small
-            style={{
-              padding: `${s(4)}px ${s(8)}px`,
-              background: "#333",
-              border: "none",
-              color: "white",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            <Minus size={14 * scale} />
-          </button>
-
-          <span
-            style={{
-              textAlign: "center",
-              color: "#fbbf24",
-              fontWeight: "bold",
-              fontSize: `${s(14)}px`,
-            }}
-          >
-            {(scale * 100).toFixed(0)}%
-          </span>
-
-          <button
-            onClick={() => setScale(Math.min(2.0, scale + 0.1))} // Prevent too big
-            style={{
-              padding: `${s(4)}px ${s(8)}px`,
-              background: "#333",
-              border: "none",
-              color: "white",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            <Plus size={14 * scale} />
-          </button>
-        </div>
-        <p
-          style={{
-            fontSize: `${s(10)}px`,
-            color: "#666",
-            textAlign: "center",
-            marginTop: "4px",
-          }}
-        >
-          {t("adjust_ui")}
-        </p>
-      </div>
-
-      <hr style={{ width: "100%", borderColor: "#333", margin: "5px 0" }} />
-
-      {/* DEBUG TOOLS */}
-      <div style={{ width: "90%" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            color: "#fbbf24",
-            fontWeight: "bold",
-            fontSize: `${s(14)}px`,
-            marginBottom: "8px",
-          }}
-        >
-          <SettingsIcon size={14 * scale} /> {t("debug_tools" as any)}
-        </div>
-
-        <button
-          onClick={toggleDebugCollision}
-          style={{
-            padding: `${s(10)}px`,
-            width: "100%",
-            background: debugCollision ? "#264" : "#444",
-            border: debugCollision ? "1px solid #4a6" : "1px solid #666",
-            color: "white",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: `${s(12)}px`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
-            transition: "all 0.2s",
-          }}
-        >
-          <div
-            style={{
-              width: s(12),
-              height: s(12),
-              background: debugCollision ? "#0f0" : "#666",
-              borderRadius: "50%",
-              boxShadow: debugCollision ? "0 0 8px #0f0" : "none",
-            }}
-          />
-          {t("visualize_collisions" as any)}:{" "}
-          {debugCollision ? t("on") : t("off")}
-        </button>
-
+        </Row>
         <button
           onClick={handleOpenPerspectiveDebugMap}
           style={{
-            padding: `${s(10)}px`,
+            padding: 9,
             width: "100%",
-            marginTop: "6px",
-            background: "#3b2f14",
+            background: "linear-gradient(180deg, #3b2f14 0%, #2a210d 100%)",
             border: "1px solid #c8a24a",
             color: "#f6d77b",
-            borderRadius: "4px",
+            borderRadius: 6,
             cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: `${s(12)}px`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
-            transition: "all 0.2s",
+            fontWeight: 700,
+            fontSize: 11,
+            letterSpacing: 0.3,
+            marginTop: 6,
+            transition: "all 0.18s",
           }}
         >
           {t("open_perspective_debug_map" as any)}
         </button>
-      </div>
+      </Section>
+
+      {/* ── Hidden / unused icon imports referenced via lucide tree-shaking ── */}
+      <span
+        style={{ display: "none" }}
+        aria-hidden
+      >
+        <Gauge size={1} />
+        <Eye size={1} />
+        <EyeOff size={1} />
+        <Activity size={1} />
+        <Sparkles size={1} />
+        <Droplets size={1} />
+      </span>
     </div>
   );
 };

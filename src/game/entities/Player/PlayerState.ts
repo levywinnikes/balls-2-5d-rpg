@@ -488,6 +488,55 @@ export class PlayerState extends EventEmitter {
   private _debugCollision: boolean = false;
   private _cloudShadowsEnabled: boolean = true;
 
+  // --- Display / Render Settings (3D runtime) ---
+  // renderScale: 0.5..1.0 — feeds into engine.setHardwareScalingLevel(1/scale).
+  // Lower scale = lower internal resolution (cheaper) but the world view,
+  // camera FOV and chunk draw radius remain identical.
+  // qualityPreset: tunes shadows/particles/light intensity in the 3D scene.
+  // fpsTarget: 0 = unlimited, otherwise target FPS for the render loop cap.
+  // antialias is read once at engine creation; toggling at runtime requires
+  // engine recreation, so we only persist the user choice.
+  private _displaySettings: {
+    renderScale: number;
+    qualityPreset: "low" | "mid" | "high";
+    fpsTarget: 0 | 30 | 60 | 120;
+    antialias: boolean;
+  } = (() => {
+    const defaults = {
+      renderScale: 1.0,
+      qualityPreset: "high" as "low" | "mid" | "high",
+      fpsTarget: 0 as 0 | 30 | 60 | 120,
+      antialias: true,
+    };
+    if (typeof window === "undefined" || !window.localStorage) return defaults;
+    try {
+      const raw = window.localStorage.getItem("tgs_display_settings");
+      if (!raw) return defaults;
+      const parsed = JSON.parse(raw);
+      return {
+        renderScale: Math.max(
+          0.5,
+          Math.min(1.0, Number(parsed.renderScale) || defaults.renderScale),
+        ),
+        qualityPreset:
+          parsed.qualityPreset === "low" ||
+          parsed.qualityPreset === "mid" ||
+          parsed.qualityPreset === "high"
+            ? parsed.qualityPreset
+            : defaults.qualityPreset,
+        fpsTarget: ([0, 30, 60, 120] as const).includes(parsed.fpsTarget)
+          ? parsed.fpsTarget
+          : defaults.fpsTarget,
+        antialias:
+          typeof parsed.antialias === "boolean"
+            ? parsed.antialias
+            : defaults.antialias,
+      };
+    } catch {
+      return defaults;
+    }
+  })();
+
   private constructor() {
     super();
     this.consumableManager = new ConsumableManager(this);
@@ -3698,6 +3747,52 @@ export class PlayerState extends EventEmitter {
 
   public toggleCloudShadows(): void {
     this.setCloudShadowsEnabled(!this._cloudShadowsEnabled);
+  }
+
+  // --- Display / Render Settings ---
+  public getDisplaySettings() {
+    return { ...this._displaySettings };
+  }
+
+  private persistDisplaySettings() {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    try {
+      window.localStorage.setItem(
+        "tgs_display_settings",
+        JSON.stringify(this._displaySettings),
+      );
+    } catch {
+      // ignore quota errors
+    }
+  }
+
+  public setRenderScale(scale: number) {
+    const clamped = Math.max(0.5, Math.min(1.0, scale));
+    if (this._displaySettings.renderScale === clamped) return;
+    this._displaySettings.renderScale = clamped;
+    this.persistDisplaySettings();
+    this.emit("displaySettingsChanged", this.getDisplaySettings());
+  }
+
+  public setQualityPreset(preset: "low" | "mid" | "high") {
+    if (this._displaySettings.qualityPreset === preset) return;
+    this._displaySettings.qualityPreset = preset;
+    this.persistDisplaySettings();
+    this.emit("displaySettingsChanged", this.getDisplaySettings());
+  }
+
+  public setFpsTarget(target: 0 | 30 | 60 | 120) {
+    if (this._displaySettings.fpsTarget === target) return;
+    this._displaySettings.fpsTarget = target;
+    this.persistDisplaySettings();
+    this.emit("displaySettingsChanged", this.getDisplaySettings());
+  }
+
+  public setAntialiasEnabled(enabled: boolean) {
+    if (this._displaySettings.antialias === enabled) return;
+    this._displaySettings.antialias = enabled;
+    this.persistDisplaySettings();
+    this.emit("displaySettingsChanged", this.getDisplaySettings());
   }
 
   // --- Rune Cooldown System ---

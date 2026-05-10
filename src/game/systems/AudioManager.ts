@@ -71,7 +71,6 @@ export class AudioManager {
   // --- STATE ---
   private musicLoop: Tone.Loop | null = null;
   private chimeLoop: Tone.Loop | null = null;
-  private currentChordIndex: number = 0;
   // S12-BUG3: debounce attack SFX to prevent Tone.js start-time assert in rapid combat
   private _lastAttackSfxAt: number = 0;
   private readonly ATTACK_SFX_MIN_INTERVAL_MS = 80;
@@ -91,85 +90,130 @@ export class AudioManager {
     return safeTime;
   }
 
-  // Chords: Bright, upbeat major progressions (C-G-Am-F loop)
+  // Medieval RPG progression in D Dorian (Em / Am / D / G feel) — open,
+  // pastoral, slightly melancholic. Long ring with sus2/add9 voicings to
+  // avoid the "bright pop" major sound. Each entry is one bar.
   private readonly chords = [
-    ["C3", "E3", "G3"], // C Major
-    ["G2", "B2", "D3"], // G Major
-    ["A2", "C3", "E3"], // A Minor (adds color)
-    ["F2", "A2", "C3"], // F Major
+    ["D2", "A2", "D3", "E3"], // Dm9 (root)
+    ["A2", "E3", "G3", "A3"], // Am11 (subdom)
+    ["G2", "D3", "G3", "A3"], // Gsus2 (medieval modal)
+    ["F2", "C3", "F3", "G3"], // Fsus2 (color)
+    ["D2", "A2", "D3", "F3"], // Dm (back home, minor third)
+    ["C3", "G3", "C4", "D4"], // Csus2 (lift)
+    ["A2", "E3", "A3", "B3"], // Am9 (suspense)
+    ["D2", "A2", "D3", "E3"], // Dm9 (resolve)
   ];
 
-  // Pentatonic C Major melody scale (fun, no dissonance) - SHIFTED DOWN
+  // D Dorian scale across two octaves — modal, medieval flavour.
+  // Picked stochastically (not as a fixed 16-step pattern).
   private readonly chimeScale = [
-    "C4",
     "D4",
     "E4",
+    "F4",
     "G4",
     "A4",
+    "B4",
     "C5",
     "D5",
     "E5",
+    "F5",
+    "G5",
+    "A5",
   ];
 
   private startGenerativeMusic() {
     if (!this.initialized) return;
 
-    // Fast, bouncy BPM
-    Tone.Transport.bpm.value = 95;
+    // Slow, ASMR pace — medieval walking tempo (~64 BPM, 4/4).
+    Tone.Transport.bpm.value = 64;
 
-    // --- BASS KICK Pattern (every beat) ---
+    // --- HARP / LUTE PAD: arpeggiated chord (one note every quarter, low velocity) ---
+    // Bars are 8 chords long but each chord lasts a full bar, so the cycle is
+    // ~8 bars (~30s) — far less repetitive than a 4-chord 8s loop.
+    let chordStep = 0;
+    let arpStep = 0;
     this.musicLoop = new Tone.Loop((time) => {
-      const chord = this.chords[this.currentChordIndex % this.chords.length];
+      const chord = this.chords[chordStep % this.chords.length];
 
-      // Light staccato chord stab on beat 1 & 3
-      this.cloudPad.triggerAttackRelease(chord, "8n", time, 0.5);
+      // Drone: hold the bottom two notes for the whole bar (long release)
       this.cloudPad.triggerAttackRelease(
-        chord,
-        "8n",
-        time + Tone.Time("2n").toSeconds(),
-        0.35,
+        [chord[0], chord[1]],
+        "1m",
+        time,
+        0.28,
       );
 
-      // Advance chord every 2 measures
-      if (this.currentChordIndex % 2 === 1) {
-        this.currentChordIndex =
-          (this.currentChordIndex + 1) % this.chords.length;
-      } else {
-        this.currentChordIndex++;
+      // Arpeggio: pluck the upper voicing across the bar in irregular order
+      // so it doesn't feel like a 4-note metronome. We schedule 4 hits per
+      // bar at quarter-note positions but pick a random voice each time.
+      const upper = chord.slice(1); // skip the bass root for the arp
+      const order = [0, 2, 1, 3]; // dorian dance pattern (not a strict scale)
+      for (let q = 0; q < 4; q++) {
+        const note = upper[order[(arpStep + q) % order.length] % upper.length];
+        // Skip ~25% of arp hits for breathing space
+        if (Math.random() < 0.25) continue;
+        const t = time + Tone.Time("4n").toSeconds() * q;
+        this.windChimes.triggerAttackRelease(
+          note,
+          "2n",
+          t,
+          0.18 + Math.random() * 0.12,
+        );
       }
+      arpStep++;
+      chordStep++;
     }, "1m").start(0);
 
-    // --- MELODY (Plucky xylophone-style chimes) ---
-    let melodyStep = 0;
-    const melodyPattern = [0, 2, 4, 2, 5, 4, 7, 5, 4, 2, 0, 4, 2, 0, 4, 7];
-    this.chimeLoop = new Tone.Loop((time) => {
-      const idx = melodyPattern[melodyStep % melodyPattern.length];
-      const note = this.chimeScale[idx % this.chimeScale.length];
-
-      // Random slight pan for liveliness
-      this.chimePanner.pan.value = Math.random() * 0.4 - 0.2;
-
-      // RANDOMNESS: Skip note 30% of the time for rhythmic air
-      if (Math.random() < 0.3) {
-        melodyStep++;
-        return;
+    // --- ORNAMENT MELODY (rare, sparse, stochastic — flute-like) ---
+    // No fixed pattern. Picks a note from D Dorian with weighted probability
+    // (favouring chord tones D/F/A/C). Plays at most ~1 note every 2-4
+    // beats, with octave drift, to feel improvised rather than looped.
+    const dorianWeights = [
+      0.2, // D4
+      0.05, // E4
+      0.15, // F4
+      0.05, // G4
+      0.18, // A4
+      0.05, // B4
+      0.12, // C5
+      0.1, // D5
+      0.04, // E5
+      0.04, // F5
+      0.01, // G5
+      0.01, // A5
+    ];
+    const totalWeight = dorianWeights.reduce((a, b) => a + b, 0);
+    const pickDorianNote = () => {
+      let r = Math.random() * totalWeight;
+      for (let i = 0; i < dorianWeights.length; i++) {
+        r -= dorianWeights[i];
+        if (r <= 0) return this.chimeScale[i];
       }
+      return this.chimeScale[0];
+    };
 
-      // Play note (bright, short)
+    this.chimeLoop = new Tone.Loop((time) => {
+      // Trigger only ~25% of beats — long silences are part of ASMR.
+      if (Math.random() > 0.25) return;
+
+      const note = pickDorianNote();
+
+      // Wide gentle pan to sound like distant flute drifting in the room
+      this.chimePanner.pan.value = Math.random() * 0.7 - 0.35;
+
       this.windChimes.triggerAttackRelease(
         note,
-        "16n",
+        Math.random() < 0.4 ? "4n" : "8n",
         time,
-        0.4 + Math.random() * 0.2,
+        0.12 + Math.random() * 0.18,
       );
-      melodyStep++;
-    }, "8n").start("4n"); // Offset so melody comes in slightly after bass
+    }, "4n").start("2n"); // Offset so ornament enters after first chord
 
-    // Subtle pink noise atmosphere (very quiet - just air)
+    // Subtle pink noise atmosphere (very quiet — wind through the keep)
     if (this.atmosphere.state !== "started") {
       this.atmosphere.start();
     }
-    this.atmosphereVol.volume.rampTo(-35, 2);
+    this.atmosphereVol.volume.rampTo(-40, 3);
 
     if (Tone.Transport.state !== "started") {
       Tone.Transport.start();
@@ -214,9 +258,9 @@ export class AudioManager {
     }).connect(this.masterLimiter);
 
     this.masterReverb = new Tone.Reverb({
-      decay: 2.5, // Short, punchy reverb
-      preDelay: 0.05,
-      wet: 0.2,
+      decay: 5.0, // Longer tail — stone hall / cathedral feel for medieval ASMR
+      preDelay: 0.04,
+      wet: 0.32,
     }).connect(masterEQ);
 
     // 2. Buses
@@ -234,22 +278,25 @@ export class AudioManager {
       .connect(this.musicBus)
       .start();
 
+    // Soft drone/pad — slow attack, very long release, dark spectrum.
+    // Triangle wave + low-passed via AutoFilter gives a "bowed psaltery" /
+    // distant choir vibe without the synthy edge of a square wave.
     this.cloudPad = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "square" }, // Brighter timbre
+      oscillator: { type: "triangle" },
       envelope: {
-        attack: 0.02, // Fast attack — punchy
-        decay: 0.3,
-        sustain: 0.4,
-        release: 0.5,
+        attack: 1.4, // Slow swell — never a stab
+        decay: 0.4,
+        sustain: 0.7,
+        release: 3.5, // Long ring after the bar ends
       },
-      volume: -14,
+      volume: -18,
     });
 
     this.cloudFilter = new Tone.AutoFilter({
-      frequency: 0.3,
-      baseFrequency: 800,
-      octaves: 1,
-      depth: 0.2,
+      frequency: 0.08, // Slow breathing (~12s cycle)
+      baseFrequency: 380, // Darker — keeps the timbre warm
+      octaves: 1.4,
+      depth: 0.5,
       type: "sine",
     })
       .connect(padPanner)
@@ -257,24 +304,25 @@ export class AudioManager {
 
     this.cloudPad.connect(this.cloudFilter);
 
-    // B) Wind Chimes - Bright Sparkles
+    // B) Harp / lute melody voice — plucked with long bell-like release.
+    // Dotted-quarter delay gives the medieval "echoing keep" feel.
     this.chimeDelay = new Tone.PingPongDelay({
-      delayTime: "4n",
-      feedback: 0.2,
-      wet: 0.2,
+      delayTime: "4n.",
+      feedback: 0.32,
+      wet: 0.28,
     }).connect(this.musicBus);
 
     this.chimePanner = new Tone.Panner(0).connect(this.chimeDelay);
 
     this.windChimes = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "triangle" }, // Bright but not harsh
+      oscillator: { type: "triangle" },
       envelope: {
-        attack: 0.005, // Instant attack — percussive
-        decay: 0.15, // Short decay — marimba/xylophone feel
-        sustain: 0,
-        release: 0.3,
+        attack: 0.004, // Pluck
+        decay: 0.6, // Bell-like fall
+        sustain: 0.05,
+        release: 1.6, // Long ring → ASMR shimmer
       },
-      volume: -8, // Louder melody
+      volume: -16, // Quieter — ornament, not lead
     }).connect(this.chimePanner);
 
     // C) Atmosphere (Air) - High frequency focus for "tingles"

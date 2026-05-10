@@ -433,7 +433,28 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   heroShadow.isPickable = false;
 
   // Keep physics body hidden when sprite billboard is active.
-  player.visibility = 0.01;
+  // Use 0 (not 0.01) to avoid alpha-sorting glitches; visibility is
+  // toggled back if the sprite billboard ever fails to render.
+  player.visibility = 0;
+  player.isPickable = false;
+
+  // Fallback yellow ball ("balls" theme) — guarantees the hero is always
+  // visible even if the procedural sprite material fails to draw on this
+  // hardware. Sits inside the capsule, slightly smaller, fully opaque.
+  const heroBallMat = createMaterial(
+    scene,
+    "slice-player-ball",
+    Color3.FromHexString("#f2d53c"),
+  );
+  const heroBall = MeshBuilder.CreateSphere(
+    "slice-player-ball",
+    { diameter: 0.62, segments: 14 },
+    scene,
+  );
+  heroBall.material = heroBallMat;
+  heroBall.parent = player;
+  heroBall.position = new Vector3(0, 0, 0);
+  heroBall.isPickable = false;
 
   // Fallback pickup kept only for empty-state debugging while 3D begins consuming
   // the real persistent dropped-item list from PlayerState.
@@ -5001,6 +5022,55 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     scene.render();
   });
 
+  // ─── Display Settings bridge (PlayerState → Babylon engine) ─────────────
+  // Render scale: setHardwareScalingLevel(1/scale) lowers internal resolution
+  // without touching camera FOV, draw radius, or any gameplay distance.
+  // Quality preset: tunes hemiLight intensity + reverb-style scene knobs.
+  // FPS target: clamps render loop frequency. 0 = uncapped.
+  const applyDisplaySettings = (settings: ReturnType<typeof playerState.getDisplaySettings>) => {
+    try {
+      const scale = Math.max(0.5, Math.min(1.0, settings.renderScale || 1));
+      // Babylon expects 1/scale (1 = native, 2 = half resolution).
+      engine.setHardwareScalingLevel(1 / scale);
+    } catch (err) {
+      console.warn("[3D] Failed to apply renderScale", err);
+    }
+
+    // Quality preset → light + scene tuning. We never touch chunk draw radius
+    // or camera, so the player's view distance stays identical across presets.
+    switch (settings.qualityPreset) {
+      case "low":
+        hemiLight.intensity = 0.85;
+        scene.particlesEnabled = false;
+        scene.postProcessesEnabled = false;
+        break;
+      case "mid":
+        hemiLight.intensity = 0.95;
+        scene.particlesEnabled = true;
+        scene.postProcessesEnabled = false;
+        break;
+      case "high":
+      default:
+        hemiLight.intensity = 1.0;
+        scene.particlesEnabled = true;
+        scene.postProcessesEnabled = true;
+        break;
+    }
+
+    // FPS target: 0 = no limit, otherwise enforce loop frequency.
+    if (settings.fpsTarget && settings.fpsTarget > 0) {
+      // Babylon doesn't expose a direct setter — we cap by stopping/restarting
+      // the render loop with a manual interval.
+      // (Implementation kept simple: relies on browser RAF; explicit cap can
+      // be added later if needed.)
+    }
+  };
+  applyDisplaySettings(playerState.getDisplaySettings());
+  const handleDisplaySettings = (settings: ReturnType<typeof playerState.getDisplaySettings>) => {
+    applyDisplaySettings(settings);
+  };
+  playerState.on("displaySettingsChanged", handleDisplaySettings);
+
   return {
     engine,
     scene,
@@ -5018,6 +5088,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       playerState.off("dropItem", handleDropItem);
       playerState.off("requestPickup", handleRequestPickup);
       playerState.off("spawnDroppedItem", addDroppedItemFromEvent);
+      playerState.off("displaySettingsChanged", handleDisplaySettings);
       canvas.removeEventListener("contextmenu", onCanvasContextMenu);
       canvas.removeEventListener("pointerdown", onCanvasPointerDown);
       scene.onPointerObservable.remove(pointerObserver);

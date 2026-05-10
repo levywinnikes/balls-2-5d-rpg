@@ -45,6 +45,19 @@ export const translations = {
     quality_high: "HIGH",
     open_perspective_debug_map: "Open 3D Debug Map",
 
+    // Settings — Display section (3D runtime)
+    display_settings: "Display",
+    render_scale: "Render Scale",
+    render_scale_desc:
+      "Lower internal resolution to improve FPS. View distance is unchanged.",
+    quality_preset: "Graphics Quality",
+    fps_target: "FPS Limit",
+    fps_unlimited: "Unlimited",
+    antialiasing: "Antialiasing",
+    aa_restart_hint: "Takes effect on next launch.",
+    gameplay_settings: "Gameplay",
+    debug_section: "Developer Tools",
+
     // Benchmark UI
     benchmark_status_pass: "PASS",
     benchmark_status_fail: "FAIL",
@@ -809,6 +822,19 @@ export const translations = {
     quality_mid: "MÉDIA",
     quality_high: "ALTA",
     open_perspective_debug_map: "Abrir Mapa Debug 3D",
+
+    // Settings — Display section (3D runtime)
+    display_settings: "Vídeo",
+    render_scale: "Escala de Renderização",
+    render_scale_desc:
+      "Reduz a resolução interna para melhorar o FPS. O alcance de visão não muda.",
+    quality_preset: "Qualidade Gráfica",
+    fps_target: "Limite de FPS",
+    fps_unlimited: "Sem Limite",
+    antialiasing: "Antialiasing",
+    aa_restart_hint: "Aplica ao reiniciar o jogo.",
+    gameplay_settings: "Jogabilidade",
+    debug_section: "Ferramentas de Desenvolvedor",
 
     // Benchmark UI
     benchmark_status_pass: "SUCESSO",
