@@ -11,6 +11,8 @@ import { createDebugSliceScene } from "../runtime/createDebugSliceScene";
 import { MainMenuUI } from "../../ui/screens/MainMenuUI";
 import { t_game } from "../../game/i18n/translations";
 import { PerfMonitor } from "../../ui/components/PerfMonitor";
+import { useUI } from "../../context/UIContext";
+import { SystemMenuUI } from "../../ui/windows/SystemMenuUI";
 
 // Default map for new 3D games. Will become the world map in Phase 3.
 const DEFAULT_3D_MAP = "city_3d_multi";
@@ -37,8 +39,13 @@ export function ThreeDSliceView() {
   // S9-T1: damage vignette flash
   const [vignetteActive, setVignetteActive] = useState(false);
   const vignetteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { toggleWindow, closeWindow, isWindowOpen, openWindow } =
-    useWindowSystem();
+  const {
+    toggleWindow: toggleRuntimeWindow,
+    closeWindow,
+    isWindowOpen,
+    openWindow,
+  } = useWindowSystem();
+  const { windows, toggleWindow: toggleUiWindow } = useUI();
 
   // ── 1.3: Handle menu start (new game or load) ──────────────────────────────
   const handleThreeDStart = useCallback((data: any) => {
@@ -143,7 +150,6 @@ export function ThreeDSliceView() {
         cheats: "cheats",
         // S11-T1: Grimorio now has its own window
         grimorio: "grimorio",
-        systemMenu: "settings",
       };
 
       const mappedId = windowIdMap[detail.key];
@@ -172,6 +178,27 @@ export function ThreeDSliceView() {
     };
   }, [isInGame, openWindow, closeWindow]);
 
+  const saveAndNotify = useCallback(async () => {
+    if (!runtimeRef.current?.save) {
+      return false;
+    }
+
+    const ok = await runtimeRef.current.save();
+    PlayerState.getInstance().emit("uiNotification", {
+      type: ok ? "success" : "error",
+      message: ok ? t_game("msg_quick_saved") : t_game("msg_save_failed"),
+    });
+    return ok;
+  }, []);
+
+  const handleSystemSaveAndExit = useCallback(async () => {
+    const ok = await saveAndNotify();
+    if (ok) {
+      handleReturnToMenu();
+    }
+    return ok;
+  }, [saveAndNotify, handleReturnToMenu]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement) {
@@ -182,52 +209,63 @@ export function ThreeDSliceView() {
 
       if (key === "i" || event.key === "Tab") {
         event.preventDefault();
-        toggleWindow("hero_menu");
+        toggleRuntimeWindow("hero_menu");
         return;
       }
 
       if (key === "j" || key === "l") {
         event.preventDefault();
-        toggleWindow("questLog");
+        toggleRuntimeWindow("questLog");
         return;
       }
 
       if (key === "o") {
         event.preventDefault();
-        toggleWindow("settings");
+        toggleRuntimeWindow("settings");
         return;
       }
 
       if (key === "m") {
         event.preventDefault();
-        toggleWindow("expandedMap");
+        toggleRuntimeWindow("expandedMap");
         return;
       }
 
-      if (key === "escape" && isWindowOpen("hero_menu")) {
+      if (key === "escape") {
         event.preventDefault();
-        closeWindow("hero_menu");
+        if (isWindowOpen("hero_menu")) {
+          closeWindow("hero_menu");
+          return;
+        }
+
+        if (windows.systemMenu) {
+          toggleUiWindow("systemMenu");
+          return;
+        }
+
+        toggleUiWindow("systemMenu");
+        if (isWindowOpen("settings")) closeWindow("settings");
+        if (isWindowOpen("expandedMap")) closeWindow("expandedMap");
+        return;
       }
 
       // F5 — manual save (2.5)
       if (event.key === "F5") {
         event.preventDefault();
-        if (runtimeRef.current?.save) {
-          void runtimeRef.current.save().then((ok) => {
-            PlayerState.getInstance().emit("uiNotification", {
-              type: ok ? "success" : "error",
-              message: ok
-                ? t_game("msg_quick_saved")
-                : t_game("msg_save_failed"),
-            });
-          });
-        }
+        void saveAndNotify();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleWindow, closeWindow, isWindowOpen]);
+  }, [
+    toggleRuntimeWindow,
+    closeWindow,
+    isWindowOpen,
+    windows.systemMenu,
+    toggleUiWindow,
+    saveAndNotify,
+  ]);
 
   useEffect(() => {
     const ps = PlayerState.getInstance();
@@ -379,6 +417,13 @@ export function ThreeDSliceView() {
             ))}
           </div>
           <WindowLayer />
+          <SystemMenuUI
+            isOpen={windows.systemMenu}
+            onClose={() => toggleUiWindow("systemMenu")}
+            onSave={saveAndNotify}
+            onSaveAndExit={handleSystemSaveAndExit}
+            useScenePause={false}
+          />
           <HeroDashboard />
           <NotificationSystem />
           <LevelUpNotification />

@@ -1,13 +1,13 @@
 {
-    "updatedAt": "2026-05-09T22:00:00-03:00",
-    "task": "Redesenhar janela de Settings para o runtime 3D, adicionar Render Scale preservando alcance de visão, remover opções não funcionais e investigar hero invisível",
-    "contractsRead": [
-        "THREE_D_INTEGRATION_BLUEPRINT.md",
-        "UI_DESIGN_CONTRACT.md",
-        "PLAYER_STATE_CONTRACT.md",
-        "LOCALIZATION_CONTRACT.md"
-    ],
-    "understanding": "Settings vira janela com seções claras (Display, Audio, Gameplay, Language, Debug). Display recebe Render Scale (Babylon engine.setHardwareScalingLevel), Quality Preset, FPS Target, Antialias e Show FPS. Cloud Shadows e Interface Scale saem. Toda string nova usa translation keys. Comunicação React->Babylon segue padrão PlayerState.emit/on.",
-    "riskConflict": "Engine Babylon não é acessível diretamente da UI React; ponte via PlayerState (novo emitter). Render Scale via setHardwareScalingLevel preserva câmera/draw radius. Hero invisível pode ser sprite billboard; investigar e adicionar fallback.",
-    "objectiveQuestion": "Nenhuma — implementar refatoração completa e validar com tsc + smoke:test."
+  "updatedAt": "2026-05-09T23:10:00-03:00",
+  "task": "Restaurar no modo 3D o menu de sistema via Esc com opção funcional de Salvar e Sair, mantendo paridade com o fluxo do 2D",
+  "contractsRead": [
+    "THREE_D_INTEGRATION_BLUEPRINT.md",
+    "UI_DESIGN_CONTRACT.md",
+    "SAVE_SYSTEM_CONTRACT.md",
+    "LOCALIZATION_CONTRACT.md"
+  ],
+  "understanding": "No 3D, Esc deve abrir/fechar o menu de sistema e o jogador precisa conseguir salvar e sair para o menu inicial. O fluxo deve reutilizar tradução existente e preservar o comportamento atual do 2D.",
+  "riskConflict": "Hoje o bridge de janelas no 3D mapeia systemMenu para settings, impedindo abrir o menu correto. O SystemMenuUI foi pensado para Phaser/GameScene e pode falhar no 3D se não receber handlers explícitos de save e exit.",
+  "objectiveQuestion": "No 3D, Save and Exit deve retornar ao menu principal da aplicação (sem reload forçado) após salvar com sucesso; seguirei com esse comportamento."
 }

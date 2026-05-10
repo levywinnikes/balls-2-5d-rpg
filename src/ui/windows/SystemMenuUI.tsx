@@ -32,13 +32,20 @@ const getGameSystems = (): { saveSystem?: any; scene?: any } => {
 export const SystemMenuUI: React.FC<{
   isOpen: boolean;
   onClose: () => void;
-}> = ({ isOpen, onClose }) => {
+  onSave?: () => Promise<boolean>;
+  onSaveAndExit?: () => Promise<boolean>;
+  useScenePause?: boolean;
+}> = ({ isOpen, onClose, onSave, onSaveAndExit, useScenePause = true }) => {
   const { s, windows, windowPositions, toggleWindow } = useUI();
   const { t } = useLanguage();
   const sceneRef = React.useRef<any>(null);
 
-  // Handle Pause/Resume
+  // Handle Pause/Resume (2D runtime)
   useEffect(() => {
+    if (!useScenePause) {
+      return;
+    }
+
     // Find and store scene reference ONCE when opening
     if (isOpen) {
       const { scene } = getGameSystems();
@@ -64,10 +71,25 @@ export const SystemMenuUI: React.FC<{
         sceneRef.current.scene.resume();
       }
     };
-  }, [isOpen]);
+  }, [isOpen, useScenePause]);
 
   const handleSaveToFile = async () => {
     console.log("SystemMenu: Save clicked");
+
+    if (onSave) {
+      try {
+        const success = await onSave();
+        if (success) {
+          onClose();
+        } else {
+          alert(t("msg_save_failed"));
+        }
+      } catch (e) {
+        console.error(e);
+        alert(t("msg_save_exception", { error: String(e) }));
+      }
+      return;
+    }
 
     // Use the ref if available, or fetch fresh
     const scene = sceneRef.current || getGameSystems().scene;
@@ -117,6 +139,19 @@ export const SystemMenuUI: React.FC<{
 
   const handleExitToTitle = async () => {
     console.log("SystemMenu: Exit clicked");
+
+    if (onSaveAndExit) {
+      try {
+        const ok = await onSaveAndExit();
+        if (!ok) {
+          alert(t("msg_save_failed"));
+        }
+      } catch (e) {
+        alert(t("msg_save_exit_exception", { error: String(e) }));
+      }
+      return;
+    }
+
     const scene = sceneRef.current || getGameSystems().scene;
     const saveSystem = scene?.saveSystem;
 
