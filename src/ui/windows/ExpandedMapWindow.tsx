@@ -24,6 +24,26 @@ import {
   LocateFixed,
 } from "lucide-react";
 import { WorldMapService } from "../../services/WorldMapService";
+import {
+  bmsGridXToVisualGridX,
+  bufferToCanvasScale,
+  clampToMapBounds,
+  gridToBufferPx,
+  worldToGridPoint,
+  gridToWorldPoint,
+} from "../utils/MapCoordinateUtils";
+
+// Persisted view state across open/close of the expanded map.
+// Module-scope so it survives unmount; per-level so each floor remembers its own framing.
+const persistedView: {
+  zoom: number;
+  scrollByLevel: Record<string, { left: number; top: number }>;
+  lastViewLevel: string | null;
+} = {
+  zoom: 1,
+  scrollByLevel: {},
+  lastViewLevel: null,
+};
 
 export const ExpandedMapContent: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -33,9 +53,11 @@ export const ExpandedMapContent: React.FC = () => {
   const playerState = PlayerState.getInstance();
   const { s, scale } = useUI();
 
-  // Estados de Controle
-  const [viewLevel, setViewLevel] = useState<string>("0");
-  const [zoom, setZoom] = useState<number>(1);
+  // Estados de Controle (initialized from persistedView)
+  const [viewLevel, setViewLevel] = useState<string>(
+    persistedView.lastViewLevel || "0",
+  );
+  const [zoom, setZoom] = useState<number>(persistedView.zoom);
 
   // --- ZOOM ANCHOR FOR ATOMIC SYNC ---
   const zoomAnchorRef = useRef<{
@@ -130,11 +152,14 @@ export const ExpandedMapContent: React.FC = () => {
       setViewLevel(pPos.level);
     }
 
-    // Calculate scroll target based on 1:1 map scaled by zoom
+    // Center on the player's VISUAL X (mirrored from BMS) so the scroll
+    // matches the mirrored buffer drawn on the canvas.
     const tileSize = mapData.tileSize || 32;
     const PIXEL_SCALE = 4 * zoom;
-    const drawX = (pPos.x / tileSize) * PIXEL_SCALE;
-    const drawY = (pPos.y / tileSize) * PIXEL_SCALE;
+    const playerGrid = worldToGridPoint(pPos.x, pPos.y, tileSize);
+    const visualX = bmsGridXToVisualGridX(playerGrid.x, mapData.width);
+    const drawX = visualX * PIXEL_SCALE;
+    const drawY = playerGrid.y * PIXEL_SCALE;
 
     const container = containerRef.current;
     container.scrollTo({
@@ -167,18 +192,46 @@ export const ExpandedMapContent: React.FC = () => {
     });
   }, [mapData, viewLevel]);
 
-  // --- AUTO-CENTER ON OPEN ---
-  // EXEC COMPATIBILITY: We use mapData as a dependency to ensure we only center once the data is actually loaded.
+  // --- RESTORE PERSISTED SCROLL OR AUTO-CENTER ON OPEN ---
+  // If the user already opened the map before, restore their previous scroll
+  // position for this level. Otherwise center on player.
   const hasAutoCentered = useRef(false);
   useEffect(() => {
     if (!mapData || hasAutoCentered.current) return;
 
     const timer = setTimeout(() => {
-      handleCenter();
+      const container = containerRef.current;
+      const remembered = persistedView.scrollByLevel[viewLevel];
+      if (container && remembered) {
+        container.scrollLeft = remembered.left;
+        container.scrollTop = remembered.top;
+      } else {
+        handleCenter();
+      }
       hasAutoCentered.current = true;
     }, 150);
     return () => clearTimeout(timer);
-  }, [mapData, handleCenter]);
+  }, [mapData, handleCenter, viewLevel]);
+
+  // --- PERSIST SCROLL POSITION PER LEVEL ---
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onScroll = () => {
+      persistedView.scrollByLevel[viewLevel] = {
+        left: container.scrollLeft,
+        top: container.scrollTop,
+      };
+      persistedView.lastViewLevel = viewLevel;
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => container.removeEventListener("scroll", onScroll);
+  }, [viewLevel]);
+
+  // --- PERSIST ZOOM ---
+  useEffect(() => {
+    persistedView.zoom = zoom;
+  }, [zoom]);
 
   // --- MOUSE PANNING (DRAG TO SCROLL) ---
   const [isDragging, setIsDragging] = useState(false);
@@ -233,8 +286,12 @@ export const ExpandedMapContent: React.FC = () => {
     const worldX = (container.scrollLeft + localX) / zoom;
     const worldY = (container.scrollTop + localY) / zoom;
 
-    const gridX = Math.floor(worldX / 4);
+    // The canvas displays a mirrored buffer, so `worldX` is in VISUAL space.
+    // Convert to BMS-canonical grid X for marker storage and lookup.
+    const visualGridX = Math.floor(worldX / 4);
     const gridY = Math.floor(worldY / 4);
+    const mapW = mapData?.width || 1;
+    const gridX = Math.floor(bmsGridXToVisualGridX(visualGridX, mapW));
 
     const marker = playerState.getMarkers().find((m) => {
       const mx = Math.floor(m.x / 32);
@@ -361,35 +418,64 @@ export const ExpandedMapContent: React.FC = () => {
         if (canvas.height !== currentBuffer.height)
           canvas.height = currentBuffer.height;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Mirror the buffer in X so the map matches what the player sees
+        // in the 3D scene (Babylon LH renders +X world to screen-left).
+        // Markers/player are then plotted using `bmsGridXToVisualGridX`
+        // so they land on the correct tile of the mirrored buffer.
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
         if (prevBuffer && alpha < 1) {
           ctx.globalAlpha = 1 - alpha;
           ctx.drawImage(prevBuffer, 0, 0, canvas.width, canvas.height);
         }
-
         ctx.globalAlpha = alpha;
         ctx.drawImage(currentBuffer, 0, 0, canvas.width, canvas.height);
         ctx.globalAlpha = 1.0;
+        ctx.restore();
       }
 
       const pPos = playerState.getPosition();
+      const mapW = mapData?.width || 1;
 
       if (pPos.level === viewLevel) {
         const tileSize = mapData?.tileSize || 32;
-        const drawX = Math.floor(pPos.x / tileSize);
-        const drawY = Math.floor(pPos.y / tileSize);
+        const playerGrid = worldToGridPoint(pPos.x, pPos.y, tileSize);
+        const visualX = bmsGridXToVisualGridX(playerGrid.x, mapW);
+        const drawX = gridToBufferPx(visualX);
+        const drawY = gridToBufferPx(playerGrid.y);
+
+        // Marker scales inversely with zoom so it stays ~6px visually.
+        const visualSize = Math.max(2, Math.ceil(6 / Math.max(zoom, 0.1)));
+        const half = visualSize / 2;
+
+        ctx.fillStyle = "#000";
+        ctx.fillRect(
+          drawX - half - 1,
+          drawY - half - 1,
+          visualSize + 2,
+          visualSize + 2,
+        );
 
         ctx.fillStyle = "#FFF";
-        ctx.fillRect(drawX - 1, drawY, 3, 1);
-        ctx.fillRect(drawX, drawY - 1, 1, 3);
-
+        ctx.fillRect(drawX - half, drawY - half, visualSize, visualSize);
         ctx.fillStyle = "#F00";
-        ctx.fillRect(drawX, drawY, 1, 1);
+        const innerSize = Math.max(1, Math.floor(visualSize / 3));
+        ctx.fillRect(
+          drawX - innerSize / 2,
+          drawY - innerSize / 2,
+          innerSize,
+          innerSize,
+        );
       }
 
       playerState.getMarkers().forEach((m) => {
         if (m.level === viewLevel) {
-          const mx = Math.floor(m.x / 32);
-          const my = Math.floor(m.y / 32);
+          const markerGrid = worldToGridPoint(m.x, m.y, 32);
+          const visualMX = bmsGridXToVisualGridX(markerGrid.x, mapW);
+          const mx = gridToBufferPx(visualMX);
+          const my = gridToBufferPx(markerGrid.y);
           const pulse = Math.sin(time / 200) * 0.5 + 0.5;
           ctx.fillStyle = m.color || "#ff0000";
           ctx.beginPath();
@@ -411,8 +497,9 @@ export const ExpandedMapContent: React.FC = () => {
       });
 
       if (menu) {
-        const cx = menu.gridX * 4 + 2;
-        const cy = menu.gridY * 4 + 2;
+        const visualMenuX = bmsGridXToVisualGridX(menu.gridX, mapW);
+        const cx = gridToBufferPx(visualMenuX) + 2;
+        const cy = gridToBufferPx(menu.gridY) + 2;
         ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
         ctx.lineWidth = 0.5;
         ctx.beginPath();
@@ -428,7 +515,7 @@ export const ExpandedMapContent: React.FC = () => {
 
     animationId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationId);
-  }, [viewLevel, playerState, mapData, menu]);
+  }, [viewLevel, playerState, mapData, menu, zoom]);
 
   const btnStyle = {
     padding: `${s(4)}px ${s(8)}px`,

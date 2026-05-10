@@ -2,6 +2,70 @@
 
 ## Delta Entry
 
+- Date: 2026-05-09
+- Task: Map UX completo — invers\u00e3o X corrigida no 3D, minimapa player-centered, marker do map expandido vis\u00edvel em qualquer zoom, persist\u00eancia de scroll/zoom
+- Scope: Corrigir 4 bugs de UX dos mapas: (1) eixo X invertido entre 3D e mapas, (2) minimapa n\u00e3o seguia o player, (3) fog of war n\u00e3o aparecia, (4) marker do player invis\u00edvel no map expandido
+- Domain: ui, map, perspective
+- Modules: src/three-d/runtime/createDebugSliceScene.ts, src/ui/components/SidebarMinimap.tsx, src/ui/windows/ExpandedMapWindow.tsx, docs/MAP_UI_MECHANICS.md
+- Previous Behavior:
+  - Top-down 3D resolvia movimento via Vector3.Project (screen-space) que invertia o eixo X em LH coordinates → andar para esquerda visualmente movia para direita no minimapa
+  - SidebarMinimap era world-locked thumbnail (mapa fixo, player marker se move) — UX n\u00e3o-padr\u00e3o para RPG
+  - Fog of war computado sobre o buffer inteiro mas projetado em escala reduzida → invis\u00edvel
+  - Marker do player no ExpandedMapWindow tinha tamanho fixo de 1-3 pixels no buffer → invis\u00edvel ap\u00f3s scale CSS em zoom < 1
+  - Map expandido sempre auto-centrava no player ao abrir, perdendo a framing escolhida pelo usu\u00e1rio
+- New Behavior:
+  - Top-down usa mapeamento can\u00f4nico fixo: D→+X mundo, W→-Z mundo (sem screen-space)
+  - SidebarMinimap voltou a player-centered: player fixo no centro, mapa rola, fog segue regi\u00e3o vis\u00edvel
+  - ExpandedMapWindow continua world-locked (correto para um map window) com player marker que escala inversamente ao zoom (sempre ~6px visuais, outline preto + corpo branco + miolo vermelho)
+  - Map expandido persiste zoom global e scroll por n\u00edvel (m\u00f3dulo-scope `persistedView`); restaura ao reabrir, com fallback para auto-center se primeira vez
+- Invariants Preserved:
+  - PlayerState.recordPlayerPosition continua publicando world pixels can\u00f4nicos
+  - WorldMapService continua sendo a fonte do buffer
+  - MapCoordinateUtils continua sendo a \u00fanica fonte de convers\u00f5es
+  - Nenhuma compensa\u00e7\u00e3o de eixo em componentes UI (fix \u00e9 na fonte: 3D)
+- Risks:
+  - Mudan\u00e7a no input top-down pode alterar feel para jogadores acostumados \u00e0 vers\u00e3o invertida — mas correto canonicamente
+  - persistedView \u00e9 reset apenas em reload da p\u00e1gina (n\u00e3o persistido em SaveSystem) — adequado para UX state ef\u00eamero
+- Validation:
+  - npx tsc --noEmit --skipLibCheck: 0 erros
+  - npm run smoke:test: 8/8 checkpoints OK
+- Rollback Hint:
+  - createDebugSliceScene.ts: restaurar bloco screen-space com Vector3.Project
+  - SidebarMinimap.tsx: voltar para world-locked thumbnail (calcular dX/dY a partir do centro do buffer)
+  - ExpandedMapWindow.tsx: remover bloco persistedView e restaurar marker fixo de 1px
+
+## Delta Entry
+
+- Date: 2026-05-10
+- Task: Minimap e WorldMap — refatoração para modelo world-locked com coordenadas canônicas
+- Scope: SidebarMinimap convertido de radar (player fixo no centro) para world-locked thumbnail (buffer inteiro, player marcado); ExpandedMapWindow unificado com mesmos helpers
+- Domain: ui, map
+- Modules: src/ui/components/SidebarMinimap.tsx, src/ui/windows/ExpandedMapWindow.tsx, src/ui/utils/MapCoordinateUtils.ts (novo)
+- Previous Behavior:
+  - SidebarMinimap usava modelo radar: player no centro, mapa se movia ao redor
+  - Conversões de coordenadas duplicadas em cada componente (sem fonte única)
+  - ExpandedMapWindow usava fórmulas de conversão locais independentes
+  - Orientação do minimapa inconsistente com movimento 3D (screen-space vs world-space)
+- New Behavior:
+  - SidebarMinimap exibe o buffer world-locked inteiro do nível, player marcado com cruz branca na posição canônica
+  - ExpandedMapWindow usa os mesmos helpers para marcadores e posição do player
+  - MapCoordinateUtils.ts é a fonte única de conversões: worldToGridPoint, gridToBufferPx, bufferToCanvasScale, bufferPxToGrid
+  - MAP_UI_BUFFER_TILE_SIZE (=4) centralizado no utilitário, sem duplicação
+- Invariants Preserved:
+  - PlayerState continua sendo a única fonte de posição canônica
+  - WorldMapService continua sendo a fonte do buffer de mapa
+  - Nenhuma mudança no createDebugSliceScene.ts (movimento 3D intacto)
+  - Todas as strings UI existentes preservadas (sem hardcode)
+- Risks:
+  - Em mapas muito grandes (256×256 tiles), o minimapa mostra o buffer completo em escala menor — zoom padrão pode parecer pequeno
+- Validation:
+  - npx tsc --noEmit --skipLibCheck: 0 erros
+  - npm run smoke:test: 8/8 checkpoints OK
+- Rollback Hint:
+  - Reverter SidebarMinimap para modelo radar (player no centro, offset via pGridX/pGridY). Remover MapCoordinateUtils.ts. Restaurar fórmulas locais em ExpandedMapWindow.
+
+## Delta Entry
+
 - Date: 2026-04-23
 - Task: topdown camera preset toggle
 - Scope: topdown camera now supports safe and cinematic presets; sprite remains vertical

@@ -194,7 +194,10 @@ export function createEnemyVisual(
     },
     scene,
   );
-  const pickProxyMat = new StandardMaterial(`${nodeName}-pick-proxy-mat`, scene);
+  const pickProxyMat = new StandardMaterial(
+    `${nodeName}-pick-proxy-mat`,
+    scene,
+  );
   pickProxyMat.alpha = 0;
   pickProxyMat.backFaceCulling = false;
   pickProxyMat.disableLighting = true;

@@ -98,17 +98,83 @@ function buildBoxVerts(
   // 24 vertices (4 per face) to preserve sharp edges and proper face UVs.
   const positions = [
     // top (+Y), CCW viewed from above
-    x0, yTop, z0, x0, yTop, z1, x1, yTop, z1, x1, yTop, z0,
+    x0,
+    yTop,
+    z0,
+    x0,
+    yTop,
+    z1,
+    x1,
+    yTop,
+    z1,
+    x1,
+    yTop,
+    z0,
     // bottom (-Y), CCW viewed from below
-    x0, yBot, z1, x0, yBot, z0, x1, yBot, z0, x1, yBot, z1,
+    x0,
+    yBot,
+    z1,
+    x0,
+    yBot,
+    z0,
+    x1,
+    yBot,
+    z0,
+    x1,
+    yBot,
+    z1,
     // front (-Z), CCW viewed from -Z
-    x0, yBot, z0, x0, yTop, z0, x1, yTop, z0, x1, yBot, z0,
+    x0,
+    yBot,
+    z0,
+    x0,
+    yTop,
+    z0,
+    x1,
+    yTop,
+    z0,
+    x1,
+    yBot,
+    z0,
     // back (+Z), CCW viewed from +Z
-    x1, yBot, z1, x1, yTop, z1, x0, yTop, z1, x0, yBot, z1,
+    x1,
+    yBot,
+    z1,
+    x1,
+    yTop,
+    z1,
+    x0,
+    yTop,
+    z1,
+    x0,
+    yBot,
+    z1,
     // right (+X), CCW viewed from +X
-    x1, yBot, z0, x1, yTop, z0, x1, yTop, z1, x1, yBot, z1,
+    x1,
+    yBot,
+    z0,
+    x1,
+    yTop,
+    z0,
+    x1,
+    yTop,
+    z1,
+    x1,
+    yBot,
+    z1,
     // left (-X), CCW viewed from -X
-    x0, yBot, z1, x0, yTop, z1, x0, yTop, z0, x0, yBot, z0,
+    x0,
+    yBot,
+    z1,
+    x0,
+    yTop,
+    z1,
+    x0,
+    yTop,
+    z0,
+    x0,
+    yBot,
+    z0,
   ];
 
   const indices: number[] = [];
@@ -145,27 +211,39 @@ function buildRoofVerts(
     yRidge = baseY + ridgeH;
 
   const positions = [
-    x0, yBase, z0, // 0 front-left
-    x1, yBase, z0, // 1 front-right
-    x1, yBase, z1, // 2 back-right
-    x0, yBase, z1, // 3 back-left
-    xM, yRidge, zM, // 4 peak
+    x0,
+    yBase,
+    z0, // 0 front-left
+    x1,
+    yBase,
+    z0, // 1 front-right
+    x1,
+    yBase,
+    z1, // 2 back-right
+    x0,
+    yBase,
+    z1, // 3 back-left
+    xM,
+    yRidge,
+    zM, // 4 peak
   ];
 
   const indices = [
-    0, 4, 1, // front
-    1, 4, 2, // right
-    2, 4, 3, // back
-    3, 4, 0, // left
+    0,
+    4,
+    1, // front
+    1,
+    4,
+    2, // right
+    2,
+    4,
+    3, // back
+    3,
+    4,
+    0, // left
   ];
 
-  const uvs = [
-    0, 0,
-    1, 0,
-    1, 1,
-    0, 1,
-    0.5, 0.5,
-  ];
+  const uvs = [0, 0, 1, 0, 1, 1, 0, 1, 0.5, 0.5];
 
   return { positions, indices, uvs };
 }
@@ -196,23 +274,72 @@ function buildStairVerts(
 
     const base = allPositions.length / 3;
     allPositions.push(
-      x0, y0, z1,  x1, y0, z1,  x1, y0, z0,  x0, y0, z0, // bottom 0-3
-      x0, y1, z1,  x1, y1, z1,  x1, y1, z0,  x0, y1, z0, // top    4-7
+      x0,
+      y0,
+      z1,
+      x1,
+      y0,
+      z1,
+      x1,
+      y0,
+      z0,
+      x0,
+      y0,
+      z0, // bottom 0-3
+      x0,
+      y1,
+      z1,
+      x1,
+      y1,
+      z1,
+      x1,
+      y1,
+      z0,
+      x0,
+      y1,
+      z0, // top    4-7
     );
     allIndices.push(
-      base+4, base+7, base+6,  base+4, base+6, base+5, // top face
-      base+0, base+1, base+2,  base+0, base+2, base+3, // bottom
-      base+0, base+4, base+5,  base+0, base+5, base+1, // south riser
-      base+3, base+2, base+6,  base+3, base+6, base+7, // north face
-      base+1, base+5, base+6,  base+1, base+6, base+2, // east side
-      base+0, base+3, base+7,  base+0, base+7, base+4, // west side
+      base + 4,
+      base + 7,
+      base + 6,
+      base + 4,
+      base + 6,
+      base + 5, // top face
+      base + 0,
+      base + 1,
+      base + 2,
+      base + 0,
+      base + 2,
+      base + 3, // bottom
+      base + 0,
+      base + 4,
+      base + 5,
+      base + 0,
+      base + 5,
+      base + 1, // south riser
+      base + 3,
+      base + 2,
+      base + 6,
+      base + 3,
+      base + 6,
+      base + 7, // north face
+      base + 1,
+      base + 5,
+      base + 6,
+      base + 1,
+      base + 6,
+      base + 2, // east side
+      base + 0,
+      base + 3,
+      base + 7,
+      base + 0,
+      base + 7,
+      base + 4, // west side
     );
 
     // Repeated face UV pattern per 8 vertices (acceptable for stair chunks)
-    allUvs.push(
-      0, 0, 1, 0, 1, 1, 0, 1,
-      0, 0, 1, 0, 1, 1, 0, 1,
-    );
+    allUvs.push(0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1);
   }
 
   return { positions: allPositions, indices: allIndices, uvs: allUvs };
@@ -229,12 +356,7 @@ function buildFloorQuadVerts(
   const z1 = y + 1;
 
   // Single top quad avoids dark side faces between thin floor tiles.
-  const positions = [
-    x0, topY, z0,
-    x0, topY, z1,
-    x1, topY, z1,
-    x1, topY, z0,
-  ];
+  const positions = [x0, topY, z0, x0, topY, z1, x1, topY, z1, x1, topY, z0];
 
   const indices = [0, 1, 2, 0, 2, 3];
   const uvs = [0, 0, 0, 1, 1, 1, 1, 0];
@@ -257,13 +379,23 @@ function computeNormals(positions: number[], indices: number[]): number[] {
     const i1 = indices[f * 3 + 1];
     const i2 = indices[f * 3 + 2];
 
-    const ax = positions[i0 * 3],     ay = positions[i0 * 3 + 1], az = positions[i0 * 3 + 2];
-    const bx = positions[i1 * 3],     by = positions[i1 * 3 + 1], bz = positions[i1 * 3 + 2];
-    const cx = positions[i2 * 3],     cy = positions[i2 * 3 + 1], cz = positions[i2 * 3 + 2];
+    const ax = positions[i0 * 3],
+      ay = positions[i0 * 3 + 1],
+      az = positions[i0 * 3 + 2];
+    const bx = positions[i1 * 3],
+      by = positions[i1 * 3 + 1],
+      bz = positions[i1 * 3 + 2];
+    const cx = positions[i2 * 3],
+      cy = positions[i2 * 3 + 1],
+      cz = positions[i2 * 3 + 2];
 
     // edge vectors
-    const ex = bx - ax, ey = by - ay, ez = bz - az;
-    const fx = cx - ax, fy = cy - ay, fz = cz - az;
+    const ex = bx - ax,
+      ey = by - ay,
+      ez = bz - az;
+    const fx = cx - ax,
+      fy = cy - ay,
+      fz = cz - az;
 
     // cross product
     const nx = ey * fz - ez * fy;
@@ -271,7 +403,7 @@ function computeNormals(positions: number[], indices: number[]): number[] {
     const nz = ex * fy - ey * fx;
 
     for (const vi of [i0, i1, i2]) {
-      normals[vi * 3]     += nx;
+      normals[vi * 3] += nx;
       normals[vi * 3 + 1] += ny;
       normals[vi * 3 + 2] += nz;
     }
@@ -283,7 +415,7 @@ function computeNormals(positions: number[], indices: number[]): number[] {
     const ny = normals[v * 3 + 1];
     const nz = normals[v * 3 + 2];
     const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
-    normals[v * 3]     = nx / len;
+    normals[v * 3] = nx / len;
     normals[v * 3 + 1] = ny / len;
     normals[v * 3 + 2] = nz / len;
   }
@@ -295,6 +427,7 @@ function computeNormals(positions: number[], indices: number[]): number[] {
 // Main handler
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line no-restricted-globals
 self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
   const { requestId, tiles } = evt.data;
 
@@ -359,9 +492,9 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
     const normals = computeNormals(accum.positions, accum.indices);
 
     const positions = new Float32Array(accum.positions);
-    const indices   = new Uint32Array(accum.indices);
-    const normalsF  = new Float32Array(normals);
-    const uvsF      = new Float32Array(accum.uvs);
+    const indices = new Uint32Array(accum.indices);
+    const normalsF = new Float32Array(normals);
+    const uvsF = new Float32Array(accum.uvs);
 
     groups.push({
       materialKey,
@@ -386,5 +519,6 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
     tileCount: tiles.length,
   };
 
+  // eslint-disable-next-line no-restricted-globals
   (self as any).postMessage(response, transferables);
 };

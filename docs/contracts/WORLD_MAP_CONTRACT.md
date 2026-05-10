@@ -1,5 +1,6 @@
 # WORLD MAP CONTRACT
-*Lido obrigatoriamente antes de qualquer gerador de mapa, script de geração de estruturas ou mudança de tile em `createDebugSliceScene.ts`.*
+
+_Lido obrigatoriamente antes de qualquer gerador de mapa, script de geração de estruturas ou mudança de tile em `createDebugSliceScene.ts`._
 
 ---
 
@@ -7,14 +8,15 @@
 
 O mapa principal **sempre** deve ser rodeado por mar. O jogador nunca deve encontrar uma borda "vazia" ou um fim abrupto do mundo.
 
-| Parâmetro | Valor |
-|-----------|-------|
-| Borda mínima de mar | **20 tiles** em todos os lados |
-| Tile de mar profundo | `wat` (blocking=true, height≤0.12) |
-| Tile de costa/praia | `snd` (sand, renderAs: floor) — faixa de ~4 tiles entre grs/terra e wat |
-| Navegação no mar | **Bloqueada** por enquanto — `wat` é colisão. Barco é feature futura |
+| Parâmetro            | Valor                                                                   |
+| -------------------- | ----------------------------------------------------------------------- |
+| Borda mínima de mar  | **20 tiles** em todos os lados                                          |
+| Tile de mar profundo | `wat` (blocking=true, height≤0.12)                                      |
+| Tile de costa/praia  | `snd` (sand, renderAs: floor) — faixa de ~4 tiles entre grs/terra e wat |
+| Navegação no mar     | **Bloqueada** por enquanto — `wat` é colisão. Barco é feature futura    |
 
 **Válido:**
+
 ```
 [wat][wat][wat][wat][wat]
 [wat][snd][grs][grs][wat]   ← ilha com borda de areia
@@ -24,6 +26,7 @@ O mapa principal **sempre** deve ser rodeado por mar. O jogador nunca deve encon
 ```
 
 **Inválido:**
+
 ```
 [wal][wal][wal]    ← bordas sólidas bloqueando a visão de mundo aberto
 [grs][grs][grs]   ← mapa termina sem mar
@@ -38,6 +41,7 @@ O mapa principal **sempre** deve ser rodeado por mar. O jogador nunca deve encon
 **Levels presentes:** `-2`, `-1`, `0`, `+1`, `+2`
 
 ### Distribuição de Biomas (level 0)
+
 ```
 ┌──────────────────────────────────────────────────────┐
 │  ~ ~ ~ ~ ~ ~ ~ ~ ~ MAR ABERTO ~ ~ ~ ~ ~ ~ ~ ~ ~ ~   │
@@ -58,14 +62,15 @@ O mapa principal **sempre** deve ser rodeado por mar. O jogador nunca deve encon
 ```
 
 ### Biomas — Tiles e Fronteiras
-| Bioma | Tile de chão principal | Tiles especiais | Inimigos |
-|-------|------------------------|-----------------|----------|
-| Cidade | `cob`, `stn`, `pav` | `wal`, `bwl`, `arc`, `pil`, `fnt` | goblins, orcs |
-| Campo | `grs` | `tre`, `flw` | animais, bandidos |
-| Floresta | `grs` + `tre` denso | `msh` (cogumelo), trilhas `pat` | lobos, slimes |
-| Pântano | `mud` (lama) | `wat` raso, árvores mortas `dtr` | sapos, vampiros |
-| Deserto | `snd` (areia) | `rok` (rocha), dunas, pirâmide | mortos-vivos, escorpiões |
-| Litoral | `snd` → `wat` | costão `rok`, barcos inertes | crabs, piratas |
+
+| Bioma    | Tile de chão principal | Tiles especiais                   | Inimigos                 |
+| -------- | ---------------------- | --------------------------------- | ------------------------ |
+| Cidade   | `cob`, `stn`, `pav`    | `wal`, `bwl`, `arc`, `pil`, `fnt` | goblins, orcs            |
+| Campo    | `grs`                  | `tre`, `flw`                      | animais, bandidos        |
+| Floresta | `grs` + `tre` denso    | `msh` (cogumelo), trilhas `pat`   | lobos, slimes            |
+| Pântano  | `mud` (lama)           | `wat` raso, árvores mortas `dtr`  | sapos, vampiros          |
+| Deserto  | `snd` (areia)          | `rok` (rocha), dunas, pirâmide    | mortos-vivos, escorpiões |
+| Litoral  | `snd` → `wat`          | costão `rok`, barcos inertes      | crabs, piratas           |
 
 **Transição entre biomas:** sempre gradual, ~6–8 tiles de tiles intermediários (ex: `grs` → `pat` → `mud` → pântano). Nunca bioma A ao lado direto de bioma B sem tile de transição.
 
@@ -77,24 +82,25 @@ O mapa principal **sempre** deve ser rodeado por mar. O jogador nunca deve encon
 
 ### Regra Contextual por Estrutura
 
-| Estrutura | Level base | +1 | +2 | -1 | -2 |
-|-----------|-----------|-----|-----|-----|-----|
-| Casa 1 andar | paredes+chão em `0` | telhado em `0` | — | — | — |
-| Casa 2 andares | paredes+chão em `0` | 2º andar (paredes+chão) | telhado em `+1` | — | — |
-| Torre 3 andares | `0` | `+1` | `+2` | — | — |
-| Morro/colina | grs em `0` | topo do morro (grs) | — | — | — |
-| Caverna | entrada em `0` | — | — | galeria em `-1` | fundo em `-2` |
-| Porão de casa | casa em `0` | — | — | porão em `-1` | — |
-| Dungeon | entrada em `0` | — | — | 1º andar em `-1` | 2º andar em `-2` |
-| Esgoto | manhole em `0` | — | — | túneis em `-1` | câmaras profundas em `-2` |
-| Pirâmide | base+entrada em `0` | câmara interna | câmara do topo | câmara subterrânea em `-1` | — |
+| Estrutura       | Level base          | +1                      | +2              | -1                         | -2                        |
+| --------------- | ------------------- | ----------------------- | --------------- | -------------------------- | ------------------------- |
+| Casa 1 andar    | paredes+chão em `0` | telhado em `0`          | —               | —                          | —                         |
+| Casa 2 andares  | paredes+chão em `0` | 2º andar (paredes+chão) | telhado em `+1` | —                          | —                         |
+| Torre 3 andares | `0`                 | `+1`                    | `+2`            | —                          | —                         |
+| Morro/colina    | grs em `0`          | topo do morro (grs)     | —               | —                          | —                         |
+| Caverna         | entrada em `0`      | —                       | —               | galeria em `-1`            | fundo em `-2`             |
+| Porão de casa   | casa em `0`         | —                       | —               | porão em `-1`              | —                         |
+| Dungeon         | entrada em `0`      | —                       | —               | 1º andar em `-1`           | 2º andar em `-2`          |
+| Esgoto          | manhole em `0`      | —                       | —               | túneis em `-1`             | câmaras profundas em `-2` |
+| Pirâmide        | base+entrada em `0` | câmara interna          | câmara do topo  | câmara subterrânea em `-1` | —                         |
 
 ### Default por Level
-| Level | Tile padrão (fill) |
-|-------|-------------------|
-| `0` | `grs` (ou tile do bioma correspondente) |
-| `+1` e acima | `...` (void/sky) — **NUNCA** usar `grs` ou outro tile sólido como fill |
-| `-1` e abaixo | tile de rocha/dungeon correspondente ao bioma acima |
+
+| Level         | Tile padrão (fill)                                                     |
+| ------------- | ---------------------------------------------------------------------- |
+| `0`           | `grs` (ou tile do bioma correspondente)                                |
+| `+1` e acima  | `...` (void/sky) — **NUNCA** usar `grs` ou outro tile sólido como fill |
+| `-1` e abaixo | tile de rocha/dungeon correspondente ao bioma acima                    |
 
 ---
 
@@ -103,14 +109,18 @@ O mapa principal **sempre** deve ser rodeado por mar. O jogador nunca deve encon
 > **Problema documentado:** telhados aparecem "flutuando" quando o tile `rof` é colocado em level `+1` ou `+2`.
 
 ### Causa técnica
+
 `buildRoofMesh()` em `createDebugSliceScene.ts` posiciona a base do telhado em:
+
 ```
 baseY = levelOffsetY + tileDef.height
 ```
+
 Se `rof` está em level `+1` → `levelOffsetY = 2.0`, `tileDef.height = 2.8` → base em Y=4.8.  
 Mas as paredes de level `0` terminam em Y=2.8. **Gap de 2 unidades → telhado flutua.**
 
 ### Regra correta
+
 **O tile `rof` deve sempre estar no mesmo level que as paredes que ele cobre.**
 
 ```
@@ -125,6 +135,7 @@ CORRETO:
 ```
 
 Para **casa de 2 andares** com telhado no 2º andar:
+
 ```
 Level 0: [bwl][flr][flr][bwl]  ← paredes do térreo
 Level 1: [bwl][flr][flr][bwl]  ← paredes do 2º andar
@@ -133,7 +144,9 @@ Level 2: [...][...][...][...]   ← void acima
 ```
 
 ### Verificação automática obrigatória (geradores)
+
 Todo gerador que emite tiles `rof` deve verificar:
+
 1. Existe tile `wal` ou `bwl` **na mesma posição** no mesmo level com `height >= 2.0`?  
    ✅ OK — a pirâmide de telhado ficará no topo correto dessas paredes.
 2. O tile `rof` está em level `N+1` relativo às paredes em `N`?  
@@ -144,6 +157,7 @@ Todo gerador que emite tiles `rof` deve verificar:
 ## 5. Anatomia Correta de Estruturas
 
 ### Casa 1 Andar (mínimo)
+
 ```
 Level 0 (todos os tiles da casa são aqui):
 
@@ -153,11 +167,13 @@ Level 0 (todos os tiles da casa são aqui):
   bwl bwl [dr] bwl bwl  ← door = 1 tile bwl removido + substituído por cob/grs
   rof rof  rof  rof rof ← telhado cobre TODA a planta (paredes + interior)
 ```
+
 - Porta: remova 1 tile `bwl` da parede e substitua por `cob`/`grs`
 - **Sem escada** — casa 1 andar não tem `stu`
 - Level 1 em cima: apenas `...` (void)
 
 ### Casa 2 Andares
+
 ```
 Level 0 — Térreo:
   bwl bwl bwl bwl bwl
@@ -177,12 +193,14 @@ Level 2: apenas ... (void)
 ```
 
 ### Torre (3+ andares)
+
 - Footprint menor que casas: 4×4 a 6×6 tiles
 - Cada andar = mesmo padrão (bwl perimeter + flr interior)
 - Telhado apenas no andar mais alto
 - Permite `bal` (balcony) em qualquer andar sem paredes externas (abertura)
 
 ### Caverna/Dungeon
+
 ```
 Level 0: entrada marcada com tile de transição (std ou hol)
          Sem "buraco visível" no chão — use std invisível em entrada de gruta
@@ -196,6 +214,7 @@ Level -2: mesma lógica, mais escuro (dwl ao invés de cwl)
 ```
 
 ### Esgoto
+
 ```
 Level 0: manhole tile (hol) em calçada — transição automática
 Level -1: swl como paredes, sfl como chão, wtr em canais
@@ -208,43 +227,44 @@ Level -1: swl como paredes, sfl como chão, wtr em canais
 
 Todo mapa do mundo principal deve ter esses tiles no `tileAtlas`. Símbolo → regras.
 
-| Símbolo | ID | Tipo | Height | Block | Notas |
-|---------|----|------|--------|-------|-------|
-| `...` | void | floor | 0.02 | não | Default de levels superiores. Cair = void fall |
-| `grs` | grass | floor | 0.05 | não | Default level 0 bioma campo/floresta |
-| `cob` | cobblestone | floor | 0.06 | não | Calçada da cidade |
-| `stn` | stone-plaza | floor | 0.07 | não | Praças |
-| `pav` | pavement | floor | 0.06 | não | Avenidas largas |
-| `snd` | sand | floor | 0.05 | não | Praia e deserto |
-| `mud` | mud | floor | 0.05 | não | Pântano |
-| `pat` | path | floor | 0.04 | não | Trilha de terra |
-| `flr` | wood-floor | floor | 0.08 | não | Interior de casas |
-| `sfl` | sewer-floor | floor | 0.06 | não | Chão de esgoto |
-| `cfl` | cave-floor | floor | 0.07 | não | Chão de caverna |
-| `bal` | balcony | floor | 0.08 | não | Varanda/sacada |
-| `wat` | water | block | 0.12 | **sim** | Mar, rio. Bloqueia movimento |
-| `wtr` | water-shallow | floor | 0.04 | não | Água rasa (pântano, poça) |
-| `wal` | city-wall | block | 4.5 | **sim** | Muralha da cidade. Muito alto |
-| `bwl` | building-wall | block | 2.8 | **sim** | Parede de casa/prédio |
-| `dwl` | dungeon-wall | block | 2.4 | **sim** | Parede de dungeon/masmorra |
-| `swl` | sewer-wall | block | 2.5 | **sim** | Parede de esgoto |
-| `cwl` | cave-wall | block | 2.6 | **sim** | Parede de caverna |
-| `sdw` | stone-dark-wall | block | 5.2 | **sim** | Torre de vigia, muralha grossa |
-| `rof` | roof-tile | floor | 2.8 | não | **Ver Seção 4. Mesmo level das paredes** |
-| `arc` | archway | block | 3.8 | **sim** | Arco/portal. Player passa embaixo |
-| `pil` | pillar | block | 3.2 | **sim** | Coluna decorativa |
-| `fnt` | fountain | block | 0.9 | **sim** | Fonte. Bloqueia 1×1 |
-| `tre` | tree | block | 3.4 | **sim** | Árvore. Bloqueia 1×1 |
-| `rok` | rock | block | 1.2 | **sim** | Pedra/rochedo |
-| `stu` | stairs-up | floor | 0.12 | não | transition: "up". Posição espelhada com std acima |
-| `std` | stairs-down | floor | 0.12 | não | transition: "down". Posição espelhada com stu abaixo |
-| `hol` | hole | floor | 0.02 | não | transition: "down". Queda automática |
+| Símbolo | ID              | Tipo  | Height | Block   | Notas                                                |
+| ------- | --------------- | ----- | ------ | ------- | ---------------------------------------------------- |
+| `...`   | void            | floor | 0.02   | não     | Default de levels superiores. Cair = void fall       |
+| `grs`   | grass           | floor | 0.05   | não     | Default level 0 bioma campo/floresta                 |
+| `cob`   | cobblestone     | floor | 0.06   | não     | Calçada da cidade                                    |
+| `stn`   | stone-plaza     | floor | 0.07   | não     | Praças                                               |
+| `pav`   | pavement        | floor | 0.06   | não     | Avenidas largas                                      |
+| `snd`   | sand            | floor | 0.05   | não     | Praia e deserto                                      |
+| `mud`   | mud             | floor | 0.05   | não     | Pântano                                              |
+| `pat`   | path            | floor | 0.04   | não     | Trilha de terra                                      |
+| `flr`   | wood-floor      | floor | 0.08   | não     | Interior de casas                                    |
+| `sfl`   | sewer-floor     | floor | 0.06   | não     | Chão de esgoto                                       |
+| `cfl`   | cave-floor      | floor | 0.07   | não     | Chão de caverna                                      |
+| `bal`   | balcony         | floor | 0.08   | não     | Varanda/sacada                                       |
+| `wat`   | water           | block | 0.12   | **sim** | Mar, rio. Bloqueia movimento                         |
+| `wtr`   | water-shallow   | floor | 0.04   | não     | Água rasa (pântano, poça)                            |
+| `wal`   | city-wall       | block | 4.5    | **sim** | Muralha da cidade. Muito alto                        |
+| `bwl`   | building-wall   | block | 2.8    | **sim** | Parede de casa/prédio                                |
+| `dwl`   | dungeon-wall    | block | 2.4    | **sim** | Parede de dungeon/masmorra                           |
+| `swl`   | sewer-wall      | block | 2.5    | **sim** | Parede de esgoto                                     |
+| `cwl`   | cave-wall       | block | 2.6    | **sim** | Parede de caverna                                    |
+| `sdw`   | stone-dark-wall | block | 5.2    | **sim** | Torre de vigia, muralha grossa                       |
+| `rof`   | roof-tile       | floor | 2.8    | não     | **Ver Seção 4. Mesmo level das paredes**             |
+| `arc`   | archway         | block | 3.8    | **sim** | Arco/portal. Player passa embaixo                    |
+| `pil`   | pillar          | block | 3.2    | **sim** | Coluna decorativa                                    |
+| `fnt`   | fountain        | block | 0.9    | **sim** | Fonte. Bloqueia 1×1                                  |
+| `tre`   | tree            | block | 3.4    | **sim** | Árvore. Bloqueia 1×1                                 |
+| `rok`   | rock            | block | 1.2    | **sim** | Pedra/rochedo                                        |
+| `stu`   | stairs-up       | floor | 0.12   | não     | transition: "up". Posição espelhada com std acima    |
+| `std`   | stairs-down     | floor | 0.12   | não     | transition: "down". Posição espelhada com stu abaixo |
+| `hol`   | hole            | floor | 0.02   | não     | transition: "down". Queda automática                 |
 
 ---
 
 ## 7. Regras de Escadas (Stairs)
 
 ### Como funciona no runtime (3D)
+
 A animação de escada é **walkthrough** — o personagem caminha diagonalmente (X/Z + Y simultâneo) durante 1,5 segundos. Não é um elevador. O personagem move na direção que o jogador estava se movendo ao ativar a escada.
 
 - `stairAnimDuration = 1.5s`
@@ -253,12 +273,15 @@ A animação de escada é **walkthrough** — o personagem caminha diagonalmente
 - Movimento do jogador fica bloqueado durante a animação
 
 ### Visual (buildStairMesh)
+
 O tile `stu`/`std` gera automaticamente um mesh de 4 degraus físicos (não um piso plano):
+
 - Degrau 0 = mais ao sul (+Z), mais baixo (baseY + riserH/4)
 - Degrau 3 = mais ao norte (-Z), mais alto (baseY + LEVEL_HEIGHT_UNITS)
 - Todos os degraus compartilham o mesmo material colorido (cor areia/madeira)
 
 ### Regras de layout no mapa
+
 1. **Par obrigatório:** cada `stu` em level `N` deve ter `std` na **mesma posição X/Z** em level `N+1`.
 2. **Corredor mínimo:** a escada deve ter pelo menos **2 tiles de chão livre** em frente (na direção que o jogador sobe) para o personagem completar o avanço horizontal sem colidir com a parede.
 3. **Não empilhar:** nunca `stu` imediatamente adjacente a `std` no mesmo level (causa loop).
@@ -266,6 +289,7 @@ O tile `stu`/`std` gera automaticamente um mesh de 4 degraus físicos (não um p
 5. **Orientação recomendada:** jogador sobe caminhando para **norte** (pressionando W). Posicione a escada com a porta/entrada ao sul.
 
 ### Anatomia de uma escada interna (casa 2 andares)
+
 ```
 Level 0 — Planta baixa (N = norte, S = sul, E = leste, W = oeste):
 
@@ -297,6 +321,7 @@ Level 2: apenas ... (void)
 Uma caverna no mundo tem **duas partes**: a boca visível na superfície (level 0) e o interior subterrâneo (level -1 em diante).
 
 ### Boca de caverna (level 0)
+
 ```
 Ao redor: bioma floresta ou montanha (grs + tre + rok)
 
@@ -306,19 +331,22 @@ Ao redor: bioma floresta ou montanha (grs + tre + rok)
     ...  rok  cwl  cwl  rok  ...
     ...  rok  rok  rok  rok  ...
 ```
+
 - `rok` = pedras/rochas em volta (blocking)
 - `cwl` = paredes de caverna formando a "moldura" da entrada
 - `hol` = buraco de queda automática (transition: "down") — o tile **não tem mesh de degraus**, é visualmente escuro
 - Alternativa: `std` em vez de `hol` para entrada **voluntária** (jogador right-clica)
 
 ### Quando usar `hol` vs `std` na entrada
-| Tipo | Tile | Ativação | Uso |
-|------|------|----------|-----|
-| Buraco no chão | `hol` | Automático ao pisар | Poço, fenda, abismo, cova de dungeon |
-| Escada/Rampa para baixo | `std` | Right-click | Escada de pedra, rampa, descida controlada |
-| Descida de caverna com degraus | `std` | Right-click | Entrada de gruta com rampa esculpida na rocha |
+
+| Tipo                           | Tile  | Ativação            | Uso                                           |
+| ------------------------------ | ----- | ------------------- | --------------------------------------------- |
+| Buraco no chão                 | `hol` | Automático ao pisар | Poço, fenda, abismo, cova de dungeon          |
+| Escada/Rampa para baixo        | `std` | Right-click         | Escada de pedra, rampa, descida controlada    |
+| Descida de caverna com degraus | `std` | Right-click         | Entrada de gruta com rampa esculpida na rocha |
 
 ### Interior da caverna (level -1)
+
 ```
 Fill padrão: cwl (paredes de caverna — não usar grs nem ...)
 
@@ -328,6 +356,7 @@ Fill padrão: cwl (paredes de caverna — não usar grs nem ...)
     cwl cfl cfl cfl cfl cfl cwl
     cwl cwl cwl cwl cwl cwl cwl
 ```
+
 - Nunca usar `...` (void) como fill em cavernas — só em levels aéreos
 - `wtr` em poças isoladas (máx. 20% do chão de uma caverna)
 - Inimigos subterrâneos: morcegos, slimes, esqueletos
@@ -339,6 +368,7 @@ Fill padrão: cwl (paredes de caverna — não usar grs nem ...)
 Dungeons têm **aparência construída** (não natural), geralmente com portão de pedra ou arco.
 
 ### Entrada de dungeon (level 0)
+
 ```
 Ao redor: bioma campo ou floresta
 
@@ -351,11 +381,13 @@ Ao redor: bioma campo ou floresta
 Opcional: 2 pilares (pil) flanqueando o arco:
     ...  pil  arc  pil  ...
 ```
+
 - O `std` fica DENTRO da silhueta do arco (mesma posição Z, 1 tile ao sul do `arc`)
 - `dwl` forma as paredes curtas que sustentam o arco
 - Sinalização visual: textura escura + possivelmente inimigos ao redor
 
 ### Interior da dungeon (level -1)
+
 ```
 Fill padrão: dwl (paredes de dungeon — pedra escura)
 
@@ -365,6 +397,7 @@ Fill padrão: dwl (paredes de dungeon — pedra escura)
     dwl dfn dfn dfn dwl dfn dwl   ← can have interior walls/rooms
     dwl dwl dwl dwl dwl dwl dwl
 ```
+
 - Mínimo 3 tiles de largura em corredores
 - Salas: 5×5 a 8×8, conectadas por corredores de 3 de largura
 - Armadilhas: `hol` em salas com buracos visuais (queda para level -2)
@@ -374,14 +407,14 @@ Fill padrão: dwl (paredes de dungeon — pedra escura)
 
 ## 8. Regras de Densidade por Bioma
 
-| Bioma | Árvores (`tre`) | Inimigos (spawn) | Estruturas |
-|-------|-----------------|------------------|------------|
-| Cidade | raras (praças) | médio (goblins, orcs) | casas densas, torres, fontanas |
-| Campo | esparsas | baixo (animais) | fazendas simples, celeiros |
-| Floresta | **densa** (60% do chão) | médio (lobos) | cabana isolada, portal de caverna |
-| Pântano | árvores mortas (`dtr`) | médio-alto | ruínas com porão, altar |
-| Deserto | nenhuma | alto (mortos-vivos) | pirâmide, oásis c/ `wtr` |
-| Litoral | palmeiras (`pal`) | baixo | cais, barcos, costão |
+| Bioma    | Árvores (`tre`)         | Inimigos (spawn)      | Estruturas                        |
+| -------- | ----------------------- | --------------------- | --------------------------------- |
+| Cidade   | raras (praças)          | médio (goblins, orcs) | casas densas, torres, fontanas    |
+| Campo    | esparsas                | baixo (animais)       | fazendas simples, celeiros        |
+| Floresta | **densa** (60% do chão) | médio (lobos)         | cabana isolada, portal de caverna |
+| Pântano  | árvores mortas (`dtr`)  | médio-alto            | ruínas com porão, altar           |
+| Deserto  | nenhuma                 | alto (mortos-vivos)   | pirâmide, oásis c/ `wtr`          |
+| Litoral  | palmeiras (`pal`)       | baixo                 | cais, barcos, costão              |
 
 ---
 
@@ -406,6 +439,7 @@ npm run benchmark:e2e                # 14/14 steps
 ```
 
 Inspecionar visualmente (checklist manual):
+
 - [ ] Bordas do mapa têm ≥20 tiles de `wat`?
 - [ ] Nenhum tile `rof` está em level diferente das paredes que cobre?
 - [ ] Todos os `stu` têm `std` correspondente no level acima (mesma posição)?
@@ -415,5 +449,5 @@ Inspecionar visualmente (checklist manual):
 
 ---
 
-*Criado: 2026-05-01 — Responsável: AI Agent (Copilot)*  
-*Referência: `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/SYSTEM_BMS.md`, `src/three-d/runtime/createDebugSliceScene.ts` (buildRoofMesh, buildChunk)*
+_Criado: 2026-05-01 — Responsável: AI Agent (Copilot)_  
+_Referência: `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/SYSTEM_BMS.md`, `src/three-d/runtime/createDebugSliceScene.ts` (buildRoofMesh, buildChunk)_

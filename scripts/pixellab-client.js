@@ -18,7 +18,9 @@ function cleanBaseUrl(baseUrl) {
 function resolveConfig(overrides = {}) {
   return {
     apiKey: overrides.apiKey || process.env.PIXELLAB_API_KEY || "",
-    baseUrl: cleanBaseUrl(overrides.baseUrl || process.env.PIXELLAB_BASE_URL || DEFAULT_BASE_URL),
+    baseUrl: cleanBaseUrl(
+      overrides.baseUrl || process.env.PIXELLAB_BASE_URL || DEFAULT_BASE_URL,
+    ),
   };
 }
 
@@ -42,8 +44,11 @@ async function requestJson({ method, url, apiKey, body }) {
 
   if (!response.ok) {
     const detail =
-      (json && (json.detail || json.message || json.error)) || `HTTP ${response.status}`;
-    throw new Error(`PixelLab API error (${response.status}): ${JSON.stringify(detail)}`);
+      (json && (json.detail || json.message || json.error)) ||
+      `HTTP ${response.status}`;
+    throw new Error(
+      `PixelLab API error (${response.status}): ${JSON.stringify(detail)}`,
+    );
   }
 
   return json;
@@ -66,19 +71,29 @@ function ensureApiKey(config) {
 async function waitForJob(config, jobId, label = "") {
   const url = `${config.baseUrl}/v2/background-jobs/${jobId}`;
   for (let attempt = 1; attempt <= POLL_MAX_ATTEMPTS; attempt++) {
-    const job = await requestJson({ method: "GET", url, apiKey: config.apiKey });
+    const job = await requestJson({
+      method: "GET",
+      url,
+      apiKey: config.apiKey,
+    });
     if (job.status === "completed") {
       return job;
     }
     if (job.status === "failed") {
-      throw new Error(`Job ${jobId}${label ? ` (${label})` : ""} failed: ${JSON.stringify(job.last_response)}`);
+      throw new Error(
+        `Job ${jobId}${label ? ` (${label})` : ""} failed: ${JSON.stringify(job.last_response)}`,
+      );
     }
-    const elapsed = attempt * POLL_INTERVAL_MS / 1000;
-    process.stdout.write(`\r[pixellab] ⏳ waiting${label ? ` ${label}` : ""} … ${elapsed}s`);
+    const elapsed = (attempt * POLL_INTERVAL_MS) / 1000;
+    process.stdout.write(
+      `\r[pixellab] ⏳ waiting${label ? ` ${label}` : ""} … ${elapsed}s`,
+    );
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
   process.stdout.write("\n");
-  throw new Error(`Job ${jobId} timed out after ${POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s`);
+  throw new Error(
+    `Job ${jobId} timed out after ${(POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s`,
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -88,20 +103,28 @@ async function waitForJob(config, jobId, label = "") {
 // POST /v2/create-character-with-4-directions (async background job)
 // Creates a persistent character with 4 directional rotations stored on server.
 // Returns { characterId, backgroundJobId }
-async function createCharacter(config, {
-  description,
-  image_size,
-  view = "low top-down",
-  outline = "single color black outline",
-  shading = "basic shading",
-  detail = "medium detail",
-  seed,
-}) {
+async function createCharacter(
+  config,
+  {
+    description,
+    image_size,
+    view = "low top-down",
+    outline = "single color black outline",
+    shading = "basic shading",
+    detail = "medium detail",
+    seed,
+  },
+) {
   const url = `${config.baseUrl}/v2/create-character-with-4-directions`;
   const body = { description, image_size, view, outline, shading, detail };
   if (seed != null) body.seed = Number(seed);
 
-  const response = await requestJson({ method: "POST", url, apiKey: config.apiKey, body });
+  const response = await requestJson({
+    method: "POST",
+    url,
+    apiKey: config.apiKey,
+    body,
+  });
   // Response: { background_job_id, character_id, status }
   return {
     characterId: response.character_id,
@@ -128,15 +151,18 @@ async function getCharacter(config, characterId) {
 // template mode: uses stored skeleton — 1 gen/direction, maximum consistency
 // v3 mode: free text action — 4-16 frames, directions independent
 // Returns { backgroundJobIds: string[], directions: string[] }
-async function animateCharacter(config, {
-  character_id,
-  template_animation_id,    // use for template mode
-  action_description,       // use for v3/pro mode
-  mode,                     // "template" | "v3" | "pro" — auto-detected if omitted
-  directions,               // array of directions, e.g. ["south","north","east","west"]
-  frame_count,              // v3 only, 4-16
-  seed,
-}) {
+async function animateCharacter(
+  config,
+  {
+    character_id,
+    template_animation_id, // use for template mode
+    action_description, // use for v3/pro mode
+    mode, // "template" | "v3" | "pro" — auto-detected if omitted
+    directions, // array of directions, e.g. ["south","north","east","west"]
+    frame_count, // v3 only, 4-16
+    seed,
+  },
+) {
   const url = `${config.baseUrl}/v2/animate-character`;
   const body = { character_id };
   if (template_animation_id) body.template_animation_id = template_animation_id;
@@ -146,7 +172,12 @@ async function animateCharacter(config, {
   if (frame_count != null) body.frame_count = Number(frame_count);
   if (seed != null) body.seed = Number(seed);
 
-  const response = await requestJson({ method: "POST", url, apiKey: config.apiKey, body });
+  const response = await requestJson({
+    method: "POST",
+    url,
+    apiKey: config.apiKey,
+    body,
+  });
   // Response: { background_job_ids: string[], directions: string[], status }
   return {
     backgroundJobIds: response.background_job_ids,
@@ -161,10 +192,14 @@ async function animateCharacter(config, {
 // GET /v2/balance
 async function getBalance(config) {
   const url = `${config.baseUrl}/v2/balance`;
-  const response = await requestJson({ method: "GET", url, apiKey: config.apiKey });
+  const response = await requestJson({
+    method: "GET",
+    url,
+    apiKey: config.apiKey,
+  });
   // Response: { credits: { usd }, subscription: { generations, total } }
   return {
-    usd: response.credits ? response.credits.usd : (response.usd || 0),
+    usd: response.credits ? response.credits.usd : response.usd || 0,
     subscription: response.subscription || null,
   };
 }
@@ -194,9 +229,12 @@ function writeBase64ToFile(base64DataUri, targetPath) {
 
   // Detect raw RGBA buffer (PixelLab v2 returns raw RGBA for animation frames, not PNG).
   // A valid PNG starts with 0x89 0x50 ('P') 0x4E ('N') 0x47 ('G').
-  const isPng = buffer.length >= 4 &&
-    buffer[0] === 0x89 && buffer[1] === 0x50 &&
-    buffer[2] === 0x4E && buffer[3] === 0x47;
+  const isPng =
+    buffer.length >= 4 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47;
 
   if (!isPng) {
     // Assume square RGBA: side = sqrt(byteLength / 4)
@@ -210,7 +248,9 @@ function writeBase64ToFile(base64DataUri, targetPath) {
       return;
     }
     // Non-square: try to detect width from known API sizes (fallback: write raw)
-    console.warn(`[pixellab] ⚠️  writeBase64ToFile: buffer is not PNG and not square RGBA (${buffer.length} bytes). Writing raw.`);
+    console.warn(
+      `[pixellab] ⚠️  writeBase64ToFile: buffer is not PNG and not square RGBA (${buffer.length} bytes). Writing raw.`,
+    );
   }
 
   fs.writeFileSync(targetPath, buffer);

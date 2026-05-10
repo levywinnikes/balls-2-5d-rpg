@@ -17,7 +17,9 @@ const DEFAULT_3D_MAP = "city_3d_multi";
 
 export function ThreeDSliceView() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const runtimeRef = useRef<ReturnType<typeof createDebugSliceScene> | null>(null);
+  const runtimeRef = useRef<ReturnType<typeof createDebugSliceScene> | null>(
+    null,
+  );
   const [isInGame, setIsInGame] = useState(false);
   const [runtimeBridge, setRuntimeBridge] = React.useState<{
     engine: any;
@@ -214,7 +216,9 @@ export function ThreeDSliceView() {
           void runtimeRef.current.save().then((ok) => {
             PlayerState.getInstance().emit("uiNotification", {
               type: ok ? "success" : "error",
-              message: ok ? t_game("msg_quick_saved") : t_game("msg_save_failed"),
+              message: ok
+                ? t_game("msg_quick_saved")
+                : t_game("msg_save_failed"),
             });
           });
         }
@@ -262,124 +266,127 @@ export function ThreeDSliceView() {
       {/* Canvas is only in the DOM when in game, avoiding premature Babylon init */}
       {isInGame && (
         <>
-          <canvas ref={canvasRef} className="w-full h-full block outline-none" />
-      {/* S9-T1: damage vignette flash — red radial border when player takes damage */}
-      {vignetteActive && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            background:
-              "radial-gradient(ellipse at center, transparent 55%, rgba(220,0,0,0.55) 100%)",
-            animation: "none",
-            opacity: 1,
-            transition: "opacity 0.4s ease-out",
-          }}
-        />
-      )}
-      {/* S7-FP1: crosshair — only visible in first-person mode */}
-      {isFP && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: 10,
-            height: 10,
-            pointerEvents: "none",
-          }}
-        >
-          {/* Horizontal bar */}
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: 0,
-              width: "100%",
-              height: 1.5,
-              background: "rgba(255,255,255,0.85)",
-              transform: "translateY(-50%)",
-            }}
+          <canvas
+            ref={canvasRef}
+            className="w-full h-full block outline-none"
           />
-          {/* Vertical bar */}
+          {/* S9-T1: damage vignette flash — red radial border when player takes damage */}
+          {vignetteActive && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                background:
+                  "radial-gradient(ellipse at center, transparent 55%, rgba(220,0,0,0.55) 100%)",
+                animation: "none",
+                opacity: 1,
+                transition: "opacity 0.4s ease-out",
+              }}
+            />
+          )}
+          {/* S7-FP1: crosshair — only visible in first-person mode */}
+          {isFP && (
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: 10,
+                height: 10,
+                pointerEvents: "none",
+              }}
+            >
+              {/* Horizontal bar */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: 0,
+                  width: "100%",
+                  height: 1.5,
+                  background: "rgba(255,255,255,0.85)",
+                  transform: "translateY(-50%)",
+                }}
+              />
+              {/* Vertical bar */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: 0,
+                  width: 1.5,
+                  height: "100%",
+                  background: "rgba(255,255,255,0.85)",
+                  transform: "translateX(-50%)",
+                }}
+              />
+              {/* Center dot */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  width: 2,
+                  height: 2,
+                  background: "white",
+                  borderRadius: "50%",
+                  transform: "translate(-50%,-50%)",
+                }}
+              />
+            </div>
+          )}
+          <HUD />
+          {/* S8-T2: rune hotbar — Q casts active slot, R cycles slot */}
           <div
             style={{
               position: "absolute",
+              bottom: 80,
               left: "50%",
-              top: 0,
-              width: 1.5,
-              height: "100%",
-              background: "rgba(255,255,255,0.85)",
               transform: "translateX(-50%)",
-            }}
-          />
-          {/* Center dot */}
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              width: 2,
-              height: 2,
-              background: "white",
-              borderRadius: "50%",
-              transform: "translate(-50%,-50%)",
-            }}
-          />
-        </div>
-      )}
-      <HUD />
-      {/* S8-T2: rune hotbar — Q casts active slot, R cycles slot */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 80,
-          left: "50%",
-          transform: "translateX(-50%)",
-          display: "flex",
-          gap: 6,
-          pointerEvents: "none",
-        }}
-      >
-        {runeSlots.map((runeId, i) => (
-          <div
-            key={i}
-            style={{
-              width: 48,
-              height: 48,
-              border:
-                i === activeRuneSlot
-                  ? "2px solid #ff8800"
-                  : "2px solid rgba(255,255,255,0.3)",
-              borderRadius: 6,
-              background: "rgba(0,0,0,0.6)",
               display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 10,
-              color: runeId ? "#ffcc66" : "#555",
-              userSelect: "none",
+              gap: 6,
+              pointerEvents: "none",
             }}
           >
-            <div style={{ fontSize: 18 }}>{runeId ? "✦" : "·"}</div>
-            <div style={{ fontSize: 9, marginTop: 2, opacity: 0.75 }}>
-              {i + 1}
-            </div>
+            {runeSlots.map((runeId, i) => (
+              <div
+                key={i}
+                style={{
+                  width: 48,
+                  height: 48,
+                  border:
+                    i === activeRuneSlot
+                      ? "2px solid #ff8800"
+                      : "2px solid rgba(255,255,255,0.3)",
+                  borderRadius: 6,
+                  background: "rgba(0,0,0,0.6)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 10,
+                  color: runeId ? "#ffcc66" : "#555",
+                  userSelect: "none",
+                }}
+              >
+                <div style={{ fontSize: 18 }}>{runeId ? "✦" : "·"}</div>
+                <div style={{ fontSize: 9, marginTop: 2, opacity: 0.75 }}>
+                  {i + 1}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <WindowLayer />
-      <HeroDashboard />
-      <NotificationSystem />
-      <LevelUpNotification />
-      <ThreeDFloatingText
-        engine={runtimeBridge?.engine}
-        scene={runtimeBridge?.scene}
-      />
-      <PerfMonitor />
+          <WindowLayer />
+          <HeroDashboard />
+          <NotificationSystem />
+          <LevelUpNotification />
+          <ThreeDFloatingText
+            engine={runtimeBridge?.engine}
+            scene={runtimeBridge?.scene}
+          />
+          <PerfMonitor />
         </>
       )}
     </div>

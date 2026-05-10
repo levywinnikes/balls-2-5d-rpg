@@ -1,11 +1,12 @@
 {
-    "updatedAt": "2026-05-01T18:35:00-03:00",
-    "task": "Reverter regressao de orientacao no minimapa/worldmap (fog e movimento) e consolidar orientacao em fonte unica",
+    "updatedAt": "2026-05-09T20:45:00-03:00",
+    "task": "Refatorar minimapa e worldmap com coordenadas canônicas e UX profissional",
     "contractsRead": [
+        "MAP_SYSTEM_CONTRACT.md",
         "THREE_D_INTEGRATION_BLUEPRINT.md",
         "UI_DESIGN_CONTRACT.md"
     ],
-    "understanding": "O problema atual e regressivo: flips no UI e compensacoes no runtime foram misturados. Vou remover compensacoes de flip em SidebarMinimap/ExpandedMap e restaurar formulas canonicas de radar para corrigir fog e movimentacao.",
-    "riskConflict": "Se a orientacao percebida na tela ainda divergir apos rollback do UI, o ajuste final deve ocorrer em um unico ponto (runtime de movimento/camera), nunca distribuido entre multiplos componentes de mapa.",
-    "objectiveQuestion": "Nenhuma — executar rollback controlado de UI agora e validar consistencia."
+    "understanding": "O minimapa precisa deixar de depender de formulas dispersas. Vou centralizar world<->grid<->pointer em um helper unico, tornar o minimapa um thumbnail world-locked do mesmo buffer canônico e reutilizar essa base no world map.",
+    "riskConflict": "Se o helper central não for aplicado em todos os pontos de leitura/interação, coordenadas e cliques podem divergir. A mitigacao e usar a mesma API em render, markers, center e contexto.",
+    "objectiveQuestion": "Nenhuma — criar o helper compartilhado, refatorar os dois mapas e documentar a mecânica." 
 }

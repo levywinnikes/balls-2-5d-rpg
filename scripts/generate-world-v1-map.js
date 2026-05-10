@@ -62,39 +62,141 @@ const ATLAS = [
 ];
 
 const IDX = {};
-ATLAS.forEach((sym, i) => { IDX[sym] = i; });
+ATLAS.forEach((sym, i) => {
+  IDX[sym] = i;
+});
 
 const TILE_DEFS = {
-  "...": { id: "void",           color: "#7ec8e3", height: 0.02,  renderAs: "floor" },
-  grs:   { id: "grass",          color: "#4ade80", height: 0.05,  renderAs: "floor" },
-  cob:   { id: "cobblestone",    color: "#64748b", height: 0.06,  renderAs: "floor" },
-  stn:   { id: "stone-plaza",    color: "#9ca3af", height: 0.07,  renderAs: "floor" },
-  pav:   { id: "pavement",       color: "#6b7280", height: 0.06,  renderAs: "floor" },
-  snd:   { id: "sand",           color: "#fbbf24", height: 0.05,  renderAs: "floor" },
-  mud:   { id: "mud",            color: "#92400e", height: 0.05,  renderAs: "floor" },
-  pat:   { id: "path",           color: "#a16207", height: 0.04,  renderAs: "floor" },
-  flr:   { id: "wood-floor",     color: "#92400e", height: 0.08,  renderAs: "floor" },
-  sfl:   { id: "sewer-floor",    color: "#334155", height: 0.06,  renderAs: "floor" },
-  cfl:   { id: "cave-floor",     color: "#57534e", height: 0.07,  renderAs: "floor" },
-  bal:   { id: "balcony",        color: "#c4b5a0", height: 0.08,  renderAs: "floor" },
-  wat:   { id: "water",          color: "#1d4ed8", height: 0.12,  renderAs: "block", block: true },
-  wtr:   { id: "water-shallow",  color: "#60a5fa", height: 0.04,  renderAs: "floor" },
-  wal:   { id: "city-wall",      color: "#78716c", height: 4.5,   renderAs: "block", block: true },
-  bwl:   { id: "building-wall",  color: "#94a3b8", height: 2.8,   renderAs: "block", block: true },
-  dwl:   { id: "dungeon-wall",   color: "#374151", height: 2.8,   renderAs: "block", block: true },
-  swl:   { id: "sewer-wall",     color: "#1e293b", height: 2.5,   renderAs: "block", block: true },
-  cwl:   { id: "cave-wall",      color: "#292524", height: 2.6,   renderAs: "block", block: true },
-  sdw:   { id: "stone-dark-wall",color: "#44403c", height: 5.2,   renderAs: "block", block: true },
-  rof:   { id: "roof-tile",      color: "#b91c1c", height: 2.8,   renderAs: "floor" },
-  arc:   { id: "archway",        color: "#a8a29e", height: 3.8,   renderAs: "block", block: true },
-  pil:   { id: "pillar",         color: "#d1d5db", height: 3.2,   renderAs: "block", block: true },
-  fnt:   { id: "fountain",       color: "#38bdf8", height: 0.9,   renderAs: "block", block: true },
-  tre:   { id: "tree",           color: "#15803d", height: 3.4,   renderAs: "block", block: true },
-  rok:   { id: "rock",           color: "#78716c", height: 1.2,   renderAs: "block", block: true },
-  stu:   { id: "stairs-up",      color: "#e2c87d", height: 0.12,  renderAs: "floor", stairDir: "up" },
-  std:   { id: "stairs-down",    color: "#a07040", height: 0.12,  renderAs: "floor", stairDir: "down" },
-  hol:   { id: "hole",           color: "#111827", height: 0.02,  renderAs: "floor", transition: "down" },
-  dfn:   { id: "dungeon-floor",  color: "#1e293b", height: 0.06,  renderAs: "floor" },
+  "...": { id: "void", color: "#7ec8e3", height: 0.02, renderAs: "floor" },
+  grs: { id: "grass", color: "#4ade80", height: 0.05, renderAs: "floor" },
+  cob: { id: "cobblestone", color: "#64748b", height: 0.06, renderAs: "floor" },
+  stn: { id: "stone-plaza", color: "#9ca3af", height: 0.07, renderAs: "floor" },
+  pav: { id: "pavement", color: "#6b7280", height: 0.06, renderAs: "floor" },
+  snd: { id: "sand", color: "#fbbf24", height: 0.05, renderAs: "floor" },
+  mud: { id: "mud", color: "#92400e", height: 0.05, renderAs: "floor" },
+  pat: { id: "path", color: "#a16207", height: 0.04, renderAs: "floor" },
+  flr: { id: "wood-floor", color: "#92400e", height: 0.08, renderAs: "floor" },
+  sfl: { id: "sewer-floor", color: "#334155", height: 0.06, renderAs: "floor" },
+  cfl: { id: "cave-floor", color: "#57534e", height: 0.07, renderAs: "floor" },
+  bal: { id: "balcony", color: "#c4b5a0", height: 0.08, renderAs: "floor" },
+  wat: {
+    id: "water",
+    color: "#1d4ed8",
+    height: 0.12,
+    renderAs: "block",
+    block: true,
+  },
+  wtr: {
+    id: "water-shallow",
+    color: "#60a5fa",
+    height: 0.04,
+    renderAs: "floor",
+  },
+  wal: {
+    id: "city-wall",
+    color: "#78716c",
+    height: 4.5,
+    renderAs: "block",
+    block: true,
+  },
+  bwl: {
+    id: "building-wall",
+    color: "#94a3b8",
+    height: 2.8,
+    renderAs: "block",
+    block: true,
+  },
+  dwl: {
+    id: "dungeon-wall",
+    color: "#374151",
+    height: 2.8,
+    renderAs: "block",
+    block: true,
+  },
+  swl: {
+    id: "sewer-wall",
+    color: "#1e293b",
+    height: 2.5,
+    renderAs: "block",
+    block: true,
+  },
+  cwl: {
+    id: "cave-wall",
+    color: "#292524",
+    height: 2.6,
+    renderAs: "block",
+    block: true,
+  },
+  sdw: {
+    id: "stone-dark-wall",
+    color: "#44403c",
+    height: 5.2,
+    renderAs: "block",
+    block: true,
+  },
+  rof: { id: "roof-tile", color: "#b91c1c", height: 2.8, renderAs: "floor" },
+  arc: {
+    id: "archway",
+    color: "#a8a29e",
+    height: 3.8,
+    renderAs: "block",
+    block: true,
+  },
+  pil: {
+    id: "pillar",
+    color: "#d1d5db",
+    height: 3.2,
+    renderAs: "block",
+    block: true,
+  },
+  fnt: {
+    id: "fountain",
+    color: "#38bdf8",
+    height: 0.9,
+    renderAs: "block",
+    block: true,
+  },
+  tre: {
+    id: "tree",
+    color: "#15803d",
+    height: 3.4,
+    renderAs: "block",
+    block: true,
+  },
+  rok: {
+    id: "rock",
+    color: "#78716c",
+    height: 1.2,
+    renderAs: "block",
+    block: true,
+  },
+  stu: {
+    id: "stairs-up",
+    color: "#e2c87d",
+    height: 0.12,
+    renderAs: "floor",
+    stairDir: "up",
+  },
+  std: {
+    id: "stairs-down",
+    color: "#a07040",
+    height: 0.12,
+    renderAs: "floor",
+    stairDir: "down",
+  },
+  hol: {
+    id: "hole",
+    color: "#111827",
+    height: 0.02,
+    renderAs: "floor",
+    transition: "down",
+  },
+  dfn: {
+    id: "dungeon-floor",
+    color: "#1e293b",
+    height: 0.06,
+    renderAs: "floor",
+  },
 };
 
 // ─── Grid helpers ─────────────────────────────────────────────────────────────
@@ -111,12 +213,15 @@ function set(g, x, y, sym) {
 function fill(g, x0, y0, x1, y1, sym) {
   const v = IDX[sym];
   for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++)
-    for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++)
-      g[y][x] = v;
+    for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++) g[y][x] = v;
 }
 
-function fillRow(g, y, x0, x1, sym) { fill(g, x0, y, x1, y, sym); }
-function fillCol(g, x, y0, y1, sym) { fill(g, x, y0, x, y1, sym); }
+function fillRow(g, y, x0, x1, sym) {
+  fill(g, x0, y, x1, y, sym);
+}
+function fillCol(g, x, y0, y1, sym) {
+  fill(g, x, y0, x, y1, sym);
+}
 
 // Border of a rectangle (wall only)
 function border(g, x0, y0, x1, y1, sym) {
@@ -144,36 +249,49 @@ function sym(g, x, y) {
 // Deterministic PRNG (xorshift32)
 function makePRNG(seed) {
   let s = (seed ^ 0xdeadbeef) >>> 0;
-  return () => { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s >>> 0) / 0xffffffff; };
+  return () => {
+    s ^= s << 13;
+    s ^= s >> 17;
+    s ^= s << 5;
+    return (s >>> 0) / 0xffffffff;
+  };
 }
 
 // toBinaryBuffer: grid is array of Uint8Array rows
 function toBin(grid) {
   const buf = Buffer.alloc(W * H);
   for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++)
-      buf[y * W + x] = grid[y][x];
+    for (let x = 0; x < W; x++) buf[y * W + x] = grid[y][x];
   return buf;
 }
 
 // ─── Biome zones (pixel bounds on 256×256) ────────────────────────────────────
 // Sea border: 20 tiles on all sides → island = tiles 20..235
 const SEA = 20;
-const ISLAND_X0 = SEA, ISLAND_X1 = W - 1 - SEA;
-const ISLAND_Y0 = SEA, ISLAND_Y1 = H - 1 - SEA;
+const ISLAND_X0 = SEA,
+  ISLAND_X1 = W - 1 - SEA;
+const ISLAND_Y0 = SEA,
+  ISLAND_Y1 = H - 1 - SEA;
 
 // Rough biome boundaries (Y increases south)
 // Norte (Y 20..90):  Floresta W(20..130), Pântano E(131..235)
 // Meio  (Y 91..165): Campo + Cidade (centro 100..155 × 90..165)
 // Sul   (Y 166..235): Deserto W(20..130), Litoral E(131..235)
 
-const FOREST_Y0 = 20,  FOREST_Y1  = 90;
-const SWAMP_Y0  = 20,  SWAMP_Y1   = 90;
-const BIOME_EW  = 130; // X divider between west/east biomes
-const MID_Y0    = 91,  MID_Y1    = 165;
-const CITY_X0   = 100, CITY_X1   = 155, CITY_Y0 = 91, CITY_Y1 = 160;
-const SOUTH_Y0  = 166, SOUTH_Y1  = 235;
-const COAST_X0  = 131;
+const FOREST_Y0 = 20,
+  FOREST_Y1 = 90;
+const SWAMP_Y0 = 20,
+  SWAMP_Y1 = 90;
+const BIOME_EW = 130; // X divider between west/east biomes
+const MID_Y0 = 91,
+  MID_Y1 = 165;
+const CITY_X0 = 100,
+  CITY_X1 = 155,
+  CITY_Y0 = 91,
+  CITY_Y1 = 160;
+const SOUTH_Y0 = 166,
+  SOUTH_Y1 = 235;
+const COAST_X0 = 131;
 
 // ─── Level 0 (surface) ────────────────────────────────────────────────────────
 function buildLevel0(rng) {
@@ -181,12 +299,19 @@ function buildLevel0(rng) {
 
   // ── Sea + beach border ─────────────────────────────────────────────────────
   // Full map sea
-  fill(g, 0, 0, W-1, H-1, "wat");
+  fill(g, 0, 0, W - 1, H - 1, "wat");
   // Island base (grass)
   fill(g, ISLAND_X0, ISLAND_Y0, ISLAND_X1, ISLAND_Y1, "grs");
   // Beach ring: 4 tiles of sand between island and sea
   for (let t = 0; t < 4; t++) {
-    border(g, ISLAND_X0 + t, ISLAND_Y0 + t, ISLAND_X1 - t, ISLAND_Y1 - t, "snd");
+    border(
+      g,
+      ISLAND_X0 + t,
+      ISLAND_Y0 + t,
+      ISLAND_X1 - t,
+      ISLAND_Y1 - t,
+      "snd",
+    );
   }
   // Overwrite beach interior with grass (border only painted sand, not fill)
   fill(g, ISLAND_X0 + 4, ISLAND_Y0 + 4, ISLAND_X1 - 4, ISLAND_Y1 - 4, "grs");
@@ -237,21 +362,26 @@ function buildLevel0(rng) {
   for (let ty = FOREST_Y0 + 5; ty <= FOREST_Y1 - 2; ty++) {
     for (let tx = ISLAND_X0 + 5; tx <= BIOME_EW - 2; tx++) {
       // ~50% densidade
-      if (rng() < 0.50 && sym(g, tx, ty) === "grs") {
+      if (rng() < 0.5 && sym(g, tx, ty) === "grs") {
         set(g, tx, ty, "tre");
       }
     }
   }
   // Trilha diagonal NW→centro da floresta (pat)
   {
-    const tx0 = ISLAND_X0 + 6, ty0 = FOREST_Y0 + 6;
-    const tx1 = 100, ty1 = FOREST_Y1 - 5;
+    const tx0 = ISLAND_X0 + 6,
+      ty0 = FOREST_Y0 + 6;
+    const tx1 = 100,
+      ty1 = FOREST_Y1 - 5;
     const steps = 40;
     for (let s = 0; s <= steps; s++) {
       const t = s / steps;
       const x = Math.round(tx0 + (tx1 - tx0) * t);
       const y = Math.round(ty0 + (ty1 - ty0) * t);
-      for (let d = -1; d <= 1; d++) { set(g, x + d, y, "pat"); set(g, x, y + d, "pat"); }
+      for (let d = -1; d <= 1; d++) {
+        set(g, x + d, y, "pat");
+        set(g, x, y + d, "pat");
+      }
     }
   }
 
@@ -281,11 +411,13 @@ function buildLevel0(rng) {
 
   // ── Entrada de caverna (floresta, NW) ─────────────────────────────────────
   // Posição fixa: 70,55  (floresta, afastado das bordas)
-  const caveX = 70, caveY = 55;
+  const caveX = 70,
+    caveY = 55;
   buildCaveEntrance(g, caveX, caveY);
 
   // ── Entrada de dungeon (deserto, SW) ──────────────────────────────────────
-  const dungX = 60, dungY = 190;
+  const dungX = 60,
+    dungY = 190;
   buildDungeonEntrance(g, dungX, dungY);
 
   // ── Manhole de esgoto (cidade) ─────────────────────────────────────────────
@@ -297,14 +429,15 @@ function buildLevel0(rng) {
 
 // ─── Cidade (city block, center of island) ────────────────────────────────────
 function buildCity(g, rng) {
-  const cx = 128, cy = 128; // spawn center
+  const cx = 128,
+    cy = 128; // spawn center
 
   // Muralha da cidade
   border(g, CITY_X0, CITY_Y0, CITY_X1, CITY_Y1, "wal");
 
   // Avenidas principais (cobblestone) formando cruz
-  fill(g, CITY_X0, cy - 2, CITY_X1, cy + 2, "cob");  // horizontal
-  fill(g, cx - 2, CITY_Y0, cx + 2, CITY_Y1, "cob");  // vertical
+  fill(g, CITY_X0, cy - 2, CITY_X1, cy + 2, "cob"); // horizontal
+  fill(g, cx - 2, CITY_Y0, cx + 2, CITY_Y1, "cob"); // vertical
 
   // Praça central
   fill(g, cx - 5, cy - 5, cx + 5, cy + 5, "stn");
@@ -321,12 +454,12 @@ function buildCity(g, rng) {
   // Casas nos 4 quadrantes
   const houses = [
     // Quadrante NW
-    { x: 104, y: 96,  w: 7, h: 7, floors: 2 },
-    { x: 114, y: 96,  w: 5, h: 5, floors: 1 },
+    { x: 104, y: 96, w: 7, h: 7, floors: 2 },
+    { x: 114, y: 96, w: 5, h: 5, floors: 1 },
     { x: 104, y: 106, w: 5, h: 5, floors: 1 },
     // Quadrante NE
-    { x: 133, y: 96,  w: 7, h: 7, floors: 2 },
-    { x: 143, y: 96,  w: 5, h: 5, floors: 1 },
+    { x: 133, y: 96, w: 7, h: 7, floors: 2 },
+    { x: 143, y: 96, w: 5, h: 5, floors: 1 },
     // Quadrante SW
     { x: 104, y: 135, w: 7, h: 7, floors: 2 },
     { x: 114, y: 135, w: 5, h: 5, floors: 1 },
@@ -334,7 +467,7 @@ function buildCity(g, rng) {
     { x: 133, y: 135, w: 7, h: 7, floors: 2 },
     { x: 143, y: 135, w: 5, h: 5, floors: 1 },
     // Torre central NE
-    { x: 148, y: 93,  w: 5, h: 5, floors: 3, isTower: true },
+    { x: 148, y: 93, w: 5, h: 5, floors: 3, isTower: true },
   ];
 
   return houses; // returned for use in upper levels
@@ -349,11 +482,16 @@ function buildCaveEntrance(g, cx, cy) {
   // Rocky frame around the hole
   for (let dy = -2; dy <= 2; dy++)
     for (let dx = -2; dx <= 2; dx++)
-      if (sym(g, cx + dx, cy + dy) !== "..." && sym(g, cx + dx, cy + dy) !== "wat")
+      if (
+        sym(g, cx + dx, cy + dy) !== "..." &&
+        sym(g, cx + dx, cy + dy) !== "wat"
+      )
         set(g, cx + dx, cy + dy, "rok");
   // Cave walls forming entrance
-  set(g, cx - 1, cy, "cwl"); set(g, cx + 1, cy, "cwl");
-  set(g, cx, cy - 1, "cwl"); set(g, cx - 1, cy - 1, "rok");
+  set(g, cx - 1, cy, "cwl");
+  set(g, cx + 1, cy, "cwl");
+  set(g, cx, cy - 1, "cwl");
+  set(g, cx - 1, cy - 1, "rok");
   set(g, cx + 1, cy - 1, "rok");
   // std inside — voluntary descent
   set(g, cx, cy, "std");
@@ -364,12 +502,15 @@ function buildDungeonEntrance(g, cx, cy) {
   // Approach: clear sand
   fill(g, cx - 3, cy - 3, cx + 3, cy + 3, "snd");
   // Flanking pillars
-  set(g, cx - 1, cy - 1, "pil"); set(g, cx + 1, cy - 1, "pil");
+  set(g, cx - 1, cy - 1, "pil");
+  set(g, cx + 1, cy - 1, "pil");
   // Archway
   set(g, cx, cy - 1, "arc");
   // Short side walls
-  set(g, cx - 2, cy, "dwl"); set(g, cx + 2, cy, "dwl");
-  set(g, cx - 2, cy - 1, "dwl"); set(g, cx + 2, cy - 1, "dwl");
+  set(g, cx - 2, cy, "dwl");
+  set(g, cx + 2, cy, "dwl");
+  set(g, cx - 2, cy - 1, "dwl");
+  set(g, cx + 2, cy - 1, "dwl");
   // std just inside arch (player presses W while facing north → walks through arch → descends)
   set(g, cx, cy, "std");
 }
@@ -380,14 +521,15 @@ function buildLevel1() {
 
   // Houses 2-floor: same footprint as city houses
   const twoFloorHouses = [
-    { x: 104, y: 96,  w: 7, h: 7 },
-    { x: 133, y: 96,  w: 7, h: 7 },
+    { x: 104, y: 96, w: 7, h: 7 },
+    { x: 133, y: 96, w: 7, h: 7 },
     { x: 104, y: 135, w: 7, h: 7 },
     { x: 133, y: 135, w: 7, h: 7 },
   ];
 
   for (const h of twoFloorHouses) {
-    const x1 = h.x + h.w - 1, y1 = h.y + h.h - 1;
+    const x1 = h.x + h.w - 1,
+      y1 = h.y + h.h - 1;
     // Walls same XZ as ground floor
     border(g, h.x, h.y, x1, y1, "bwl");
     fill(g, h.x + 1, h.y + 1, x1 - 1, y1 - 1, "flr");
@@ -406,8 +548,12 @@ function buildLevel1() {
 
   // Tower (3 floors): level 1 = 2nd floor, no roof yet
   {
-    const tx = 148, ty = 93, tw = 5, th = 5;
-    const tx1 = tx + tw - 1, ty1 = ty + th - 1;
+    const tx = 148,
+      ty = 93,
+      tw = 5,
+      th = 5;
+    const tx1 = tx + tw - 1,
+      ty1 = ty + th - 1;
     border(g, tx, ty, tx1, ty1, "bwl");
     fill(g, tx + 1, ty + 1, tx1 - 1, ty1 - 1, "flr");
     // std (same pos as stu in level 0)
@@ -425,8 +571,12 @@ function buildLevel2() {
 
   // Tower top floor + roof
   {
-    const tx = 148, ty = 93, tw = 5, th = 5;
-    const tx1 = tx + tw - 1, ty1 = ty + th - 1;
+    const tx = 148,
+      ty = 93,
+      tw = 5,
+      th = 5;
+    const tx1 = tx + tw - 1,
+      ty1 = ty + th - 1;
     border(g, tx, ty, tx1, ty1, "bwl");
     fill(g, tx + 1, ty + 1, tx1 - 1, ty1 - 1, "flr");
     set(g, tx + 2, ty1 - 1, "std"); // std same pos as stu from level 1
@@ -446,7 +596,8 @@ function buildLevelMinus1(rng) {
 
   // ── Cave interior (below floresta NW) ──────────────────────────────────────
   // Center roughly below caveEntrance at 70,55
-  const caveCX = 70, caveCY = 55;
+  const caveCX = 70,
+    caveCY = 55;
   // Main room
   room(g, caveCX - 8, caveCY - 8, caveCX + 8, caveCY + 8, "cwl", "cfl");
   // stu back up (same X/Z as std on level 0)
@@ -463,7 +614,8 @@ function buildLevelMinus1(rng) {
   set(g, caveCX + 23, caveCY - 3, "std");
 
   // ── Dungeon interior (below deserto SW, near 60,190) ──────────────────────
-  const dCX = 60, dCY = 190;
+  const dCX = 60,
+    dCY = 190;
   // stu back up
   set(g, dCX, dCY, "stu");
   // Entry corridor going north
@@ -497,7 +649,9 @@ function buildLevelMinus1(rng) {
   for (let i = 0; i < 40; i++) {
     const rx = Math.floor(rng() * W);
     const ry = Math.floor(rng() * H);
-    if (ATLAS[g[ry][rx]] === "cwl") { /* wall stays */ }
+    if (ATLAS[g[ry][rx]] === "cwl") {
+      /* wall stays */
+    }
   }
 
   return g;
@@ -508,12 +662,14 @@ function buildLevelMinus2(rng) {
   const g = makeGrid("dwl"); // default = dungeon wall
 
   // Deep cave (below cave -1 side room)
-  const dCX2 = 93, dCY2 = 55; // approx below std in level -1
+  const dCX2 = 93,
+    dCY2 = 55; // approx below std in level -1
   room(g, dCX2 - 10, dCY2 - 10, dCX2 + 10, dCY2 + 10, "cwl", "cfl");
   set(g, dCX2, dCY2 - 3, "stu"); // stu to level -1
 
   // Deep dungeon (below dungeon -1)
-  const dDX = 60, dDY = 190;
+  const dDX = 60,
+    dDY = 190;
   set(g, dDX, dDY - 14, "stu"); // stu back to level -1
   room(g, dDX - 12, dDY - 30, dDX + 12, dDY - 16, "dwl", "dfn");
   fill(g, dDX - 1, dDY - 16, dDX + 1, dDY - 15, "dfn"); // corridor connector
@@ -528,14 +684,15 @@ function buildLevelMinus2(rng) {
 // Called after buildLevel0 to inject stu into the ground floor.
 function injectStairsLevel0(g) {
   const twoFloorHouses = [
-    { x: 104, y: 96,  w: 7, h: 7 },
-    { x: 133, y: 96,  w: 7, h: 7 },
+    { x: 104, y: 96, w: 7, h: 7 },
+    { x: 133, y: 96, w: 7, h: 7 },
     { x: 104, y: 135, w: 7, h: 7 },
     { x: 133, y: 135, w: 7, h: 7 },
   ];
 
   for (const h of twoFloorHouses) {
-    const x1 = h.x + h.w - 1, y1 = h.y + h.h - 1;
+    const x1 = h.x + h.w - 1,
+      y1 = h.y + h.h - 1;
     const stairX = h.x + Math.floor(h.w / 2);
     const stairY = y1 - 2;
     // Place walls + floor for house (build house on level 0)
@@ -549,8 +706,12 @@ function injectStairsLevel0(g) {
 
   // Tower (3 floors)
   {
-    const tx = 148, ty = 93, tw = 5, th = 5;
-    const tx1 = tx + tw - 1, ty1 = ty + th - 1;
+    const tx = 148,
+      ty = 93,
+      tw = 5,
+      th = 5;
+    const tx1 = tx + tw - 1,
+      ty1 = ty + th - 1;
     border(g, tx, ty, tx1, ty1, "bwl");
     fill(g, tx + 1, ty + 1, tx1 - 1, ty1 - 1, "flr");
     set(g, tx + 2, ty1, "cob"); // door
@@ -559,15 +720,16 @@ function injectStairsLevel0(g) {
 
   // 1-floor houses (walls + floor only, no stairs)
   const oneFloorHouses = [
-    { x: 114, y: 96,  w: 5, h: 5 },
+    { x: 114, y: 96, w: 5, h: 5 },
     { x: 104, y: 106, w: 5, h: 5 },
-    { x: 143, y: 96,  w: 5, h: 5 },
+    { x: 143, y: 96, w: 5, h: 5 },
     { x: 114, y: 135, w: 5, h: 5 },
     { x: 143, y: 135, w: 5, h: 5 },
   ];
 
   for (const h of oneFloorHouses) {
-    const x1 = h.x + h.w - 1, y1 = h.y + h.h - 1;
+    const x1 = h.x + h.w - 1,
+      y1 = h.y + h.h - 1;
     border(g, h.x, h.y, x1, y1, "bwl");
     fill(g, h.x + 1, h.y + 1, x1 - 1, y1 - 1, "flr");
     // Door
@@ -592,31 +754,31 @@ const ENTITY_TEMPLATES = {
 function buildEntities() {
   return {
     "-2": [
-      { symbol: "orc", x: 60,  y: 175 },
-      { symbol: "orc", x: 50,  y: 170 },
+      { symbol: "orc", x: 60, y: 175 },
+      { symbol: "orc", x: 50, y: 170 },
     ],
     "-1": [
-      { symbol: "rat", x: 72,  y: 55  },
-      { symbol: "rat", x: 78,  y: 60  },
-      { symbol: "gob", x: 62,  y: 188 },
-      { symbol: "orc", x: 55,  y: 178 },
+      { symbol: "rat", x: 72, y: 55 },
+      { symbol: "rat", x: 78, y: 60 },
+      { symbol: "gob", x: 62, y: 188 },
+      { symbol: "orc", x: 55, y: 178 },
       { symbol: "rat", x: 128, y: 107 },
     ],
-    "0": [
-      { symbol: "gob", x: 115, y: 92  },
-      { symbol: "gla", x: 119, y: 92  },
-      { symbol: "orc", x: 140, y: 92  },
+    0: [
+      { symbol: "gob", x: 115, y: 92 },
+      { symbol: "gla", x: 119, y: 92 },
+      { symbol: "orc", x: 140, y: 92 },
       { symbol: "gob", x: 110, y: 140 },
       { symbol: "orc", x: 140, y: 140 },
       // Floresta
-      { symbol: "gob", x: 65,  y: 50  },
-      { symbol: "gob", x: 75,  y: 65  },
+      { symbol: "gob", x: 65, y: 50 },
+      { symbol: "gob", x: 75, y: 65 },
       // Deserto
-      { symbol: "orc", x: 60,  y: 200 },
-      { symbol: "gob", x: 50,  y: 210 },
+      { symbol: "orc", x: 60, y: 200 },
+      { symbol: "gob", x: 50, y: 210 },
     ],
-    "1": [],
-    "2": [],
+    1: [],
+    2: [],
   };
 }
 
@@ -641,13 +803,13 @@ function writeMap(levels) {
           playerPos: lv === "0" ? { x: 128 * 32, y: 128 * 32 } : { x: 0, y: 0 },
           entities: entities[lv] ?? [],
         },
-      ])
+      ]),
     ),
   };
 
   fs.writeFileSync(
     path.join(OUTPUT_DIR, `${MAP_NAME}.json`),
-    JSON.stringify(mapJson, null, 2)
+    JSON.stringify(mapJson, null, 2),
   );
   console.log(`[world-v1] Wrote ${MAP_NAME}.json`);
 
@@ -667,15 +829,17 @@ function main() {
   const rng = makePRNG(0x5e4d1a2b);
 
   const l0 = buildLevel0(rng);
-  injectStairsLevel0(l0);  // house walls + stairs on top of biome tiles
+  injectStairsLevel0(l0); // house walls + stairs on top of biome tiles
   const l1 = buildLevel1();
   const l2 = buildLevel2();
   const lm1 = buildLevelMinus1(rng);
   const lm2 = buildLevelMinus2(rng);
 
-  writeMap({ "-2": lm2, "-1": lm1, "0": l0, "1": l1, "2": l2 });
+  writeMap({ "-2": lm2, "-1": lm1, 0: l0, 1: l1, 2: l2 });
 
-  console.log(`\n[world-v1] Done. Spawn: tile 128,128 (world coords ${128*32},${128*32})`);
+  console.log(
+    `\n[world-v1] Done. Spawn: tile 128,128 (world coords ${128 * 32},${128 * 32})`,
+  );
   console.log("[world-v1] Validation: npm run check:bms");
 }
 

@@ -17,19 +17,23 @@ type GeneratedAnimDef = {
 
 const GENERATED_ANIM_DEFS: Record<string, GeneratedAnimDef[]> = {
   goblin_lanceiro: [
-    { state: "idle",   direction: "south", frameCount: 4 },
-    { state: "walk",   direction: "south", frameCount: 4 },
+    { state: "idle", direction: "south", frameCount: 4 },
+    { state: "walk", direction: "south", frameCount: 4 },
     { state: "attack", direction: "south", frameCount: 3 },
-    { state: "death",  direction: "south", frameCount: 9 },
+    { state: "death", direction: "south", frameCount: 9 },
   ],
 };
 
 const FPS_GENERATED = 8;
 
-function buildGeneratedFrameUrls(entityId: string, anim: GeneratedAnimDef): string[] {
+function buildGeneratedFrameUrls(
+  entityId: string,
+  anim: GeneratedAnimDef,
+): string[] {
   const base = `/assets/sprites/generated/${entityId}/${anim.state}_${anim.direction}`;
-  return Array.from({ length: anim.frameCount }, (_, i) =>
-    `${base}/frame_${String(i).padStart(2, "0")}.png`,
+  return Array.from(
+    { length: anim.frameCount },
+    (_, i) => `${base}/frame_${String(i).padStart(2, "0")}.png`,
   );
 }
 
@@ -44,7 +48,8 @@ export function createGeneratedSpriteAnimatedMaterial(
   keyPrefix: string,
   entityId: string,
 ): StandardMaterial {
-  const animDefs = GENERATED_ANIM_DEFS[entityId] ?? GENERATED_ANIM_DEFS["goblin_lanceiro"];
+  const animDefs =
+    GENERATED_ANIM_DEFS[entityId] ?? GENERATED_ANIM_DEFS["goblin_lanceiro"];
   const interval = 1000 / FPS_GENERATED;
 
   // Pre-load all textures grouped by state
@@ -234,7 +239,10 @@ function drawHeroFrame(ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
 }
 
-function drawEnemyFrame(ctx: CanvasRenderingContext2D, enemyId: EnemySpriteId): void {
+function drawEnemyFrame(
+  ctx: CanvasRenderingContext2D,
+  enemyId: EnemySpriteId,
+): void {
   switch (enemyId) {
     case "rat": {
       ctx.fillStyle = hexToCss(0x808080);

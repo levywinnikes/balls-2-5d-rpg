@@ -10,16 +10,16 @@ Use this matrix to decide mandatory validation commands based on change impact.
 
 ## Impact -> Required Commands
 
-| Impact Area                               | Required Commands                                                               |
-| :---------------------------------------- | :------------------------------------------------------------------------------ |
-| Docs-only (no code/config/runtime change) | No runtime command required; ensure markdown/lint checks pass if applicable     |
-| UI text / HUD / windows / notifications   | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`                      |
-| Gameplay logic / systems / scenes         | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                         |
-| Save/load flow                            | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                         |
-| Map/BMS internals                         | `npm run check:bms`, `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`    |
-| Pathfinding / navigation workers          | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                         |
-| Benchmark harness / checkpoints           | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e` |
-| Dependency or build config updates        | `npx tsc --noEmit --skipLibCheck`, `npm run ci`                                 |
+| Impact Area                               | Required Commands                                                                              |
+| :---------------------------------------- | :--------------------------------------------------------------------------------------------- |
+| Docs-only (no code/config/runtime change) | No runtime command required; ensure markdown/lint checks pass if applicable                    |
+| UI text / HUD / windows / notifications   | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`                                     |
+| Gameplay logic / systems / scenes         | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                                        |
+| Save/load flow                            | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                                        |
+| Map/BMS internals                         | `npm run check:bms`, `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                   |
+| Pathfinding / navigation workers          | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                                        |
+| Benchmark harness / checkpoints           | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`            |
+| Dependency or build config updates        | `npx tsc --noEmit --skipLibCheck`, `npm run ci`                                                |
 | Cross-cutting refactor (multi-module)     | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`, `npm run ci` |
 
 ## Full Benchmark Trigger

@@ -8,20 +8,20 @@ Before writing or modifying any code, you MUST:
 2. Read the corresponding contract file(s) listed for that domain.
 3. If you have not read the relevant contract, **refuse to implement and ask for confirmation first**.
 
-| Domain                                                                | Contract file(s) to read                                                                         |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| **3D Slice Runtime, HUD, FloatingText, Audio integration**            | **`docs/THREE_D_INTEGRATION_BLUEPRINT.md` (CLÁUSULA PÉTREA — ler ANTES de qualquer mudança 3D)** |
-| Map rendering, tiles, BMS, binary levels, LevelRenderer, TileRegistry | `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/SYSTEM_BMS.md`                                    |
-| 3D perspective, projection, volumetric walls, PerspectiveProjection   | `docs/contracts/PERSPECTIVE_MODE_CONTRACT.md`, `docs/PERSPECTIVE_MODE_MASTER_PLAN.md`            |
-| Level transitions, stairs, holes, TransitionSystem                    | `docs/contracts/MAP_SYSTEM_CONTRACT.md`                                                          |
-| Player state, stats, inventory, equipment                             | `docs/contracts/PLAYER_STATE_CONTRACT.md`                                                        |
-| Save/load, SaveSystem, persistence                                    | `docs/contracts/SAVE_SYSTEM_CONTRACT.md`                                                         |
-| UI components, HUD, windows, React overlays                           | `docs/contracts/UI_DESIGN_CONTRACT.md`                                                           |
-| Any player-facing text, labels, notifications                         | `docs/contracts/LOCALIZATION_CONTRACT.md`                                                        |
-| Combat, BattleSystem, damage, XP                                      | `docs/contracts/BATTLE_SYSTEM_CONTRACT.md`                                                       |
-| Benchmark, smoke test, smoke_test.json, generate-smoke-map.js         | `docs/contracts/BENCHMARK_CONTRACT.md`                                                           |
-| **World map, island layout, biomes, tile atlas, structure rules, map generators** | **`docs/contracts/WORLD_MAP_CONTRACT.md`** (ler ANTES de qualquer gerador de mapa) |
-| Cross-cutting / multiple domains                                      | All contracts above that apply                                                                   |
+| Domain                                                                            | Contract file(s) to read                                                                         |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **3D Slice Runtime, HUD, FloatingText, Audio integration**                        | **`docs/THREE_D_INTEGRATION_BLUEPRINT.md` (CLÁUSULA PÉTREA — ler ANTES de qualquer mudança 3D)** |
+| Map rendering, tiles, BMS, binary levels, LevelRenderer, TileRegistry             | `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/SYSTEM_BMS.md`                                    |
+| 3D perspective, projection, volumetric walls, PerspectiveProjection               | `docs/contracts/PERSPECTIVE_MODE_CONTRACT.md`, `docs/PERSPECTIVE_MODE_MASTER_PLAN.md`            |
+| Level transitions, stairs, holes, TransitionSystem                                | `docs/contracts/MAP_SYSTEM_CONTRACT.md`                                                          |
+| Player state, stats, inventory, equipment                                         | `docs/contracts/PLAYER_STATE_CONTRACT.md`                                                        |
+| Save/load, SaveSystem, persistence                                                | `docs/contracts/SAVE_SYSTEM_CONTRACT.md`                                                         |
+| UI components, HUD, windows, React overlays                                       | `docs/contracts/UI_DESIGN_CONTRACT.md`                                                           |
+| Any player-facing text, labels, notifications                                     | `docs/contracts/LOCALIZATION_CONTRACT.md`                                                        |
+| Combat, BattleSystem, damage, XP                                                  | `docs/contracts/BATTLE_SYSTEM_CONTRACT.md`                                                       |
+| Benchmark, smoke test, smoke_test.json, generate-smoke-map.js                     | `docs/contracts/BENCHMARK_CONTRACT.md`                                                           |
+| **World map, island layout, biomes, tile atlas, structure rules, map generators** | **`docs/contracts/WORLD_MAP_CONTRACT.md`** (ler ANTES de qualquer gerador de mapa)               |
+| Cross-cutting / multiple domains                                                  | All contracts above that apply                                                                   |
 
 After reading, state: "Li o contrato X. A restrição relevante para esta tarefa é Y."
 
@@ -119,15 +119,16 @@ Checklist refresh triggers (mandatory):
 
 ## Validation commands by impact area
 
-| Change area               | Required commands                                                               |
-| ------------------------- | ------------------------------------------------------------------------------- |
-| Gameplay, scenes, systems | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                         |
-| Map / BMS                 | `npm run check:bms`, `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`    |
-| UI text / HUD             | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`                      |
-| Save/load                 | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                         |
-| Benchmark harness         | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`                      |
+| Change area               | Required commands                                                            |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| Gameplay, scenes, systems | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                      |
+| Map / BMS                 | `npm run check:bms`, `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test` |
+| UI text / HUD             | `npm run check:i18n-ui`, `npx tsc --noEmit --skipLibCheck`                   |
+| Save/load                 | `npx tsc --noEmit --skipLibCheck`, `npm run smoke:test`                      |
+| Benchmark harness         | `npx tsc --noEmit --skipLibCheck`, `npm run benchmark:e2e`                   |
 
 `benchmark:e2e` trigger set:
+
 - required on PR-final validation and release validation
 - required when benchmark harness/checkpoints/menu benchmark flow is touched
 

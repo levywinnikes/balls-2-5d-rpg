@@ -17,8 +17,12 @@ import {
 } from "lucide-react";
 
 import { WorldMapService } from "../../services/WorldMapService";
-
-const BASE_TILE_SIZE = 4;
+import {
+  MAP_UI_BUFFER_TILE_SIZE,
+  bmsGridXToVisualGridX,
+  clampToMapBounds,
+  worldToGridPoint,
+} from "../utils/MapCoordinateUtils";
 const VIEW_RANGE = 25;
 
 export const SidebarMinimap: React.FC = () => {
@@ -99,54 +103,66 @@ export const SidebarMinimap: React.FC = () => {
       const buffer = WorldMapService.getBuffer(viewLevel);
       const explored = playerState.getExploredArea(viewLevel);
       const tileSizeGame = mapData.tileSize || 32;
-      const currentTileSize = BASE_TILE_SIZE * zoom;
+      // PLAYER-CENTERED MODEL with X mirror (see MapCoordinateUtils):
+      // - Player marker fixed at canvas center.
+      // - World buffer drawn shifted so the player's VISUAL grid X lands at
+      //   centerX (BMS X is mirrored to match what the player sees in 3D).
+      // - 1 grid tile = MAP_UI_BUFFER_TILE_SIZE * zoom pixels in the canvas.
+      const tilePx = MAP_UI_BUFFER_TILE_SIZE * zoom;
+      const mapW = mapData.width;
 
-      const pGridX = pPos.x / tileSizeGame;
-      const pGridY = pPos.y / tileSizeGame;
+      const pGrid = worldToGridPoint(pPos.x, pPos.y, tileSizeGame);
+      const pVisualX = bmsGridXToVisualGridX(pGrid.x, mapW);
+      const pGridY = pGrid.y;
       const centerX = width / 2;
       const centerY = height / 2;
-      if (buffer) {
-        const visibleRange = VIEW_RANGE / zoom;
-        // Player-centered minimap (radar): player fixed at center, world moves around.
-        const sX = pGridX - visibleRange;
-        const sY = pGridY - visibleRange;
-        const sW = visibleRange * 2;
-        const sH = visibleRange * 2;
 
-        const currentTileSize = BASE_TILE_SIZE * zoom;
-        const dW = sW * currentTileSize;
-        const dH = sH * currentTileSize;
-        const dX = centerX - dW / 2;
-        const dY = centerY - dH / 2;
+      if (buffer) {
+        // Compute the buffer placement so that the player's VISUAL X
+        // lands at centerX. After translate+scale(-1,1), drawing the
+        // buffer at x=0 places its right edge at "0" (mirrored).
+        const dX = centerX - pVisualX * tilePx;
+        const dY = centerY - pGridY * tilePx;
+        const dW = buffer.width * tilePx;
+        const dH = buffer.height * tilePx;
 
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(buffer, sX, sY, sW, sH, dX, dY, dW, dH);
+        // Mirror the buffer in X so what's drawn matches what the
+        // 3D camera shows (Babylon LH renders +X world to screen-left).
+        ctx.save();
+        ctx.translate(dX + dW, dY);
+        ctx.scale(-1, 1);
+        ctx.drawImage(buffer, 0, 0, dW, dH);
+        ctx.restore();
 
         if (explored) {
-          const startX = Math.floor(sX);
-          const endX = Math.ceil(sX + sW);
-          const startY = Math.floor(sY);
-          const endY = Math.ceil(sY + sH);
+          // Iterate fog using BMS coords; transform to visual canvas X.
+          const startX = Math.max(0, Math.floor(pGrid.x - VIEW_RANGE / zoom));
+          const endX = Math.min(
+            mapW,
+            Math.ceil(pGrid.x + VIEW_RANGE / zoom),
+          );
+          const startY = Math.max(0, Math.floor(pGridY - VIEW_RANGE / zoom));
+          const endY = Math.min(
+            mapData.height,
+            Math.ceil(pGridY + VIEW_RANGE / zoom),
+          );
 
           ctx.fillStyle = "#000000";
-          for (let y = startY; y <= endY; y++) {
-            for (let x = startX; x <= endX; x++) {
-              if (y < 0 || y >= mapData.height || x < 0 || x >= mapData.width)
-                continue;
+          for (let y = startY; y < endY; y++) {
+            for (let x = startX; x < endX; x++) {
               if (!explored[y] || !explored[y][x]) {
-                const drawX = centerX + (x - pGridX) * currentTileSize;
-                const drawY = centerY + (y - pGridY) * currentTileSize;
-                ctx.fillRect(
-                  drawX,
-                  drawY,
-                  currentTileSize + 0.5,
-                  currentTileSize + 0.5,
-                );
+                // Mirror this tile's X to visual coords.
+                const visualX = bmsGridXToVisualGridX(x + 1, mapW); // +1 because tile occupies [x, x+1)
+                const drawX = centerX + (visualX - pVisualX) * tilePx;
+                const drawY = dY + y * tilePx;
+                ctx.fillRect(drawX, drawY, tilePx + 0.5, tilePx + 0.5);
               }
             }
           }
         }
 
+        // Player marker — fixed at canvas center.
         if (pPos.level === viewLevel) {
           ctx.fillStyle = "#FFFFFF";
           const crossSize = 2 * zoom;
@@ -168,10 +184,10 @@ export const SidebarMinimap: React.FC = () => {
         const markers = playerState.getMarkers();
         markers.forEach((m) => {
           if (String(m.level) === String(viewLevel)) {
-            const mx =
-              centerX + ((m.x - pPos.x) / tileSizeGame) * currentTileSize;
-            const my =
-              centerY + ((m.y - pPos.y) / tileSizeGame) * currentTileSize;
+            const markerGrid = worldToGridPoint(m.x, m.y, tileSizeGame);
+            const visualMX = bmsGridXToVisualGridX(markerGrid.x, mapW);
+            const mx = centerX + (visualMX - pVisualX) * tilePx;
+            const my = dY + markerGrid.y * tilePx;
 
             const dotSize = 4 * zoom;
             ctx.fillStyle = m.color || "#ff0000";
@@ -227,24 +243,31 @@ export const SidebarMinimap: React.FC = () => {
           const mouseX = (e.clientX - rect.left) * scaleX;
           const mouseY = (e.clientY - rect.top) * scaleY;
 
-          // Game Data
+          // Player-centered model with X mirror: invert canvas → BMS.
+          // canvasX = centerX + (visualGridX - playerVisualX) * tilePx
+          // → visualGridX = playerVisualX + (canvasX - centerX) / tilePx
+          // → bmsGridX   = mapWidth - visualGridX
           const tileSizeGame = mapData.tileSize || 32;
+          const tilePx = MAP_UI_BUFFER_TILE_SIZE * zoom;
           const pPos = playerState.getPosition();
-          const pGridX = pPos.x / tileSizeGame;
-          const pGridY = pPos.y / tileSizeGame;
-          const currentTileSize = BASE_TILE_SIZE * zoom;
+          const pGrid = worldToGridPoint(pPos.x, pPos.y, tileSizeGame);
+          const mapW = mapData.width || 1;
+          const playerVisualX = bmsGridXToVisualGridX(pGrid.x, mapW);
+          const centerX = 200 / 2;
+          const centerY = 200 / 2;
 
-          const gridOffsetX = (mouseX - 100) / currentTileSize;
-          const gridOffsetY = (mouseY - 100) / currentTileSize;
+          const visualGridX = playerVisualX + (mouseX - centerX) / tilePx;
+          const targetGridX = clampToMapBounds(
+            Math.floor(bmsGridXToVisualGridX(visualGridX, mapW)),
+            mapW,
+          );
+          const targetGridY = clampToMapBounds(
+            Math.floor(pGrid.y + (mouseY - centerY) / tilePx),
+            mapData.height || 1,
+          );
 
-          const targetGridX = pGridX + gridOffsetX;
-          const targetGridY = pGridY + gridOffsetY;
-
-          const clampedGridX = Math.max(0, Math.min((mapData.width || 1) - 1, targetGridX));
-          const clampedGridY = Math.max(0, Math.min((mapData.height || 1) - 1, targetGridY));
-
-          const targetWorldX = clampedGridX * tileSizeGame;
-          const targetWorldY = clampedGridY * tileSizeGame;
+          const targetWorldX = targetGridX * tileSizeGame;
+          const targetWorldY = targetGridY * tileSizeGame;
 
           // EXEC COMPATIBILITY: Avoid window.prompt for executable support.
           // Using a default name for now; the user can rename it in the Expanded Map.

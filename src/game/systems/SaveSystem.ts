@@ -471,7 +471,10 @@ export class SaveSystem {
     };
 
     if (this.isNative()) {
-      const result = await window.electronAPI!.saveGame(characterName, saveData);
+      const result = await window.electronAPI!.saveGame(
+        characterName,
+        saveData,
+      );
       if (result.success) {
         console.log(`[SaveSystem] 3D save OK: ${characterName}`);
         return true;

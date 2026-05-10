@@ -747,7 +747,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const backlogScore = clampScore(
       100 - avgPendingCandidates * 2.2 - avgPendingUnloads * 1.2,
     );
-    const leakPenalty = leakRisk === "high" ? 30 : leakRisk === "medium" ? 15 : 0;
+    const leakPenalty =
+      leakRisk === "high" ? 30 : leakRisk === "medium" ? 15 : 0;
 
     const sessionHealthScore = clampScore(
       frameScore * 0.35 +
@@ -774,7 +775,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       heap: {
         currentMb: currentHeap,
         slopeMbPerSec:
-          heapSlope !== undefined ? Math.round(heapSlope * 10000) / 10000 : undefined,
+          heapSlope !== undefined
+            ? Math.round(heapSlope * 10000) / 10000
+            : undefined,
         unloadRecoveryFailures: chunkUnloadRecoveryFailures,
       },
       chunk: {
@@ -789,10 +792,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     };
   };
 
-  const pushLogEvent = (
-    type: string,
-    payload?: Record<string, unknown>,
-  ) => {
+  const pushLogEvent = (type: string, payload?: Record<string, unknown>) => {
     if (!telemetryEnabled) return;
     if (runtimeLog.events.length >= LOG_MAX_EVENTS) {
       runtimeLog.events.shift();
@@ -1583,7 +1583,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   ): Mesh => {
     const mesh = new Mesh(name, scene);
     const STEP_COUNT = 4;
-    const stepDepth = 1.0 / STEP_COUNT;          // Z depth per step  (0.25)
+    const stepDepth = 1.0 / STEP_COUNT; // Z depth per step  (0.25)
     const stepRise = LEVEL_HEIGHT_UNITS / STEP_COUNT; // Y rise per step (0.5)
 
     const allPositions: number[] = [];
@@ -1595,23 +1595,75 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const x0 = tx;
       const x1 = tx + 1;
       const z0 = tz + (STEP_COUNT - 1 - i) * stepDepth; // north edge of this step
-      const z1 = tz + (STEP_COUNT - i) * stepDepth;     // south edge of this step
+      const z1 = tz + (STEP_COUNT - i) * stepDepth; // south edge of this step
       const y0 = baseY;
       const y1 = baseY + (i + 1) * stepRise;
 
       const base = allPositions.length / 3;
       // 8 vertices — shared per step (ComputeNormals averages them; fine for steps)
       allPositions.push(
-        x0, y0, z1,  x1, y0, z1,  x1, y0, z0,  x0, y0, z0, // bottom
-        x0, y1, z1,  x1, y1, z1,  x1, y1, z0,  x0, y1, z0, // top
+        x0,
+        y0,
+        z1,
+        x1,
+        y0,
+        z1,
+        x1,
+        y0,
+        z0,
+        x0,
+        y0,
+        z0, // bottom
+        x0,
+        y1,
+        z1,
+        x1,
+        y1,
+        z1,
+        x1,
+        y1,
+        z0,
+        x0,
+        y1,
+        z0, // top
       );
       allIndices.push(
-        base+4, base+7, base+6,  base+4, base+6, base+5, // top face (visible)
-        base+0, base+1, base+2,  base+0, base+2, base+3, // bottom (hidden)
-        base+0, base+4, base+5,  base+0, base+5, base+1, // south riser (+Z)
-        base+3, base+2, base+6,  base+3, base+6, base+7, // north face
-        base+1, base+5, base+6,  base+1, base+6, base+2, // east side
-        base+0, base+3, base+7,  base+0, base+7, base+4, // west side
+        base + 4,
+        base + 7,
+        base + 6,
+        base + 4,
+        base + 6,
+        base + 5, // top face (visible)
+        base + 0,
+        base + 1,
+        base + 2,
+        base + 0,
+        base + 2,
+        base + 3, // bottom (hidden)
+        base + 0,
+        base + 4,
+        base + 5,
+        base + 0,
+        base + 5,
+        base + 1, // south riser (+Z)
+        base + 3,
+        base + 2,
+        base + 6,
+        base + 3,
+        base + 6,
+        base + 7, // north face
+        base + 1,
+        base + 5,
+        base + 6,
+        base + 1,
+        base + 6,
+        base + 2, // east side
+        base + 0,
+        base + 3,
+        base + 7,
+        base + 0,
+        base + 7,
+        base + 4, // west side
       );
     }
 
@@ -1707,7 +1759,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           mesh.setEnabled(true);
         } else {
           // Fade out: lerp to 0 (user confirmed this direction looks fine)
-          const next = mesh.visibility + (targetVisibility - mesh.visibility) * lerpFactor;
+          const next =
+            mesh.visibility + (targetVisibility - mesh.visibility) * lerpFactor;
           mesh.visibility = next;
           if (next <= 0.01) {
             mesh.visibility = 0;
@@ -1788,13 +1841,23 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           // causing level 0 tiles to visually invade level 1 in 3D.
           const DEFAULT_WALL_H = LEVEL_HEIGHT_UNITS - 0.001;
           const tileHeight = isRoofTile
-            ? Math.min(Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H), DEFAULT_WALL_H)
+            ? Math.min(
+                Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H),
+                DEFAULT_WALL_H,
+              )
             : blocking
-            ? Math.min(Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H), DEFAULT_WALL_H)
-            : Math.max(0.03, tileDef?.height ?? 0.08);
+              ? Math.min(
+                  Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H),
+                  DEFAULT_WALL_H,
+                )
+              : Math.max(0.03, tileDef?.height ?? 0.08);
 
           // Resolve material key on main thread (getTileMaterial caches anyway)
-          const fallbackHex = isRoofTile ? "#8b3a2a" : isStairTile ? "#c4a07a" : "#6a9f36";
+          const fallbackHex = isRoofTile
+            ? "#8b3a2a"
+            : isStairTile
+              ? "#c4a07a"
+              : "#6a9f36";
           const mat = getTileMaterial(symbol, tileDef, fallbackHex);
           const materialKey = `${renderLevel}::${mat.name}`;
 
@@ -1827,8 +1890,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     >();
     for (const t of tiles) {
       if (!matByKey.has(t.materialKey)) {
-        const fallbackHex = t.isRoof ? "#8b3a2a" : t.isStair ? "#c4a07a" : "#6a9f36";
-        const mat = getTileMaterial(t.symbol, mapData.tileDefinitions?.[t.symbol], fallbackHex);
+        const fallbackHex = t.isRoof
+          ? "#8b3a2a"
+          : t.isStair
+            ? "#c4a07a"
+            : "#6a9f36";
+        const mat = getTileMaterial(
+          t.symbol,
+          mapData.tileDefinitions?.[t.symbol],
+          fallbackHex,
+        );
         // renderLevel is encoded in materialKey as the prefix before "::"
         const levelKey = t.materialKey.split("::")[0];
         matByKey.set(t.materialKey, { mat, levelKey, isRoof: t.isRoof });
@@ -1865,7 +1936,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         // doesn't flash visible for one frame before updateUpperLevelVisibility runs.
         const meshLevelNum = parseLevelNumber(entry.levelKey);
         const occlusionAtRegister = findUpperOcclusionLevel();
-        if (occlusionAtRegister !== null && meshLevelNum >= occlusionAtRegister) {
+        if (
+          occlusionAtRegister !== null &&
+          meshLevelNum >= occlusionAtRegister
+        ) {
           mesh.visibility = 0;
           mesh.setEnabled(false);
         }
@@ -2138,11 +2212,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const currentTileDef = currentTileSymbol
       ? mapData.tileDefinitions?.[currentTileSymbol]
       : undefined;
-    const currentTileBlocked = isBlockingTile(currentTileSymbol, currentTileDef);
+    const currentTileBlocked = isBlockingTile(
+      currentTileSymbol,
+      currentTileDef,
+    );
     const hasInvalidSpawn =
-      !isWithinBounds ||
-      isVoidSymbol(currentTileSymbol) ||
-      currentTileBlocked;
+      !isWithinBounds || isVoidSymbol(currentTileSymbol) || currentTileBlocked;
 
     if (hasInvalidSpawn) {
       const findNearestWalkable = (originX: number, originZ: number) => {
@@ -2153,7 +2228,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         for (let radius = 0; radius <= maxRadius; radius++) {
           for (let dz = -radius; dz <= radius; dz++) {
             for (let dx = -radius; dx <= radius; dx++) {
-              if (radius > 0 && Math.abs(dx) !== radius && Math.abs(dz) !== radius) {
+              if (
+                radius > 0 &&
+                Math.abs(dx) !== radius &&
+                Math.abs(dz) !== radius
+              ) {
                 continue;
               }
 
@@ -2168,7 +2247,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
                 continue;
               }
 
-              const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
+              const tileDef = symbol
+                ? mapData.tileDefinitions?.[symbol]
+                : undefined;
               if (isBlockingTile(symbol, tileDef)) {
                 continue;
               }
@@ -2193,13 +2274,22 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           player.position.z = Math.min(mapHeight - 0.5, Math.max(0.5, targetZ));
         }
       } else {
-        const walkable = findNearestWalkable(player.position.x, player.position.z);
+        const walkable = findNearestWalkable(
+          player.position.x,
+          player.position.z,
+        );
         if (walkable) {
           player.position.x = walkable.x;
           player.position.z = walkable.z;
         } else {
-          player.position.x = Math.min(mapWidth - 0.5, Math.max(0.5, player.position.x));
-          player.position.z = Math.min(mapHeight - 0.5, Math.max(0.5, player.position.z));
+          player.position.x = Math.min(
+            mapWidth - 0.5,
+            Math.max(0.5, player.position.x),
+          );
+          player.position.z = Math.min(
+            mapHeight - 0.5,
+            Math.max(0.5, player.position.z),
+          );
         }
       }
     }
@@ -3263,7 +3353,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
 
     const nextKeys = new Set(
-      streamedItems.map((item) => getDroppedItemMeshKey(currentLevel, item.itemId)),
+      streamedItems.map((item) =>
+        getDroppedItemMeshKey(currentLevel, item.itemId),
+      ),
     );
 
     droppedItemMeshes.forEach((mesh, meshKey) => {
@@ -4245,10 +4337,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
           const det = basisX.x * basisZ.y - basisX.y * basisZ.x;
           if (Math.abs(det) > 1e-6) {
-            const worldDX =
-              (desired.x * basisZ.y - desired.y * basisZ.x) / det;
-            const worldDZ =
-              (basisX.x * desired.y - basisX.y * desired.x) / det;
+            const worldDX = (desired.x * basisZ.y - desired.y * basisZ.x) / det;
+            const worldDZ = (basisX.x * desired.y - basisX.y * desired.x) / det;
             movement = new Vector3(worldDX, 0, worldDZ);
           } else {
             // Fallback for degenerate projection matrix edge-cases.
@@ -4570,7 +4660,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       pushBounded(frameMsWindow, sample.perf.frameMs, LOG_FRAME_WINDOW_MAX);
       if (sample.pathfinding.lastMs > 0) {
-        pushBounded(pathMsWindow, sample.pathfinding.lastMs, LOG_PATH_WINDOW_MAX);
+        pushBounded(
+          pathMsWindow,
+          sample.pathfinding.lastMs,
+          LOG_PATH_WINDOW_MAX,
+        );
       }
 
       if (sample.perf.jsHeapUsedMb !== undefined) {
@@ -4589,7 +4683,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           }
 
           const elapsedSinceUnload = sample.elapsedSec - checkpoint.atSec;
-          const droppedEnough = sample.perf.jsHeapUsedMb! <= checkpoint.heapMb - 1;
+          const droppedEnough =
+            sample.perf.jsHeapUsedMb! <= checkpoint.heapMb - 1;
           if (droppedEnough) {
             checkpoint.resolved = true;
             checkpoint.succeeded = true;
@@ -4611,20 +4706,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
 
       const chunkKey = `${sample.activeLevel}:${sample.player.chunkX}_${sample.player.chunkZ}`;
-      const chunkEntry =
-        chunkHotspots.get(chunkKey) ||
-        {
-          level: sample.activeLevel,
-          chunkX: sample.player.chunkX,
-          chunkZ: sample.player.chunkZ,
-          samples: 0,
-          frameMsAcc: 0,
-          drawCallsAcc: 0,
-          activeMeshesAcc: 0,
-          verticesAcc: 0,
-          maxHeapUsedMb: 0,
-          maxPathMs: 0,
-        };
+      const chunkEntry = chunkHotspots.get(chunkKey) || {
+        level: sample.activeLevel,
+        chunkX: sample.player.chunkX,
+        chunkZ: sample.player.chunkZ,
+        samples: 0,
+        frameMsAcc: 0,
+        drawCallsAcc: 0,
+        activeMeshesAcc: 0,
+        verticesAcc: 0,
+        maxHeapUsedMb: 0,
+        maxPathMs: 0,
+      };
       chunkEntry.samples += 1;
       chunkEntry.frameMsAcc += sample.perf.frameMs;
       chunkEntry.drawCallsAcc += sample.perf.drawCalls;

@@ -21,11 +21,32 @@ const {
 // ─────────────────────────────────────────────
 const ANIMATION_PLAN = [
   // template mode (skeleton-based, guaranteed consistent with stored character)
-  { name: "walk",   mode: "template", templateId: "walking-4-frames", directions: ["south", "north", "east", "west"] },
-  { name: "idle",   mode: "template", templateId: "breathing-idle",   directions: ["south", "north", "east", "west"] },
-  { name: "attack", mode: "template", templateId: "lead-jab",         directions: ["south", "north", "east", "west"] },
+  {
+    name: "walk",
+    mode: "template",
+    templateId: "walking-4-frames",
+    directions: ["south", "north", "east", "west"],
+  },
+  {
+    name: "idle",
+    mode: "template",
+    templateId: "breathing-idle",
+    directions: ["south", "north", "east", "west"],
+  },
+  {
+    name: "attack",
+    mode: "template",
+    templateId: "lead-jab",
+    directions: ["south", "north", "east", "west"],
+  },
   // v3 mode — no official template for death; frame_count gives sequential frames
-  { name: "death",  mode: "v3", actionDescription: "dying, collapsing to the ground, death fall", frameCount: 8, directions: ["south"] },
+  {
+    name: "death",
+    mode: "v3",
+    actionDescription: "dying, collapsing to the ground, death fall",
+    frameCount: 8,
+    directions: ["south"],
+  },
 ];
 
 // ─────────────────────────────────────────────
@@ -33,22 +54,22 @@ const ANIMATION_PLAN = [
 // ─────────────────────────────────────────────
 const TIER_FRAME_PROFILES = {
   trash: {
-    idle:   { min: 2, max: 6,  target: 4 },
-    walk:   { min: 4, max: 8,  target: 6 },
-    attack: { min: 4, max: 8,  target: 6 },
-    death:  { min: 4, max: 8,  target: 6 },
+    idle: { min: 2, max: 6, target: 4 },
+    walk: { min: 4, max: 8, target: 6 },
+    attack: { min: 4, max: 8, target: 6 },
+    death: { min: 4, max: 8, target: 6 },
   },
   elite: {
-    idle:   { min: 4, max: 8,  target: 6 },
-    walk:   { min: 6, max: 10, target: 8 },
+    idle: { min: 4, max: 8, target: 6 },
+    walk: { min: 6, max: 10, target: 8 },
     attack: { min: 6, max: 10, target: 8 },
-    death:  { min: 6, max: 10, target: 8 },
+    death: { min: 6, max: 10, target: 8 },
   },
   boss: {
-    idle:   { min: 6, max: 12, target: 8 },
-    walk:   { min: 8, max: 12, target: 8 },
+    idle: { min: 6, max: 12, target: 8 },
+    walk: { min: 8, max: 12, target: 8 },
     attack: { min: 8, max: 12, target: 8 },
-    death:  { min: 8, max: 12, target: 8 },
+    death: { min: 8, max: 12, target: 8 },
   },
 };
 
@@ -95,7 +116,11 @@ function validateFrameTargetsByTier(frameTargets, tier, errors) {
 
   states.forEach((state) => {
     const expected = profile[state];
-    const candidate = asPositiveInt(frameTargets?.[state], `animation_profile.frame_targets.${state}`, errors);
+    const candidate = asPositiveInt(
+      frameTargets?.[state],
+      `animation_profile.frame_targets.${state}`,
+      errors,
+    );
     if (candidate == null) {
       return;
     }
@@ -121,16 +146,32 @@ function validateSpecSchema(spec, specPath) {
     errors,
   );
 
-  const width = asPositiveInt(spec?.sprite_sheet?.source_canvas?.width, "sprite_sheet.source_canvas.width", errors);
-  const height = asPositiveInt(spec?.sprite_sheet?.source_canvas?.height, "sprite_sheet.source_canvas.height", errors);
+  const width = asPositiveInt(
+    spec?.sprite_sheet?.source_canvas?.width,
+    "sprite_sheet.source_canvas.width",
+    errors,
+  );
+  const height = asPositiveInt(
+    spec?.sprite_sheet?.source_canvas?.height,
+    "sprite_sheet.source_canvas.height",
+    errors,
+  );
 
-  const tier = asNonEmptyString(spec?.animation_profile?.tier, "animation_profile.tier", errors).toLowerCase();
+  const tier = asNonEmptyString(
+    spec?.animation_profile?.tier,
+    "animation_profile.tier",
+    errors,
+  ).toLowerCase();
   if (tier && !TIER_FRAME_PROFILES[tier]) {
     errors.push("animation_profile.tier must be one of: trash, elite, boss.");
   }
 
   const frameTargets = TIER_FRAME_PROFILES[tier]
-    ? validateFrameTargetsByTier(spec?.animation_profile?.frame_targets, tier, errors)
+    ? validateFrameTargetsByTier(
+        spec?.animation_profile?.frame_targets,
+        tier,
+        errors,
+      )
     : null;
 
   const deathDirection = asNonEmptyString(
@@ -139,16 +180,22 @@ function validateSpecSchema(spec, specPath) {
     errors,
   ).toLowerCase();
 
-  const overrideReason = typeof spec?.sprite_sheet?.directions?.death_direction_override_reason === "string"
-    ? spec.sprite_sheet.directions.death_direction_override_reason.trim()
-    : "";
+  const overrideReason =
+    typeof spec?.sprite_sheet?.directions?.death_direction_override_reason ===
+    "string"
+      ? spec.sprite_sheet.directions.death_direction_override_reason.trim()
+      : "";
 
   if (deathDirection !== "south" && !overrideReason) {
-    errors.push("sprite_sheet.directions.death_direction_override_reason is required when death_shared_direction is not south.");
+    errors.push(
+      "sprite_sheet.directions.death_direction_override_reason is required when death_shared_direction is not south.",
+    );
   }
 
   if (errors.length > 0) {
-    throw new Error(`Invalid sprite spec '${specPath}':\n- ${errors.join("\n- ")}`);
+    throw new Error(
+      `Invalid sprite spec '${specPath}':\n- ${errors.join("\n- ")}`,
+    );
   }
 
   return {
@@ -190,7 +237,9 @@ function readJsonSpec(specPath) {
 
 function ensureRequired(spec) {
   if (!spec.prompt || !spec.prompt.trim()) {
-    throw new Error("Missing prompt. Use --prompt or --spec with production_prompts.base_generation_prompt.");
+    throw new Error(
+      "Missing prompt. Use --prompt or --spec with production_prompts.base_generation_prompt.",
+    );
   }
 }
 
@@ -263,13 +312,19 @@ async function phaseA(config, spec, outBaseDir) {
   console.log(`[pixellab]   character_id : ${characterId}`);
   console.log(`[pixellab]   job_id       : ${backgroundJobId}`);
 
-  const creationJob = await waitForJob(config, backgroundJobId, "character creation");
+  const creationJob = await waitForJob(
+    config,
+    backgroundJobId,
+    "character creation",
+  );
   process.stdout.write("\n");
   console.log(`[pixellab] ✓ Character creation job completed`);
 
   // Fetch full character details to get rotation images
   const character = await getCharacter(config, characterId);
-  console.log(`[pixellab]   Character response keys: ${Object.keys(character).join(", ")}`);
+  console.log(
+    `[pixellab]   Character response keys: ${Object.keys(character).join(", ")}`,
+  );
 
   // Extract rotation images — field name may vary (rotation_urls, images, rotations)
   const rotationData =
@@ -330,8 +385,15 @@ async function phaseA(config, spec, outBaseDir) {
 // ─────────────────────────────────────────────
 // PHASE B — Animate (one ANIMATION_PLAN entry)
 // ─────────────────────────────────────────────
-async function phaseBAnimation(config, spec, characterId, animEntry, outBaseDir) {
-  const { name, mode, templateId, actionDescription, frameCount, directions } = animEntry;
+async function phaseBAnimation(
+  config,
+  spec,
+  characterId,
+  animEntry,
+  outBaseDir,
+) {
+  const { name, mode, templateId, actionDescription, frameCount, directions } =
+    animEntry;
   console.log(`\n[pixellab] ─── Animation: ${name} (mode: ${mode}) ───`);
 
   const animArgs = {
@@ -347,7 +409,10 @@ async function phaseBAnimation(config, spec, characterId, animEntry, outBaseDir)
     if (frameCount) animArgs.frame_count = frameCount;
   }
 
-  const { backgroundJobIds, directions: returnedDirs } = await animateCharacter(config, animArgs);
+  const { backgroundJobIds, directions: returnedDirs } = await animateCharacter(
+    config,
+    animArgs,
+  );
   console.log(`[pixellab]   Submitted ${backgroundJobIds.length} job(s)`);
 
   for (let i = 0; i < backgroundJobIds.length; i++) {
@@ -359,7 +424,9 @@ async function phaseBAnimation(config, spec, characterId, animEntry, outBaseDir)
 
     const frames = extractFrames(job.last_response);
     if (frames.length === 0) {
-      console.warn(`[pixellab] ⚠️  No frames found for ${name}/${dir}. Skipping.`);
+      console.warn(
+        `[pixellab] ⚠️  No frames found for ${name}/${dir}. Skipping.`,
+      );
       if (job.last_response) {
         console.warn("  Raw last_response (first 600 chars):");
         console.warn(JSON.stringify(job.last_response, null, 2).slice(0, 600));
@@ -371,7 +438,10 @@ async function phaseBAnimation(config, spec, characterId, animEntry, outBaseDir)
     fs.mkdirSync(frameDir, { recursive: true });
 
     for (let fi = 0; fi < frames.length; fi++) {
-      const framePath = path.join(frameDir, `frame_${String(fi).padStart(2, "0")}.png`);
+      const framePath = path.join(
+        frameDir,
+        `frame_${String(fi).padStart(2, "0")}.png`,
+      );
       await saveFrameToPath(frames[fi], framePath);
     }
 
@@ -385,8 +455,13 @@ async function phaseBAnimation(config, spec, characterId, animEntry, outBaseDir)
       generatedAt: new Date().toISOString(),
       characterId,
     };
-    fs.writeFileSync(path.join(frameDir, "meta.json"), JSON.stringify(meta, null, 2));
-    console.log(`[pixellab] ✓ ${name}/${dir}: ${frames.length} frames → ${frameDir}`);
+    fs.writeFileSync(
+      path.join(frameDir, "meta.json"),
+      JSON.stringify(meta, null, 2),
+    );
+    console.log(
+      `[pixellab] ✓ ${name}/${dir}: ${frames.length} frames → ${frameDir}`,
+    );
   }
 }
 
@@ -442,7 +517,9 @@ async function main() {
   if (!characterId) {
     const sidecarPath = path.join(outBaseDir, spec.entityId, "character.json");
     if (fs.existsSync(sidecarPath)) {
-      characterId = JSON.parse(fs.readFileSync(sidecarPath, "utf8")).characterId;
+      characterId = JSON.parse(
+        fs.readFileSync(sidecarPath, "utf8"),
+      ).characterId;
       console.log(`[pixellab] Loaded characterId from sidecar: ${characterId}`);
     } else {
       throw new Error(
@@ -453,7 +530,9 @@ async function main() {
 
   // ── Phase B ────────────────────────────────
   if (phase === "all" || phase === "animate") {
-    const animFilter = args.anim ? args.anim.split(",").map((s) => s.trim()) : null;
+    const animFilter = args.anim
+      ? args.anim.split(",").map((s) => s.trim())
+      : null;
     const plan = animFilter
       ? ANIMATION_PLAN.filter((a) => animFilter.includes(a.name))
       : ANIMATION_PLAN;
@@ -468,7 +547,9 @@ async function main() {
       await phaseBAnimation(config, spec, characterId, animEntry, outBaseDir);
     }
 
-    console.log(`\n[pixellab] ✓ All animations complete. Character ID: ${characterId}`);
+    console.log(
+      `\n[pixellab] ✓ All animations complete. Character ID: ${characterId}`,
+    );
   }
 }
 

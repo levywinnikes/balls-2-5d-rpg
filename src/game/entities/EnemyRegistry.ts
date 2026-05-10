@@ -25,7 +25,7 @@ export type EnemyDefinition = {
     create: (
       scene: Phaser.Scene,
       x: number,
-      y: number
+      y: number,
     ) => Phaser.Physics.Arcade.Sprite;
   };
   health: number;
@@ -45,7 +45,7 @@ export type EnemyDefinition = {
   aggroRange: number; // Tiles
   chaseRange: number; // Tiles
   returnToSpawn: boolean;
-  loot: LootItem[]; 
+  loot: LootItem[];
   scale?: number; // Visual scale modifier
   armor: number;
   magicAttacks?: string[]; // IDs of magic attacks
@@ -67,8 +67,8 @@ export class EnemyRegistry {
       damage: 5,
       speed: 200,
       exp: 5 * this.EXP_RATE,
-      rangeVision: 3, 
-      aggroRange: 4, 
+      rangeVision: 3,
+      aggroRange: 4,
       chaseRange: 8,
       returnToSpawn: true,
       pursuitRange: 5 * 32,
@@ -87,7 +87,7 @@ export class EnemyRegistry {
         { itemId: "rat_meat", chance: 0.8, minQuantity: 1, maxQuantity: 2 },
       ],
       magicAttacks: ["rat_bite"],
-      bloodColor: 0xcc0000, 
+      bloodColor: 0xcc0000,
     },
     {
       id: "skeleton",
@@ -119,7 +119,7 @@ export class EnemyRegistry {
       ],
       bloodColor: 0xe0e0e0, // Bone / dust
       resistances: { fire: -0.2 }, // 20% Inherent Vulnerability
-      defenseResistances: { fire: 0.05 } // Only 5% mitigated on block
+      defenseResistances: { fire: 0.05 }, // Only 5% mitigated on block
     },
     {
       id: "goblin",
@@ -270,12 +270,12 @@ export class EnemyRegistry {
       magicAttacks: ["dragon_fire"],
       bloodColor: 0xff4400, // Magma / Fire
       resistances: { fire: 0.8 }, // 80% Inherent Resistance
-      defenseResistances: { fire: 0.95 } // 95% mitigated on block (very efficient)
+      defenseResistances: { fire: 0.95 }, // 95% mitigated on block (very efficient)
     },
     {
       id: "god",
       graphic: GodGraphic,
-      scale: 1.0, 
+      scale: 1.0,
       health: 10000,
       damage: 1000,
       speed: 1000,
@@ -343,7 +343,7 @@ export class EnemyRegistry {
     enemyId: string,
     x: number,
     y: number,
-    overrides?: Partial<EnemyDefinition>
+    overrides?: Partial<EnemyDefinition>,
   ): {
     sprite: Phaser.Physics.Arcade.Sprite;
     health: number;
@@ -386,7 +386,7 @@ export class EnemyRegistry {
     const frameHeight = sprite.height;
 
     sprite.setSize(localSize, localSize);
-    
+
     // Center the body
     const offsetX = (frameWidth - localSize) / 2;
     const offsetY = (frameHeight - localSize) / 2;
@@ -410,7 +410,7 @@ export class EnemyRegistry {
       returnToSpawn: stats.returnToSpawn,
       armor: stats.armor,
       magicAttacks: stats.magicAttacks || [],
-      scale: scale
+      scale: scale,
     };
   }
 
@@ -423,17 +423,24 @@ export class EnemyRegistry {
   }
 
   // Novo método para gerar loot
-  static generateLoot(enemyId: string): { itemId: string; count: number; stars?: number; attributes?: any[] }[] {
+  static generateLoot(
+    enemyId: string,
+  ): { itemId: string; count: number; stars?: number; attributes?: any[] }[] {
     const enemyDef = this.getEnemyDefinition(enemyId);
     if (!enemyDef) return [];
 
-    const droppedItems: { itemId: string; count: number; stars?: number; attributes?: any[] }[] = [];
+    const droppedItems: {
+      itemId: string;
+      count: number;
+      stars?: number;
+      attributes?: any[];
+    }[] = [];
 
     enemyDef.loot.forEach((lootItem) => {
       const roll = Math.random();
       // Debug log (optional)
       // console.log(`[Loot] Rolling for ${lootItem.itemId}: needed ${lootItem.chance}, got ${roll}`);
-      
+
       if (roll <= lootItem.chance) {
         // Item dropou!
         const quantity =
@@ -444,57 +451,66 @@ export class EnemyRegistry {
         // STAR SYSTEM
         let stars = 0;
         const attributes: any[] = [];
-        
+
         // Check if weapon allows stars
         const { WeaponRegistry } = require("./weapons/WeaponRegistry"); // Lazy load to avoid circular dependency
-        const { ItemAttributeRegistry } = require("../items/ItemAttributeRegistry");
-        
-        const weaponDef = WeaponRegistry.getWeaponDefinition(lootItem.itemId);
-        
-        // Only generate stars if weapon allows it AND enemy has a starChance configured
-        if (weaponDef && weaponDef.possibleAttributes && weaponDef.possibleAttributes.length > 0 && lootItem.starChance) {
-             let currentStarChance = lootItem.starChance / 100; // Convert 10 (10%) to 0.1
-             let attempts = 0;
-             
-             // 1. Determine Star Count (Recursive Roll)
-             // Roll for 1st star, if success roll for 2nd, etc.
-             while (attempts < 5) {
-                 if (Math.random() <= currentStarChance) {
-                     stars++;
-                     // Reduce chance for next star? Or Keep constant?
-                     // Standard ARPG: Chance diminishes. 
-                     // But User request implies "Gold" tier is possible, current logic was constant.
-                     // Let's keep existing probability logic: constant chance for next star.
-                 } else {
-                     break; // Failed to roll next star
-                 }
-                 attempts++;
-             }
+        const {
+          ItemAttributeRegistry,
+        } = require("../items/ItemAttributeRegistry");
 
-             // 2. Generate Unique Attributes if keys exist
-             if (stars > 0) {
-                 // Use the new Pool System
-                 attributes.push(...ItemAttributeRegistry.generateUniqueAttributes(stars));
-             }
+        const weaponDef = WeaponRegistry.getWeaponDefinition(lootItem.itemId);
+
+        // Only generate stars if weapon allows it AND enemy has a starChance configured
+        if (
+          weaponDef &&
+          weaponDef.possibleAttributes &&
+          weaponDef.possibleAttributes.length > 0 &&
+          lootItem.starChance
+        ) {
+          let currentStarChance = lootItem.starChance / 100; // Convert 10 (10%) to 0.1
+          let attempts = 0;
+
+          // 1. Determine Star Count (Recursive Roll)
+          // Roll for 1st star, if success roll for 2nd, etc.
+          while (attempts < 5) {
+            if (Math.random() <= currentStarChance) {
+              stars++;
+              // Reduce chance for next star? Or Keep constant?
+              // Standard ARPG: Chance diminishes.
+              // But User request implies "Gold" tier is possible, current logic was constant.
+              // Let's keep existing probability logic: constant chance for next star.
+            } else {
+              break; // Failed to roll next star
+            }
+            attempts++;
+          }
+
+          // 2. Generate Unique Attributes if keys exist
+          if (stars > 0) {
+            // Use the new Pool System
+            attributes.push(
+              ...ItemAttributeRegistry.generateUniqueAttributes(stars),
+            );
+          }
         }
 
-        // Add single entry with quantity 1 if unstackable? 
-        // Or one entry with count? 
+        // Add single entry with quantity 1 if unstackable?
+        // Or one entry with count?
         // Usually weapons are unstackable, so we push multiple times if count > 1
         // But for stackable items (runes), stars don't apply usually.
         // Let's assume draggable/stackable logic handles count.
         // If stars > 0, we probably should treat as unique instance (count=1).
-        
+
         for (let i = 0; i < quantity; i++) {
-             // For non-stackable gear with stars, likely want individual drops.
-             // But existing logic pushed itemId strings.
-             // If we return objects, consumer handles them.
-             droppedItems.push({
-                 itemId: lootItem.itemId,
-                 count: 1, 
-                 stars: stars,
-                 attributes: attributes.length > 0 ? attributes : undefined
-             });
+          // For non-stackable gear with stars, likely want individual drops.
+          // But existing logic pushed itemId strings.
+          // If we return objects, consumer handles them.
+          droppedItems.push({
+            itemId: lootItem.itemId,
+            count: 1,
+            stars: stars,
+            attributes: attributes.length > 0 ? attributes : undefined,
+          });
         }
       }
     });
