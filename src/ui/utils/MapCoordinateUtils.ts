@@ -69,10 +69,7 @@ export function bufferToCanvasScale(
   return Math.min(canvasWidth / bufferWidth, canvasHeight / bufferHeight);
 }
 
-export function clampToMapBounds(
-  value: number,
-  maxExclusive: number,
-): number {
+export function clampToMapBounds(value: number, maxExclusive: number): number {
   return Math.max(0, Math.min(maxExclusive - 1, value));
 }
 

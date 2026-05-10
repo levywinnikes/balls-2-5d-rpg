@@ -1,12 +1,11 @@
 {
-    "updatedAt": "2026-05-09T20:45:00-03:00",
-    "task": "Refatorar minimapa e worldmap com coordenadas canônicas e UX profissional",
+    "updatedAt": "2026-05-09T21:20:00-03:00",
+    "task": "Corrigir textura escura persistente em chunks distantes no runtime 3D (upgrade de LOD ao reaproximar)",
     "contractsRead": [
-        "MAP_SYSTEM_CONTRACT.md",
         "THREE_D_INTEGRATION_BLUEPRINT.md",
-        "UI_DESIGN_CONTRACT.md"
+        "MAP_SYSTEM_CONTRACT.md"
     ],
-    "understanding": "O minimapa precisa deixar de depender de formulas dispersas. Vou centralizar world<->grid<->pointer em um helper unico, tornar o minimapa um thumbnail world-locked do mesmo buffer canônico e reutilizar essa base no world map.",
-    "riskConflict": "Se o helper central não for aplicado em todos os pontos de leitura/interação, coordenadas e cliques podem divergir. A mitigacao e usar a mesma API em render, markers, center e contexto.",
-    "objectiveQuestion": "Nenhuma — criar o helper compartilhado, refatorar os dois mapas e documentar a mecânica." 
+    "understanding": "O defeito persistente ocorre porque chunks podem ser criados em LOD reduzido sem piso e não são reconstruídos quando o jogador volta para perto. Vou rastrear LOD por chunk e forçar rebuild apenas quando o LOD desejado ficar mais detalhado.",
+    "riskConflict": "Rebuild excessivo por tick pode causar stutter. A mitigação é manter orçamento existente de build e só promover chunks quando houver ganho real de detalhe.",
+    "objectiveQuestion": "Nenhuma - aplicar correção determinística de promoção de LOD e validar com tsc e smoke:test."
 }

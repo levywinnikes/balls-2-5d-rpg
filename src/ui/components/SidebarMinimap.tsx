@@ -138,10 +138,7 @@ export const SidebarMinimap: React.FC = () => {
         if (explored) {
           // Iterate fog using BMS coords; transform to visual canvas X.
           const startX = Math.max(0, Math.floor(pGrid.x - VIEW_RANGE / zoom));
-          const endX = Math.min(
-            mapW,
-            Math.ceil(pGrid.x + VIEW_RANGE / zoom),
-          );
+          const endX = Math.min(mapW, Math.ceil(pGrid.x + VIEW_RANGE / zoom));
           const startY = Math.max(0, Math.floor(pGridY - VIEW_RANGE / zoom));
           const endY = Math.min(
             mapData.height,
@@ -195,7 +192,12 @@ export const SidebarMinimap: React.FC = () => {
 
             ctx.strokeStyle = "#000000";
             ctx.lineWidth = 0.5 * zoom;
-            ctx.strokeRect(mx - dotSize / 2, my - dotSize / 2, dotSize, dotSize);
+            ctx.strokeRect(
+              mx - dotSize / 2,
+              my - dotSize / 2,
+              dotSize,
+              dotSize,
+            );
           }
         });
       }

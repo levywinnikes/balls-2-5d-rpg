@@ -495,6 +495,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const DROPPED_ITEM_STREAM_RADIUS_UNITS =
     CHUNK_SIZE * (TOPDOWN_DRAW_RADIUS_CHUNKS + 2);
   const chunkMeshes = new Map<string, Mesh[]>();
+  const chunkLodByKey = new Map<string, 0 | 1 | 2>();
   const chunkLoading = new Set<string>();
 
   // ─── Geometry Worker ────────────────────────────────────────────────────────
@@ -523,11 +524,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
   // ────────────────────────────────────────────────────────────────────────────
 
-  // LRU tile material cache — cap at 80 entries to bound heap.
-  // When the limit is reached, the oldest entry is disposed and evicted.
-  const TILE_MATERIAL_CACHE_LIMIT = 80;
+  // Tile material cache — distinct materials are bounded by `kind × baseHex`,
+  // which for the current tile atlas resolves to at most ~30 entries. We keep
+  // an LRU array for ordering (used by clear-on-map-change) but DO NOT evict
+  // while the runtime is alive: evicting would dispose() a material that may
+  // still be assigned to chunk meshes built earlier, leaving those meshes
+  // rendered with an invalid/black material until the chunk is unloaded.
+  const TILE_MATERIAL_CACHE_LIMIT = 256;
   const tileMaterials = new Map<string, StandardMaterial>();
-  const tileMaterialLRU: string[] = []; // insertion-order keys for eviction
+  const tileMaterialLRU: string[] = []; // insertion-order keys (legacy; not evicted)
   const levelBinaryCache = new Map<string, Uint8Array>();
   const meshLevelByMesh = new Map<Mesh, string>();
   const levelMeshes = new Map<string, Set<Mesh>>();
@@ -1047,16 +1052,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const tileId = (tileDef?.id || symbol || "").toLowerCase();
     if (tileId.includes("roof")) return "roof";
     if (tileId.includes("sewer")) return "sewer";
-    if (tileId.includes("wood") || tileId.includes("floor")) return "wood";
+    // Specific stone/cave/dungeon ids must be checked BEFORE the generic
+    // "floor" pattern, otherwise "dungeon-floor" / "cave-floor" /
+    // "stone-floor" all collapse into the wood material.
     if (
       tileId.includes("cob") ||
       tileId.includes("stone") ||
       tileId.includes("pave") ||
-      tileId.includes("plaza")
+      tileId.includes("plaza") ||
+      tileId.includes("dungeon") ||
+      tileId.includes("cave")
     ) {
       return "cobblestone";
     }
     if (tileId.includes("grass") || tileId.includes("park")) return "grass";
+    if (tileId.includes("wood") || tileId.includes("floor")) return "wood";
     if (tileDef?.renderAs === "block" || tileDef?.block) return "wall";
     return "plain";
   };
@@ -1256,11 +1266,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return existing;
     }
 
-    // Evict oldest entry if over limit
+    // Evict oldest entry only if we somehow blow past the (generous) limit.
+    // We do NOT dispose() the material here — chunk meshes built in earlier
+    // frames still reference it, and disposing causes them to render with an
+    // invalid/black material. Remove from the cache map only; GC reclaims it
+    // once all referencing meshes are disposed by clearChunk().
     if (tileMaterials.size >= TILE_MATERIAL_CACHE_LIMIT) {
       const oldest = tileMaterialLRU.shift();
       if (oldest) {
-        tileMaterials.get(oldest)?.dispose();
         tileMaterials.delete(oldest);
       }
     }
@@ -1409,6 +1422,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     // handler doesn't recreate the chunk after it was explicitly cleared.
     pendingChunkRequests.delete(key);
     chunkLoading.delete(key);
+    chunkLodByKey.delete(key);
     const meshes = chunkMeshes.get(key);
     if (meshes) {
       meshes.forEach((m) => {
@@ -1447,6 +1461,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
     chunkMeshes.clear();
     chunkLoading.clear();
+    chunkLodByKey.clear();
   };
 
   const rebuildNavigationGrid = (level: string) => {
@@ -1879,6 +1894,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     if (tiles.length === 0) {
       chunkLoading.delete(key);
+      chunkLodByKey.set(key, lod);
       chunkMeshes.set(key, []);
       return;
     }
@@ -1948,6 +1964,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
 
       chunkMeshes.set(key, meshes);
+      chunkLodByKey.set(key, lod);
       chunkLoading.delete(key);
     });
 
@@ -1993,7 +2010,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const pendingUnloads = Math.max(0, toUnload.length - unloadedThisTick);
 
     // Queue load for nearby chunks (near-first, budget-limited)
-    const chunkCandidates: Array<{ cx: number; cy: number; dist: number }> = [];
+    const chunkCandidates: Array<{
+      cx: number;
+      cy: number;
+      dist: number;
+      lod: 0 | 1 | 2;
+    }> = [];
     for (let dy = -drawRadiusChunks; dy <= drawRadiusChunks; dy++) {
       for (let dx = -drawRadiusChunks; dx <= drawRadiusChunks; dx++) {
         const cx = playerCX + dx;
@@ -2003,9 +2025,24 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         }
 
         const dist = Math.max(Math.abs(dx), Math.abs(dy));
+        const desiredLod: 0 | 1 | 2 =
+          dist <= 2 ? 0 : dist <= 4 ? 1 : 2;
         const key = `${cx}_${cy}`;
+
+        // If the chunk is already loaded with a coarser LOD, force rebuild
+        // so floor tiles and full materials are restored when the player
+        // returns near that area.
+        const loadedLod = chunkLodByKey.get(key);
+        if (
+          loadedLod !== undefined &&
+          loadedLod > desiredLod &&
+          !chunkLoading.has(key)
+        ) {
+          clearChunk(key);
+        }
+
         if (!chunkMeshes.has(key) && !chunkLoading.has(key)) {
-          chunkCandidates.push({ cx, cy, dist });
+          chunkCandidates.push({ cx, cy, dist, lod: desiredLod });
         }
       }
     }
@@ -2018,9 +2055,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         break;
       }
 
-      const lod: 0 | 1 | 2 =
-        candidate.dist <= 2 ? 0 : candidate.dist <= 4 ? 1 : 2;
-      buildChunk(candidate.cx, candidate.cy, lod);
+      buildChunk(candidate.cx, candidate.cy, candidate.lod);
       builtThisTick += 1;
     }
 
