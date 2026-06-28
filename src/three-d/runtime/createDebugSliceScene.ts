@@ -40,9 +40,50 @@ import { WorldMapService } from "../../services/WorldMapService";
 import {
   createEnemyVisual,
   setEnemyVisualAnimState,
+  setEnemyVisualDirection,
   type EnemyVisualAnimState,
 } from "./ThreeDEnemyVisualRegistry";
-import { createHeroParitySpriteMaterial } from "./TwoDParitySpriteFactory";
+import {
+  createHeroModularSpriteMaterial,
+  resolveHeroBmsDirection,
+  HERO_BILLBOARD_LAYOUT,
+  getGeneratedDeathDurationMs,
+  getGeneratedAttackDurationMs,
+  resolveWorldBmsDirection,
+  type HeroAnimState,
+  type HeroBmsDirection,
+} from "./TwoDParitySpriteFactory";
+import {
+  sampleAquaticAtWorldFootprint,
+} from "./WaterQuery3D";
+import { isWaterTileId, sampleAquaticFromTile, type AquaticSample } from "./WaterProfile";
+import { attachAquaticShaderTint } from "./AquaticSpriteShader";
+import { configureBillboardSpriteMesh } from "./BillboardDepthConfig";
+import { computeFallDamageMultiplier, getAquaticVisualPreset } from "./AquaticVisualConfig";
+import {
+  collectWaterEffectTiles,
+  WaterEffectSystem,
+} from "./WaterEffectSystem";
+import {
+  computeWaterPitWallMask,
+  waterHoleDepthForTileId,
+} from "./WaterHoleConfig";
+import { FEET_CLEARANCE, sampleGroundFootY } from "./GroundHeightQuery3D";
+import {
+  sampleActorWorldY,
+  type TileSurfaceContext,
+} from "./TileSurfaceResolver";
+import {
+  probeRampLevelTransition,
+  shouldStartLedgeFall,
+} from "./VerticalTransition3D";
+import {
+  DEFAULT_VERTICAL_COLUMN_RADIUS,
+  resolveVerticalVisibleLevels,
+} from "./VerticalLevelVisibility3D";
+import { probeStairLevelTransition } from "./StairConfig3D";
+import type { SliceTileDefinition } from "./SliceTileTypes";
+import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
 import { SaveSystem } from "../../game/systems/SaveSystem";
 import type {
@@ -205,14 +246,8 @@ type MapEntity = {
   symbol: string;
   uuid?: string;
   contents?: Array<{ id: string; count: number }>;
-};
-
-type SliceTileDefinition = {
-  id?: string;
-  color?: string;
-  block?: boolean;
-  height?: number;
-  renderAs?: "floor" | "block";
+  locked?: boolean;
+  keyId?: string | null;
 };
 
 type SliceLevelData = {
@@ -225,6 +260,9 @@ type SliceMapData = {
   width?: number;
   height?: number;
   tileSize?: number;
+  config?: {
+    debugSandbox?: boolean;
+  };
   tileAtlas?: string[];
   tileDefinitions?: Record<string, SliceTileDefinition>;
   entityTemplates?: Record<string, any>;
@@ -257,7 +295,21 @@ type SliceEnemy = {
   isProvoked: boolean;
   selectionRing: Mesh | null;
   animState: EnemyVisualAnimState;
+  animDirection: HeroBmsDirection;
   animLockedUntil: number;
+};
+
+type SliceDoor = {
+  uuid: string;
+  level: string;
+  tileX: number;
+  tileY: number;
+  doorId: string;
+  locked: boolean;
+  keyId?: string | null;
+  mesh: Mesh;
+  hingeOnX: boolean;
+  hingeSide: number;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -293,10 +345,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const sliceMapName =
     searchParams.get("map") ||
     searchParams.get("mapName") ||
-    "perspective_debug";
+    "debug_sandbox";
   // Match standard wall height to remove visible seams between stacked floors.
   const LEVEL_HEIGHT_UNITS = 2.0;
-  const PLAYER_GROUND_OFFSET = 0.8;
+  // Floor mesh top for default tiles (see tileDefinitions.height, e.g. cob 0.06).
+  const FLOOR_SURFACE_Y = 0.06;
+  // Player root = feet on floor (hero billboard anchorY targets local y=0).
+  const PLAYER_GROUND_OFFSET = FLOOR_SURFACE_Y;
+  // Preserve prior FP eye world height (old center 0.8 + eye 0.55 ≈ 1.35).
+  const FIRST_PERSON_EYE_ABOVE_FEET = 1.29;
 
   // ── S12-T1/T4: Layer Semantics & Ownership (canonical, top-down is the product mode) ───────────
   // Layer conventions:
@@ -307,7 +364,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   // Ownership rules:
   //   - LevelRenderer (buildChunk) owns all 3D tile geometry for visible levels around activeLevel.
   //   - Chunks are rebuilt on level change to keep visual stack and currentLevel state synchronized.
-  //   - Roofs (isRoofTile) are faded when the player is under them (S12-T2).
+  //   - Upper-level structures are faded by level-occlusion when the player is under them.
   //   - All map/tile decisions use top-down perspective as the canonical product view.
   // ────────────────────────────────────────────────────────────────────────────────────────────────
   const parseLevelNumber = (level: string) => Number.parseInt(level, 10) || 0;
@@ -324,7 +381,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     "slice-camera",
     Math.PI / 2, // top-down: alpha = +90° (north-facing, looking south) so +Z = screen-down = minimap south
     0.72,
-    14,
+    9,
     new Vector3(0, 1.5, 0),
     scene,
   );
@@ -333,21 +390,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (preset === "safe") {
       // Safe preset: higher readability for combat/navigation.
       camera.beta = 0.72; // ~49° from ground
-      camera.radius = 14;
-      camera.fov = 0.95;
+      camera.radius = 9;
+      camera.fov = 0.92;
       camera.maxZ = 52;
-      camera.lowerRadiusLimit = 14;
-      camera.upperRadiusLimit = 14;
+      camera.lowerRadiusLimit = 9;
+      camera.upperRadiusLimit = 9;
       camera.lowerBetaLimit = 0.72;
       camera.upperBetaLimit = 0.72;
     } else {
       // Cinematic preset: slightly steeper depth feel.
       camera.beta = 0.56; // ~58° from ground
-      camera.radius = 16;
-      camera.fov = 1.1;
+      camera.radius = 11;
+      camera.fov = 1.05;
       camera.maxZ = 58;
-      camera.lowerRadiusLimit = 16;
-      camera.upperRadiusLimit = 16;
+      camera.lowerRadiusLimit = 11;
+      camera.upperRadiusLimit = 11;
       camera.lowerBetaLimit = 0.56;
       camera.upperBetaLimit = 0.56;
     }
@@ -397,20 +454,64 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
   player.material = playerMaterial;
 
-  // Keep hero visual in parity with 2D PlayerGraphic (procedural sprite).
-  const heroSpriteMat = createHeroParitySpriteMaterial(scene, "slice-player");
+  // Hero billboard: visual profile (alpha = hero_default body + hair overlay).
+  const heroSpriteMat = createHeroModularSpriteMaterial(
+    scene,
+    "slice-player",
+    resolveCharacterVisualProfile(playerState),
+  );
+
+  const syncHeroVisualProfile = () => {
+    const setter = (heroSpriteMat as any)._setVisualProfile;
+    if (typeof setter === "function") {
+      setter(resolveCharacterVisualProfile(playerState));
+    }
+  };
+
+  playerState.on("equipmentChanged", syncHeroVisualProfile);
+  playerState.on("heroSkinChanged", syncHeroVisualProfile);
+  playerState.on("heroSkinUnlocked", syncHeroVisualProfile);
+  let heroAnimState: HeroAnimState = "idle";
+  let heroDirection: HeroBmsDirection = "south";
+  let heroAnimLockedUntil = 0;
+
+  const setHeroAnimState = (state: HeroAnimState, lockMs = 0) => {
+    heroAnimState = state;
+    const setter = (heroSpriteMat as any)._setAnimState;
+    if (typeof setter === "function") {
+      setter(state);
+    }
+    if (lockMs > 0) {
+      heroAnimLockedUntil = Date.now() + lockMs;
+    }
+  };
+
+  const setHeroDirection = (direction: HeroBmsDirection) => {
+    heroDirection = direction;
+    const setter = (heroSpriteMat as any)._setDirection;
+    if (typeof setter === "function") {
+      setter(direction);
+    }
+  };
 
   const heroBillboard = MeshBuilder.CreatePlane(
     "slice-player-sprite",
-    { width: 1.0, height: 1.55 },
+    {
+      width: HERO_BILLBOARD_LAYOUT.width,
+      height: HERO_BILLBOARD_LAYOUT.height,
+    },
     scene,
   );
   heroBillboard.material = heroSpriteMat;
   heroBillboard.parent = player;
-  // Keep feet closer to the ground plane to avoid apparent floating.
-  heroBillboard.position = new Vector3(0, 0.66, 0);
+  // Anchor feet to ground using measured feet row in generated PNGs.
+  heroBillboard.position = new Vector3(0, HERO_BILLBOARD_LAYOUT.anchorY, 0);
   heroBillboard.billboardMode = Mesh.BILLBOARDMODE_Y;
+  configureBillboardSpriteMesh(heroBillboard);
   heroBillboard.setEnabled(true);
+
+  const heroAquaticTint = attachAquaticShaderTint(heroSpriteMat);
+  let lastPlayerAquaticMode: AquaticSample["mode"] = "dry";
 
   const heroShadowMat = new StandardMaterial("slice-player-shadow-mat", scene);
   heroShadowMat.diffuseColor = Color3.Black();
@@ -426,7 +527,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   heroShadow.material = heroShadowMat;
   heroShadow.position = new Vector3(
     player.position.x,
-    levelToWorldY(activeLevelNumber) + 0.02,
+    levelToWorldY(activeLevelNumber) + FLOOR_SURFACE_Y + 0.01,
     player.position.z,
   );
   heroShadow.rotation.x = Math.PI / 2;
@@ -456,6 +557,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   heroBall.position = new Vector3(0, 0, 0);
   heroBall.isPickable = false;
 
+  (heroSpriteMat as any)._onReady = () => {
+    heroBall.setEnabled(false);
+  };
+
   // Fallback pickup kept only for empty-state debugging while 3D begins consuming
   // the real persistent dropped-item list from PlayerState.
   const pickupMaterial = createMaterial(
@@ -472,15 +577,161 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   pickupOrb.material = pickupMaterial;
   let fallbackPickupConsumed = false;
 
-  const droppedItemMaterial = createMaterial(
-    scene,
-    "slice-dropped-item",
-    Color3.FromHexString("#ffd166"),
-  );
-  const droppedItemMeshes = new Map<string, Mesh>();
+  const droppedItemIconMaterials = new Map<string, StandardMaterial>();
+  const getDroppedItemMaterial = (itemVisualId: string): StandardMaterial => {
+    const cached = droppedItemIconMaterials.get(itemVisualId);
+    if (cached) {
+      return cached;
+    }
+    const mat = new StandardMaterial(
+      `slice-dropped-item-${itemVisualId}`,
+      scene,
+    );
+    mat.backFaceCulling = false;
+    mat.specularColor = Color3.Black();
+    mat.useAlphaFromDiffuseTexture = true;
+    mat.disableLighting = true;
+    mat.emissiveColor = Color3.White();
+    const texture = new Texture(
+      `/assets/items/${itemVisualId}.png`,
+      scene,
+      false,
+      true,
+      Texture.NEAREST_NEAREST,
+    );
+    texture.hasAlpha = true;
+    mat.diffuseTexture = texture;
+    mat.opacityTexture = texture;
+    droppedItemIconMaterials.set(itemVisualId, mat);
+    return mat;
+  };
+  const droppedItemShadowMat = new StandardMaterial("slice-dropped-shadow-mat", scene);
+  droppedItemShadowMat.diffuseColor = Color3.Black();
+  droppedItemShadowMat.specularColor = Color3.Black();
+  droppedItemShadowMat.disableLighting = true;
+
+  const getDeterministicRotation = (id: string): number => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return (Math.abs(hash) % 360) * (Math.PI / 180);
+  };
+
+  const droppedItemMeshes = new Map<string, TransformNode>();
   const getDroppedItemMeshKey = (level: string, itemId: string) =>
     `${level}::${itemId}`;
+
+  type ActiveSlash = {
+    mesh: Mesh;
+    material: StandardMaterial;
+    texture: DynamicTexture;
+    elapsed: number;
+    duration: number;
+    startScale: number;
+    endScale: number;
+  };
+  const activeSlashtrails: ActiveSlash[] = [];
+
+  const getWeaponSlashColor = (weaponId: string | null): Color3 => {
+    if (!weaponId) return Color3.FromHexString("#ffffff");
+    const wId = weaponId.toLowerCase();
+    if (wId.includes("dragon") || wId.includes("fire") || wId.includes("light_torch")) {
+      return Color3.FromHexString("#ff6b35");
+    }
+    if (wId.includes("poison") || wId.includes("venom") || wId.includes("decay")) {
+      return Color3.FromHexString("#06d6a0");
+    }
+    if (wId.includes("magic") || wId.includes("rune") || wId.includes("energy")) {
+      return Color3.FromHexString("#118ab2");
+    }
+    return Color3.FromHexString("#ffffff");
+  };
+
+  const triggerPlayerAttackSlashEffect = (enemy: SliceEnemy) => {
+    const delta = enemy.worldPos.subtract(player.position);
+    delta.y = 0;
+    if (delta.lengthSquared() < 0.001) {
+      return;
+    }
+    const dir = delta.normalize();
+
+    const levelWorldY = levelToWorldY(activeLevel);
+    const slashPos = player.position.clone();
+    slashPos.y = levelWorldY + 0.4;
+    slashPos.addInPlace(dir.scale(0.5));
+
+    const slashMesh = MeshBuilder.CreatePlane(
+      `player-slash-trail-${performance.now()}`,
+      { width: 0.8, height: 0.4 },
+      scene,
+    );
+    slashMesh.position.copyFrom(slashPos);
+    slashMesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
+
+    const angle = Math.atan2(dir.x, dir.z);
+    slashMesh.rotation.z = -angle - Math.PI / 2;
+
+    const canvasWidth = 128;
+    const canvasHeight = 64;
+    const dynTex = new DynamicTexture(
+      `slash-trail-tex-${performance.now()}`,
+      { width: canvasWidth, height: canvasHeight },
+      scene,
+      false
+    );
+    const ctx = dynTex.getContext();
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    const weaponId = playerState.equippedWeaponId;
+    const slashColor = getWeaponSlashColor(weaponId);
+
+    const grad = ctx.createLinearGradient(0, 0, canvasWidth, 0);
+    grad.addColorStop(0, "rgba(255, 255, 255, 0)");
+    
+    const r = Math.round(slashColor.r * 255);
+    const g = Math.round(slashColor.g * 255);
+    const b = Math.round(slashColor.b * 255);
+    grad.addColorStop(0.3, `rgba(${r}, ${g}, ${b}, 0.8)`);
+    grad.addColorStop(0.5, "rgba(255, 255, 255, 1.0)");
+    grad.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, 0.8)`);
+    grad.addColorStop(1, "rgba(255, 255, 255, 0)");
+
+    ctx.fillStyle = grad;
+
+    ctx.beginPath();
+    ctx.moveTo(10, canvasHeight - 10);
+    ctx.quadraticCurveTo(canvasWidth / 2, 8, canvasWidth - 10, canvasHeight - 10);
+    ctx.quadraticCurveTo(canvasWidth / 2, 22, 10, canvasHeight - 10);
+    ctx.closePath();
+    ctx.fill();
+    dynTex.update();
+
+    const slashMat = new StandardMaterial(`slash-trail-mat-${performance.now()}`, scene);
+    slashMat.diffuseTexture = dynTex;
+    slashMat.opacityTexture = dynTex;
+    slashMat.useAlphaFromDiffuseTexture = true;
+    slashMat.backFaceCulling = false;
+    slashMat.disableLighting = true;
+    slashMat.emissiveColor = Color3.White();
+
+    slashMesh.material = slashMat;
+    slashMesh.isPickable = false;
+
+    activeSlashtrails.push({
+      mesh: slashMesh,
+      material: slashMat,
+      texture: dynTex,
+      elapsed: 0,
+      duration: 250,
+      startScale: 0.8,
+      endScale: 1.1,
+    });
+  };
   const enemies = new Map<string, SliceEnemy>();
+  const doors = new Map<string, SliceDoor>();
+  const doorByLevelTile = new Map<string, string>();
+  const seededDoorLevels = new Set<string>();
   let selectedEnemyUid: string | null = null;
   let lastPlayerAttackAt = 0;
   let activeRuneSlotIndex = 0;
@@ -501,6 +752,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let enemyHighlightPulseT = 0; // accumulator for sine pulse (seconds)
 
   const mapRoot = new TransformNode("slice-map-root", scene);
+  const waterEffectSystem = new WaterEffectSystem(scene, mapRoot, FLOOR_SURFACE_Y);
   // Chunk streaming constants (visual profile depends on camera mode; gameplay state remains global)
   const CHUNK_SIZE = 16; // tiles per chunk side
   const TOPDOWN_DRAW_RADIUS_CHUNKS = 3;
@@ -557,8 +809,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const levelBinaryCache = new Map<string, Uint8Array>();
   const meshLevelByMesh = new Map<Mesh, string>();
   const levelMeshes = new Map<string, Set<Mesh>>();
-  // S12-T2: track roof meshes for coverage-fade (top-down: fade when player enters under roof)
-  const roofMeshes = new Set<Mesh>();
 
   const LOG_SAMPLE_INTERVAL = 1.0;
   const LOG_PERSIST_INTERVAL = 5.0;
@@ -1071,8 +1321,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     tileDef?: SliceTileDefinition,
   ) => {
     const tileId = (tileDef?.id || symbol || "").toLowerCase();
-    if (tileId.includes("roof")) return "roof";
     if (tileId.includes("sewer")) return "sewer";
+    if (tileId.includes("roof")) return "roof";
     // Specific stone/cave/dungeon ids must be checked BEFORE the generic
     // "floor" pattern, otherwise "dungeon-floor" / "cave-floor" /
     // "stone-floor" all collapse into the wood material.
@@ -1087,6 +1337,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return "cobblestone";
     }
     if (tileId.includes("grass") || tileId.includes("park")) return "grass";
+    if (tileId.includes("water")) return "water";
     if (tileId.includes("wood") || tileId.includes("floor")) return "wood";
     if (tileDef?.renderAs === "block" || tileDef?.block) return "wall";
     return "plain";
@@ -1125,48 +1376,75 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         [6, 30, 18, 24, 0.78],
         [30, 32, 26, 20, 1.16],
       ];
-      stones.forEach(([x, y, width, height, tone]) => {
+      stones.forEach(([sx, sy, width, height, tone]) => {
         ctx.fillStyle = shadeColor(baseColor, tone as number);
         ctx.fillRect(
-          x as number,
-          y as number,
+          sx as number,
+          sy as number,
           width as number,
           height as number,
         );
         ctx.strokeStyle = shadeColor(baseColor, 0.45);
         ctx.lineWidth = 2;
         ctx.strokeRect(
-          x as number,
-          y as number,
+          sx as number,
+          sy as number,
           width as number,
           height as number,
         );
       });
+    } else if (kind === "wet-cobble") {
+      const stones = [
+        [4, 4, 22, 18, 0.62],
+        [30, 6, 24, 16, 0.48],
+        [6, 30, 18, 24, 0.52],
+        [30, 32, 26, 20, 0.58],
+      ];
+      stones.forEach(([sx, sy, width, height, tone]) => {
+        ctx.fillStyle = shadeColor(baseColor, tone as number);
+        ctx.fillRect(
+          sx as number,
+          sy as number,
+          width as number,
+          height as number,
+        );
+      });
+      ctx.fillStyle = "rgba(120,180,220,0.22)";
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      ctx.fillRect(10, 8, 20, 3);
+      ctx.fillRect(36, 28, 14, 2);
     } else if (kind === "roof") {
-      ctx.fillStyle = shadeColor(baseColor, 0.82);
-      ctx.fillRect(0, 0, size, 12);
-      ctx.fillStyle = shadeColor(baseColor, 1.15);
-      ctx.fillRect(0, size - 12, size, 12);
-      ctx.strokeStyle = shadeColor(baseColor, 0.62);
-      ctx.lineWidth = 2;
-      for (let y = 0; y <= size; y += 16) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(size, y);
-        ctx.stroke();
+      // Draw overlapping roof-tile rows (like terracotta/ceramic tiles).
+      // Each "row" is a horizontal band; within each row, tiles are staggered.
+      const tileW = 20;
+      const tileH = 14;
+      const overlap = 4; // how many px each tile overlaps the row below
+      for (let row = 0; row * (tileH - overlap) < size + tileH; row++) {
+        const rowY = row * (tileH - overlap);
+        const offsetX = (row % 2) * (tileW / 2); // stagger every other row
+        for (let col = -1; col * tileW < size + tileW; col++) {
+          const tx = col * tileW + offsetX;
+          // tile body — slightly lighter than base
+          ctx.fillStyle = shadeColor(baseColor, 0.9 + ((row + col) % 3) * 0.07);
+          ctx.fillRect(tx + 1, rowY + 1, tileW - 2, tileH - 1);
+          // bottom-lip highlight (shadow line at bottom edge of tile)
+          ctx.fillStyle = shadeColor(baseColor, 0.55);
+          ctx.fillRect(tx + 1, rowY + tileH - 2, tileW - 2, 2);
+          // top-edge subtle highlight
+          ctx.fillStyle = shadeColor(baseColor, 1.18);
+          ctx.fillRect(tx + 1, rowY + 1, tileW - 2, 2);
+          // grout lines between tiles
+          ctx.fillStyle = shadeColor(baseColor, 0.48);
+          ctx.fillRect(tx, rowY, 1, tileH);
+        }
       }
-      for (let x = 8; x < size; x += 16) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, size / 2);
-        ctx.stroke();
-      }
-      for (let x = 0; x < size; x += 16) {
-        ctx.beginPath();
-        ctx.moveTo(x, size / 2);
-        ctx.lineTo(x, size);
-        ctx.stroke();
-      }
+      // Overall border darkening to suggest the slab edge
+      ctx.fillStyle = shadeColor(baseColor, 0.55);
+      ctx.fillRect(0, 0, size, 2);
+      ctx.fillRect(0, size - 2, size, 2);
+      ctx.fillRect(0, 0, 2, size);
+      ctx.fillRect(size - 2, 0, 2, size);
     } else if (kind === "wood") {
       ctx.strokeStyle = shadeColor(baseColor, 0.55);
       ctx.lineWidth = 2;
@@ -1208,6 +1486,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       ctx.fillRect(6, 6, 8, 2);
       ctx.fillRect(34, 20, 7, 2);
       ctx.fillRect(20, 44, 10, 2);
+    } else if (kind === "water") {
+      ctx.fillStyle = shadeColor(baseColor, 0.88);
+      ctx.fillRect(0, 0, size, size);
+      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      ctx.lineWidth = 1.5;
+      for (let wave = 0; wave < 3; wave += 1) {
+        const y = 12 + wave * 16;
+        ctx.beginPath();
+        ctx.moveTo(4, y);
+        ctx.quadraticCurveTo(16, y + 3, 28, y);
+        ctx.quadraticCurveTo(40, y - 3, 60, y);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.fillRect(8, 6, 14, 4);
     } else if (kind === "wall") {
       ctx.strokeStyle = shadeColor(baseColor, 0.48);
       ctx.lineWidth = 2;
@@ -1365,9 +1658,108 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return mapData.tileAtlas[atlasIndex] || null;
   };
 
+  const getAquaticSampleAt = (
+    worldX: number,
+    worldZ: number,
+    level: string,
+  ): AquaticSample =>
+    sampleAquaticAtWorldFootprint(
+      worldX,
+      worldZ,
+      level,
+      getMapTileAt,
+      (symbol) =>
+        symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+    );
+
+  const getTileSurfaceContext = (): TileSurfaceContext => ({
+    levelToWorldY,
+    getTile: getMapTileAt,
+    getTileDef: (symbol) =>
+      symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+    levelHeightUnits: LEVEL_HEIGHT_UNITS,
+    floorRimOffset: FLOOR_SURFACE_Y,
+    feetClearance: FEET_CLEARANCE,
+  });
+
+  const getGroundFootY = (worldX: number, worldZ: number, level: string) =>
+    sampleGroundFootY(
+      worldX,
+      worldZ,
+      level,
+      levelToWorldY,
+      getMapTileAt,
+      (symbol) =>
+        symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+      { levelHeightUnits: LEVEL_HEIGHT_UNITS, feetClearance: FEET_CLEARANCE },
+    );
+
+  const applyActorAquaticY = (worldPos: Vector3, level: string) => {
+    const sample = getAquaticSampleAt(worldPos.x, worldPos.z, level);
+    worldPos.y = sampleActorWorldY(
+      worldPos.x,
+      worldPos.z,
+      level,
+      sample,
+      getTileSurfaceContext(),
+    );
+  };
+
+  const applyActiveLevelChange = (newLevel: string) => {
+    if (newLevel === activeLevel) {
+      return;
+    }
+    const previousLevel = activeLevel;
+    activeLevel = newLevel;
+    activeLevelNumber = parseLevelNumber(newLevel);
+    playerState.setCurrentLevel(newLevel);
+    snapPlayerFootToActiveLevel();
+    const mapData = mapDataCache;
+    if (mapData) {
+      void loadLevelBinary(newLevel, mapData).then(() => {
+        snapPlayerFootToActiveLevel();
+        chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
+      });
+    }
+    void ensureMapLevelReady(newLevel);
+    void ensureLevelDoorsSeeded(newLevel);
+    void ensureLevelEnemiesSeeded(newLevel);
+    void ensureLevelItemsSeeded(newLevel);
+    pushLogEvent("level.change", {
+      from: previousLevel,
+      to: newLevel,
+      playerX: Math.round(player.position.x * 100) / 100,
+      playerZ: Math.round(player.position.z * 100) / 100,
+    });
+  };
+
+  const snapPlayerFootToActiveLevel = () => {
+    const footY = levelBinaryCache.has(activeLevel)
+      ? getGroundFootY(
+          player.position.x,
+          player.position.z,
+          activeLevel,
+        )
+      : levelToWorldY(activeLevel) +
+        FLOOR_SURFACE_Y +
+        FEET_CLEARANCE;
+    player.position.y = footY;
+    verticalVelocity = 0;
+    isGrounded = true;
+    lastGroundedFootY = footY;
+  };
+
+  const getDoorTileKey = (level: string, tileX: number, tileY: number) =>
+    `${level}:${tileX}:${tileY}`;
+
+  const getDoorAtTile = (level: string, tileX: number, tileY: number) => {
+    const uuid = doorByLevelTile.get(getDoorTileKey(level, tileX, tileY));
+    return uuid ? doors.get(uuid) || null : null;
+  };
+
   const isVoidSymbol = (symbol: string | null) => !symbol || symbol === "...";
 
-  const isBlockingTile = (
+  const isStaticTileBlocking = (
     symbol: string | null,
     tileDef?: SliceTileDefinition,
   ) => {
@@ -1380,8 +1772,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return false;
     }
 
-    const tileId = resolvedTileId.toLowerCase();
-    if (tileId.includes("roof")) {
+    if (isWaterTileId(resolvedTileId)) {
       return false;
     }
 
@@ -1394,6 +1785,33 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     return Boolean(tileDef?.block);
+  };
+
+  const isDoorOpenAtTile = (level: string, tileX: number, tileY: number) => {
+    const door = getDoorAtTile(level, tileX, tileY);
+    if (!door) {
+      return false;
+    }
+    return !!playerState.getDoorState(door.uuid)?.open;
+  };
+
+  const isBlockingTile = (
+    symbol: string | null,
+    tileDef?: SliceTileDefinition,
+    options?: { level?: string; tileX?: number; tileY?: number },
+  ) => {
+    if (
+      options?.level !== undefined &&
+      options.tileX !== undefined &&
+      options.tileY !== undefined
+    ) {
+      const door = getDoorAtTile(options.level, options.tileX, options.tileY);
+      if (door) {
+        return !isDoorOpenAtTile(options.level, options.tileX, options.tileY);
+      }
+    }
+
+    return isStaticTileBlocking(symbol, tileDef);
   };
 
   const isWorldPositionBlocked = (
@@ -1430,7 +1848,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return true;
       }
       const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
-      if (isBlockingTile(symbol, tileDef)) {
+      if (
+        isBlockingTile(symbol, tileDef, {
+          level: activeLevel,
+          tileX,
+          tileY,
+        })
+      ) {
         return true;
       }
     }
@@ -1439,6 +1863,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const clearChunk = (key: string) => {
+    waterEffectSystem.clearChunk(key);
     // Cancel any pending worker response for this key so the response
     // handler doesn't recreate the chunk after it was explicitly cleared.
     pendingChunkRequests.delete(key);
@@ -1447,7 +1872,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const meshes = chunkMeshes.get(key);
     if (meshes) {
       meshes.forEach((m) => {
-        roofMeshes.delete(m);
         const levelKey = meshLevelByMesh.get(m);
         if (levelKey) {
           const set = levelMeshes.get(levelKey);
@@ -1467,7 +1891,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     pendingChunkRequests.clear();
     chunkMeshes.forEach((meshes) =>
       meshes.forEach((m) => {
-        roofMeshes.delete(m);
         const levelKey = meshLevelByMesh.get(m);
         if (levelKey) {
           const set = levelMeshes.get(levelKey);
@@ -1501,7 +1924,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       for (let x = 0; x < mapData.width; x++) {
         const symbol = getMapTileAt(level, x, y);
         const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
-        if (isBlockingTile(symbol, tileDef)) {
+        if (isBlockingTile(symbol, tileDef, { level, tileX: x, tileY: y })) {
           navigationGrid[y][x] = 1;
         }
       }
@@ -1607,10 +2030,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return group;
   };
 
-  // Build a 4-step staircase mesh for a single 1×1-tile footprint.
-  // Steps run south→north (low at +Z, high at -Z) matching the default wall
-  // orientation. The total rise equals LEVEL_HEIGHT_UNITS so the top step
-  // visually aligns with the floor of the level above.
+  // Build an 8-step staircase mesh for a single 1×1-tile footprint (fallback path).
+  // Steps run south→north (low at +Z, high at -Z). Keep in sync with geometry.worker.ts.
   const buildStairMesh = (
     name: string,
     tx: number,
@@ -1618,21 +2039,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     baseY: number,
   ): Mesh => {
     const mesh = new Mesh(name, scene);
-    const STEP_COUNT = 4;
-    const stepDepth = 1.0 / STEP_COUNT; // Z depth per step  (0.25)
-    const stepRise = LEVEL_HEIGHT_UNITS / STEP_COUNT; // Y rise per step (0.5)
+    const STEP_COUNT = 8;
+    const stepDepth = 1.0 / STEP_COUNT;
+    const stepRise = LEVEL_HEIGHT_UNITS / STEP_COUNT;
 
     const allPositions: number[] = [];
     const allIndices: number[] = [];
 
     for (let i = 0; i < STEP_COUNT; i++) {
-      // Step 0 = southernmost (+Z side), lowest
-      // Step 3 = northernmost (-Z side), highest
       const x0 = tx;
       const x1 = tx + 1;
-      const z0 = tz + (STEP_COUNT - 1 - i) * stepDepth; // north edge of this step
-      const z1 = tz + (STEP_COUNT - i) * stepDepth; // south edge of this step
-      const y0 = baseY;
+      const z0 = tz + (STEP_COUNT - 1 - i) * stepDepth;
+      const z1 = tz + (STEP_COUNT - i) * stepDepth;
+      const y0 = baseY + i * stepRise;
       const y1 = baseY + (i + 1) * stepRise;
 
       const base = allPositions.length / 3;
@@ -1721,10 +2140,75 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return [activeLevel];
     }
 
-    // Render all available levels to preserve the 2D-like "see-through void" behavior.
-    return Object.keys(mapData.levels).sort(
-      (a, b) => parseLevelNumber(a) - parseLevelNumber(b),
+    return resolveVerticalVisibleLevels(
+      activeLevel,
+      Math.floor(player.position.x),
+      Math.floor(player.position.z),
+      Object.keys(mapData.levels),
+      getMapTileAt,
+      (symbol) =>
+        symbol ? mapData.tileDefinitions?.[symbol] : undefined,
+      { parseLevelNumber, columnRadius: DEFAULT_VERTICAL_COLUMN_RADIUS },
     );
+  };
+
+  const syncVerticalLevelVisibility = (deltaSeconds: number) => {
+    const mapData = mapDataCache;
+    const verticallyVisible = new Set(getRenderableLevels());
+    const occlusionStartLevel = findUpperOcclusionLevel();
+    const lerpFactor = Math.min(1, deltaSeconds * 8);
+
+    if (!isFirstPerson && levelMeshes.size > 0) {
+      levelMeshes.forEach((meshes, levelKey) => {
+        const levelNum = parseLevelNumber(levelKey);
+        const inVerticalColumn = verticallyVisible.has(levelKey);
+        const occluded =
+          occlusionStartLevel !== null && levelNum >= occlusionStartLevel;
+
+        meshes.forEach((mesh) => {
+          if (!mesh || mesh.isDisposed()) {
+            return;
+          }
+
+          if (!inVerticalColumn) {
+            mesh.visibility = 0;
+            mesh.setEnabled(false);
+            return;
+          }
+
+          if (occluded) {
+            const next =
+              mesh.visibility + (0 - mesh.visibility) * lerpFactor;
+            mesh.visibility = next;
+            if (next <= 0.01) {
+              mesh.visibility = 0;
+              mesh.setEnabled(false);
+            } else {
+              mesh.setEnabled(true);
+            }
+            return;
+          }
+
+          mesh.visibility = 1;
+          mesh.setEnabled(true);
+        });
+      });
+    }
+
+    waterEffectSystem.updateOcclusion(occlusionStartLevel, deltaSeconds);
+
+    (window as any).__slice3dVerticalVisibility = {
+      activeLevel,
+      visibleLevels: Array.from(verticallyVisible),
+      occludedFromLevel: occlusionStartLevel,
+      totalLevels: mapData?.levels ? Object.keys(mapData.levels).length : 1,
+      columnRadius: DEFAULT_VERTICAL_COLUMN_RADIUS,
+      playerTile: {
+        x: Math.floor(player.position.x),
+        y: Math.floor(player.position.z),
+      },
+      ts: Date.now(),
+    };
   };
 
   const registerMeshForLevel = (levelKey: string, mesh: Mesh) => {
@@ -1746,22 +2230,38 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const currentNum = parseLevelNumber(activeLevel);
     const playerTileX = Math.floor(player.position.x);
     const playerTileY = Math.floor(player.position.z);
+    const localX = player.position.x - playerTileX;
+    const localZ = player.position.z - playerTileY;
+
+    const sampleColumns: Array<[number, number]> = [
+      [playerTileX, playerTileY],
+      [playerTileX, playerTileY - 1],
+      [playerTileX, playerTileY + 1],
+      [playerTileX - 1, playerTileY],
+      [playerTileX + 1, playerTileY],
+    ];
+    if (localX < 0.32) {
+      sampleColumns.push([playerTileX - 1, playerTileY]);
+    }
+    if (localX > 0.68) {
+      sampleColumns.push([playerTileX + 1, playerTileY]);
+    }
+    if (localZ < 0.32) {
+      sampleColumns.push([playerTileX, playerTileY - 1]);
+    }
+    if (localZ > 0.68) {
+      sampleColumns.push([playerTileX, playerTileY + 1]);
+    }
 
     const upperLevels = Object.keys(mapData.levels)
       .filter((levelKey) => parseLevelNumber(levelKey) > currentNum)
       .sort((a, b) => parseLevelNumber(a) - parseLevelNumber(b));
 
     for (const levelKey of upperLevels) {
-      for (let oy = -1; oy <= 1; oy++) {
-        for (let ox = -1; ox <= 1; ox++) {
-          const symbol = getMapTileAt(
-            levelKey,
-            playerTileX + ox,
-            playerTileY + oy,
-          );
-          if (symbol && symbol !== "...") {
-            return parseLevelNumber(levelKey);
-          }
+      for (const [colX, colY] of sampleColumns) {
+        const symbol = getMapTileAt(levelKey, colX, colY);
+        if (symbol && symbol !== "...") {
+          return parseLevelNumber(levelKey);
         }
       }
     }
@@ -1769,42 +2269,40 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return null;
   };
 
+  /** @deprecated Use syncVerticalLevelVisibility — kept as alias for chunk register. */
   const updateUpperLevelVisibility = (deltaSeconds: number) => {
-    if (isFirstPerson || levelMeshes.size === 0) {
-      return;
+    syncVerticalLevelVisibility(deltaSeconds);
+  };
+
+  const resolvePoolFloorMaterial = (
+    level: string,
+    tileX: number,
+    tileY: number,
+  ) => {
+    const mapData = mapDataCache;
+    const maxRadius = 20;
+    for (let radius = 1; radius <= maxRadius; radius += 1) {
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) {
+            continue;
+          }
+          const symbol = getMapTileAt(level, tileX + dx, tileY + dy);
+          if (!symbol || symbol === "...") {
+            continue;
+          }
+          const tileDef = mapData?.tileDefinitions?.[symbol];
+          const neighborId = (tileDef?.id || symbol || "").toLowerCase();
+          if (isWaterTileId(neighborId)) {
+            continue;
+          }
+          return getTileMaterial(symbol, tileDef, "#9ca3af");
+        }
+      }
     }
 
-    const occlusionStartLevel = findUpperOcclusionLevel();
-    const lerpFactor = Math.min(1, deltaSeconds * 8);
-
-    levelMeshes.forEach((meshes, levelKey) => {
-      const levelNum = parseLevelNumber(levelKey);
-      const shouldHide =
-        occlusionStartLevel !== null && levelNum >= occlusionStartLevel;
-      const targetVisibility = shouldHide ? 0.0 : 1.0;
-
-      meshes.forEach((mesh) => {
-        if (!mesh || mesh.isDisposed()) {
-          return;
-        }
-        if (targetVisibility >= 1.0) {
-          // Snap to fully visible immediately — lerping from 0→1 causes Babylon.js
-          // to render the mesh in alpha/transparency mode, producing broken-looking
-          // blocks with incorrect face ordering. Instant show avoids this artifact.
-          mesh.visibility = 1.0;
-          mesh.setEnabled(true);
-        } else {
-          // Fade out: lerp to 0 (user confirmed this direction looks fine)
-          const next =
-            mesh.visibility + (targetVisibility - mesh.visibility) * lerpFactor;
-          mesh.visibility = next;
-          if (next <= 0.01) {
-            mesh.visibility = 0;
-            mesh.setEnabled(false);
-          }
-        }
-      });
-    });
+    const cobDef = mapData?.tileDefinitions?.cob;
+    return getTileMaterial("cob", cobDef, "#9ca3af");
   };
 
   /**
@@ -1848,6 +2346,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     // ── Collect tile descriptors (main thread reads tile data; no Babylon calls) ──
     // We compute materialKey here so the worker doesn't need tile definitions.
     const tiles: GeometryWorkerRequest["tiles"] = [];
+    const waterZoneTiles: Array<{
+      x: number;
+      y: number;
+      tileId: string;
+      levelOffsetY: number;
+      levelKey: string;
+    }> = [];
 
     for (const renderLevel of renderableLevels) {
       if (lod >= 2) continue; // lod 2 = ground-only (skipped entirely for now)
@@ -1865,8 +2370,47 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           if (!blocking && lod === 1) continue; // lod 1: walls only
 
           const tileId = (tileDef?.id || symbol || "").toLowerCase();
-          const isRoofTile = tileId.includes("roof");
-          const isStairTile = (tileDef as any)?.stairDir !== undefined;
+
+          if (isWaterTileId(tileId)) {
+            waterZoneTiles.push({
+              x,
+              y,
+              tileId,
+              levelOffsetY,
+              levelKey: renderLevel,
+            });
+
+            const pitDepth = waterHoleDepthForTileId(tileId);
+            const pitWallMask = computeWaterPitWallMask(
+              renderLevel,
+              x,
+              y,
+              getMapTileAt,
+              (sym) => mapData.tileDefinitions?.[sym ?? ""],
+            );
+            const floorMat = resolvePoolFloorMaterial(renderLevel, x, y);
+            const materialKey = `${renderLevel}::${floorMat.name}`;
+
+            tiles.push({
+              x,
+              y,
+              symbol,
+              tileId,
+              isBlocking: false,
+              geometryProfile: "water-hole",
+              isStair: false,
+              height: 0,
+              levelOffsetY,
+              materialKey,
+              pitDepth,
+              pitWallMask,
+            });
+            continue;
+          }
+
+          const inferredStair = tileDef?.stairDir !== undefined;
+          const geometryProfile =
+            tileDef?.geometryProfile ?? (inferredStair ? "stair" : "box");
 
           // Use LEVEL_HEIGHT_UNITS - 0.001 as default wall height to leave a
           // sub-millimetre gap between the top face of level N and the bottom
@@ -1876,24 +2420,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           // were authored for the 2D renderer and can exceed 2.0 (e.g. "wal":4.5),
           // causing level 0 tiles to visually invade level 1 in 3D.
           const DEFAULT_WALL_H = LEVEL_HEIGHT_UNITS - 0.001;
-          const tileHeight = isRoofTile
+          const tileHeight = blocking
             ? Math.min(
                 Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H),
                 DEFAULT_WALL_H,
               )
-            : blocking
-              ? Math.min(
-                  Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H),
-                  DEFAULT_WALL_H,
-                )
-              : Math.max(0.03, tileDef?.height ?? 0.08);
+            : Math.max(0.03, tileDef?.height ?? 0.08);
 
           // Resolve material key on main thread (getTileMaterial caches anyway)
-          const fallbackHex = isRoofTile
-            ? "#8b3a2a"
-            : isStairTile
-              ? "#c4a07a"
-              : "#6a9f36";
+          const fallbackHex =
+            geometryProfile === "stair" ? "#c4a07a" : "#6a9f36";
           const mat = getTileMaterial(symbol, tileDef, fallbackHex);
           const materialKey = `${renderLevel}::${mat.name}`;
 
@@ -1903,8 +2439,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             symbol,
             tileId,
             isBlocking: blocking,
-            isRoof: isRoofTile,
-            isStair: isStairTile,
+            geometryProfile,
+            isStair: geometryProfile === "stair",
+            stairDir: tileDef?.stairDir,
             height: tileHeight,
             levelOffsetY,
             materialKey,
@@ -1913,25 +2450,34 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
+    const syncWaterForChunk = () => {
+      const waterTiles = collectWaterEffectTiles(
+        waterZoneTiles,
+        LEVEL_HEIGHT_UNITS,
+      );
+      waterEffectSystem.syncChunk(
+        key,
+        waterTiles,
+        findUpperOcclusionLevel(),
+      );
+    };
+
     if (tiles.length === 0) {
+      syncWaterForChunk();
       chunkLoading.delete(key);
       chunkLodByKey.set(key, lod);
       chunkMeshes.set(key, []);
       return;
     }
 
-    // ── Build a materialKey → { mat, levelKey, isRoof } lookup for the response handler ──
+    // ── Build a materialKey → { mat, levelKey } lookup for the response handler ──
     const matByKey = new Map<
       string,
-      { mat: StandardMaterial; levelKey: string; isRoof: boolean }
+      { mat: StandardMaterial; levelKey: string }
     >();
     for (const t of tiles) {
       if (!matByKey.has(t.materialKey)) {
-        const fallbackHex = t.isRoof
-          ? "#8b3a2a"
-          : t.isStair
-            ? "#c4a07a"
-            : "#6a9f36";
+        const fallbackHex = t.isStair ? "#c4a07a" : "#6a9f36";
         const mat = getTileMaterial(
           t.symbol,
           mapData.tileDefinitions?.[t.symbol],
@@ -1939,7 +2485,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         );
         // renderLevel is encoded in materialKey as the prefix before "::"
         const levelKey = t.materialKey.split("::")[0];
-        matByKey.set(t.materialKey, { mat, levelKey, isRoof: t.isRoof });
+        matByKey.set(t.materialKey, { mat, levelKey });
       }
     }
 
@@ -1965,8 +2511,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         vd.applyToMesh(mesh);
 
         mesh.material = entry.mat;
-
-        if (entry.isRoof) roofMeshes.add(mesh);
         registerMeshForLevel(entry.levelKey, mesh);
 
         // If this level is currently occluded, start the mesh hidden so it
@@ -1987,6 +2531,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       chunkMeshes.set(key, meshes);
       chunkLodByKey.set(key, lod);
       chunkLoading.delete(key);
+
+      syncWaterForChunk();
     });
 
     const request: GeometryWorkerRequest = { requestId: key, tiles };
@@ -2046,8 +2592,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         }
 
         const dist = Math.max(Math.abs(dx), Math.abs(dy));
-        const desiredLod: 0 | 1 | 2 =
-          dist <= 2 ? 0 : dist <= 4 ? 1 : 2;
+        const desiredLod: 0 | 1 | 2 = dist <= 2 ? 0 : dist <= 4 ? 1 : 2;
         const key = `${cx}_${cy}`;
 
         // If the chunk is already loaded with a coarser LOD, force rebuild
@@ -2091,6 +2636,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       pendingCandidates: Math.max(0, chunkCandidates.length - builtThisTick),
       unloadedThisTick,
       pendingUnloads,
+      visibleLevels: getRenderableLevels(),
       ts: Date.now(),
     };
   };
@@ -2183,6 +2729,289 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
   };
 
+  const ensureDebugSandboxStarterLoadout = (mapData: SliceMapData) => {
+    if (!mapData.config?.debugSandbox) {
+      return;
+    }
+
+    let grantedSomething = false;
+
+    const fireBurstCharges =
+      playerState
+        .getEnchantedRunes()
+        .find((rune) => rune.runeId === "fire_burst_rune")?.count || 0;
+    if (fireBurstCharges < 10) {
+      playerState.addEnchantedRune("fire_burst_rune", 10 - fireBurstCharges, 2);
+      grantedSomething = true;
+    }
+
+    const equippedRuneSlots = playerState.getEquippedRuneSlots();
+    if (!equippedRuneSlots.includes("fire_burst_rune")) {
+      playerState.setEquippedRuneSlot(0, "fire_burst_rune");
+      grantedSomething = true;
+    }
+
+    const magicRuneCount = playerState
+      .getInventory()
+      .filter((item) => item.itemId === "magic_rune")
+      .reduce((total, item) => total + (item.count || 0), 0);
+    if (magicRuneCount < 5) {
+      playerState.addItem("magic_rune", 5 - magicRuneCount);
+      grantedSomething = true;
+    }
+
+    if (grantedSomething) {
+      playerState.emit("uiNotification", {
+        type: "info",
+        message: "Debug sandbox: runas e cargas liberadas para teste.",
+      });
+    }
+  };
+
+  const resolveDoorOrientation = (
+    level: string,
+    tileX: number,
+    tileY: number,
+    mapData: SliceMapData,
+  ) => {
+    const wallAt = (x: number, y: number) => {
+      const symbol = getMapTileAt(level, x, y);
+      const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
+      return isStaticTileBlocking(symbol, tileDef);
+    };
+
+    const northWall = wallAt(tileX, tileY - 1);
+    const southWall = wallAt(tileX, tileY + 1);
+    const eastWall = wallAt(tileX + 1, tileY);
+    const westWall = wallAt(tileX - 1, tileY);
+
+    // Door panel spans the axis where side walls sit (E/W -> panel along X).
+    const hingeOnX = eastWall || westWall;
+    const hingeOnZ = northWall || southWall;
+
+    if (hingeOnX && !hingeOnZ) {
+      return { hingeOnX: true, hingeSide: westWall ? -1 : 1 };
+    }
+    if (hingeOnZ && !hingeOnX) {
+      return { hingeOnX: false, hingeSide: northWall ? -1 : 1 };
+    }
+
+    // Fallback for symmetric room entrances: corridor runs N/S in sandbox rooms.
+    return { hingeOnX: true, hingeSide: westWall ? -1 : 1 };
+  };
+
+  const updateDoorVisual = (door: SliceDoor) => {
+    const state = playerState.getDoorState(door.uuid);
+    const isOpen = !!state?.open;
+    const levelWorldY = levelToWorldY(door.level);
+    const floorTop = levelWorldY + 0.06;
+    const doorHeight = 1.9;
+    const centerY = floorTop + doorHeight / 2;
+    const tileCenterX = door.tileX + 0.5;
+    const tileCenterZ = door.tileY + 0.5;
+    const hingeOffset = 0.46 * (door.hingeSide ?? 1);
+
+    door.mesh.rotation.y = 0;
+    if (door.hingeOnX) {
+      door.mesh.position.set(tileCenterX, centerY, tileCenterZ);
+      if (isOpen) {
+        door.mesh.rotation.y = (Math.PI / 2) * (door.hingeSide ?? 1);
+        door.mesh.position.x = tileCenterX + hingeOffset;
+        door.mesh.position.z = tileCenterZ + 0.34 * (door.hingeSide ?? 1);
+      }
+    } else {
+      door.mesh.position.set(tileCenterX, centerY, tileCenterZ);
+      if (isOpen) {
+        door.mesh.rotation.y = (Math.PI / 2) * (door.hingeSide ?? 1);
+        door.mesh.position.z = tileCenterZ + hingeOffset;
+        door.mesh.position.x = tileCenterX + 0.34 * (door.hingeSide ?? 1);
+      }
+    }
+    door.mesh.setEnabled(door.level === activeLevel);
+  };
+
+  const refreshDoorSystemsForLevel = (level: string) => {
+    rebuildNavigationGrid(level);
+    enemies.forEach((enemy) => {
+      if (enemy.level !== level) {
+        return;
+      }
+      enemy.currentPath = [];
+      enemy.currentPathIndex = 0;
+      enemy.lastPathAt = 0;
+    });
+  };
+
+  const DOOR_INTERACT_RADIUS = 1.2;
+
+  const isPlayerOnDoorTile = (door: SliceDoor) => {
+    const doorTileX = door.tileX;
+    const doorTileY = door.tileY;
+    const radius = 0.32;
+    const samplePoints: Array<[number, number]> = [
+      [player.position.x, player.position.z],
+      [player.position.x - radius, player.position.z],
+      [player.position.x + radius, player.position.z],
+      [player.position.x, player.position.z - radius],
+      [player.position.x, player.position.z + radius],
+    ];
+
+    for (const [sx, sz] of samplePoints) {
+      if (Math.floor(sx) === doorTileX && Math.floor(sz) === doorTileY) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const canCloseDoor = (door: SliceDoor) => {
+    if (!playerState.getDoorState(door.uuid)?.open) {
+      return true;
+    }
+    return !isPlayerOnDoorTile(door);
+  };
+
+  const interactDoorByUuid = (uuid: string): boolean => {
+    const door = doors.get(uuid);
+    if (!door || door.level !== activeLevel) {
+      return false;
+    }
+
+    const state = playerState.getDoorState(uuid);
+    if (state?.locked) {
+      playerState.emit("message", "Door is locked.");
+      return false;
+    }
+
+    const isOpen = !!state?.open;
+    if (isOpen && !canCloseDoor(door)) {
+      playerState.emit("uiNotification", {
+        type: "warning",
+        message: "Não dá para fechar — você está na passagem.",
+      });
+      return false;
+    }
+
+    playerState.setDoorOpen(uuid, !isOpen);
+    updateDoorVisual(door);
+    refreshDoorSystemsForLevel(door.level);
+    return true;
+  };
+
+  const tryInteractNearbyDoor = (): boolean => {
+    const nearbyDoor = findNearbyDoor(DOOR_INTERACT_RADIUS);
+    if (!nearbyDoor) {
+      return false;
+    }
+    return interactDoorByUuid(nearbyDoor.uuid);
+  };
+
+  const findNearbyDoor = (maxDistanceUnits = DOOR_INTERACT_RADIUS): SliceDoor | null => {
+    let nearestDoor: SliceDoor | null = null;
+    let nearestDistance = maxDistanceUnits + 1;
+
+    doors.forEach((door) => {
+      if (door.level !== activeLevel) {
+        return;
+      }
+      const centerX = door.tileX + 0.5;
+      const centerZ = door.tileY + 0.5;
+      const dx = player.position.x - centerX;
+      const dz = player.position.z - centerZ;
+      const distance = Math.sqrt(dx * dx + dz * dz);
+      if (distance > maxDistanceUnits || distance >= nearestDistance) {
+        return;
+      }
+      nearestDoor = door;
+      nearestDistance = distance;
+    });
+
+    return nearestDoor;
+  };
+
+  const ensureLevelDoorsSeeded = async (level: string) => {
+    if (seededDoorLevels.has(level)) {
+      return;
+    }
+
+    const mapData = await loadMapData();
+    if (!mapData) {
+      return;
+    }
+
+    const levelData = mapData.levels?.[level];
+    const entityTemplates = mapData.entityTemplates || {};
+    const wallColor = safeTileColor(
+      mapData.tileDefinitions?.wal?.color,
+      "#7c5a3b",
+    );
+
+    levelData?.entities?.forEach((entity, index) => {
+      const entityDef = entityTemplates[entity.symbol];
+      if (!entityDef || entityDef.type !== "door") {
+        return;
+      }
+
+      const uuid =
+        entity.uuid ||
+        entityDef.uuid ||
+        `door_${level}_${entity.x}_${entity.y}_${index}`;
+      if (doors.has(uuid)) {
+        return;
+      }
+
+      playerState.seedDoorState(uuid, {
+        open: false,
+        locked: entity.locked ?? entityDef.locked ?? false,
+        keyId: entity.keyId ?? entityDef.keyId ?? null,
+      });
+
+      const orientation = resolveDoorOrientation(
+        level,
+        entity.x,
+        entity.y,
+        mapData,
+      );
+      const doorHeight = 1.9;
+
+      const doorMesh = MeshBuilder.CreateBox(
+        `slice-door-${uuid}`,
+        {
+          width: orientation.hingeOnX ? 0.96 : 0.14,
+          height: doorHeight,
+          depth: orientation.hingeOnX ? 0.14 : 0.96,
+        },
+        scene,
+      );
+      const doorMaterial = new StandardMaterial(`slice-door-mat-${uuid}`, scene);
+      doorMaterial.diffuseColor = wallColor.scale(0.9);
+      doorMaterial.specularColor = Color3.Black();
+      doorMaterial.emissiveColor = wallColor.scale(0.15);
+      doorMesh.material = doorMaterial;
+      doorMesh.isPickable = true;
+      doorMesh.metadata = { sliceDoorUuid: uuid };
+
+      const door: SliceDoor = {
+        uuid,
+        level,
+        tileX: entity.x,
+        tileY: entity.y,
+        doorId: entityDef.id || "door",
+        locked: entity.locked ?? entityDef.locked ?? false,
+        keyId: entity.keyId ?? entityDef.keyId ?? null,
+        mesh: doorMesh,
+        hingeOnX: orientation.hingeOnX,
+        hingeSide: orientation.hingeSide,
+      };
+      doors.set(uuid, door);
+      doorByLevelTile.set(getDoorTileKey(level, entity.x, entity.y), uuid);
+      updateDoorVisual(door);
+    });
+
+    seededDoorLevels.add(level);
+    refreshDoorSystemsForLevel(level);
+  };
+
   const loadMapData = async (): Promise<SliceMapData | null> => {
     if (mapDataCache) {
       return mapDataCache;
@@ -2241,6 +3070,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       : availableLevels[0];
 
     await ensureWorldMapReady(mapData);
+    ensureDebugSandboxStarterLoadout(mapData);
+    await ensureLevelDoorsSeeded(resolvedLevel);
 
     if (resolvedLevel !== activeLevel) {
       activeLevel = resolvedLevel;
@@ -2468,6 +3299,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       spawnLevelY,
       worldToSliceCoord(spawn.y),
     );
+    applyActorAquaticY(worldPos, level);
     meshRoot.position = worldPos.clone();
     meshRoot.metadata = { sliceEnemyUid: uid };
     const selectionRing =
@@ -2497,6 +3329,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       isProvoked: false,
       selectionRing,
       animState: "idle",
+      animDirection: "south",
       animLockedUntil: 0,
     };
 
@@ -2634,9 +3467,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     enemy.isDead = true;
-    setEnemyAnimState(enemy, "death", 250);
-    enemy.meshRoot.dispose();
-    enemies.delete(enemy.uid);
+    setEnemyAnimState(enemy, "death", 60_000);
+
+    const deathMs = getGeneratedDeathDurationMs(enemy.enemyType);
+    window.setTimeout(() => {
+      if (enemy.meshRoot.isDisposed()) {
+        return;
+      }
+      enemy.meshRoot.dispose();
+      enemies.delete(enemy.uid);
+    }, deathMs);
 
     // Persist this kill so the enemy won't respawn on re-entry
     playerState.markEnemy3dDead(activeLevel, enemy.spawnKey);
@@ -2665,6 +3505,39 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       "#ffff00",
     );
     audioManager.playEnemyDeath(enemy.enemyType);
+  };
+
+  const applyRuneDamageToEnemy = (
+    enemy: SliceEnemy,
+    damage: number,
+    runeId: string,
+  ) => {
+    if (enemy.isDead) {
+      return;
+    }
+
+    enemy.health = Math.max(0, enemy.health - damage);
+    enemy.isProvoked = true;
+
+    playerState.emit("floatingText", {
+      x: enemy.worldPos.x,
+      y: enemy.worldPos.y,
+      z: enemy.worldPos.z,
+      damage: -damage,
+      isCritical: false,
+    });
+
+    playerState.log(
+      "combat_damage_dealt",
+      { damage, target: enemy.enemyType },
+      "#ffffff",
+    );
+
+    if (enemy.health <= 0) {
+      const isFireKill =
+        RuneRegistry.getRune(runeId)?.damage.element === "fire";
+      destroyEnemy(enemy, { finishingDamage: damage, isFireKill });
+    }
   };
 
   const emitPlayerDamagePopup = (
@@ -2708,6 +3581,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
+  const setEnemyDirection = (enemy: SliceEnemy, direction: HeroBmsDirection) => {
+    if (enemy.animDirection === direction) {
+      return;
+    }
+    enemy.animDirection = direction;
+    setEnemyVisualDirection(enemy.meshRoot, direction);
+  };
+
   const setEnemyAnimState = (
     enemy: SliceEnemy,
     nextState: EnemyVisualAnimState,
@@ -2718,9 +3599,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
-    if (enemy.animState !== nextState) {
+    const restart = nextState === "attack";
+    if (enemy.animState !== nextState || restart) {
       enemy.animState = nextState;
-      setEnemyVisualAnimState(enemy.meshRoot, nextState);
+      setEnemyVisualAnimState(enemy.meshRoot, nextState, restart);
     }
 
     if (lockMs > 0) {
@@ -2914,7 +3796,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     enemy.lastAttackAt = now;
-    setEnemyAnimState(enemy, "attack", 320);
+    const attackLockMs = getGeneratedAttackDurationMs(enemy.enemyType);
+    setEnemyAnimState(enemy, "attack", attackLockMs);
 
     const isFireAttack =
       enemy.enemyType === "dragon" ||
@@ -3069,7 +3952,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       enemy.magicCooldowns.set(magicId, now);
       enemy.lastAttackAt = now;
-      setEnemyAnimState(enemy, "attack", 420);
+      setEnemyAnimState(
+        enemy,
+        "attack",
+        getGeneratedAttackDurationMs(enemy.enemyType),
+      );
 
       const spellDamage = randomInt(magicDef.minDamage, magicDef.maxDamage);
       const playerDied = playerState.takeDamage(spellDamage);
@@ -3145,6 +4032,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     lastPlayerAttackAt = now;
+    setHeroAnimState("attack", 320);
+    triggerPlayerAttackSlashEffect(enemy);
     applyPlayerAttackToEnemy(enemy);
   };
 
@@ -3260,7 +4149,27 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     enemy.worldPos.addInPlace(movement);
     enemy.worldPos.x = clamp(enemy.worldPos.x, mapMinX + 0.5, mapMaxX);
     enemy.worldPos.z = clamp(enemy.worldPos.z, mapMinZ + 0.5, mapMaxZ);
+    applyActorAquaticY(enemy.worldPos, enemy.level);
     enemy.meshRoot.position = enemy.worldPos;
+  };
+
+  const faceEnemyToward = (
+    enemy: SliceEnemy,
+    targetX: number,
+    targetZ: number,
+  ) => {
+    if (enemy.isDead) {
+      return;
+    }
+    const dx = targetX - enemy.worldPos.x;
+    const dz = targetZ - enemy.worldPos.z;
+    if (Math.abs(dx) < 0.001 && Math.abs(dz) < 0.001) {
+      return;
+    }
+    setEnemyDirection(
+      enemy,
+      resolveWorldBmsDirection(dx, dz, enemy.animDirection),
+    );
   };
 
   const updateEnemyAI = (deltaSeconds: number) => {
@@ -3268,18 +4177,28 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     enemies.forEach((enemy) => {
       const onActiveLevel = enemy.level === activeLevel;
-      if (!onActiveLevel || enemy.isDead) {
-        enemy.meshRoot.setEnabled(false);
-      }
-
       if (!onActiveLevel) {
+        enemy.meshRoot.setEnabled(false);
         if (selectedEnemyUid === enemy.uid) {
           setSelectedEnemy(null);
         }
         return;
       }
 
+      applyActorAquaticY(enemy.worldPos, enemy.level);
+      enemy.meshRoot.position = enemy.worldPos;
+      const enemyAquatic = getAquaticSampleAt(
+        enemy.worldPos.x,
+        enemy.worldPos.z,
+        enemy.level,
+      );
+      const enemyAquaticTint = (enemy.meshRoot as any)._aquaticTint as
+        | { update: (sample: AquaticSample) => void }
+        | undefined;
+      enemyAquaticTint?.update(enemyAquatic);
+
       if (enemy.isDead) {
+        enemy.meshRoot.setEnabled(true);
         return;
       }
 
@@ -3330,7 +4249,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         hasLineOfSight(enemy.worldPos, player.position)
       ) {
         enemy.currentPath = [];
+        faceEnemyToward(
+          enemy,
+          player.position.x,
+          player.position.z,
+        );
         applyEnemyAttackToPlayer(enemy, now);
+        if (now >= enemy.animLockedUntil && enemy.animState === "attack") {
+          setEnemyAnimState(enemy, "idle");
+        }
         return;
       }
 
@@ -3352,6 +4279,24 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const movedSq =
         (enemy.worldPos.x - prevX) * (enemy.worldPos.x - prevX) +
         (enemy.worldPos.z - prevZ) * (enemy.worldPos.z - prevZ);
+
+      if (currentlyChasing) {
+        faceEnemyToward(
+          enemy,
+          player.position.x,
+          player.position.z,
+        );
+      } else if (movedSq > 0.0001) {
+        setEnemyDirection(
+          enemy,
+          resolveWorldBmsDirection(
+            enemy.worldPos.x - prevX,
+            enemy.worldPos.z - prevZ,
+            enemy.animDirection,
+          ),
+        );
+      }
+
       if (movedSq > 0.0001) {
         setEnemyAnimState(enemy, "walk");
       } else {
@@ -3383,6 +4328,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       activeLevel = currentLevel;
       activeLevelNumber = parseLevelNumber(currentLevel);
       void ensureMapLevelReady(currentLevel);
+      void ensureLevelDoorsSeeded(currentLevel);
       void ensureLevelItemsSeeded(currentLevel);
       void ensureLevelEnemiesSeeded(currentLevel);
       setSelectedEnemy(null);
@@ -3429,28 +4375,51 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     streamedItems.forEach((item) => {
       const meshKey = getDroppedItemMeshKey(currentLevel, item.itemId);
-      let mesh = droppedItemMeshes.get(meshKey);
-      if (!mesh) {
-        mesh = MeshBuilder.CreateSphere(
-          `slice-dropped-${item.itemId}`,
-          { diameter: 0.5, segments: 10 },
+      let container = droppedItemMeshes.get(meshKey);
+      if (!container) {
+        container = new TransformNode(`slice-dropped-root-${item.itemId}`, scene);
+
+        const itemPlane = MeshBuilder.CreatePlane(
+          `slice-dropped-plane-${item.itemId}`,
+          { width: 0.42, height: 0.42 },
           scene,
         );
-        mesh.material = droppedItemMaterial;
-        droppedItemMeshes.set(meshKey, mesh);
+        itemPlane.material = getDroppedItemMaterial(item.weaponId);
+        itemPlane.rotation.x = Math.PI / 2;
+        itemPlane.parent = container;
+        itemPlane.isPickable = false;
+
+        const shadowDisc = MeshBuilder.CreateDisc(
+          `slice-dropped-shadow-${item.itemId}`,
+          { radius: 0.2, tessellation: 16 },
+          scene,
+        );
+        shadowDisc.material = droppedItemShadowMat;
+        shadowDisc.parent = container;
+        shadowDisc.rotation.x = Math.PI / 2;
+        shadowDisc.position.y = 0.002;
+        shadowDisc.isPickable = false;
+
+        // Apply deterministic rotation around Y axis
+        container.rotation.y = getDeterministicRotation(item.itemId);
+
+        (container as any).itemPlane = itemPlane;
+        (container as any).shadowDisc = shadowDisc;
+
+        droppedItemMeshes.set(meshKey, container);
       }
 
       const levelWorldY = levelToWorldY(currentLevel);
-      mesh.position.set(
+      container.position.set(
         worldToSliceCoord(item.x),
-        levelWorldY + 0.4,
+        levelWorldY + 0.01,
         worldToSliceCoord(item.y),
       );
-      mesh.metadata = {
+      container.metadata = {
         ...item,
         level: currentLevel,
       } satisfies SliceDroppedItem;
-      mesh.setEnabled(true);
+      container.setEnabled(true);
     });
 
     hasRealDroppedItems = persistentItems.length > 0;
@@ -3647,25 +4616,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let wasOnVoidWithSafety = false;
   let lastSafePlayerX = player.position.x;
   let lastSafePlayerZ = player.position.z;
+  let lastGroundedFootY = player.position.y;
   let chunkUpdateTimer = 0;
-  let stairCooldown = 0; // seconds until next level transition is allowed
-  let stairAnimTimer = 0; // seconds elapsed during stair animation
-  let stairAnimDuration = 1.5; // total time to walk up/down stairs (reduced from 2.0 — feels more natural)
-  let stairAnimStartY = 0;
-  let stairAnimTargetY = 0;
+  let levelTransitionCooldown = 0; // seconds until next floor change (ramp/stair)
   const CHUNK_UPDATE_INTERVAL = 0.2;
   const PERF_PUBLISH_INTERVAL = 0.25;
   const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
   const ENEMY_AI_RADIUS_UNITS = 18;
-  let stairAnimTargetLevel = "0"; // target level to switch to after animation
-  let isStairAnimActive = false; // true only while a stair transition is playing
-  let pendingStairInteract = false; // set by right-click; consumed by stair transition gate
-  // Direction the player walks during stair animation (unit vector in XZ).
-  // Captured from player movement at trigger time so the character visually
-  // walks through the staircase instead of floating like an elevator.
-  let stairAnimDirX = 0;
-  let stairAnimDirZ = -1; // default: north
-  const STAIR_HORIZ_SPEED = 1.0; // tiles/second of forward movement during climb
   let dropSyncTimer = 0;
   let perfPublishTimer = 0;
 
@@ -3696,9 +4653,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       camera.detachControl();
       firstPersonCamera.position.set(
         player.position.x,
-        // S7-FP5: eye height at 0.55 — lower than crown (0.72) for better depth
-        // perception. Reference: Morrowind ~0.55, Daggerfall ~0.50.
-        player.position.y + 0.55,
+        player.position.y + FIRST_PERSON_EYE_ABOVE_FEET,
         player.position.z,
       );
       scene.activeCamera = firstPersonCamera;
@@ -3714,55 +4669,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     heroBillboard.setEnabled(true);
     scene.activeCamera = camera;
     camera.attachControl(canvas, true);
-  };
-
-  const findNearbyStairTarget = (
-    maxDistanceUnits = 1.15,
-  ): { targetLevel: string } | null => {
-    const tileX = Math.floor(player.position.x);
-    const tileZ = Math.floor(player.position.z);
-
-    let best: { targetLevel: string; distance: number } | null = null;
-
-    for (let dz = -1; dz <= 1; dz += 1) {
-      for (let dx = -1; dx <= 1; dx += 1) {
-        const x = tileX + dx;
-        const z = tileZ + dz;
-        const symbol = getMapTileAt(activeLevel, x, z);
-        const def = symbol
-          ? mapDataCache?.tileDefinitions?.[symbol]
-          : undefined;
-        const stairDir = (def as any)?.stairDir as string | undefined;
-        if (!stairDir) {
-          continue;
-        }
-
-        const centerX = x + 0.5;
-        const centerZ = z + 0.5;
-        const dxToStair = player.position.x - centerX;
-        const dzToStair = player.position.z - centerZ;
-        const distance = Math.sqrt(
-          dxToStair * dxToStair + dzToStair * dzToStair,
-        );
-
-        if (distance > maxDistanceUnits) {
-          continue;
-        }
-
-        const currentNum = parseLevelNumber(activeLevel);
-        const targetNum = stairDir === "up" ? currentNum + 1 : currentNum - 1;
-        const targetLevel = String(targetNum);
-        if (!mapDataCache?.levels?.[targetLevel]) {
-          continue;
-        }
-
-        if (!best || distance < best.distance) {
-          best = { targetLevel, distance };
-        }
-      }
-    }
-
-    return best ? { targetLevel: best.targetLevel } : null;
   };
 
   const findVoidFallLanding = (
@@ -3817,11 +4723,20 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     const maxHealth = Math.max(1, playerState.getMaxHealth());
-    const damagePercent = calculateFallDamagePercent(
+    let damagePercent = calculateFallDamagePercent(
       voidFallFloors,
       voidFallImpactSpeed,
     );
-    const damage = Math.max(1, Math.floor(maxHealth * damagePercent));
+    const landingAquatic = getAquaticSampleAt(
+      player.position.x,
+      player.position.z,
+      voidFallTargetLevel,
+    );
+    damagePercent *= computeFallDamageMultiplier(landingAquatic);
+    const damage = Math.max(
+      landingAquatic.mode === "swimming" ? 0 : 1,
+      Math.floor(maxHealth * damagePercent),
+    );
 
     const playerDied = playerState.takeDamage(damage);
     emitPlayerDamagePopup(
@@ -3931,6 +4846,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const toTarget = finalTarget.worldPos.subtract(proj.position);
       const dist = toTarget.length();
       if (dist < 0.2) {
+        if (finalTarget.isDead) {
+          proj.dispose();
+          projMat.dispose();
+          scene.onBeforeRenderObservable.remove(removeObs);
+          return;
+        }
+
         // Impact: apply damage
         const playerInt = playerState.getIntelligenceData().level;
         const dmg = RuneRegistry.calculateDamage(
@@ -3942,15 +4864,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           1,
           dmg.min + Math.floor(Math.random() * (dmg.max - dmg.min + 1)),
         );
-        finalTarget.health = Math.max(0, finalTarget.health - damage);
-        finalTarget.isProvoked = true;
-        playerState.emit("floatingText", {
-          x: finalTarget.worldPos.x,
-          y: finalTarget.worldPos.y,
-          z: finalTarget.worldPos.z,
-          damage: -damage,
-          isCritical: false,
-        });
+        applyRuneDamageToEnemy(finalTarget, damage, runeId);
 
         // Impact flash: scale-up then dispose
         const flashMat = new StandardMaterial("rune_flash_" + now, scene);
@@ -3979,8 +4893,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         proj.dispose();
         projMat.dispose();
         scene.onBeforeRenderObservable.remove(removeObs);
-
-        // Kill check handled by regular AI loop (health <= 0)
         return;
       }
 
@@ -4039,6 +4951,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const toTarget = finalTarget.worldPos.subtract(proj.position);
       const dist = toTarget.length();
       if (dist < 0.2) {
+        if (finalTarget.isDead) {
+          proj.dispose();
+          projMat.dispose();
+          scene.onBeforeRenderObservable.remove(removeObs);
+          return;
+        }
+
         // Impact: apply damage
         const playerInt = playerState.getIntelligenceData().level;
         const dmg = RuneRegistry.calculateDamage(
@@ -4051,15 +4970,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           1,
           dmg.min + Math.floor(Math.random() * (dmg.max - dmg.min + 1)),
         );
-        finalTarget.health = Math.max(0, finalTarget.health - damage);
-        finalTarget.isProvoked = true;
-        playerState.emit("floatingText", {
-          x: finalTarget.worldPos.x,
-          y: finalTarget.worldPos.y,
-          z: finalTarget.worldPos.z,
-          damage: -damage,
-          isCritical: false,
-        });
+        applyRuneDamageToEnemy(finalTarget, damage, runeId);
 
         // Impact flash
         const flashMat = new StandardMaterial("rune_flash_" + now, scene);
@@ -4163,6 +5074,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (key === "e" && !event.repeat) {
+      if (tryInteractNearbyDoor()) {
+        return;
+      }
+
       const pickedRealItem = tryPickupNearestItem();
       if (pickedRealItem) {
         syncDroppedItems(true);
@@ -4260,10 +5175,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
-    if (isRightClick) {
-      pendingStairInteract = true;
-    }
-
     // S9-T3: in FP mode both left and right click pick from screen center (crosshair aim)
     let pickResult;
     if (isFirstPerson) {
@@ -4294,6 +5205,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
+    if (isRightClick) {
+      tryInteractNearbyDoor();
+      return;
+    }
+
     setSelectedEnemy(null);
   });
 
@@ -4303,6 +5219,46 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (dropSyncTimer >= DROP_SYNC_INTERVAL) {
       dropSyncTimer = 0;
       syncDroppedItems();
+    }
+
+    // Animate dropped items (floating bob & shadow scaling)
+    droppedItemMeshes.forEach((container) => {
+      if (!container.isEnabled()) return;
+      const itemPlane = (container as any).itemPlane;
+      const shadowDisc = (container as any).shadowDisc;
+      if (itemPlane) {
+        const time = performance.now() * 0.003;
+        const item = container.metadata as SliceDroppedItem | undefined;
+        const phase = item ? getDeterministicRotation(item.itemId) * 10 : 0;
+        
+        // Bob height fluctuates between 0.05 and 0.11 above the container
+        itemPlane.position.y = 0.08 + Math.sin(time + phase) * 0.03;
+
+        if (shadowDisc) {
+          const ratio = (itemPlane.position.y - 0.05) / 0.06; // 0 to 1
+          shadowDisc.visibility = 0.28 - ratio * 0.12; // fade shadow slightly as it rises
+          const scale = 1.0 - ratio * 0.15; // shrink shadow slightly as it rises
+          shadowDisc.scaling.set(scale, scale, scale);
+        }
+      }
+    });
+
+    // Animate active slash trails
+    const deltaMs = engine.getDeltaTime();
+    for (let i = activeSlashtrails.length - 1; i >= 0; i--) {
+      const slash = activeSlashtrails[i];
+      slash.elapsed += deltaMs;
+      const ratio = slash.elapsed / slash.duration;
+      if (ratio >= 1) {
+        slash.mesh.dispose();
+        slash.material.dispose();
+        slash.texture.dispose();
+        activeSlashtrails.splice(i, 1);
+      } else {
+        const currentScale = slash.startScale + (slash.endScale - slash.startScale) * ratio;
+        slash.mesh.scaling.set(currentScale, currentScale, currentScale);
+        slash.mesh.visibility = 1.0 - ratio;
+      }
     }
 
     // S10-T1: Parity with 2D — tick PlayerState for hunger decay, HP regen and buff timers.
@@ -4329,11 +5285,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
-    // 2D parity: when player enters below an upper structure, hide that full level and above.
-    // Also keep fade smooth for readability.
-    updateUpperLevelVisibility(deltaSeconds);
+    // Hide upper floors when the hero walks underneath (occlusion wins over column cull).
+    syncVerticalLevelVisibility(deltaSeconds);
 
-    const speed = 4.5;
+    const aquaticSample = getAquaticSampleAt(
+      player.position.x,
+      player.position.z,
+      activeLevel,
+    );
+    const speed = 4.5 * aquaticSample.speedMultiplier;
     let moveForward = 0;
     let moveRight = 0;
 
@@ -4342,9 +5302,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (pressedKeys.has("a") || pressedKeys.has("arrowleft")) moveRight -= 1;
     if (pressedKeys.has("d") || pressedKeys.has("arrowright")) moveRight += 1;
 
-    if (moveForward !== 0 || moveRight !== 0) {
-      // Block horizontal movement while a stair transition is in progress (S3-T4)
-      if (!isStairAnimActive && !isVoidFallActive) {
+    const isMoving = moveForward !== 0 || moveRight !== 0;
+    const nowMs = Date.now();
+    if (nowMs >= heroAnimLockedUntil) {
+      if (isMoving) {
+        setHeroDirection(
+          resolveHeroBmsDirection(moveForward, moveRight, heroDirection),
+        );
+        setHeroAnimState("walk");
+      } else {
+        setHeroAnimState("idle");
+      }
+    }
+
+    if (isMoving) {
+      if (!isVoidFallActive) {
         let movement = Vector3.Zero();
 
         if (isFirstPerson) {
@@ -4442,96 +5414,81 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           mapMaxZ,
           Math.max(mapMinZ + 0.5, player.position.z),
         );
-        audioManager.playFootstep("floor");
-      } // end !isStairAnimActive
-    }
-
-    // ── Stair / level transition check ──────────────────────────────────────
-    if (stairCooldown > 0) {
-      stairCooldown -= deltaSeconds;
-    }
-
-    if (pendingStairInteract && stairCooldown <= 0 && !isStairAnimActive) {
-      const stairTarget = findNearbyStairTarget();
-      pendingStairInteract = false;
-
-      if (stairTarget) {
-        stairCooldown = stairAnimDuration + 0.5;
-        stairAnimTimer = 0;
-        stairAnimStartY = player.position.y;
-        stairAnimTargetLevel = stairTarget.targetLevel;
-        stairAnimTargetY =
-          levelToWorldY(stairTarget.targetLevel) + PLAYER_GROUND_OFFSET;
-
-        // Capture movement direction so the character walks *through* the stairs.
-        // Prefer the key the player is currently holding; fall back to the vector
-        // from the player toward the stair tile center.
-        let dirX = 0;
-        let dirZ = 0;
-        if (pressedKeys.has("w") || pressedKeys.has("arrowup")) dirZ -= 1;
-        if (pressedKeys.has("s") || pressedKeys.has("arrowdown")) dirZ += 1;
-        if (pressedKeys.has("a") || pressedKeys.has("arrowleft")) dirX -= 1;
-        if (pressedKeys.has("d") || pressedKeys.has("arrowright")) dirX += 1;
-        const keyDist = Math.sqrt(dirX * dirX + dirZ * dirZ);
-        if (keyDist > 0) {
-          stairAnimDirX = dirX / keyDist;
-          stairAnimDirZ = dirZ / keyDist;
-        } else {
-          // No key held — use vector toward stair tile center
-          const cx = Math.floor(player.position.x) + 0.5;
-          const cz = Math.floor(player.position.z) + 0.5;
-          const fdx = cx - player.position.x;
-          const fdz = cz - player.position.z;
-          const fd = Math.sqrt(fdx * fdx + fdz * fdz);
-          stairAnimDirX = fd > 0.05 ? fdx / fd : 0;
-          stairAnimDirZ = fd > 0.05 ? fdz / fd : -1;
-        }
-
-        isStairAnimActive = true;
       }
     }
 
-    // Smooth stair animation (only when isStairAnimActive)
-    if (isStairAnimActive) {
-      stairAnimTimer += deltaSeconds;
-      const progress = Math.min(1, stairAnimTimer / stairAnimDuration);
-      const easeProgress =
-        progress < 0.5
-          ? 2 * progress * progress
-          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-
-      player.position.y =
-        stairAnimStartY + (stairAnimTargetY - stairAnimStartY) * easeProgress;
-
-      // Walk forward through the staircase (horizontal movement during climb).
-      // This gives the "walking up step by step" feel instead of a vertical elevator.
-      player.position.x += stairAnimDirX * STAIR_HORIZ_SPEED * deltaSeconds;
-      player.position.z += stairAnimDirZ * STAIR_HORIZ_SPEED * deltaSeconds;
-
-      // At midpoint: load target level geometry
+    const tryRampLevelTransition = () => {
       if (
-        progress >= 0.45 &&
-        progress < 0.55 &&
-        activeLevel !== stairAnimTargetLevel
+        levelTransitionCooldown > 0 ||
+        isVoidFallActive ||
+        !isGrounded
       ) {
-        void ensureMapLevelReady(stairAnimTargetLevel);
+        return;
       }
 
-      // Animation complete
-      if (stairAnimTimer >= stairAnimDuration) {
-        player.position.y = stairAnimTargetY;
-        verticalVelocity = 0;
-        isGrounded = true;
-        isStairAnimActive = false;
-        if (activeLevel !== stairAnimTargetLevel) {
-          void ensureMapLevelReady(stairAnimTargetLevel);
-        }
-        void ensureLevelEnemiesSeeded(stairAnimTargetLevel);
-        void ensureLevelItemsSeeded(stairAnimTargetLevel);
+      const probe = probeRampLevelTransition(
+        player.position.x,
+        player.position.z,
+        activeLevel,
+        getMapTileAt,
+        (symbol) =>
+          symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+        {
+          parseLevelNumber,
+          levelHeightUnits: LEVEL_HEIGHT_UNITS,
+          hasLevel: (level) => Boolean(mapDataCache?.levels?.[level]),
+        },
+      );
+      if (!probe) {
+        return;
       }
+
+      levelTransitionCooldown = 1.2;
+      applyActiveLevelChange(probe.targetLevel);
+    };
+
+    const tryStairLevelTransition = () => {
+      if (
+        levelTransitionCooldown > 0 ||
+        isVoidFallActive ||
+        !isGrounded
+      ) {
+        return;
+      }
+
+      const probe = probeStairLevelTransition(
+        player.position.x,
+        player.position.z,
+        activeLevel,
+        getMapTileAt,
+        (symbol) =>
+          symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+        {
+          parseLevelNumber,
+          hasLevel: (level) => Boolean(mapDataCache?.levels?.[level]),
+        },
+      );
+      if (!probe) {
+        return;
+      }
+
+      levelTransitionCooldown = 1.2;
+      applyActiveLevelChange(probe.targetLevel);
+    };
+
+    if (isMoving) {
+      tryRampLevelTransition();
+      tryStairLevelTransition();
     }
 
-    // (legacy timer-based completion removed — handled inside isStairAnimActive block)
+    const consumeFootstep = (heroSpriteMat as any)._consumeFootstepTick;
+    if (typeof consumeFootstep === "function" && consumeFootstep()) {
+      audioManager.playFootstep("floor", true);
+    }
+
+    if (levelTransitionCooldown > 0) {
+      levelTransitionCooldown -= deltaSeconds;
+    }
 
     updateEnemyAI(deltaSeconds);
     tryAutoPlayerAttack(Date.now());
@@ -4846,8 +5803,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
-    // Gravity and fall system (stairs remain non-damaging transitions)
-    if (!isStairAnimActive) {
+    // Gravity and fall system
+    {
       const tileX = Math.floor(player.position.x);
       const tileZ = Math.floor(player.position.z);
       const supportSymbol = getMapTileAt(activeLevel, tileX, tileZ);
@@ -4880,11 +5837,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             isGrounded = false;
             verticalVelocity = Math.min(verticalVelocity, 0);
             voidFallTargetLevel = landing.landingLevel;
-            voidFallTargetY =
-              levelToWorldY(landing.landingLevel) + PLAYER_GROUND_OFFSET;
+            voidFallTargetY = getGroundFootY(
+              player.position.x,
+              player.position.z,
+              landing.landingLevel,
+            );
             voidFallFloors = landing.floors;
 
             void ensureMapLevelReady(landing.landingLevel);
+            void ensureLevelDoorsSeeded(landing.landingLevel);
             void ensureLevelEnemiesSeeded(landing.landingLevel);
             void ensureLevelItemsSeeded(landing.landingLevel);
           }
@@ -4909,29 +5870,82 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           isVoidFallActive = false;
 
           if (activeLevel !== voidFallTargetLevel) {
-            void ensureMapLevelReady(voidFallTargetLevel);
+            applyActiveLevelChange(voidFallTargetLevel);
           }
-          activeLevel = voidFallTargetLevel;
-          activeLevelNumber = parseLevelNumber(voidFallTargetLevel);
+          lastGroundedFootY = player.position.y;
           resolveVoidFall();
         }
       } else {
-        const levelGroundY =
-          levelToWorldY(activeLevelNumber) + PLAYER_GROUND_OFFSET;
+        const levelGroundY = getGroundFootY(
+          player.position.x,
+          player.position.z,
+          activeLevel,
+        );
         if (player.position.y <= levelGroundY) {
           player.position.y = levelGroundY;
           verticalVelocity = 0;
           isGrounded = true;
+        } else if (
+          player.position.y - levelGroundY < 0.65 &&
+          verticalVelocity <= 0.05
+        ) {
+          // Stair / level transition — snap down instead of hovering above floor.
+          player.position.y = levelGroundY;
+          verticalVelocity = 0;
+          isGrounded = true;
+        } else if (player.position.y > levelGroundY + 0.08) {
+          isGrounded = false;
         }
       }
     }
+
+    if (
+      isGrounded &&
+      !isVoidFallActive &&
+      !isFirstPerson
+    ) {
+      const targetFootY = getGroundFootY(
+        player.position.x,
+        player.position.z,
+        activeLevel,
+      );
+      if (shouldStartLedgeFall(lastGroundedFootY, targetFootY)) {
+        isVoidFallActive = true;
+        isGrounded = false;
+        verticalVelocity = 0;
+        voidFallTargetLevel = activeLevel;
+        voidFallTargetY = targetFootY;
+        voidFallFloors = 0;
+      } else {
+        applyActorAquaticY(player.position, activeLevel);
+        lastGroundedFootY = player.position.y;
+      }
+    }
+
+    const playerAquatic = getAquaticSampleAt(
+      player.position.x,
+      player.position.z,
+      activeLevel,
+    );
+    heroAquaticTint.update(playerAquatic);
+    if (
+      playerAquatic.mode !== "dry" &&
+      lastPlayerAquaticMode === "dry"
+    ) {
+      audioManager.playSplash();
+    }
+    lastPlayerAquaticMode = playerAquatic.mode;
+    const aquaticPreset = getAquaticVisualPreset(playerAquatic.mode);
+    heroShadowMat.alpha = aquaticPreset
+      ? 0.32 * aquaticPreset.shadowScale
+      : 0.32;
 
     if (isFirstPerson) {
       heroBillboard.setEnabled(false);
       heroShadow.setEnabled(false);
       firstPersonCamera.position.set(
         player.position.x,
-        player.position.y + 0.55, // S7-FP5: eye height (see setCameraMode comment)
+        player.position.y + FIRST_PERSON_EYE_ABOVE_FEET,
         player.position.z,
       );
       playerState.exploreArea(
@@ -4954,17 +5968,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     heroShadow.setEnabled(true);
     heroShadow.position.set(
       player.position.x,
-      levelToWorldY(activeLevelNumber) + 0.02,
+      levelToWorldY(activeLevelNumber) + FLOOR_SURFACE_Y + 0.01,
       player.position.z,
     );
 
-    const currentTarget = camera.target;
+    // Top-down product mode: hero stays screen-centered (Diablo/PoE-style).
+    // Lazy lerp made fast movement feel like the character "outruns" the camera.
     camera.setTarget(
-      Vector3.Lerp(
-        currentTarget,
-        new Vector3(player.position.x, player.position.y, player.position.z),
-        0.12,
-      ),
+      new Vector3(player.position.x, player.position.y, player.position.z),
     );
 
     playerState.exploreArea(
@@ -5027,7 +6038,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   // without touching camera FOV, draw radius, or any gameplay distance.
   // Quality preset: tunes hemiLight intensity + reverb-style scene knobs.
   // FPS target: clamps render loop frequency. 0 = uncapped.
-  const applyDisplaySettings = (settings: ReturnType<typeof playerState.getDisplaySettings>) => {
+  const applyDisplaySettings = (
+    settings: ReturnType<typeof playerState.getDisplaySettings>,
+  ) => {
     try {
       const scale = Math.max(0.5, Math.min(1.0, settings.renderScale || 1));
       // Babylon expects 1/scale (1 = native, 2 = half resolution).
@@ -5066,10 +6079,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
   };
   applyDisplaySettings(playerState.getDisplaySettings());
-  const handleDisplaySettings = (settings: ReturnType<typeof playerState.getDisplaySettings>) => {
+  const handleDisplaySettings = (
+    settings: ReturnType<typeof playerState.getDisplaySettings>,
+  ) => {
     applyDisplaySettings(settings);
   };
   playerState.on("displaySettingsChanged", handleDisplaySettings);
+  const handleDoorStatesChanged = () => {
+    doors.forEach((door) => updateDoorVisual(door));
+    refreshDoorSystemsForLevel(activeLevel);
+  };
+  playerState.on("doorStatesChanged", handleDoorStatesChanged);
 
   return {
     engine,
@@ -5088,16 +6108,35 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       playerState.off("dropItem", handleDropItem);
       playerState.off("requestPickup", handleRequestPickup);
       playerState.off("spawnDroppedItem", addDroppedItemFromEvent);
+      playerState.off("equipmentChanged", syncHeroVisualProfile);
       playerState.off("displaySettingsChanged", handleDisplaySettings);
+      playerState.off("doorStatesChanged", handleDoorStatesChanged);
       canvas.removeEventListener("contextmenu", onCanvasContextMenu);
       canvas.removeEventListener("pointerdown", onCanvasPointerDown);
       scene.onPointerObservable.remove(pointerObserver);
       document.exitPointerLock?.();
       clearAllChunks();
+      waterEffectSystem.dispose();
+      heroAquaticTint.dispose();
       mapRoot.dispose();
       tileMaterials.forEach((material) => material.dispose());
       droppedItemMeshes.forEach((mesh) => mesh.dispose());
       droppedItemMeshes.clear();
+      activeSlashtrails.forEach((slash) => {
+        slash.mesh.dispose();
+        slash.material.dispose();
+        slash.texture.dispose();
+      });
+      activeSlashtrails.length = 0;
+      doors.forEach((door) => {
+        const material = door.mesh.material;
+        door.mesh.dispose();
+        if (material instanceof StandardMaterial) {
+          material.dispose();
+        }
+      });
+      doors.clear();
+      doorByLevelTile.clear();
       clearEnemies();
       // S7-FP4: torus marker removed — no dispose needed
       delete (window as any).__slice3dLogs;

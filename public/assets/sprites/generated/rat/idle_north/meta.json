@@ -1,0 +1,10 @@
+{
+  "animation": "idle",
+  "direction": "north",
+  "mode": "template",
+  "templateId": "idle",
+  "actionDescription": null,
+  "frameCount": 8,
+  "generatedAt": "2026-06-28T00:00:03.056Z",
+  "characterId": "d35a62b8-d258-4d6e-855e-7e68e4291ed6"
+}

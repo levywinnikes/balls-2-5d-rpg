@@ -165,7 +165,20 @@ export const MainMenuUI: React.FC<MainMenuUIProps> = ({ onStart }) => {
               onClick={() =>
                 onStart({
                   isNewGame: true,
-                  map: "smoke_test",
+                  map: "debug_sandbox",
+                  charName: "Debug",
+                })
+              }
+              className={`${btnStyle} border-emerald-800 text-emerald-300`}
+            >
+              <Bot size={20} /> DEBUG SANDBOX
+            </button>
+
+            <button
+              onClick={() =>
+                onStart({
+                  isNewGame: true,
+                  map: "city_3d_multi",
                   benchmarkMode: true,
                   benchmarkName: "Smoke Test Benchmark",
                   charName: "Benchmark",

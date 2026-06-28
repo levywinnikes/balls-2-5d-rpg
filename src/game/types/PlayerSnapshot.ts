@@ -54,6 +54,12 @@ export interface WindowConfigSnapshot {
   [windowType: string]: { x: number; y: number };
 }
 
+export interface DoorStateSnapshot {
+  open: boolean;
+  locked?: boolean;
+  keyId?: string | null;
+}
+
 /**
  * Complete player state snapshot for persistence.
  * All fields are serializable (no Map/Set objects, only arrays).
@@ -61,6 +67,8 @@ export interface WindowConfigSnapshot {
 export interface PlayerSnapshot {
   // --- Identity & Vitals ---
   characterName?: string;
+  unlockedHeroSkinIds?: string[];
+  activeHeroSkinId?: string | null;
   health: number;
   maxHealth: number;
   level: number;
@@ -112,6 +120,8 @@ export interface PlayerSnapshot {
   equippedHelmetId?: string | null;
   equippedHelmetItem?: EquipmentItemSnapshot | null;
 
+  equippedHairId?: string | null;
+
   equippedArmorId?: string | null;
   equippedArmorItem?: EquipmentItemSnapshot | null;
 
@@ -141,6 +151,7 @@ export interface PlayerSnapshot {
   containers?: [string, any[]][]; // Map container ID -> items inside
   visitedLevels?: string[]; // Levels visited by player
   deadEnemies3d?: Record<string, string[]>; // 3D world: killed enemy spawn keys per level
+  doorStates?: Record<string, DoorStateSnapshot>; // 3D doors keyed by stable UUID
 
   // --- Altar & Magic ---
   altarStorage?: [string, any[]][]; // Map altar ID -> items stored

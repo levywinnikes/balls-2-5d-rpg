@@ -51,14 +51,14 @@ const ATLAS = [
   "bal", // 22 varanda/passarela
 ];
 
-  // Gable roof tiles (indices 23-27). All ids contain "roof" → isRoofTile=true.
-  ATLAS.push(
-    "rsn", // 23 – roof slope north
-    "rss", // 24 – roof slope south
-    "rse", // 25 – roof slope east
-    "rsw", // 26 – roof slope west
-    "rrd", // 27 – roof ridge cap
-  );
+// Gable roof tiles (indices 23-27). All ids contain "roof" → isRoofTile=true.
+ATLAS.push(
+  "rsn", // 23 – roof slope north
+  "rss", // 24 – roof slope south
+  "rse", // 25 – roof slope east
+  "rsw", // 26 – roof slope west
+  "rrd", // 27 – roof ridge cap
+);
 
 // ─── Tile Definitions ─────────────────────────────────────────────────────────
 const TILE_DEFS = {
@@ -68,11 +68,11 @@ const TILE_DEFS = {
   bwl: { color: 0x8b4513, height: 2.0, renderAs: "wall", block: true },
   flr: { color: 0x999090, height: 0.15, renderAs: "floor", block: false },
   rof: { color: 0x5a3e28, height: 0.3, renderAs: "roof", block: false },
-    rsn: { id: "roof-slope-n", color: 0xb84c18, height: 0.8, block: false },
-    rss: { id: "roof-slope-s", color: 0xb84c18, height: 0.8, block: false },
-    rse: { id: "roof-slope-e", color: 0xb84c18, height: 0.8, block: false },
-    rsw: { id: "roof-slope-w", color: 0xb84c18, height: 0.8, block: false },
-    rrd: { id: "roof-ridge",   color: 0x7a3010, height: 0.8, block: false },
+  rsn: { id: "roof-slope-n", color: 0xb84c18, height: 0.8, block: false },
+  rss: { id: "roof-slope-s", color: 0xb84c18, height: 0.8, block: false },
+  rse: { id: "roof-slope-e", color: 0xb84c18, height: 0.8, block: false },
+  rsw: { id: "roof-slope-w", color: 0xb84c18, height: 0.8, block: false },
+  rrd: { id: "roof-ridge", color: 0x7a3010, height: 0.8, block: false },
   grs: { color: 0x4a7c3f, height: 0.2, renderAs: "floor", block: false },
   stn: { color: 0x808080, height: 0.25, renderAs: "floor", block: false },
   mkt: { color: 0xd4a017, height: 0.2, renderAs: "floor", block: false },
@@ -292,8 +292,8 @@ function generateLevel1(rng, stairUpPositions, roofRects) {
 
   // Telhados dos edificios do nivel 0 para manter estruturas completas
   for (const { x0, y0, x1, y1 } of roofRects) {
-  // Gable roof spanning the full building footprint (including wall tiles)
-  fillGableRoof(grid, x0, y0, x1, y1);
+    // Gable roof spanning the full building footprint (including wall tiles)
+    fillGableRoof(grid, x0, y0, x1, y1);
   }
 
   for (const { x, y } of stairUpPositions) {

@@ -6,7 +6,16 @@ import {
   StandardMaterial,
   TransformNode,
 } from "@babylonjs/core";
-import { createEnemyParitySpriteMaterial } from "./TwoDParitySpriteFactory";
+import {
+  createEnemyParitySpriteMaterial,
+  getGeneratedEnemyAnchorY,
+  resolveGeneratedSpriteEntityId,
+  type GeneratedSpriteDirection,
+} from "./TwoDParitySpriteFactory";
+import { attachAquaticShaderTint } from "./AquaticSpriteShader";
+import {
+  configureBillboardSpriteMesh,
+} from "./BillboardDepthConfig";
 
 export type EnemyVisualProfile = {
   baseColor: string;
@@ -31,9 +40,16 @@ const PROFILE_BY_ENEMY_ID: Record<string, EnemyVisualProfile> = {
   rat: {
     baseColor: "#6b7280",
     accentColor: "#d1d5db",
-    radius: 0.24,
-    height: 0.65,
+    radius: 0.28,
+    height: 0.72,
     headScale: 0.5,
+  },
+  bear: {
+    baseColor: "#6b4423",
+    accentColor: "#c4a574",
+    radius: 0.46,
+    height: 1.1,
+    headScale: 0.55,
   },
   skeleton: {
     baseColor: "#d6d3d1",
@@ -118,6 +134,7 @@ export function createEnemyVisual(
 ): TransformNode {
   const profile = getEnemyVisualProfile(enemyId);
   const root = new TransformNode(nodeName, scene);
+  const generatedId = resolveGeneratedSpriteEntityId(enemyId);
 
   const spriteMat = createEnemyParitySpriteMaterial(
     scene,
@@ -125,24 +142,41 @@ export function createEnemyVisual(
     enemyId,
   );
   const spriteAnimSetter = (spriteMat as any)._setAnimState;
+  const spriteDirSetter = (spriteMat as any)._setDirection;
   if (typeof spriteAnimSetter === "function") {
-    (root as any)._setAnimState = (state: EnemyVisualAnimState) => {
-      spriteAnimSetter(state);
+    (root as any)._setAnimState = (
+      state: EnemyVisualAnimState,
+      restart?: boolean,
+    ) => {
+      spriteAnimSetter(state, restart);
+    };
+  }
+  if (typeof spriteDirSetter === "function") {
+    (root as any)._setDirection = (direction: GeneratedSpriteDirection) => {
+      spriteDirSetter(direction);
     };
   }
 
+  const spriteWidth = Math.max(0.8, profile.radius * 3.2);
+  const spriteHeight = Math.max(1.0, profile.height * 1.35);
   const sprite = MeshBuilder.CreatePlane(
     `${nodeName}-sprite`,
     {
-      width: Math.max(0.8, profile.radius * 3.2),
-      height: Math.max(1.0, profile.height * 1.35),
+      width: spriteWidth,
+      height: spriteHeight,
     },
     scene,
   );
   sprite.material = spriteMat;
   sprite.parent = root;
-  sprite.position.y = Math.max(0.45, profile.height * 0.55);
+  const spriteAnchorY = generatedId
+    ? getGeneratedEnemyAnchorY(generatedId, spriteHeight)
+    : Math.max(0.45, profile.height * 0.55);
+  sprite.position.y = spriteAnchorY;
   sprite.billboardMode = Mesh.BILLBOARDMODE_Y;
+  configureBillboardSpriteMesh(sprite);
+
+  (root as any)._aquaticTint = attachAquaticShaderTint(spriteMat);
 
   const shadowMat = new StandardMaterial(`${nodeName}-shadow-mat`, scene);
   shadowMat.diffuseColor = Color3.Black();
@@ -232,9 +266,20 @@ export function createEnemyVisual(
 export function setEnemyVisualAnimState(
   enemyRoot: TransformNode,
   state: EnemyVisualAnimState,
+  restart = false,
 ): void {
   const setter = (enemyRoot as any)._setAnimState;
   if (typeof setter === "function") {
-    setter(state);
+    setter(state, restart);
+  }
+}
+
+export function setEnemyVisualDirection(
+  enemyRoot: TransformNode,
+  direction: GeneratedSpriteDirection,
+): void {
+  const setter = (enemyRoot as any)._setDirection;
+  if (typeof setter === "function") {
+    setter(direction);
   }
 }

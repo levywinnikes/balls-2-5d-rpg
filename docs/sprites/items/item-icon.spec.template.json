@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "CHANGE_ME",
+  "registry_id": "CHANGE_ME",
+  "name": "Human Readable Name",
+  "category": "item_icon",
+  "item_type": "helmet",
+  "links": {
+    "weapon_registry_id": "CHANGE_ME"
+  },
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "path": "public/assets/items/CHANGE_ME.png",
+    "public_url": "assets/items/CHANGE_ME.png"
+  },
+  "production_prompts": {
+    "description": "pixel art ITEM_NAME item icon, cartoon readable style, low top-down angle, clean dark outline, vibrant flat colors, centered in frame, transparent background, 32x32",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character full body"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux",
+    "no_background": true
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "leather_legs",
+  "registry_id": "leather_legs",
+  "name": "Leather Leggings",
+  "category": "item_icon",
+  "item_type": "legs",
+  "links": {
+    "weapon_registry_id": "leather_legs"
+  },
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "path": "public/assets/items/leather_legs.png",
+    "public_url": "assets/items/leather_legs.png"
+  },
+  "production_prompts": {
+    "description": "pixel art brown leather leg armor item icon, simple leggings, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat brown colors, centered, readable silhouette, transparent background, 32x32",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character full body, scene background"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux",
+    "no_background": true
+  }
+}

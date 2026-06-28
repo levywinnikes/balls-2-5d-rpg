@@ -2,6 +2,22 @@ const fs = require("fs");
 const path = require("path");
 const { PNG } = require("pngjs");
 
+// Load .env file if it exists
+const envPath = path.join(process.cwd(), ".env");
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, "utf8");
+  envContent.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return;
+    const parts = trimmed.split("=");
+    const key = parts[0].trim();
+    const val = parts.slice(1).join("=").trim();
+    if (key) {
+      process.env[key] = val;
+    }
+  });
+}
+
 // PixelLab API v2 — docs at https://api.pixellab.ai/v2/docs
 // Most endpoints are ASYNCHRONOUS: submit job → poll /v2/background-jobs/{id} → retrieve results.
 // Consistency strategy: create persistent character (character_id) → animate via same id.
@@ -9,7 +25,45 @@ const { PNG } = require("pngjs");
 
 const DEFAULT_BASE_URL = "https://api.pixellab.ai";
 const POLL_INTERVAL_MS = 6000;
-const POLL_MAX_ATTEMPTS = 60; // 6 min max per job
+const POLL_MAX_ATTEMPTS = 200; // 20 min max per job (death v3 can be very slow)
+const REQUEST_RETRY_MAX = 5;
+const REQUEST_RETRY_BASE_MS = 4000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableRequestError(error) {
+  const message = String(error?.message || error);
+  return (
+    message.includes("fetch failed") ||
+    message.includes("ECONNRESET") ||
+    message.includes("ETIMEDOUT") ||
+    message.includes("ENOTFOUND") ||
+    message.includes("(429)") ||
+    message.includes("(502)") ||
+    message.includes("(503)") ||
+    message.includes("(504)")
+  );
+}
+
+async function withRequestRetries(label, fn) {
+  for (let attempt = 1; attempt <= REQUEST_RETRY_MAX; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (!isRetryableRequestError(error) || attempt === REQUEST_RETRY_MAX) {
+        throw error;
+      }
+      const waitMs = REQUEST_RETRY_BASE_MS * attempt;
+      console.warn(
+        `[pixellab] ⚠️  ${label} failed (${error.message}); retry ${attempt}/${REQUEST_RETRY_MAX} in ${waitMs / 1000}s…`,
+      );
+      await sleep(waitMs);
+    }
+  }
+  throw new Error(`${label} exhausted retries`);
+}
 
 function cleanBaseUrl(baseUrl) {
   return String(baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -25,33 +79,35 @@ function resolveConfig(overrides = {}) {
 }
 
 async function requestJson({ method, url, apiKey, body }) {
-  const response = await fetch(url, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
+  return withRequestRetries(`${method} ${url}`, async () => {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const text = await response.text();
+    let json;
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      json = { raw: text };
+    }
+
+    if (!response.ok) {
+      const detail =
+        (json && (json.detail || json.message || json.error)) ||
+        `HTTP ${response.status}`;
+      throw new Error(
+        `PixelLab API error (${response.status}): ${JSON.stringify(detail)}`,
+      );
+    }
+
+    return json;
   });
-
-  const text = await response.text();
-  let json;
-  try {
-    json = text ? JSON.parse(text) : {};
-  } catch {
-    json = { raw: text };
-  }
-
-  if (!response.ok) {
-    const detail =
-      (json && (json.detail || json.message || json.error)) ||
-      `HTTP ${response.status}`;
-    throw new Error(
-      `PixelLab API error (${response.status}): ${JSON.stringify(detail)}`,
-    );
-  }
-
-  return json;
 }
 
 function ensureApiKey(config) {
@@ -68,9 +124,10 @@ function ensureApiKey(config) {
 
 // Polls GET /v2/background-jobs/{jobId} until status is completed or failed.
 // Returns the completed job object { status, last_response, ... }.
-async function waitForJob(config, jobId, label = "") {
+async function waitForJob(config, jobId, label = "", options = {}) {
+  const maxAttempts = options.maxAttempts ?? POLL_MAX_ATTEMPTS;
   const url = `${config.baseUrl}/v2/background-jobs/${jobId}`;
-  for (let attempt = 1; attempt <= POLL_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const job = await requestJson({
       method: "GET",
       url,
@@ -92,7 +149,7 @@ async function waitForJob(config, jobId, label = "") {
   }
   process.stdout.write("\n");
   throw new Error(
-    `Job ${jobId} timed out after ${(POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s`,
+    `Job ${jobId} timed out after ${(maxAttempts * POLL_INTERVAL_MS) / 1000}s`,
   );
 }
 
@@ -112,11 +169,15 @@ async function createCharacter(
     outline = "single color black outline",
     shading = "basic shading",
     detail = "medium detail",
+    template_id,
     seed,
   },
 ) {
   const url = `${config.baseUrl}/v2/create-character-with-4-directions`;
   const body = { description, image_size, view, outline, shading, detail };
+  if (template_id) {
+    body.template_id = template_id;
+  }
   if (seed != null) body.seed = Number(seed);
 
   const response = await requestJson({
@@ -141,6 +202,40 @@ async function createCharacter(
 async function getCharacter(config, characterId) {
   const url = `${config.baseUrl}/v2/characters/${characterId}`;
   return requestJson({ method: "GET", url, apiKey: config.apiKey });
+}
+
+// POST /v2/create-character-state (async background job)
+// Applies a text edit to an existing character across all stored directions.
+// Returns { characterId, backgroundJobId } for the new state character.
+async function createCharacterState(
+  config,
+  {
+    character_id,
+    edit_description,
+    no_background = true,
+    use_color_palette_from_reference = true,
+    seed,
+  },
+) {
+  const url = `${config.baseUrl}/v2/create-character-state`;
+  const body = {
+    character_id,
+    edit_description,
+    no_background,
+    use_color_palette_from_reference,
+  };
+  if (seed != null) body.seed = Number(seed);
+
+  const response = await requestJson({
+    method: "POST",
+    url,
+    apiKey: config.apiKey,
+    body,
+  });
+  return {
+    characterId: response.character_id,
+    backgroundJobId: response.background_job_id,
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -204,19 +299,117 @@ async function getBalance(config) {
   };
 }
 
+// POST /v2/animate-with-text-v3 (async background job)
+// Animates a single reference image from a text action (4-16 even frames).
+async function animateWithTextV3(
+  config,
+  {
+    first_frame,
+    last_frame,
+    action,
+    frame_count = 8,
+    no_background = true,
+    enhance_prompt = false,
+    seed,
+  },
+) {
+  const url = `${config.baseUrl}/v2/animate-with-text-v3`;
+  const body = {
+    first_frame,
+    action,
+    frame_count: Number(frame_count),
+    no_background,
+    enhance_prompt,
+  };
+  if (last_frame) body.last_frame = last_frame;
+  if (seed != null) body.seed = Number(seed);
+
+  const response = await requestJson({
+    method: "POST",
+    url,
+    apiKey: config.apiKey,
+    body,
+  });
+
+  return {
+    backgroundJobId: response.background_job_id,
+    enhancedPrompt: response.enhanced_prompt || null,
+  };
+}
+
+function readPngAsBase64Image(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  return {
+    type: "base64",
+    base64: buffer.toString("base64"),
+    format: "png",
+  };
+}
+
+// POST /v2/create-image-pixflux
+// Generates a single pixel art image (sync or async depending on API response).
+async function createImagePixflux(
+  config,
+  {
+    description,
+    image_size,
+    no_background = true,
+    negative_description,
+    view = "low top-down",
+    outline = "single color black outline",
+    shading = "basic shading",
+    detail = "medium detail",
+    seed,
+  },
+) {
+  const url = `${config.baseUrl}/v2/create-image-pixflux`;
+  const body = {
+    description,
+    image_size,
+    no_background,
+    view,
+    outline,
+    shading,
+    detail,
+  };
+  if (negative_description) body.negative_description = negative_description;
+  if (seed != null) body.seed = Number(seed);
+
+  const response = await requestJson({
+    method: "POST",
+    url,
+    apiKey: config.apiKey,
+    body,
+  });
+
+  if (response.background_job_id) {
+    return {
+      backgroundJobId: response.background_job_id,
+      async: true,
+    };
+  }
+
+  return {
+    async: false,
+    response,
+  };
+}
+
 // ─────────────────────────────────────────────
 // FILE HELPERS
 // ─────────────────────────────────────────────
 
 // Download a public CDN URL to a local file
 async function downloadToFile(url, targetPath) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download ${url}: HTTP ${response.status}`);
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  fs.writeFileSync(targetPath, buffer);
+  await withRequestRetries(`download ${url}`, async () => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to download ${url}: HTTP ${response.status}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.writeFileSync(targetPath, buffer);
+  });
 }
 
 // Save base64 data URI to file (for backwards compat with any v1 uses)
@@ -261,6 +454,10 @@ module.exports = {
   ensureApiKey,
   waitForJob,
   createCharacter,
+  createCharacterState,
+  createImagePixflux,
+  animateWithTextV3,
+  readPngAsBase64Image,
   getCharacter,
   animateCharacter,
   getBalance,

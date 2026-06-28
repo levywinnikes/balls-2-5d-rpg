@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "id": "oak_tree",
+  "name": "Oak Tree",
+  "category": "prop",
+  "canvas": {
+    "width": 64,
+    "height": 96
+  },
+  "output": {
+    "dir": "public/assets/sprites/generated/oak_tree"
+  },
+  "production_prompts": {
+    "base_description": "cartoon oak tree prop, thick brown trunk, round leafy green canopy, low top-down pixel art RPG decoration, clean dark outline, transparent background, 64x96, single south-facing view",
+    "negative_prompt": "character, humanoid, animal, house, building, blurry, realistic photo, text, watermark, solid background"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux + animate-with-text-v3",
+    "no_background": true,
+    "direction": "south"
+  },
+  "animations": [
+    {
+      "name": "sway_gentle",
+      "frame_count": 4,
+      "frame_rate": 6,
+      "action": "gentle cartoon wind sway, leaves and branches move slightly, trunk stays rooted, seamless looping animation"
+    },
+    {
+      "name": "sway_strong",
+      "frame_count": 4,
+      "frame_rate": 8,
+      "action": "strong cartoon wind gust, canopy bends more, leaves flutter harder, trunk stays rooted, seamless looping animation"
+    }
+  ]
+}

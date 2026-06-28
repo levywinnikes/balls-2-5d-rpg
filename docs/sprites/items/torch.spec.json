@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "torch",
+  "registry_id": "torch",
+  "name": "Torch",
+  "category": "item_icon",
+  "item_type": "club",
+  "links": {
+    "weapon_registry_id": "torch"
+  },
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "path": "public/assets/items/torch.png",
+    "public_url": "assets/items/torch.png"
+  },
+  "production_prompts": {
+    "description": "pixel art wooden torch item icon, brown stick with orange yellow flame on top, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character full body, scene background"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux",
+    "no_background": true
+  }
+}

@@ -58,6 +58,8 @@ For all gameplay actors and enemies:
 
 1. Direction policy:
    - idle/walk/attack: 4 (down, left, right, up)
+   - BMS folder names: `south`, `west`, `east`, `north` (see **`docs/sprites/DIRECTION_CONVENTION.md`**)
+   - **Validation:** every new entity's `character_rotations/` must match `hero_base` orientation before runtime integration
    - death: 1 shared direction for 2D monsters
    - death default direction: south
    - per-creature death direction override is allowed only with documented readability justification in the sprite spec
@@ -116,6 +118,27 @@ World integration baseline:
 1. Enemy/player identity colors must match between 2D sprites and 3D billboard materials.
 2. If a sprite is changed in 2D, update corresponding 3D visual profile/material mapping in the same task.
 3. Do not introduce 3D-only enemy identity colors that diverge from 2D gameplay recognition.
+
+### 9.1 Hero modular (3D primary)
+
+1. Player avatar in the 3D slice uses `hero_base` generated frames + optional hair overlay (`PlayerState.equippedHairId`).
+2. Hair layers are static 4-direction PNGs derived via pixel diff from `hero_base`; runtime applies per-frame head-anchor offset (see `docs/sprites/MODULAR_SPRITE_AND_NPC_GENERATION_GUIDE.md` §4.2).
+3. Billboard feet grounding must use measured PNG feet row (`HERO_FEET_Y = 77` on 92×92 canvas), not ad-hoc Y offsets.
+4. Walk footstep audio in 3D must sync to walk animation frames (not raw movement input); see `TwoDParitySpriteFactory._consumeFootstepTick`.
+
+### 9.2 Hero body equipment (3D target)
+
+1. Canonical design for helmet, armor, legs, boots, shield, one-hand/two-hand weapons, and bow on the 3D billboard: `docs/three-d/HERO_BODY_EQUIPMENT.md`.
+2. Equipment specs live under `docs/sprites/hero/equipment/` using `equipment-layer.spec.template.json`.
+3. Held items (shield, 1H, 2H, bow) use socket tables on the 92×92 composite canvas; body layers use animated diffs aligned to `hero_base` frames.
+4. Gameplay slot mapping must follow `EquipmentSlot` in `src/config/ItemConstants.ts`; visual layer order and conflict rules (2H/bow vs shield, helmet vs hair) are defined in the equipment doc.
+
+### 9.3 Item icons (inventory, ground, containers)
+
+1. Every equippable item with authored art must have a **Phase A** icon spec under `docs/sprites/items/` and output at `public/assets/items/{registry_id}.png`.
+2. Canonical workflow: `docs/sprites/items/ITEM_VISUAL_PIPELINE.md` — icon first, then body layer; `registry_id` must match existing `WeaponRegistry` entry.
+3. UI loads icons via `assets/items/{itemId}.png`; 3D ground drops must reuse the same asset when present.
+4. Generate with `npm run generate:item-icon -- --spec docs/sprites/items/{name}.spec.json`.
 
 ## 10. Tree and Prop Policy
 

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "sprint": 17,
+  "phase": "P0",
+  "updatedAt": "2026-05-16T22:52:00Z",
+  "decision": "GO_CONDITIONAL",
+  "authority": "Map Generation Gatekeeper",
+  "inputs": {
+    "approvalsFile": "docs/MAP_MUNDI_3D_P0_APPROVALS.json",
+    "backlogFile": "docs/MAP_MUNDI_3D_P0_BACKLOG.json",
+    "kpiFile": "docs/MAP_MUNDI_3D_P0_KPI.json",
+    "validationFile": "docs/MAP_MUNDI_3D_P0_VALIDATION.json"
+  },
+  "criticalBlockers": [],
+  "warnings": [
+    "Transicao alta em mud-snd: 164 > 80"
+  ],
+  "unblockActions": [],
+  "monitoringConditions": [
+    "Manter alerta mud-snd e bloquear promocao se aumentar ou persistir acima do limiar por iteracoes consecutivas",
+    "Falhar gate se p95 de frame exceder budget em 2+ macrozonas",
+    "Falhar gate se heap exceder limite em 2 amostras consecutivas",
+    "Qualquer erro nos validadores ecologico/anti-repeticao retorna No-Go imediato"
+  ],
+  "nextSubmissionCondition": "Liberado para iniciar P1 com monitoramento continuo"
+}

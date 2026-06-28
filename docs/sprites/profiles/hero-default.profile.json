@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "id": "hero_default",
+  "name": "Hero Default (alpha)",
+  "status": "active",
+  "body_entity": "hero_base",
+  "hair_overlay_entity": "hair_classic",
+  "generation": {
+    "method": "create-character-with-4-directions + animate-character templates",
+    "reference_spec": "docs/sprites/hero/hero-base.spec.json",
+    "hair_spec": "docs/sprites/hero/hair-classic.spec.json"
+  },
+  "equipment_visual_policy": {
+    "body_shows_armor": false,
+    "body_shows_helmet": false,
+    "body_shows_weapons": false,
+    "icons_show_all_equipment": true
+  },
+  "future_profiles": [
+    {
+      "id": "hero_one_hand",
+      "trigger": "MAIN_HAND melee weapon, no shield",
+      "body_entity": "hero_one_hand",
+      "notes": "Optional weapon socket on top; or baked weapon in pose"
+    },
+    {
+      "id": "hero_one_hand_shield",
+      "trigger": "MAIN_HAND + OFF_HAND shield",
+      "body_entity": "hero_one_hand_shield"
+    },
+    {
+      "id": "hero_two_hand",
+      "trigger": "twoHanded weapon",
+      "body_entity": "hero_two_hand"
+    },
+    {
+      "id": "hero_bow",
+      "trigger": "ItemType.DISTANCE",
+      "body_entity": "hero_bow"
+    }
+  ]
+}

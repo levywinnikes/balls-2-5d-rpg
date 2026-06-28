@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "sprint": 17,
+  "phase": "P0",
+  "updatedAt": "2026-05-16T22:45:00Z",
+  "approvals": [
+    {
+      "agent": "Global Map Design Lead",
+      "status": "approved-with-ressalvas",
+      "criticalBlockers": [],
+      "notes": [
+        "Aprova escala faseada 512x512 -> 512 enriquecido -> 1024 candidato.",
+        "Exige coerencia macro climatica e de rotas antes da execucao P1."
+      ]
+    },
+    {
+      "agent": "World Design Lead",
+      "status": "approved-with-ressalvas",
+      "criticalBlockers": [],
+      "notes": [
+        "Aprova estrategia de biomas e cavernas naturais.",
+        "Exige validador de transicoes ecologicas e anti-repeticao ativo."
+      ]
+    },
+    {
+      "agent": "City Design Lead",
+      "status": "approved-with-ressalvas",
+      "criticalBlockers": [],
+      "notes": [
+        "Aprova malha policentrica e hierarquia viaria por distrito.",
+        "Exige controle de repeticao de quarteirao e tipologias."
+      ]
+    },
+    {
+      "agent": "House Tech Lead",
+      "status": "approved-with-ressalvas",
+      "criticalBlockers": [],
+      "notes": [
+        "Aprova tipologias por bioma/distrito com cobertura por composicao de levels.",
+        "Exige matriz de tipologias e validacao de drenagem/silhueta."
+      ]
+    },
+    {
+      "agent": "Dungeon Design Lead",
+      "status": "approved-with-ressalvas",
+      "criticalBlockers": [],
+      "notes": [
+        "Aprova blueprint de dungeons nao repetitivas com segredos/lore.",
+        "Exige backlog tecnico para traps/secret graph/encounter director."
+      ]
+    }
+  ],
+  "summary": {
+    "totalRequired": 5,
+    "approved": 0,
+    "approvedWithRessalvas": 5,
+    "blocked": 0,
+    "criticalBlockersOpen": 0,
+    "readyForGatekeeper": true
+  }
+}

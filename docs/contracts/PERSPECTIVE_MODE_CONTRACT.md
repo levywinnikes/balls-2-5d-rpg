@@ -59,12 +59,25 @@ Related analysis:
 - Scene synchronizes player and related entities into level containers to keep projection coherent.
 - Volumetric polygon updates are movement-driven (and transition-driven) to reduce wall drift while keeping frame cost controlled.
 
+### 2.5 3D Babylon Runtime (`createDebugSliceScene.ts`)
+
+Product-facing 3D slice rules (top-down is canonical):
+
+1. **Camera follow:** In top-down mode, `ArcRotateCamera.setTarget` must track the player position **every frame without lazy lerp**. The hero stays screen-centered; the world scrolls (ARPG baseline: Diablo / Path of Exile style).
+2. **Camera presets:** `safe` and `cinematic` presets tune beta/radius/FOV only; they must not reintroduce follow lag or player off-center drift at movement speed ~4.5 u/s.
+3. **Alternate view:** First-person camera is debug-only (`V` toggle). It must not drive map authoring, UI axis conventions, or minimap semantics.
+4. **Axis / minimap parity:** World position published to `PlayerState` uses `(player.x * 32, player.z * 32)` with `+X = east`, `+Y = south`; see `docs/MAP_UI_MECHANICS.md`. Do not mirror axes in UI to compensate for camera bugs.
+5. **Hero presentation:** Modular billboard (`hero_base` + `equippedHairId` hair layer) is the player-facing avatar in top-down; grounding uses `HERO_BILLBOARD_LAYOUT.anchorY` from measured feet row in generated PNGs.
+
+Implementation reference: `src/three-d/runtime/createDebugSliceScene.ts`, `src/three-d/runtime/TwoDParitySpriteFactory.ts`, `docs/sprites/MODULAR_SPRITE_AND_NPC_GENERATION_GUIDE.md` §4.2.
+
 ## 3. Level System Coupling
 
 ### 3.1 Multi-Level Visibility
 
 - Renderer keeps current level as main context and can render lower and upper levels within culling boundaries.
 - Transparency and under-tile logic (`under: "..."`) are part of vertical readability.
+- **3D slice (canonical):** when the hero stands under upper-level geometry, those levels **must hide** so the hero stays visible. Implementation and anti-regression rules: **`docs/three-d/DESIGN_RULES_3D.md`** § R1–R2 (`syncVerticalLevelVisibility`, `findUpperOcclusionLevel`). Do not add parallel mesh-visibility passes.
 
 ### 3.2 Transition System
 

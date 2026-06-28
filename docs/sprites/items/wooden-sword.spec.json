@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "wooden_sword",
+  "registry_id": "wooden_sword",
+  "name": "Wooden Sword",
+  "category": "item_icon",
+  "item_type": "sword",
+  "links": {
+    "weapon_registry_id": "wooden_sword"
+  },
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "path": "public/assets/items/wooden_sword.png",
+    "public_url": "assets/items/wooden_sword.png"
+  },
+  "production_prompts": {
+    "description": "pixel art wooden training sword item icon, simple brown wood blade and guard, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat brown and tan colors, centered, readable silhouette, transparent background, 32x32",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character full body, scene background"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux",
+    "no_background": true
+  }
+}

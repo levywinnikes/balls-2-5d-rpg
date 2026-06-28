@@ -551,11 +551,11 @@ export class AudioManager {
   private lastStepTime: number = 0;
   private stepDuration: number = 380; // ms (adjust for pace)
 
-  public playFootstep(terrain: string = "floor") {
+  public playFootstep(terrain: string = "floor", force = false) {
     if (!this.sfxEnabled) return;
 
     const now = Date.now();
-    if (now - this.lastStepTime < this.stepDuration) return;
+    if (!force && now - this.lastStepTime < this.stepDuration) return;
 
     this.lastStepTime = now;
 

@@ -1,0 +1,10 @@
+{
+  "animation": "death",
+  "direction": "south",
+  "mode": "v3",
+  "templateId": null,
+  "actionDescription": "dying, collapsing to the ground, death fall",
+  "frameCount": 9,
+  "generatedAt": "2026-06-27T18:04:52.085Z",
+  "characterId": "08eeac51-25a0-4281-8c30-4c9aa9f736f5"
+}

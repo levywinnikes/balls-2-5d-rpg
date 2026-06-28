@@ -63,11 +63,11 @@ const TILE_DEFS = {
   },
   flr: { id: "wood-floor", color: "#92400e", height: 0.08, renderAs: "floor" },
   rof: { id: "roof-tile", color: "#b91c1c", height: 0.12, renderAs: "floor" },
-    rsn: { id: "roof-slope-n", color: "#c1440e", height: 0.8, block: false },
-    rss: { id: "roof-slope-s", color: "#c1440e", height: 0.8, block: false },
-    rse: { id: "roof-slope-e", color: "#c1440e", height: 0.8, block: false },
-    rsw: { id: "roof-slope-w", color: "#c1440e", height: 0.8, block: false },
-    rrd: { id: "roof-ridge",   color: "#8c3008", height: 0.8, block: false },
+  rsn: { id: "roof-slope-n", color: "#c1440e", height: 0.8, block: false },
+  rss: { id: "roof-slope-s", color: "#c1440e", height: 0.8, block: false },
+  rse: { id: "roof-slope-e", color: "#c1440e", height: 0.8, block: false },
+  rsw: { id: "roof-slope-w", color: "#c1440e", height: 0.8, block: false },
+  rrd: { id: "roof-ridge", color: "#8c3008", height: 0.8, block: false },
   grs: { id: "grass", color: "#4ade80", height: 0.05, renderAs: "floor" },
   stn: { id: "stone-plaza", color: "#9ca3af", height: 0.07, renderAs: "floor" },
   mkt: {
@@ -143,8 +143,7 @@ function fillGableRoof(grid, x0, y0, x1, y1) {
     // E-W ridge: north half = rsn, south half = rss, centre (odd d) = rrd
     const halfD = Math.floor(d / 2);
     for (let dy = 0; dy < d; dy++) {
-      const sym =
-        dy < halfD ? "rsn" : dy > d - 1 - halfD ? "rss" : "rrd";
+      const sym = dy < halfD ? "rsn" : dy > d - 1 - halfD ? "rss" : "rrd";
       for (let dx = 0; dx < w; dx++) {
         set(grid, x0 + dx, y0 + dy, sym);
       }
@@ -153,8 +152,7 @@ function fillGableRoof(grid, x0, y0, x1, y1) {
     // N-S ridge: west half = rsw, east half = rse, centre (odd w) = rrd
     const halfW = Math.floor(w / 2);
     for (let dx = 0; dx < w; dx++) {
-      const sym =
-        dx < halfW ? "rsw" : dx > w - 1 - halfW ? "rse" : "rrd";
+      const sym = dx < halfW ? "rsw" : dx > w - 1 - halfW ? "rse" : "rrd";
       for (let dy = 0; dy < d; dy++) {
         set(grid, x0 + dx, y0 + dy, sym);
       }
@@ -309,8 +307,13 @@ function generate() {
       const roofStyle = rng() < 0.4 ? "rof" : "flr";
       rect(grid, hx, hy, hx + hw - 1, hy + hh - 1, wallStyle, roofStyle);
 
-  // Record footprint for level-1 roof generation
-  allBuildingRects.push({ x0: hx, y0: hy, x1: hx + hw - 1, y1: hy + hh - 1 });
+      // Record footprint for level-1 roof generation
+      allBuildingRects.push({
+        x0: hx,
+        y0: hy,
+        x1: hx + hw - 1,
+        y1: hy + hh - 1,
+      });
 
       // Door (1 tile opening in wall)
       const doorSide = Math.floor(rng() * 4);
@@ -426,10 +429,17 @@ function buildOutput() {
   const binFile1 = MAP_NAME + "_1.bin";
   fs.writeFileSync(path.join(OUTPUT_DIR, binFile1), binData1);
   const roofCount = allBuildingRects.length;
-  console.log("[generate-giant-3d-map] Written " + binFile1 + " (" + roofCount + " gable rooftops)");
+  console.log(
+    "[generate-giant-3d-map] Written " +
+      binFile1 +
+      " (" +
+      roofCount +
+      " gable rooftops)",
+  );
 
   // Player spawn — first cobblestone tile found
-  let playerX = 100 * 32, playerY = 100 * 32;
+  let playerX = 100 * 32,
+    playerY = 100 * 32;
   outer: for (let y = 10; y < H - 10; y++) {
     for (let x = 10; x < W - 10; x++) {
       if (grid[y][x] === IDX["cob"]) {
@@ -468,10 +478,19 @@ function buildOutput() {
   };
 
   const jsonFile = MAP_NAME + ".json";
-  fs.writeFileSync(path.join(OUTPUT_DIR, jsonFile), JSON.stringify(meta, null, 2));
+  fs.writeFileSync(
+    path.join(OUTPUT_DIR, jsonFile),
+    JSON.stringify(meta, null, 2),
+  );
   console.log("[generate-giant-3d-map] Written " + jsonFile);
-  console.log("[generate-giant-3d-map] Player spawn: x=" + playerX + " y=" + playerY);
-  console.log("[generate-giant-3d-map] Done. Open with ?slice3d=1&map=" + MAP_NAME + "&fp=1");
+  console.log(
+    "[generate-giant-3d-map] Player spawn: x=" + playerX + " y=" + playerY,
+  );
+  console.log(
+    "[generate-giant-3d-map] Done. Open with ?slice3d=1&map=" +
+      MAP_NAME +
+      "&fp=1",
+  );
 }
 
 buildOutput();

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "rat_meat",
+  "registry_id": "rat_meat",
+  "name": "Rat Meat",
+  "category": "item_icon",
+  "item_type": "food",
+  "links": {
+    "weapon_registry_id": "rat_meat"
+  },
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "path": "public/assets/items/rat_meat.png",
+    "public_url": "assets/items/rat_meat.png"
+  },
+  "production_prompts": {
+    "description": "pixel art raw rat meat item icon, small pink meat chunk, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character full body, scene background"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux",
+    "no_background": true
+  }
+}

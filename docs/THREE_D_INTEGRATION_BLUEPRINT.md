@@ -1,336 +1,124 @@
-# THREE_D_INTEGRATION_BLUEPRINT (Cláusula Pétrea)
+# 3D Integration Blueprint
 
-**Última atualização:** 2026-04-18
+**Last updated:** 2026-06-17  
+**Status:** 3D top-down slice is the **product runtime**; 2D Phaser is legacy.
 
-## 1. Recursos 2D Reutilizáveis (100% Compartilhados)
-
-### 1.1 Componentes React Prontos
-
-| Componente            | Arquivo                                     | Status                     | Uso 3D                                    |
-| --------------------- | ------------------------------------------- | -------------------------- | ----------------------------------------- |
-| `HUD`                 | `src/ui/HUD.tsx`                            | ✅ Canônico (runtime 2D)   | Reutilizar diretamente em ThreeDSliceView |
-| `StatusWidget`        | `src/ui/components/StatusWidget.tsx`        | ✅ Canônico (parte do HUD) | Vem via `HUD`                             |
-| `SkillProgressHUD`    | `src/ui/components/SkillProgressHUD.tsx`    | ✅ Completo                | Renderizar em ThreeDSliceView             |
-| `LevelUpNotification` | `src/ui/components/LevelUpNotification.tsx` | ✅ Completo                | Renderizar em ThreeDSliceView             |
-| `NotificationSystem`  | `src/ui/components/NotificationSystem.tsx`  | ✅ Completo                | Já integrado                              |
-
-Nota: `src/ui/windows/StatusHUD.tsx` e uma janela legada e nao deve ser usada como HUD principal no slice 3D.
-
-**Hook padrão de listener:**
-
-```typescript
-usePlayerState("eventName", getterFunction, defaultValue);
-```
-
-### 1.2 Efeitos Visuais (FloatingText)
-
-| Classe         | Arquivo                            | Tipos Suportados             |
-| -------------- | ---------------------------------- | ---------------------------- |
-| `FloatingText` | `src/game/effects/FloatingText.ts` | Dano, Cura, Crítico, Ambient |
-| `XPText`       | `src/game/effects/XPText.ts`       | XP (★ {xp} XP)               |
-
-**Método de criação:**
-
-```typescript
-FloatingText.createDamageText(scene, x, y, damage, isCritical);
-FloatingText.createText(scene, x, y, message, color, isCritical);
-FloatingText.createAmbientText(scene, x, y, message);
-new XPText(scene, x, y, xpAmount);
-```
-
-### 1.3 Sistema de Audio
-
-| Método                  | Arquivo                            | Tipos Suportados          | Exato/Nova           |
-| ----------------------- | ---------------------------------- | ------------------------- | -------------------- |
-| `playFootstep(terrain)` | `src/game/systems/AudioManager.ts` | "floor", "grass", "stone" | Exato                |
-| `playJump()`            | `src/game/systems/AudioManager.ts` | N/A                       | **NOVA** (adicionar) |
-| `playAttack()`          | `src/game/systems/AudioManager.ts` | N/A                       | Exato                |
-| `playCritical()`        | `src/game/systems/AudioManager.ts` | N/A                       | Exato                |
-| `playPickup()`          | `src/game/systems/AudioManager.ts` | N/A                       | Exato                |
-| `playLevelUp()`         | `src/game/systems/AudioManager.ts` | N/A                       | Exato                |
-| `playEnemyDeath(type)`  | `src/game/systems/AudioManager.ts` | enemyType                 | Exato                |
-
-### 1.4 Sistemas de Dano/Fórmulas
-
-**Arquivo:** `src/game/systems/BattleSystem.ts`
-
-**Pode ser importado diretamente:**
-
-```typescript
-import { BattleSystem } from "../../game/systems/BattleSystem";
-```
-
-**Fórmula exata (usada no 3D):**
-
-```typescript
-// Dano base
-let damage = Math.max(1, attackRoll - Math.floor(defenseRoll / 2));
-
-// Redução de armor (RANDOMIZADO)
-const armor = player.getTotalArmor();
-if (armor > 0) {
-  const minReduction = Math.ceil(armor * 0.1);
-  const armorReduction = Phaser.Math.Between(minReduction, armor);
-  damage = Math.max(0, damage - armorReduction);
-}
-
-// Crítico
-const isCritical = Random() * 100 <= player.getCriticalChance();
-if (isCritical) {
-  const critMultiplier = 1 + player.getCriticalDamageMultiplier();
-  damage = Math.max(1, Math.round(damage * critMultiplier));
-}
-```
+Canonical deep-dives live under **`docs/three-d/`** — this file is the **integration map** (React ↔ Babylon ↔ shared game systems).
 
 ---
 
-## 2. Runtime 3D Arquitetura
+## 1. Architecture
 
-### 2.1 createDebugSliceScene.ts ("GameScene do 3D")
-
-**Arquivo:** `src/three-d/runtime/createDebugSliceScene.ts`
-
-**Responsabilidades:**
-
-- ✅ Babylon.js scene setup (camera, lights, meshes)
-- ✅ Player movimento + gravidade + jump
-- ✅ Enemy spawning + AI + pathfinding
-- ✅ Combat logic (applyPlayerAttackToEnemy, applyEnemyAttackToPlayer)
-- ✅ Item pickup + persistence
-- ✅ Audio calls (playFootstep, playAttack, playCritical)
-- ⏭️ FloatingText event emission (novo)
-- ⏭️ Jump audio differentiation (novo)
-
-**Call sites críticos para integração:**
-
-```typescript
-// 1. Aplicar dano ao inimigo (L~540)
-applyPlayerAttackToEnemy(enemy) {
-  // ... calcula damage ...
-  // EMITIR: PlayerState.emit("floatingText", {x, y, z, damage, isCritical})
-}
-
-// 2. Aplicar dano ao player (L~590)
-applyEnemyAttackToPlayer(enemy, now) {
-  // ... calcula damage ...
-  // EMITIR: PlayerState.emit("floatingText", {x, y, z, damage, isCritical})
-}
-
-// 3. Jump audio (L~1000)
-if (isGrounded) {
-  verticalVelocity = jumpImpulse;
-  isGrounded = false;
-  // CHAMAR: audioManager.playJump() [em vez de playFootstep]
-}
+```text
+App.tsx
+  └── ThreeDSliceView.tsx          React shell: menu, HUD, windows, canvas lifecycle
+        └── createDebugSliceScene    Babylon loop: map, combat, AI, save
+              ├── geometry.worker    Chunk mesh buffers
+              ├── TwoDParitySpriteFactory / ThreeDEnemyVisualRegistry
+              └── PlayerState (singleton) + SaveSystem.saveGameDirect
 ```
 
-### 2.2 ThreeDSliceView.tsx (React Root)
-
-**Arquivo:** `src/three-d/bootstrap/ThreeDSliceView.tsx`
-
-**Responsabilidades atuais:**
-
-- ✅ Renderiza canvas Babylon.js
-- ✅ Renderiza HeroDashboard
-- ✅ Renderiza NotificationSystem
-- ✅ Renderiza WindowLayer
-
-**Responsabilidades novas:**
-
-- ⏭️ Renderizar StatusHUD (sempre visível)
-- ⏭️ Renderizar SkillProgressHUD (sempre visível)
-- ⏭️ Renderizar LevelUpNotification (sempre visível)
-- ⏭️ Renderizar ThreeDFloatingText container (sempre visível)
+| Layer | Doc |
+| :--- | :--- |
+| Runtime loop | [three-d/SLICE_RUNTIME.md](./three-d/SLICE_RUNTIME.md) |
+| Combat | [three-d/COMBAT_3D_PARITY.md](./three-d/COMBAT_3D_PARITY.md) |
+| Save/load | [three-d/SAVE_LOAD_3D.md](./three-d/SAVE_LOAD_3D.md) |
+| Events | [three-d/PLAYER_STATE_EVENTS_3D.md](./three-d/PLAYER_STATE_EVENTS_3D.md) |
+| Inventory / audit | [three-d/SYSTEMS_INVENTORY.md](./three-d/SYSTEMS_INVENTORY.md), [three-d/COMPATIBILITY_AUDIT.md](./three-d/COMPATIBILITY_AUDIT.md) |
 
 ---
 
-## 3. Implementação de FloatingText 3D
+## 2. ThreeDSliceView.tsx (React shell)
 
-### 3.1 Novo Componente: ThreeDFloatingText.tsx
+**File:** `src/three-d/bootstrap/ThreeDSliceView.tsx`
 
-**Caminho:** `src/three-d/runtime/ThreeDFloatingText.tsx`
+### Responsibilities (delivered)
 
-**Responsabilidade:**
+| Area | Implementation |
+| :--- | :--- |
+| Menu gating | `MainMenuUI` until `isInGame`; `handleThreeDStart` / `handleReturnToMenu` |
+| Canvas lifecycle | Mount canvas only in-game; `createDebugSliceScene` + `dispose` on exit |
+| Default map | `DEFAULT_3D_MAP = "city_3d_mundi_p1"` |
+| HUD | `HUD`, rune hotbar (S8), damage vignette (S9), FP crosshair (S7 debug) |
+| Windows | `WindowLayer`, `SystemMenuUI`, `HeroDashboard`, grimório/container via `WindowSystem` |
+| Floating combat text | `ThreeDFloatingText` ← `PlayerState` `floatingText` events |
+| Notifications | `NotificationSystem`, `LevelUpNotification` |
+| Save UI | F5 + system menu → `runtime.save()` |
+| DOM bridges | `slice3d:*`, `ui:windowToggled`, `returnToTitle` — see [PLAYER_STATE_EVENTS_3D.md](./three-d/PLAYER_STATE_EVENTS_3D.md) |
 
-- Recebe evento `floatingText` de PlayerState
-- Converte posição 3D world → tela 2D usando câmera Babylon
-- Renderiza overlay React com estilos de FloatingText.ts
-- Anima + auto-destroi após 1.2s
+### Load game
 
-**Interface:**
-
-```typescript
-interface FloatingTextData {
-  x: number; // World position
-  y: number;
-  z: number;
-  damage?: number;
-  message?: string;
-  isCritical?: boolean;
-  icon?: string;
-  customColor?: string;
-  isAmbient?: boolean;
-}
-```
-
-**Fluxo:**
-
-```
-createDebugSliceScene.ts emite:
-  PlayerState.emit("floatingText", {...})
-    ↓
-ThreeDSliceView.tsx listener:
-  playerState.on("floatingText", handleFloatingText)
-    ↓
-ThreeDFloatingText.tsx renderiza:
-  Overlay div com CSS animation
-    ↓
-Auto-destroi após 1.2s
-```
+Restores `playerState.loadState(save.playerState)`, sets URL `?map=` / `?level=`, then starts slice. See [SAVE_LOAD_3D.md §4](./three-d/SAVE_LOAD_3D.md#4-load-flow-menu--slice).
 
 ---
 
-## 4. Checklist de Integração (Ordem Exata)
+## 3. createDebugSliceScene.ts (game loop)
 
-### Fase 1: HUD Rendering
+**File:** `src/three-d/runtime/createDebugSliceScene.ts` (~5200 lines)
 
-- [ ] Importar StatusHUD, SkillProgressHUD, LevelUpNotification em ThreeDSliceView.tsx
-- [ ] Renderizá-los na JSX (fora da canvas)
-- [ ] Validar que atualizam conforme PlayerState muda
+Do **not** duplicate behavior here — use [SLICE_RUNTIME.md](./three-d/SLICE_RUNTIME.md).
 
-### Fase 2: Audio Differentiation
+Summary:
 
-- [ ] Adicionar `playJump()` método em AudioManager.ts
-- [ ] Chamar `audioManager.playJump()` em createDebugSliceScene.ts (L~1000)
-- [ ] Remover chamada `playFootstep()` para jump
+- BMS map load + chunk streaming ([CHUNK_STREAMING_3D.md](./three-d/CHUNK_STREAMING_3D.md))
+- Top-down camera (product) + FP debug (`V`)
+- Combat, enemies, loot, stairs, void fall
+- `playerState.update` every frame (hunger/regen)
+- Auto-save 60 s + `save()` export on `SliceRuntime`
 
-### Fase 3: FloatingText 3D
-
-- [ ] Criar `ThreeDFloatingText.tsx`
-- [ ] Criar container listener em ThreeDSliceView.tsx
-- [ ] Emitir eventos em createDebugSliceScene.ts:
-  - L~540: applyPlayerAttackToEnemy → emit dano
-  - L~590: applyEnemyAttackToPlayer → emit dano
-  - L~720: destroyEnemy → emit XP
-  - (Healing se aplicável)
-
-### Fase 4: BattleSystem Import (Opcional)
-
-- [ ] Importar BattleSystem.ts se lógica de dano divergir
-- [ ] Usar BattleSystem.getDamage() em vez de reimplementar
-
-### Fase 5: Validação
-
-- [ ] `npx tsc --noEmit --skipLibCheck` → 0 errors
-- [ ] `npm run benchmark:e2e` → 14/14 pass
-- [ ] Testar 3D slice:
-  - StatusHUD visível e atualiza
-  - SkillProgressHUD atualiza com combate
-  - LevelUpNotification dispara ao subir
-  - Damage popups aparecem (dano/cura/crítico/xp)
-  - Audio: footstep ≠ jump ≠ attack ≠ critical
+**Do not** import `BattleSystem` for 3D combat — formulas are inlined with S10 parity ([COMBAT_3D_PARITY.md](./three-d/COMBAT_3D_PARITY.md)).
 
 ---
 
-## 5. Formato de Dados de FloatingText
+## 4. Shared systems (reuse as-is)
 
-### 5.1 Casos de Uso Principais
-
-**Caso 1: Damage ao inimigo (Player ataca)**
-
-```typescript
-PlayerState.emit("floatingText", {
-  x: enemy.worldPos.x,
-  y: enemy.worldPos.y,
-  z: enemy.worldPos.z,
-  damage: 15,
-  isCritical: true, // Se critical
-  // Ícones automáticos:
-  // - isCritical=true → Magenta + 1.2x scale
-  // - damage > 0 → ❤ vermelho
-});
-```
-
-**Caso 2: Damage ao player (Enemy ataca)**
-
-```typescript
-PlayerState.emit("floatingText", {
-  x: player.position.x,
-  y: player.position.y,
-  z: player.position.z,
-  damage: 5,
-  isCritical: false,
-  // ❤ vermelho padrão
-});
-```
-
-**Caso 3: XP ao matar**
-
-```typescript
-PlayerState.emit("floatingText", {
-  x: enemy.worldPos.x,
-  y: enemy.worldPos.y,
-  z: enemy.worldPos.z,
-  message: `★ 50 XP`,
-  customColor: "#F6E05E", // Ouro
-  isAmbient: false, // 1.2s fade
-});
-```
-
-**Caso 4: Skill XP (Strength, Dex, etc)**
-
-```typescript
-// Já emitido automaticamente por PlayerState
-// Apenas escutar "strengthExperienceChanged", etc
-// SkillProgressHUD já trata
-```
+| System | Module | 3D usage |
+| :--- | :--- | :--- |
+| Player progression | `PlayerState` | Single singleton; emit/on bridge |
+| Persistence | `SaveSystem.saveGameDirect` | No Phaser scene required |
+| Audio | `AudioManager` | Footsteps, combat, pickup |
+| Registries | `EnemyRegistry`, `RuneRegistry`, `ItemRegistry`, … | Data-driven spawn/combat |
+| i18n | `t_game` | UI + slice messages |
+| Minimap / fog | `WorldMapService`, `exploreArea` | Pre-render on map load |
+| Maps | BMS JSON + `.bin` | `MapLoader` patterns via slice fetch |
 
 ---
 
-## 6. Referência Rápida: O Que Já Existe
+## 5. Visual parity
 
-| Feature              | Local                    | Status                 |
-| -------------------- | ------------------------ | ---------------------- |
-| HP/MP/XP bars        | StatusHUD.tsx            | ✅ Pronto              |
-| Skill XP tracking    | SkillProgressHUD.tsx     | ✅ Pronto              |
-| Level up popup       | LevelUpNotification.tsx  | ✅ Pronto              |
-| Damage popup styling | FloatingText.ts          | ✅ Pronto              |
-| XP popup styling     | XPText.ts                | ✅ Pronto              |
-| Audio effects        | AudioManager.ts          | ✅ Pronto (+ playJump) |
-| Combat formulas      | BattleSystem.ts          | ✅ Pronto              |
-| 3D runtime           | createDebugSliceScene.ts | ✅ Sólido              |
+| Topic | Doc |
+| :--- | :--- |
+| Hero billboard | [CHARACTER_VISUAL_SCOPE.md](./CHARACTER_VISUAL_SCOPE.md), [sprites/DIRECTION_CONVENTION.md](./sprites/DIRECTION_CONVENTION.md) |
+| Enemy billboards | [three-d/ENEMY_SPRITE_RUNTIME.md](./three-d/ENEMY_SPRITE_RUNTIME.md) |
+| Future body equip | [three-d/HERO_BODY_EQUIPMENT.md](./three-d/HERO_BODY_EQUIPMENT.md) |
+| Item icons in world | [sprites/items/ITEM_VISUAL_PIPELINE.md](./sprites/items/ITEM_VISUAL_PIPELINE.md) |
 
-**NÃO precisa reimplementar nada. Apenas integrar.**
+2D `FloatingText` Phaser class is **not** used in 3D — use `PlayerState.emit("floatingText", …)` + `ThreeDFloatingText`.
 
 ---
 
-## 7. Validação Pós-Implementação
+## 6. Default maps
 
-```bash
-# Typecheck
-npx tsc --noEmit --skipLibCheck
-# ✓ Should compile with 0 errors
-
-# Benchmark (CRÍTICO)
-npm run benchmark:e2e
-# ✓ Should pass 14/14 steps
-
-# Testes Manuais (3D slice)
-1. Abrir 3D slice
-2. Ver StatusHUD visível (HP/MP/XP)
-3. Atacar inimigo
-   - Damage popup aparece com ícone ❤
-   - Audio diferente (attack vs critical)
-   - SkillProgressHUD atualiza
-   - Notification "Gained XP" no canto
-4. Pular
-   - Audio diferente de footstep
-5. Subir de nível
-   - LevelUpNotification popup (Skyrim-style)
-6. Levar dano
-   - Damage popup em player
-```
+| Context | Map name |
+| :--- | :--- |
+| Menu new game | `city_3d_mundi_p1` — [world/MUNDI_P1_README.md](./world/MUNDI_P1_README.md) |
+| Slice URL fallback | `debug_sandbox` |
+| Combat regression | `debug_sandbox` — [debug/DEBUG_SANDBOX_MAP.md](./debug/DEBUG_SANDBOX_MAP.md) |
+| Benchmark menu entry | `city_3d_multi` |
 
 ---
 
-**Próximo passo:** Implementar Phase 1 (HUD Rendering) → Phase 2 (Audio) → Phase 3 (FloatingText)
+## 7. Perspective contract
+
+Top-down 3D is canonical product view. FP camera is **debug-only** (`V`).  
+See [contracts/PERSPECTIVE_MODE_CONTRACT.md](./contracts/PERSPECTIVE_MODE_CONTRACT.md).
+
+---
+
+## 8. Maintenance
+
+When changing 3D integration:
+
+1. Update the matching row in [COMPATIBILITY_AUDIT.md](./three-d/COMPATIBILITY_AUDIT.md)  
+2. Update the domain doc (SLICE, COMBAT, SAVE, …)  
+3. Append factual behavior notes to [MECHANICS_DELTAS.md](./MECHANICS_DELTAS.md) if player-visible rules change

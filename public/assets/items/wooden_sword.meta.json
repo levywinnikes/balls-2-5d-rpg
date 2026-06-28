@@ -1,0 +1,10 @@
+{
+  "registryId": "wooden_sword",
+  "spec": "docs\\sprites\\items\\wooden-sword.spec.json",
+  "generatedAt": "2026-06-20T11:53:13.756Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/wooden_sword.png"
+}

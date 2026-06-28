@@ -1,0 +1,10 @@
+{
+  "registryId": "iron_helmet",
+  "spec": "docs\\sprites\\items\\iron-helmet.spec.json",
+  "generatedAt": "2026-06-20T11:59:20.269Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/iron_helmet.png"
+}

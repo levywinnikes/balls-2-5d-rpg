@@ -5,32 +5,216 @@ import {
   Texture,
   Color3,
 } from "@babylonjs/core";
+import {
+  normalizeVisualProfile,
+  type CharacterVisualProfile,
+} from "./CharacterVisualProfile";
+import { configureBillboardSpriteMaterial } from "./BillboardDepthConfig";
 
 // Entities that have pre-generated PNG sprites under public/assets/sprites/generated/{id}/
-const GENERATED_SPRITE_ENTITIES = new Set<string>(["goblin_lanceiro"]);
+const GENERATED_SPRITE_ENTITIES = new Set<string>([
+  "goblin_lanceiro",
+  "skeleton",
+  "bear",
+  "rat",
+]);
+
+/** Until each enemy has its own folder, reuse generated assets. */
+const GENERATED_SPRITE_ALIASES: Record<string, string> = {
+  goblin: "goblin_lanceiro",
+};
+
+export type GeneratedSpriteDirection = "south" | "north" | "east" | "west";
+export type GeneratedSpriteState = "idle" | "walk" | "attack" | "death";
 
 type GeneratedAnimDef = {
-  state: "idle" | "walk" | "attack" | "death";
-  direction: "south" | "north" | "east" | "west";
+  state: GeneratedSpriteState;
+  direction: GeneratedSpriteDirection;
   frameCount: number;
 };
 
+const GENERATED_DIRECTIONS: GeneratedSpriteDirection[] = [
+  "south",
+  "north",
+  "east",
+  "west",
+];
+
+function buildDirectionalAnimDefs(
+  states: Array<{ state: GeneratedSpriteState; frameCount: number }>,
+): GeneratedAnimDef[] {
+  const defs: GeneratedAnimDef[] = [];
+  for (const direction of GENERATED_DIRECTIONS) {
+    for (const entry of states) {
+      defs.push({
+        state: entry.state,
+        direction,
+        frameCount: entry.frameCount,
+      });
+    }
+  }
+  return defs;
+}
+
 const GENERATED_ANIM_DEFS: Record<string, GeneratedAnimDef[]> = {
   goblin_lanceiro: [
-    { state: "idle", direction: "south", frameCount: 4 },
-    { state: "walk", direction: "south", frameCount: 4 },
-    { state: "attack", direction: "south", frameCount: 3 },
+    ...buildDirectionalAnimDefs([
+      { state: "idle", frameCount: 4 },
+      { state: "walk", frameCount: 4 },
+      { state: "attack", frameCount: 3 },
+    ]),
+    { state: "death", direction: "south", frameCount: 9 },
+  ],
+  skeleton: [
+    ...buildDirectionalAnimDefs([
+      { state: "idle", frameCount: 4 },
+      { state: "walk", frameCount: 4 },
+      { state: "attack", frameCount: 3 },
+    ]),
+    { state: "death", direction: "south", frameCount: 9 },
+  ],
+  bear: [
+    ...buildDirectionalAnimDefs([
+      { state: "idle", frameCount: 4 },
+      { state: "walk", frameCount: 4 },
+      { state: "attack", frameCount: 3 },
+    ]),
+    { state: "death", direction: "south", frameCount: 9 },
+  ],
+  rat: [
+    ...buildDirectionalAnimDefs([
+      { state: "idle", frameCount: 8 },
+      { state: "walk", frameCount: 4 },
+      { state: "attack", frameCount: 5 },
+    ]),
     { state: "death", direction: "south", frameCount: 9 },
   ],
 };
 
-const FPS_GENERATED = 8;
+/** Feet row in generated 64×64 enemy PNGs (audit per entity after first batch). */
+const GENERATED_ENEMY_FEET_Y: Record<string, number> = {
+  goblin_lanceiro: 58,
+  skeleton: 58,
+  bear: 56,
+  rat: 54,
+};
+const GENERATED_ENEMY_CANVAS_SIZE = 64;
+
+export function getGeneratedEnemyAnchorY(
+  entityId: string,
+  billboardHeight: number,
+): number {
+  const feetY = GENERATED_ENEMY_FEET_Y[entityId] ?? 58;
+  const feetFromBottom =
+    (GENERATED_ENEMY_CANVAS_SIZE - feetY) / GENERATED_ENEMY_CANVAS_SIZE;
+  return billboardHeight * 0.5 - feetFromBottom * billboardHeight;
+}
+
+const GENERATED_FRAME_INTERVAL_MS: Record<GeneratedSpriteState, number> = {
+  idle: 1000 / 6,
+  walk: 1000 / 10,
+  attack: 1000 / 14,
+  death: 1000 / 12,
+};
+
+/** Fallback when only character_rotations/ exist (no frame_XX folders). */
+const GENERATED_SPRITE_PROFILES: Record<
+  string,
+  { mode: "animated" | "rotations" }
+> = {};
+
+/**
+ * Some PixelLab batches swapped east/west folder labels vs hero_base.
+ * Remap runtime direction → on-disk folder. Document in spec.direction_validation.
+ * See docs/sprites/DIRECTION_CONVENTION.md §6 — prefer fixing assets over keeping this.
+ */
+const GENERATED_SWAP_EAST_WEST_ASSET_DIRS = new Set<string>([
+  "goblin_lanceiro",
+]);
+
+function resolveGeneratedAssetDirection(
+  entityId: string,
+  direction: GeneratedSpriteDirection,
+): GeneratedSpriteDirection {
+  if (!GENERATED_SWAP_EAST_WEST_ASSET_DIRS.has(entityId)) {
+    return direction;
+  }
+  if (direction === "east") {
+    return "west";
+  }
+  if (direction === "west") {
+    return "east";
+  }
+  return direction;
+}
+
+export function resolveGeneratedSpriteEntityId(
+  enemyId: string,
+): string | null {
+  if (GENERATED_SPRITE_ENTITIES.has(enemyId)) {
+    return enemyId;
+  }
+  const alias = GENERATED_SPRITE_ALIASES[enemyId];
+  if (alias && GENERATED_SPRITE_ENTITIES.has(alias)) {
+    return alias;
+  }
+  return null;
+}
+
+export function getGeneratedDeathDurationMs(entityId: string): number {
+  const resolved = resolveGeneratedSpriteEntityId(entityId) ?? entityId;
+  const defs = GENERATED_ANIM_DEFS[resolved];
+  if (!defs) {
+    return 750;
+  }
+  const deathDef = defs.find((def) => def.state === "death");
+  if (!deathDef) {
+    return 750;
+  }
+  return Math.ceil(deathDef.frameCount * GENERATED_FRAME_INTERVAL_MS.death);
+}
+
+export function getGeneratedAttackDurationMs(entityId: string): number {
+  const resolved = resolveGeneratedSpriteEntityId(entityId) ?? entityId;
+  const defs = GENERATED_ANIM_DEFS[resolved];
+  if (!defs) {
+    return 320;
+  }
+  const attackDef = defs.find((def) => def.state === "attack");
+  if (!attackDef) {
+    return 320;
+  }
+  return Math.ceil(attackDef.frameCount * GENERATED_FRAME_INTERVAL_MS.attack);
+}
+
+/**
+ * Maps world-space movement (BMS X → world X, BMS Y → world Z) to sprite direction.
+ * Must match 2D Enemy.ts: +velocity.y → down/south, −velocity.y → up/north.
+ * Full rules + validation: docs/sprites/DIRECTION_CONVENTION.md
+ */
+export function resolveWorldBmsDirection(
+  deltaX: number,
+  deltaZ: number,
+  fallback: GeneratedSpriteDirection,
+): GeneratedSpriteDirection {
+  if (Math.abs(deltaX) < 0.001 && Math.abs(deltaZ) < 0.001) {
+    return fallback;
+  }
+  if (Math.abs(deltaZ) >= Math.abs(deltaX)) {
+    return deltaZ > 0 ? "south" : "north";
+  }
+  return deltaX > 0 ? "east" : "west";
+}
 
 function buildGeneratedFrameUrls(
   entityId: string,
   anim: GeneratedAnimDef,
 ): string[] {
-  const base = `/assets/sprites/generated/${entityId}/${anim.state}_${anim.direction}`;
+  const folderDirection = resolveGeneratedAssetDirection(
+    entityId,
+    anim.direction,
+  );
+  const base = `/assets/sprites/generated/${entityId}/${anim.state}_${folderDirection}`;
   return Array.from(
     { length: anim.frameCount },
     (_, i) => `${base}/frame_${String(i).padStart(2, "0")}.png`,
@@ -48,58 +232,219 @@ export function createGeneratedSpriteAnimatedMaterial(
   keyPrefix: string,
   entityId: string,
 ): StandardMaterial {
+  const profile = GENERATED_SPRITE_PROFILES[entityId];
+  if (profile?.mode === "rotations") {
+    return createGeneratedRotationSpriteMaterial(scene, keyPrefix, entityId);
+  }
+
   const animDefs =
     GENERATED_ANIM_DEFS[entityId] ?? GENERATED_ANIM_DEFS["goblin_lanceiro"];
-  const interval = 1000 / FPS_GENERATED;
 
-  // Pre-load all textures grouped by state
   const textureMap = new Map<string, Texture[]>();
   for (const def of animDefs) {
     const urls = buildGeneratedFrameUrls(entityId, def);
     const textures = urls.map((url) => {
-      const t = new Texture(url, scene, false, true, Texture.NEAREST_NEAREST);
-      t.hasAlpha = true;
-      return t;
+      const texture = new Texture(
+        url,
+        scene,
+        false,
+        true,
+        Texture.NEAREST_NEAREST,
+      );
+      texture.hasAlpha = true;
+      return texture;
     });
-    textureMap.set(def.state, textures);
+    textureMap.set(`${def.state}:${def.direction}`, textures);
   }
 
-  const idleFrames = textureMap.get("idle") ?? textureMap.values().next().value;
+  const fallbackFrames = textureMap.values().next().value as
+    | Texture[]
+    | undefined;
+  const idleFrames =
+    textureMap.get("idle:south") ??
+    textureMap.get("idle:north") ??
+    fallbackFrames ??
+    [];
+  if (idleFrames.length === 0) {
+    throw new Error(`No animation frames loaded for ${entityId}`);
+  }
 
   const mat = new StandardMaterial(`${keyPrefix}-mat`, scene);
   mat.backFaceCulling = false;
   mat.specularColor = Color3.Black();
   mat.useAlphaFromDiffuseTexture = true;
+  mat.disableLighting = true;
+  mat.emissiveColor = Color3.White();
   mat.diffuseTexture = idleFrames[0];
   mat.opacityTexture = idleFrames[0];
+  configureBillboardSpriteMaterial(mat);
 
-  let currentState = "idle";
+  let currentState: GeneratedSpriteState = "idle";
+  let currentDirection: GeneratedSpriteDirection = "south";
   let frame = 0;
   let lastFrameAt = 0;
 
+  const applyFrame = () => {
+    const direction =
+      currentState === "death" ? "south" : currentDirection;
+    const frames =
+      textureMap.get(`${currentState}:${direction}`) ??
+      textureMap.get("idle:south");
+    if (!frames || frames.length === 0) {
+      return;
+    }
+    const index = Math.min(frame, frames.length - 1);
+    mat.diffuseTexture = frames[index];
+    mat.opacityTexture = frames[index];
+  };
+
   const obs = scene.onBeforeRenderObservable.add(() => {
     const now = Date.now();
-    if (now - lastFrameAt < interval) return;
+    const interval = GENERATED_FRAME_INTERVAL_MS[currentState];
+    if (now - lastFrameAt < interval) {
+      return;
+    }
     lastFrameAt = now;
 
-    const frames = textureMap.get(currentState) ?? idleFrames;
-    frame = (frame + 1) % frames.length;
-    mat.diffuseTexture = frames[frame];
-    mat.opacityTexture = frames[frame];
+    const direction =
+      currentState === "death" ? "south" : currentDirection;
+    const frames =
+      textureMap.get(`${currentState}:${direction}`) ??
+      textureMap.get("idle:south");
+    if (!frames || frames.length === 0) {
+      return;
+    }
+
+    if (currentState === "attack" || currentState === "death") {
+      frame = Math.min(frame + 1, frames.length - 1);
+    } else {
+      frame = (frame + 1) % frames.length;
+    }
+    applyFrame();
   });
 
-  // Expose state setter on metadata so external code can drive animation
-  (mat as any)._setAnimState = (state: string) => {
-    if (state !== currentState) {
-      currentState = state;
+  (mat as any)._setAnimState = (
+    state: GeneratedSpriteState,
+    restart = false,
+  ) => {
+    if (state === currentState && !restart) {
+      return;
+    }
+    currentState = state;
+    frame = 0;
+    lastFrameAt = 0;
+    applyFrame();
+  };
+
+  (mat as any)._setDirection = (direction: GeneratedSpriteDirection) => {
+    if (direction === currentDirection) {
+      return;
+    }
+    currentDirection = direction;
+    if (currentState !== "death") {
       frame = 0;
       lastFrameAt = 0;
+      applyFrame();
     }
   };
 
   mat.onDisposeObservable.add(() => {
     scene.onBeforeRenderObservable.remove(obs);
-    textureMap.forEach((frames) => frames.forEach((t) => t.dispose()));
+    textureMap.forEach((frames) => frames.forEach((texture) => texture.dispose()));
+  });
+
+  return mat;
+}
+
+/** Static 4-dir sprites (character_rotations/) until full animation folders exist. */
+function createGeneratedRotationSpriteMaterial(
+  scene: Scene,
+  keyPrefix: string,
+  entityId: string,
+): StandardMaterial {
+  const textureByDirection = new Map<GeneratedSpriteDirection, Texture>();
+  for (const direction of GENERATED_DIRECTIONS) {
+    const assetDirection = resolveGeneratedAssetDirection(entityId, direction);
+    const texture = new Texture(
+      `/assets/sprites/generated/${entityId}/character_rotations/${assetDirection}.png`,
+      scene,
+      false,
+      true,
+      Texture.NEAREST_NEAREST,
+    );
+    texture.hasAlpha = true;
+    textureByDirection.set(direction, texture);
+  }
+
+  const defaultTexture = textureByDirection.get("south");
+  if (!defaultTexture) {
+    throw new Error(`Missing south rotation sprite for ${entityId}`);
+  }
+
+  const mat = new StandardMaterial(`${keyPrefix}-mat`, scene);
+  mat.backFaceCulling = false;
+  mat.specularColor = Color3.Black();
+  mat.useAlphaFromDiffuseTexture = true;
+  mat.disableLighting = true;
+  mat.emissiveColor = Color3.White();
+  mat.diffuseTexture = defaultTexture;
+  mat.opacityTexture = defaultTexture;
+  configureBillboardSpriteMaterial(mat);
+
+  let currentState: GeneratedSpriteState = "idle";
+  let currentDirection: GeneratedSpriteDirection = "south";
+  let deathStartedAt = 0;
+
+  const applyDirection = () => {
+    const direction =
+      currentState === "death" ? "south" : currentDirection;
+    const texture = textureByDirection.get(direction);
+    if (!texture) {
+      return;
+    }
+    mat.diffuseTexture = texture;
+    mat.opacityTexture = texture;
+  };
+
+  const obs = scene.onBeforeRenderObservable.add(() => {
+    if (currentState !== "death" || deathStartedAt === 0) {
+      return;
+    }
+    const elapsed = Date.now() - deathStartedAt;
+    const duration = getGeneratedDeathDurationMs(entityId);
+    const t = Math.min(1, elapsed / duration);
+    mat.alpha = 1 - t * 0.85;
+    if (t >= 1) {
+      mat.alpha = 0.15;
+    }
+  });
+
+  (mat as any)._setAnimState = (state: GeneratedSpriteState) => {
+    if (state === currentState) {
+      return;
+    }
+    currentState = state;
+    if (state === "death") {
+      deathStartedAt = Date.now();
+      mat.alpha = 1;
+    } else {
+      deathStartedAt = 0;
+      mat.alpha = 1;
+    }
+    applyDirection();
+  };
+
+  (mat as any)._setDirection = (direction: GeneratedSpriteDirection) => {
+    if (direction === currentDirection || currentState === "death") {
+      return;
+    }
+    currentDirection = direction;
+    applyDirection();
+  };
+
+  mat.onDisposeObservable.add(() => {
+    scene.onBeforeRenderObservable.remove(obs);
+    textureByDirection.forEach((texture) => texture.dispose());
   });
 
   return mat;
@@ -107,6 +452,7 @@ export function createGeneratedSpriteAnimatedMaterial(
 
 type EnemySpriteId =
   | "rat"
+  | "bear"
   | "skeleton"
   | "goblin"
   | "orc"
@@ -173,6 +519,7 @@ function createSpriteMaterialFromDraw(
   material.specularColor = Color3.Black();
   material.disableLighting = true;
   material.emissiveColor = Color3.White();
+  configureBillboardSpriteMaterial(material);
   return material;
 }
 
@@ -191,6 +538,9 @@ function normalizeEnemyId(enemyId: string): EnemySpriteId {
   }
   if (enemyId.includes("rat")) {
     return "rat";
+  }
+  if (enemyId.includes("bear")) {
+    return "bear";
   }
   if (enemyId.includes("goblin")) {
     return "goblin";
@@ -246,19 +596,36 @@ function drawEnemyFrame(
   switch (enemyId) {
     case "rat": {
       ctx.fillStyle = hexToCss(0x808080);
-      drawEllipse(ctx, 16, 20, 12, 8);
+      drawEllipse(ctx, 16, 22, 14, 7);
       ctx.fillStyle = hexToCss(0xffc0cb);
-      drawCircle(ctx, 10, 12, 4);
-      drawCircle(ctx, 22, 12, 4);
+      drawCircle(ctx, 10, 14, 3);
+      drawCircle(ctx, 22, 14, 3);
+      ctx.fillStyle = hexToCss(0x666666);
+      drawEllipse(ctx, 16, 10, 5, 4);
       ctx.fillStyle = hexToCss(0x000000);
-      drawCircle(ctx, 12, 18, 2);
-      drawCircle(ctx, 20, 18, 2);
+      drawCircle(ctx, 14, 10, 1);
+      drawCircle(ctx, 18, 10, 1);
+      ctx.fillStyle = hexToCss(0x555555);
+      drawCircle(ctx, 8, 24, 2);
+      drawCircle(ctx, 12, 26, 2);
+      drawCircle(ctx, 20, 26, 2);
+      drawCircle(ctx, 24, 24, 2);
       ctx.strokeStyle = hexToCss(0xffc0cb);
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(16, 28);
-      ctx.lineTo(16, 32);
+      ctx.moveTo(28, 22);
+      ctx.lineTo(31, 24);
       ctx.stroke();
+      return;
+    }
+    case "bear": {
+      ctx.fillStyle = hexToCss(0x6b4423);
+      drawEllipse(ctx, 16, 22, 14, 10);
+      ctx.fillStyle = hexToCss(0x8b5a2b);
+      drawCircle(ctx, 16, 12, 7);
+      ctx.fillStyle = hexToCss(0x000000);
+      drawCircle(ctx, 13, 11, 1.5);
+      drawCircle(ctx, 19, 11, 1.5);
       return;
     }
     case "skeleton": {
@@ -462,13 +829,705 @@ export function createHeroParitySpriteMaterial(
   );
 }
 
+// ─── Hero modular sprite (visual profile body + optional hair overlay) ────────
+
+export type HeroBmsDirection = "south" | "north" | "east" | "west";
+export type HeroAnimState = "idle" | "walk" | "attack" | "death";
+
+export const HERO_MODULAR_SPRITE_ENABLED = true;
+const HERO_SOURCE_SIZE = 92;
+/** Feet row in generated hero PNGs (see scratch/audit-hero-base.js). */
+const HERO_FEET_Y = 77;
+
+export const HERO_BILLBOARD_LAYOUT = {
+  canvasSize: HERO_SOURCE_SIZE,
+  feetY: HERO_FEET_Y,
+  width: 1.15,
+  height: 1.78,
+  /** Local Y so sprite feet sit on the player ground plane (plane pivot = center). */
+  get anchorY(): number {
+    const feetFromBottom =
+      (this.canvasSize - this.feetY) / this.canvasSize;
+    return this.height * 0.5 - feetFromBottom * this.height;
+  },
+};
+
+type HeroBodyAnimDef = {
+  state: HeroAnimState;
+  directions: HeroBmsDirection[];
+  frameCount: number;
+};
+
+const HERO_BODY_ANIMS: HeroBodyAnimDef[] = [
+  {
+    state: "idle",
+    directions: ["south", "north", "east", "west"],
+    frameCount: 4,
+  },
+  {
+    state: "walk",
+    directions: ["south", "north", "east", "west"],
+    frameCount: 4,
+  },
+  {
+    state: "attack",
+    directions: ["south", "north", "east", "west"],
+    frameCount: 3,
+  },
+  { state: "death", directions: ["south"], frameCount: 9 },
+];
+
+const HERO_FRAME_INTERVAL_MS: Record<HeroAnimState, number> = {
+  idle: 1000 / 6,
+  walk: 1000 / 10,
+  attack: 1000 / 14,
+  death: 1000 / 12,
+};
+
+function loadImageElement(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+    img.src = url;
+  });
+}
+
+function getHeadAnchor(img: HTMLImageElement): { x: number; y: number } {
+  const canvas = document.createElement("canvas");
+  canvas.width = HERO_SOURCE_SIZE;
+  canvas.height = HERO_SOURCE_SIZE;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return { x: HERO_SOURCE_SIZE / 2, y: HERO_SOURCE_SIZE * 0.2 };
+  }
+  ctx.drawImage(img, 0, 0, HERO_SOURCE_SIZE, HERO_SOURCE_SIZE);
+  const data = ctx.getImageData(0, 0, HERO_SOURCE_SIZE, HERO_SOURCE_SIZE).data;
+
+  let minX = HERO_SOURCE_SIZE;
+  let maxX = -1;
+  let minY = HERO_SOURCE_SIZE;
+  let maxY = -1;
+
+  for (let y = 0; y < HERO_SOURCE_SIZE; y += 1) {
+    for (let x = 0; x < HERO_SOURCE_SIZE; x += 1) {
+      const alpha = data[(y * HERO_SOURCE_SIZE + x) * 4 + 3];
+      if (alpha > 20) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+
+  if (maxY < minY) {
+    return { x: HERO_SOURCE_SIZE / 2, y: HERO_SOURCE_SIZE * 0.2 };
+  }
+
+  const headMaxY = minY + Math.round((maxY - minY) * 0.34);
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+  for (let y = minY; y <= headMaxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const alpha = data[(y * HERO_SOURCE_SIZE + x) * 4 + 3];
+      if (alpha > 20) {
+        sumX += x;
+        sumY += y;
+        count += 1;
+      }
+    }
+  }
+
+  if (count === 0) {
+    return { x: (minX + maxX) / 2, y: minY + (headMaxY - minY) / 2 };
+  }
+
+  return { x: sumX / count, y: sumY / count };
+}
+
+interface Socket {
+  x: number;
+  y: number;
+}
+
+// Sockets for weapon (MAIN_HAND) - Left hand
+const WEAPON_SOCKETS: Record<string, Record<string, Socket[]>> = {
+  idle: {
+    south: [{ x: 58, y: 61 }, { x: 58, y: 62 }, { x: 58, y: 61 }, { x: 58, y: 60 }],
+    north: [{ x: 40, y: 61 }, { x: 40, y: 62 }, { x: 40, y: 61 }, { x: 40, y: 60 }],
+    east: [{ x: 44, y: 66 }, { x: 44, y: 67 }, { x: 44, y: 66 }, { x: 44, y: 65 }],
+    west: [{ x: 49, y: 66 }, { x: 49, y: 67 }, { x: 49, y: 66 }, { x: 49, y: 65 }]
+  },
+  walk: {
+    south: [{ x: 58, y: 57 }, { x: 57, y: 61 }, { x: 58, y: 61 }, { x: 58, y: 66 }],
+    north: [{ x: 40, y: 61 }, { x: 41, y: 66 }, { x: 40, y: 61 }, { x: 40, y: 57 }],
+    east: [{ x: 44, y: 66 }, { x: 40, y: 64 }, { x: 44, y: 66 }, { x: 58, y: 64 }],
+    west: [{ x: 49, y: 66 }, { x: 58, y: 64 }, { x: 49, y: 66 }, { x: 40, y: 64 }]
+  },
+  attack: {
+    south: [{ x: 64, y: 55 }, { x: 53, y: 56 }, { x: 64, y: 54 }],
+    north: [{ x: 37, y: 55 }, { x: 42, y: 56 }, { x: 37, y: 54 }],
+    east: [{ x: 44, y: 54 }, { x: 51, y: 48 }, { x: 49, y: 48 }],
+    west: [{ x: 51, y: 54 }, { x: 41, y: 48 }, { x: 43, y: 48 }]
+  }
+};
+
+// Sockets for shield (OFF_HAND) - Right hand
+const SHIELD_SOCKETS: Record<string, Record<string, Socket[]>> = {
+  idle: {
+    south: [{ x: 40, y: 61 }, { x: 40, y: 62 }, { x: 40, y: 61 }, { x: 40, y: 60 }],
+    north: [{ x: 58, y: 61 }, { x: 58, y: 62 }, { x: 58, y: 61 }, { x: 58, y: 60 }],
+    east: [{ x: 49, y: 66 }, { x: 49, y: 67 }, { x: 49, y: 66 }, { x: 49, y: 65 }],
+    west: [{ x: 44, y: 66 }, { x: 44, y: 67 }, { x: 44, y: 66 }, { x: 44, y: 65 }]
+  },
+  walk: {
+    south: [{ x: 40, y: 61 }, { x: 41, y: 66 }, { x: 40, y: 61 }, { x: 40, y: 57 }],
+    north: [{ x: 58, y: 57 }, { x: 57, y: 61 }, { x: 58, y: 61 }, { x: 58, y: 66 }],
+    east: [{ x: 49, y: 66 }, { x: 58, y: 64 }, { x: 49, y: 66 }, { x: 40, y: 64 }],
+    west: [{ x: 44, y: 66 }, { x: 40, y: 64 }, { x: 44, y: 66 }, { x: 58, y: 64 }]
+  },
+  attack: {
+    south: [{ x: 41, y: 54 }, { x: 42, y: 49 }, { x: 42, y: 49 }],
+    north: [{ x: 54, y: 54 }, { x: 53, y: 49 }, { x: 53, y: 49 }],
+    east: [{ x: 51, y: 54 }, { x: 73, y: 44 }, { x: 67, y: 44 }],
+    west: [{ x: 44, y: 54 }, { x: 19, y: 44 }, { x: 25, y: 44 }]
+  }
+};
+
+function getWeaponSocket(state: HeroAnimState, direction: HeroBmsDirection, frameIndex: number): Socket {
+  const dirMap = WEAPON_SOCKETS[state] || WEAPON_SOCKETS["idle"];
+  const list = dirMap[direction] || dirMap["south"];
+  return list[frameIndex % list.length] || { x: 58, y: 61 };
+}
+
+function getShieldSocket(state: HeroAnimState, direction: HeroBmsDirection, frameIndex: number): Socket {
+  const dirMap = SHIELD_SOCKETS[state] || SHIELD_SOCKETS["idle"];
+  const list = dirMap[direction] || dirMap["south"];
+  return list[frameIndex % list.length] || { x: 40, y: 61 };
+}
+
+function compositeHeroFrame(
+  bodyImg: HTMLImageElement,
+  hairImg: HTMLImageElement | null,
+  refHeadAnchor: { x: number; y: number } | null,
+  bodyHeadAnchor: { x: number; y: number } | null,
+  weaponImg: HTMLImageElement | null,
+  shieldImg: HTMLImageElement | null,
+  state: HeroAnimState,
+  direction: HeroBmsDirection,
+  frameIndex: number,
+  weaponId: string | null = null,
+  shieldId: string | null = null,
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = HERO_SOURCE_SIZE;
+  canvas.height = HERO_SOURCE_SIZE;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Canvas 2D context unavailable.");
+  }
+  ctx.clearRect(0, 0, HERO_SOURCE_SIZE, HERO_SOURCE_SIZE);
+
+  const drawShield = () => {
+    if (!shieldImg || state === "death") return;
+    const socket = getShieldSocket(state, direction, frameIndex);
+    if (socket) {
+      ctx.save();
+      ctx.translate(socket.x, socket.y);
+
+      // Classify/scale shield
+      const sId = shieldId?.toLowerCase() || "";
+      let sizeX = 28; // slightly smaller than 32 for better proportion
+      let sizeY = 28;
+      let pivotOffsetX = -14;
+      let pivotOffsetY = -14;
+
+      if (sId.includes("tower")) {
+        sizeX = 30;
+        sizeY = 32;
+        pivotOffsetX = -15;
+        pivotOffsetY = -16;
+      }
+
+      let rot = 0;
+      if (direction === "east") rot = -Math.PI / 8;
+      if (direction === "west") rot = Math.PI / 8;
+
+      if (state === "walk") {
+        rot += Math.sin(frameIndex * Math.PI) * 0.05;
+      }
+
+      ctx.rotate(rot);
+      ctx.drawImage(shieldImg, pivotOffsetX, pivotOffsetY, sizeX, sizeY);
+      ctx.restore();
+    }
+  };
+
+  const drawWeapon = () => {
+    if (!weaponImg || state === "death") return;
+    const socket = getWeaponSocket(state, direction, frameIndex);
+    if (socket) {
+      ctx.save();
+      ctx.translate(socket.x, socket.y);
+
+      // Classify weapon type
+      const wId = weaponId?.toLowerCase() || "";
+      const isSword = wId.includes("sword");
+      const isAxe = wId.includes("axe");
+      const isBow = wId.includes("bow");
+      const isTorch = wId.includes("torch");
+      const isStar = wId.includes("star");
+
+      // Custom pivot offsets and drawing size based on type
+      let sizeX = 32;
+      let sizeY = 32;
+      let pivotOffsetX = -16;
+      let pivotOffsetY = -24;
+
+      if (isBow) {
+        // Bows are held at the center grid point
+        sizeX = 28;
+        sizeY = 32;
+        pivotOffsetX = -14;
+        pivotOffsetY = -16; // pivot in the center
+      } else if (isSword) {
+        sizeX = 30;
+        sizeY = 30;
+        pivotOffsetX = -15;
+        pivotOffsetY = -23;
+      } else if (isTorch) {
+        sizeX = 28;
+        sizeY = 28;
+        pivotOffsetX = -14;
+        pivotOffsetY = -22;
+      } else if (isStar) {
+        sizeX = 24;
+        sizeY = 24;
+        pivotOffsetX = -12;
+        pivotOffsetY = -12; // centered
+      }
+
+      // Base rotation based on direction
+      let rot = 0;
+      if (direction === "south") {
+        rot = 0;
+      } else if (direction === "north") {
+        rot = -Math.PI / 2;
+      } else if (direction === "east") {
+        rot = 0;
+      } else if (direction === "west") {
+        rot = -Math.PI / 2;
+      }
+
+      // Apply dynamic rotation & swing animations based on type
+      if (state === "attack") {
+        if (isBow) {
+          // Bow attack: held stable, slight recoil on frames
+          // Pulling recoil offset
+          if (frameIndex === 1) {
+            if (direction === "south") pivotOffsetY -= 3;
+            else if (direction === "north") pivotOffsetY += 3;
+            else if (direction === "east") pivotOffsetX -= 3;
+            else if (direction === "west") pivotOffsetX += 3;
+          }
+        } else {
+          // Sword / Axe / Torch swing animation frame by frame
+          if (frameIndex === 0) {
+            if (direction === "south") rot -= Math.PI / 6;
+            else if (direction === "north") rot -= Math.PI / 6;
+            else if (direction === "east") rot -= Math.PI / 6;
+            else if (direction === "west") rot += Math.PI / 6;
+          } else if (frameIndex === 1) {
+            if (direction === "south") rot += Math.PI / 6;
+            else if (direction === "north") rot += Math.PI / 6;
+            else if (direction === "east") rot += Math.PI / 4;
+            else if (direction === "west") rot -= Math.PI / 4;
+          } else {
+            if (direction === "south") rot += Math.PI / 3;
+            else if (direction === "north") rot += Math.PI / 3;
+            else if (direction === "east") rot += Math.PI / 2;
+            else if (direction === "west") rot -= Math.PI / 2;
+          }
+        }
+      } else {
+        // Idle / walk subtle variations
+        if (isSword || isAxe) {
+          if (direction === "south") rot += 0.2;
+          else if (direction === "east") rot += 0.3;
+          else if (direction === "west") rot -= 0.3;
+        }
+      }
+
+      ctx.rotate(rot);
+      ctx.drawImage(weaponImg, pivotOffsetX, pivotOffsetY, sizeX, sizeY);
+      ctx.restore();
+    }
+  };
+
+  const drawBody = () => {
+    ctx.drawImage(bodyImg, 0, 0, HERO_SOURCE_SIZE, HERO_SOURCE_SIZE);
+  };
+
+  const drawHair = () => {
+    if (hairImg) {
+      if (refHeadAnchor && bodyHeadAnchor) {
+        const dx = Math.round(bodyHeadAnchor.x - refHeadAnchor.x);
+        const dy = Math.round(bodyHeadAnchor.y - refHeadAnchor.y);
+        ctx.drawImage(hairImg, dx, dy, HERO_SOURCE_SIZE, HERO_SOURCE_SIZE);
+      } else {
+        ctx.drawImage(hairImg, 0, 0, HERO_SOURCE_SIZE, HERO_SOURCE_SIZE);
+      }
+    }
+  };
+
+  // Determine drawing order based on direction
+  if (direction === "north") {
+    // Weapon and Shield are behind the body
+    drawShield();
+    drawWeapon();
+    drawBody();
+    drawHair();
+  } else if (direction === "east") {
+    // Weapon (left hand, far side) is behind body. Shield (right hand, near side) is in front.
+    drawWeapon();
+    drawBody();
+    drawHair();
+    drawShield();
+  } else if (direction === "west") {
+    // Weapon (left hand, near side) is in front. Shield (right hand, far side) is behind body.
+    drawShield();
+    drawBody();
+    drawHair();
+    drawWeapon();
+  } else {
+    // south (facing camera): both in front of body
+    drawBody();
+    drawHair();
+    drawShield();
+    drawWeapon();
+  }
+
+  return canvas;
+}
+
+function canvasToSpriteTexture(
+  scene: Scene,
+  name: string,
+  canvas: HTMLCanvasElement,
+): Texture {
+  // Same path as goblin_lanceiro PNGs — no vScale flip needed.
+  const texture = new Texture(
+    canvas.toDataURL("image/png"),
+    scene,
+    false,
+    true,
+    Texture.NEAREST_NEAREST,
+  );
+  texture.name = name;
+  texture.hasAlpha = true;
+  return texture;
+}
+
+function getHairOverlayUrl(
+  hairEntityId: string,
+  direction: HeroBmsDirection,
+): string {
+  return `/assets/sprites/generated/${hairEntityId}/character_rotations/${direction}.png`;
+}
+
+async function buildHeroModularTextureMap(
+  scene: Scene,
+  keyPrefix: string,
+  profile: CharacterVisualProfile,
+): Promise<Map<string, Texture[]>> {
+  const textureMap = new Map<string, Texture[]>();
+  const headOverlayByDirection = new Map<HeroBmsDirection, HTMLImageElement>();
+  const { bodyEntityId, hairOverlayEntityId, weaponId, shieldId, hideEquipmentOverlays } =
+    profile;
+  const overlayHairId = hideEquipmentOverlays ? null : hairOverlayEntityId;
+  const overlayWeaponId = hideEquipmentOverlays ? null : weaponId;
+  const overlayShieldId = hideEquipmentOverlays ? null : shieldId;
+
+  if (overlayHairId) {
+    await Promise.all(
+      (["south", "north", "east", "west"] as HeroBmsDirection[]).map(
+        async (direction) => {
+          const overlayImg = await loadImageElement(
+            getHairOverlayUrl(overlayHairId, direction),
+          );
+          headOverlayByDirection.set(direction, overlayImg);
+        },
+      ),
+    );
+  }
+
+  let weaponImg: HTMLImageElement | null = null;
+  if (overlayWeaponId) {
+    try {
+      weaponImg = await loadImageElement(`/assets/items/${overlayWeaponId}.png`);
+    } catch (e) {
+      console.warn(`Failed to load weapon image: ${weaponId}`, e);
+    }
+  }
+
+  let shieldImg: HTMLImageElement | null = null;
+  if (overlayShieldId) {
+    try {
+      shieldImg = await loadImageElement(`/assets/items/${overlayShieldId}.png`);
+    } catch (e) {
+      console.warn(`Failed to load shield image: ${shieldId}`, e);
+    }
+  }
+
+  const refHeadAnchorByDirection = new Map<
+    HeroBmsDirection,
+    { x: number; y: number }
+  >();
+  await Promise.all(
+    (["south", "north", "east", "west"] as HeroBmsDirection[]).map(
+      async (direction) => {
+        const idleRefUrl = `/assets/sprites/generated/${bodyEntityId}/idle_${direction}/frame_00.png`;
+        const idleRefImg = await loadImageElement(idleRefUrl);
+        refHeadAnchorByDirection.set(direction, getHeadAnchor(idleRefImg));
+      },
+    ),
+  );
+
+  for (const anim of HERO_BODY_ANIMS) {
+    for (const direction of anim.directions) {
+      const refHeadAnchor =
+        refHeadAnchorByDirection.get(direction) ?? null;
+      const frames: Texture[] = [];
+
+      for (let frameIndex = 0; frameIndex < anim.frameCount; frameIndex += 1) {
+        const bodyUrl = `/assets/sprites/generated/${bodyEntityId}/${anim.state}_${direction}/frame_${String(frameIndex).padStart(2, "0")}.png`;
+        const bodyImg = await loadImageElement(bodyUrl);
+        const bodyHeadAnchor = getHeadAnchor(bodyImg);
+        const canvas = compositeHeroFrame(
+          bodyImg,
+          headOverlayByDirection.get(direction) ?? null,
+          refHeadAnchor,
+          bodyHeadAnchor,
+          weaponImg,
+          shieldImg,
+          anim.state,
+          direction,
+          frameIndex,
+          overlayWeaponId,
+          overlayShieldId,
+        );
+        frames.push(
+          canvasToSpriteTexture(
+            scene,
+            `${keyPrefix}-${anim.state}-${direction}-${frameIndex}`,
+            canvas,
+          ),
+        );
+      }
+
+      textureMap.set(`${anim.state}:${direction}`, frames);
+    }
+  }
+
+  return textureMap;
+}
+
+export function resolveHeroBmsDirection(
+  moveForward: number,
+  moveRight: number,
+  fallback: HeroBmsDirection,
+): HeroBmsDirection {
+  if (moveForward === 0 && moveRight === 0) {
+    return fallback;
+  }
+  if (Math.abs(moveForward) >= Math.abs(moveRight)) {
+    return moveForward > 0 ? "north" : "south";
+  }
+  return moveRight > 0 ? "east" : "west";
+}
+
+/**
+ * Animated hero material from a visual profile (body folder + optional hair overlay).
+ * Exposes `_setAnimState`, `_setDirection`, `_setVisualProfile`, and `_onReady`.
+ */
+export function createHeroModularSpriteMaterial(
+  scene: Scene,
+  keyPrefix: string,
+  profile: CharacterVisualProfile | string | null = "hair_classic",
+): StandardMaterial {
+  const placeholder = createHeroParitySpriteMaterial(scene, keyPrefix);
+  if (!HERO_MODULAR_SPRITE_ENABLED) {
+    return placeholder;
+  }
+
+  const mat = new StandardMaterial(`${keyPrefix}-modular-mat`, scene);
+  mat.backFaceCulling = false;
+  mat.specularColor = Color3.Black();
+  mat.useAlphaFromDiffuseTexture = true;
+  mat.disableLighting = true;
+  mat.emissiveColor = Color3.White();
+  mat.diffuseTexture = placeholder.diffuseTexture;
+  mat.opacityTexture = placeholder.opacityTexture;
+  configureBillboardSpriteMaterial(mat);
+
+  let textureMap = new Map<string, Texture[]>();
+  let ready = false;
+  let loadGeneration = 0;
+  let visualProfile = normalizeVisualProfile(profile);
+  let currentState: HeroAnimState = "idle";
+  let currentDirection: HeroBmsDirection = "south";
+  let frame = 0;
+  let lastFrameAt = 0;
+  let pendingFootstep = false;
+
+  const disposeTextureMap = (map: Map<string, Texture[]>) => {
+    map.forEach((frames) => frames.forEach((texture) => texture.dispose()));
+  };
+
+  const loadVisualProfile = (nextProfile: CharacterVisualProfile) => {
+    visualProfile = nextProfile;
+    const generation = ++loadGeneration;
+    ready = false;
+
+    return buildHeroModularTextureMap(scene, keyPrefix, nextProfile)
+      .then((loaded) => {
+        if (generation !== loadGeneration) {
+          disposeTextureMap(loaded);
+          return;
+        }
+        disposeTextureMap(textureMap);
+        textureMap = loaded;
+        ready = true;
+        frame = 0;
+        lastFrameAt = 0;
+        applyFrame();
+      })
+      .catch((error) => {
+        if (generation !== loadGeneration) {
+          return;
+        }
+        console.warn(
+          "[HeroModular3D] Failed to load visual profile; keeping previous textures if any.",
+          error,
+        );
+        ready = textureMap.size > 0;
+        applyFrame();
+      });
+  };
+
+  const applyFrame = () => {
+    if (!ready) {
+      return;
+    }
+    const direction =
+      currentState === "death" ? "south" : currentDirection;
+    const frames =
+      textureMap.get(`${currentState}:${direction}`) ??
+      textureMap.get("idle:south");
+    if (!frames || frames.length === 0) {
+      return;
+    }
+    const index = Math.min(frame, frames.length - 1);
+    mat.diffuseTexture = frames[index];
+    mat.opacityTexture = frames[index];
+  };
+
+  const obs = scene.onBeforeRenderObservable.add(() => {
+    if (!ready) {
+      return;
+    }
+    const now = Date.now();
+    const interval = HERO_FRAME_INTERVAL_MS[currentState];
+    if (now - lastFrameAt < interval) {
+      return;
+    }
+    lastFrameAt = now;
+
+    const direction =
+      currentState === "death" ? "south" : currentDirection;
+    const frames =
+      textureMap.get(`${currentState}:${direction}`) ??
+      textureMap.get("idle:south");
+    if (!frames || frames.length === 0) {
+      return;
+    }
+
+    if (currentState === "attack" || currentState === "death") {
+      frame = Math.min(frame + 1, frames.length - 1);
+    } else {
+      const prevFrame = frame;
+      frame = (frame + 1) % frames.length;
+      if (
+        currentState === "walk" &&
+        (frame === 0 || frame === 2) &&
+        frame !== prevFrame
+      ) {
+        pendingFootstep = true;
+      }
+    }
+    applyFrame();
+  });
+
+  (mat as any)._consumeFootstepTick = (): boolean => {
+    if (!pendingFootstep) {
+      return false;
+    }
+    pendingFootstep = false;
+    return true;
+  };
+
+  (mat as any)._setAnimState = (state: HeroAnimState) => {
+    if (state === currentState) {
+      return;
+    }
+    currentState = state;
+    frame = 0;
+    lastFrameAt = 0;
+    pendingFootstep = state === "walk";
+    applyFrame();
+  };
+
+  (mat as any)._setDirection = (direction: HeroBmsDirection) => {
+    if (direction === currentDirection) {
+      return;
+    }
+    currentDirection = direction;
+    frame = 0;
+    lastFrameAt = 0;
+    pendingFootstep = false;
+    applyFrame();
+  };
+
+  (mat as any)._setVisualProfile = (nextProfile: CharacterVisualProfile) => {
+    void loadVisualProfile(nextProfile);
+  };
+
+  mat.onDisposeObservable.add(() => {
+    scene.onBeforeRenderObservable.remove(obs);
+    disposeTextureMap(textureMap);
+    placeholder.dispose();
+  });
+
+  void loadVisualProfile(visualProfile).then(() => {
+    const onReady = (mat as any)._onReady;
+    if (typeof onReady === "function") {
+      onReady();
+    }
+  });
+
+  return mat;
+}
+
 export function createEnemyParitySpriteMaterial(
   scene: Scene,
   keyPrefix: string,
   enemyId: string,
 ): StandardMaterial {
-  if (GENERATED_SPRITE_ENTITIES.has(enemyId)) {
-    return createGeneratedSpriteAnimatedMaterial(scene, keyPrefix, enemyId);
+  const generatedId = resolveGeneratedSpriteEntityId(enemyId);
+  if (generatedId) {
+    return createGeneratedSpriteAnimatedMaterial(scene, keyPrefix, generatedId);
   }
 
   const normalized = normalizeEnemyId(enemyId);

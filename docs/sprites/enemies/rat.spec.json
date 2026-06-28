@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "id": "rat",
+  "name": "Dungeon Rat",
+  "category": "enemy",
+  "family": "beast",
+  "body_type": "quadruped",
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "trash",
+    "frame_targets": {
+      "idle": 4,
+      "walk": 6,
+      "attack": 6,
+      "death": 6
+    }
+  },
+  "pipeline": {
+    "model_primary": "pixflux",
+    "template_id": "cat",
+    "character_id": "d35a62b8-d258-4d6e-855e-7e68e4291ed6"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "tiny grey dungeon rat rodent, pink ears, long tail, four short legs on ground, crouched scurrying posture on all fours, low top-down pixel art, clean dark outline, transparent background, 64x64",
+    "negative_prompt": "biped, bipedal, standing upright, anthropomorphic, humanoid, walking on two legs, arms, hands, hero pose, no sword, no weapon, no shield",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "unarmed quadruped rat scurrying on four paws"
+  },
+  "direction_validation": {
+    "reference": "hero_base",
+    "status": "pending",
+    "validated_at": null,
+    "note": "Quadruped only — must stay on four paws in all directions. Validate vs hero_base facing."
+  }
+}

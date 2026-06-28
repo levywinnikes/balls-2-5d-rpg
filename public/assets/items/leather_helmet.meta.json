@@ -1,0 +1,10 @@
+{
+  "registryId": "leather_helmet",
+  "spec": "docs\\sprites\\items\\leather-helmet.spec.json",
+  "generatedAt": "2026-06-20T11:04:54.280Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/leather_helmet.png"
+}

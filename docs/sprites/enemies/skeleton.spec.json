@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "id": "skeleton",
+  "name": "Skeleton Warrior",
+  "category": "enemy",
+  "family": "undead",
+  "body_type": "humanoid",
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "trash",
+    "frame_targets": {
+      "idle": 4,
+      "walk": 6,
+      "attack": 6,
+      "death": 6
+    }
+  },
+  "pipeline": {
+    "model_primary": "pixflux"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "low top-down angle pixel art undead skeleton warrior, bone white skull and ribcage, dark purple joints, humanoid biped empty hands no weapons no sword, neutral standing pose facing camera, same scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+    "negative_prompt": "blurry, noisy, muddy colors, extra limbs, flesh, muscles, inconsistent proportions, quadruped, sword, weapon, shield, spear, axe, dagger, staff, bow, goblin, orc",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "unarmed skeleton warrior"
+  },
+  "direction_validation": {
+    "reference": "hero_base",
+    "status": "pending",
+    "validated_at": null,
+    "note": "Unarmed enemy (project policy). Direction ref: hero_base only."
+  }
+}

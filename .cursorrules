@@ -31,3 +31,16 @@ If you modify these files, you MUST check the related systems:
 | `WorldMapService.ts` | Minimap / UI | Verify `SidebarMinimap.tsx` re-rendering |
 
 *Failure to adhere to these rules will result in engine crashes due to binary data mismatches.*
+
+## 3D RUNTIME (MANDATORY — product mode)
+
+Before **any** edit to `src/three-d/**` or `geometry.worker.ts`:
+
+1. Read **`docs/three-d/DESIGN_RULES_3D.md`** (non-negotiable design decisions + NEVER list).
+2. Read **`docs/three-d/PRODUCT_3D_VISION.md`** if the task touches verticality, water, floors, or visibility.
+3. **Upper-floor occlusion:** when the hero walks under level N+1 geometry, that level must hide. Only **`syncVerticalLevelVisibility`** may set per-level mesh visibility — never add a second pass that forces upper floors visible.
+4. **Height:** use **`TileSurfaceResolver`** — do not invent parallel foot-Y logic.
+5. **Water:** hole geometry + surface shader — not flat floor stickers.
+6. **Test maps:** `debug_sandbox`, `debug_vertical` — regenerate with npm scripts after map generator changes.
+
+3D doc hub: `docs/three-d/README.md`

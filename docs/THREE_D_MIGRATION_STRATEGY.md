@@ -322,7 +322,15 @@ Applied in this batch:
 5. audio compatibility baseline in 3D runtime:
 	- lazy `AudioManager.init()` on first interaction
 	- pickup SFX on successful item pickup
-	- footstep SFX while moving
+	- footstep SFX synced to hero walk animation frames in top-down (not per movement tick); see `TwoDParitySpriteFactory._consumeFootstepTick`
+
+Recent hero/camera stabilization (2026-06):
+
+1. Modular hero billboard: `hero_base` + `hair_classic` via `createHeroModularSpriteMaterial`
+2. Feet grounding: `HERO_BILLBOARD_LAYOUT.anchorY` from PNG feet row (y=77 / canvas 92)
+3. Hair head tracking: overlay offset per frame from idle reference anchor
+4. Top-down camera: hero locked screen-center (removed lazy target lerp)
+5. Walk audio: animation-driven footstep ticks on frames 0 and 2
 
 Deferred intentionally (not plug-and-play in this batch):
 

@@ -108,7 +108,9 @@ export const ExpandedMapContent: React.FC = () => {
     } else {
       const searchParams = new URLSearchParams(window.location.search);
       const activeMapName =
-        searchParams.get("map") || searchParams.get("mapName") || "newmap";
+        searchParams.get("map") ||
+        searchParams.get("mapName") ||
+        "city_3d_multi";
 
       fetch(`/maps/${activeMapName}.json?v=${Date.now()}`)
         .then((res) => res.json())

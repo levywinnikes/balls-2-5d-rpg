@@ -1,0 +1,36 @@
+{
+  "id": "CHANGE_ME",
+  "layer_kind": "head_overlay",
+  "equipment_slot": "HEAD",
+  "item_type": "helmet",
+  "source_entity": "hero_base",
+  "character_id": "d8bfd55a-a30b-4821-b2d9-36d8b234063f",
+  "production_prompts": {
+    "edit_description": "DESCRIBE EQUIPMENT ON HERO_BASE, SAME BODY PROPORTIONS, LOW TOP-DOWN, TRANSPARENT BACKGROUND"
+  },
+  "visibility_rules": {
+    "hides_hair": true,
+    "blocks_off_hand": false,
+    "requires_two_hands": false
+  },
+  "diff_mask": {
+    "bbox_height_fraction": [0.0, 0.34],
+    "comment": "head_overlay: top 34%. body_animated: [0.35,0.75]. legs: [0.45,0.90]. boots: [0.75,1.0]"
+  },
+  "animation_profile": {
+    "states": ["idle", "walk", "attack"],
+    "directions": ["south", "north", "east", "west"],
+    "frame_counts": {
+      "idle": 4,
+      "walk": 4,
+      "attack": 3
+    }
+  },
+  "held_socket": {
+    "profile": "none",
+    "comment": "one_hand | two_hand | bow | shield — use with layer_kind held_*"
+  },
+  "output": {
+    "entity_folder": "public/assets/sprites/generated/CHANGE_ME"
+  }
+}

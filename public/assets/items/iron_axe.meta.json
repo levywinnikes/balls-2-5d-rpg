@@ -1,0 +1,10 @@
+{
+  "registryId": "iron_axe",
+  "spec": "docs\\sprites\\items\\iron-axe.spec.json",
+  "generatedAt": "2026-06-20T11:56:08.709Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/iron_axe.png"
+}

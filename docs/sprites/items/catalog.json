@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "style_defaults": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character full body, scene background"
+  },
+  "groups": {
+    "starter": [
+      "wooden_sword",
+      "wooden_shield",
+      "torch",
+      "leather_armor",
+      "leather_legs",
+      "leather_boots"
+    ],
+    "weapons": [
+      "iron_axe",
+      "short_bow",
+      "throwing_star",
+      "light_torch",
+      "dragon_axe"
+    ],
+    "armor_mid": [
+      "iron_shield",
+      "iron_helmet",
+      "viking_helmet",
+      "plate_armor",
+      "plate_legs",
+      "steel_boots",
+      "tower_shield"
+    ],
+    "dragon": ["dragon_shield", "dragon_armor"],
+    "misc": ["magic_rune", "rat_meat"]
+  },
+  "items": {
+    "wooden_sword": {
+      "name": "Wooden Sword",
+      "item_type": "sword",
+      "description": "pixel art wooden training sword item icon, simple brown wood blade and guard, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat brown and tan colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "wooden_shield": {
+      "name": "Wooden Shield",
+      "item_type": "shield",
+      "description": "pixel art round wooden shield item icon, simple plank texture with metal boss, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat brown colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "torch": {
+      "name": "Torch",
+      "item_type": "club",
+      "description": "pixel art wooden torch item icon, brown stick with orange yellow flame on top, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "light_torch": {
+      "name": "Light Torch",
+      "item_type": "club",
+      "description": "pixel art enchanted torch item icon, wooden handle with bright magical blue-white flame, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "iron_axe": {
+      "name": "Iron Axe",
+      "item_type": "axe",
+      "description": "pixel art iron battle axe item icon, grey metal head on wooden handle, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "dragon_axe": {
+      "name": "Dragon Axe",
+      "item_type": "axe",
+      "description": "pixel art dragon-themed battle axe item icon, dark metal with red accents and small horn motif, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "short_bow": {
+      "name": "Short Bow",
+      "item_type": "bow",
+      "description": "pixel art short bow item icon, curved wooden bow with string, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat brown colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "throwing_star": {
+      "name": "Throwing Star",
+      "item_type": "ammunition",
+      "description": "pixel art metal shuriken throwing star item icon, four-point star shape, cartoon adventure game style, low top-down perspective, clean dark outline, silver grey flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "iron_shield": {
+      "name": "Iron Shield",
+      "item_type": "shield",
+      "description": "pixel art iron kite shield item icon, grey metal with simple emblem, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "tower_shield": {
+      "name": "Tower Shield",
+      "item_type": "shield",
+      "description": "pixel art large tower shield item icon, tall rectangular metal shield, cartoon adventure game style, low top-down perspective, clean dark outline, grey steel flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "dragon_shield": {
+      "name": "Dragon Shield",
+      "item_type": "shield",
+      "description": "pixel art dragon scale shield item icon, dark metal with red scale pattern, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "leather_armor": {
+      "name": "Leather Armor",
+      "item_type": "body_armor",
+      "description": "pixel art brown leather chest armor item icon, simple vest with straps, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat brown and tan colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "leather_legs": {
+      "name": "Leather Leggings",
+      "item_type": "legs",
+      "description": "pixel art brown leather leg armor item icon, simple leggings, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat brown colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "leather_boots": {
+      "name": "Leather Boots",
+      "item_type": "boots",
+      "description": "pixel art brown leather boots item icon, pair of short adventure boots, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat brown colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "plate_armor": {
+      "name": "Plate Armor",
+      "item_type": "body_armor",
+      "description": "pixel art steel plate chest armor item icon, grey metal breastplate, cartoon adventure game style, low top-down perspective, clean dark outline, silver grey flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "plate_legs": {
+      "name": "Plate Leggings",
+      "item_type": "legs",
+      "description": "pixel art steel plate leg armor item icon, grey metal greaves, cartoon adventure game style, low top-down perspective, clean dark outline, silver grey flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "iron_helmet": {
+      "name": "Iron Helmet",
+      "item_type": "helmet",
+      "description": "pixel art iron helmet item icon, simple grey metal helm with nose guard, cartoon adventure game style, low top-down perspective, clean dark outline, silver grey flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "viking_helmet": {
+      "name": "Viking Helmet",
+      "item_type": "helmet",
+      "description": "pixel art viking helmet item icon, grey metal helm with horns, cartoon adventure game style, low top-down perspective, clean dark outline, silver grey flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "steel_boots": {
+      "name": "Steel Boots",
+      "item_type": "boots",
+      "description": "pixel art steel plate boots item icon, grey metal sabatons, cartoon adventure game style, low top-down perspective, clean dark outline, silver grey flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "dragon_armor": {
+      "name": "Dragon Armor",
+      "item_type": "body_armor",
+      "description": "pixel art dragon scale chest armor item icon, dark metal with red scale plates, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "magic_rune": {
+      "name": "Magic Rune",
+      "item_type": "misc",
+      "description": "pixel art glowing magic rune stone item icon, purple crystal with simple arcane symbol, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32"
+    },
+    "rat_meat": {
+      "name": "Rat Meat",
+      "item_type": "food",
+      "description": "pixel art raw rat meat item icon, small pink meat chunk, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32"
+    }
+  }
+}

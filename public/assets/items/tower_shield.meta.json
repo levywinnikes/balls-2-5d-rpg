@@ -1,0 +1,10 @@
+{
+  "registryId": "tower_shield",
+  "spec": "docs\\sprites\\items\\tower-shield.spec.json",
+  "generatedAt": "2026-06-20T12:00:57.362Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/tower_shield.png"
+}

@@ -1,0 +1,10 @@
+{
+  "animation": "walk",
+  "direction": "west",
+  "mode": "template",
+  "templateId": "walking-4-frames",
+  "actionDescription": null,
+  "frameCount": 4,
+  "generatedAt": "2026-06-27T16:32:12.000Z",
+  "characterId": "08eeac51-25a0-4281-8c30-4c9aa9f736f5"
+}

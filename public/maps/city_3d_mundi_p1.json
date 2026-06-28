@@ -1,0 +1,504 @@
+{
+  "mapName": "city_3d_mundi_p1",
+  "tileSize": 32,
+  "width": 512,
+  "height": 512,
+  "config": {
+    "startLevel": "0",
+    "mapName": "World P1 Macro 512x512",
+    "smokeTests": [
+      {
+        "id": "spawn-point",
+        "type": "spawn",
+        "level": "0"
+      }
+    ]
+  },
+  "tileAtlas": [
+    "...",
+    "grs",
+    "cob",
+    "stn",
+    "pav",
+    "snd",
+    "mud",
+    "pat",
+    "flr",
+    "sfl",
+    "cfl",
+    "bal",
+    "wat",
+    "wtr",
+    "wal",
+    "bwl",
+    "dwl",
+    "swl",
+    "cwl",
+    "sdw",
+    "rof",
+    "arc",
+    "pil",
+    "fnt",
+    "tre",
+    "rok",
+    "stu",
+    "std",
+    "hol",
+    "dfn"
+  ],
+  "tileDefinitions": {
+    "...": {
+      "id": "void",
+      "color": "#7ec8e3",
+      "height": 0.02,
+      "renderAs": "floor"
+    },
+    "grs": {
+      "id": "grass",
+      "color": "#4ade80",
+      "height": 0.05,
+      "renderAs": "floor"
+    },
+    "cob": {
+      "id": "cobblestone",
+      "color": "#64748b",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "stn": {
+      "id": "stone-plaza",
+      "color": "#9ca3af",
+      "height": 0.07,
+      "renderAs": "floor"
+    },
+    "pav": {
+      "id": "pavement",
+      "color": "#6b7280",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "snd": {
+      "id": "sand",
+      "color": "#fbbf24",
+      "height": 0.05,
+      "renderAs": "floor"
+    },
+    "mud": {
+      "id": "mud",
+      "color": "#92400e",
+      "height": 0.05,
+      "renderAs": "floor"
+    },
+    "pat": {
+      "id": "path",
+      "color": "#a16207",
+      "height": 0.04,
+      "renderAs": "floor"
+    },
+    "flr": {
+      "id": "wood-floor",
+      "color": "#92400e",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "sfl": {
+      "id": "sewer-floor",
+      "color": "#334155",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "cfl": {
+      "id": "cave-floor",
+      "color": "#57534e",
+      "height": 0.07,
+      "renderAs": "floor"
+    },
+    "bal": {
+      "id": "balcony",
+      "color": "#c4b5a0",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "wat": {
+      "id": "water",
+      "color": "#1d4ed8",
+      "height": 0.12,
+      "renderAs": "block",
+      "block": true
+    },
+    "wtr": {
+      "id": "water-shallow",
+      "color": "#60a5fa",
+      "height": 0.04,
+      "renderAs": "floor"
+    },
+    "wal": {
+      "id": "city-wall",
+      "color": "#78716c",
+      "height": 4.5,
+      "renderAs": "block",
+      "block": true
+    },
+    "bwl": {
+      "id": "building-wall",
+      "color": "#94a3b8",
+      "height": 2.8,
+      "renderAs": "block",
+      "block": true
+    },
+    "dwl": {
+      "id": "dungeon-wall",
+      "color": "#374151",
+      "height": 2.8,
+      "renderAs": "block",
+      "block": true
+    },
+    "swl": {
+      "id": "sewer-wall",
+      "color": "#1e293b",
+      "height": 2.5,
+      "renderAs": "block",
+      "block": true
+    },
+    "cwl": {
+      "id": "cave-wall",
+      "color": "#292524",
+      "height": 2.6,
+      "renderAs": "block",
+      "block": true
+    },
+    "sdw": {
+      "id": "stone-dark-wall",
+      "color": "#44403c",
+      "height": 5.2,
+      "renderAs": "block",
+      "block": true
+    },
+    "rof": {
+      "id": "roof-tile",
+      "color": "#c2622d",
+      "height": 0.45,
+      "renderAs": "floor"
+    },
+    "arc": {
+      "id": "archway",
+      "color": "#a8a29e",
+      "height": 3.8,
+      "renderAs": "block",
+      "block": true
+    },
+    "pil": {
+      "id": "pillar",
+      "color": "#d1d5db",
+      "height": 3.2,
+      "renderAs": "block",
+      "block": true
+    },
+    "fnt": {
+      "id": "fountain",
+      "color": "#38bdf8",
+      "height": 0.9,
+      "renderAs": "block",
+      "block": true
+    },
+    "tre": {
+      "id": "tree",
+      "color": "#15803d",
+      "height": 3.4,
+      "renderAs": "block",
+      "block": true
+    },
+    "rok": {
+      "id": "rock",
+      "color": "#78716c",
+      "height": 1.2,
+      "renderAs": "block",
+      "block": true
+    },
+    "stu": {
+      "id": "stairs-up",
+      "color": "#e2c87d",
+      "height": 0.12,
+      "renderAs": "floor",
+      "stairDir": "up"
+    },
+    "std": {
+      "id": "stairs-down",
+      "color": "#a07040",
+      "height": 0.12,
+      "renderAs": "floor",
+      "stairDir": "down"
+    },
+    "hol": {
+      "id": "hole",
+      "color": "#111827",
+      "height": 0.02,
+      "renderAs": "floor",
+      "transition": "down"
+    },
+    "dfn": {
+      "id": "dungeon-floor",
+      "color": "#1e293b",
+      "height": 0.06,
+      "renderAs": "floor"
+    }
+  },
+  "entityTemplates": {
+    "gob": {
+      "type": "enemy",
+      "id": "goblin"
+    },
+    "gla": {
+      "type": "enemy",
+      "id": "goblin_lanceiro"
+    },
+    "orc": {
+      "type": "enemy",
+      "id": "orc"
+    },
+    "rat": {
+      "type": "enemy",
+      "id": "rat"
+    }
+  },
+  "levels": {
+    "0": {
+      "binFile": "city_3d_mundi_p1_0.bin",
+      "playerPos": {
+        "x": 8320,
+        "y": 3872
+      },
+      "entities": [
+        {
+          "symbol": "gob",
+          "x": 248,
+          "y": 108
+        },
+        {
+          "symbol": "gla",
+          "x": 276,
+          "y": 108
+        },
+        {
+          "symbol": "orc",
+          "x": 282,
+          "y": 123
+        },
+        {
+          "symbol": "gob",
+          "x": 218,
+          "y": 113
+        },
+        {
+          "symbol": "gla",
+          "x": 300,
+          "y": 129
+        },
+        {
+          "symbol": "gob",
+          "x": 101,
+          "y": 102
+        },
+        {
+          "symbol": "rat",
+          "x": 94,
+          "y": 124
+        },
+        {
+          "symbol": "rat",
+          "x": 401,
+          "y": 144
+        },
+        {
+          "symbol": "gob",
+          "x": 411,
+          "y": 138
+        },
+        {
+          "symbol": "orc",
+          "x": 392,
+          "y": 330
+        },
+        {
+          "symbol": "orc",
+          "x": 425,
+          "y": 338
+        },
+        {
+          "symbol": "gob",
+          "x": 249,
+          "y": 398
+        },
+        {
+          "symbol": "gla",
+          "x": 279,
+          "y": 391
+        },
+        {
+          "symbol": "gla",
+          "x": 118,
+          "y": 267
+        },
+        {
+          "symbol": "orc",
+          "x": 126,
+          "y": 258
+        },
+        {
+          "symbol": "gob",
+          "x": 244,
+          "y": 123
+        }
+      ]
+    },
+    "1": {
+      "binFile": "city_3d_mundi_p1_1.bin",
+      "playerPos": {
+        "x": 0,
+        "y": 0
+      },
+      "entities": [
+        {
+          "symbol": "gob",
+          "x": 245,
+          "y": 107
+        },
+        {
+          "symbol": "gob",
+          "x": 274,
+          "y": 107
+        },
+        {
+          "symbol": "gla",
+          "x": 279,
+          "y": 391
+        },
+        {
+          "symbol": "gob",
+          "x": 126,
+          "y": 258
+        }
+      ]
+    },
+    "2": {
+      "binFile": "city_3d_mundi_p1_2.bin",
+      "playerPos": {
+        "x": 0,
+        "y": 0
+      },
+      "entities": [
+        {
+          "symbol": "orc",
+          "x": 283,
+          "y": 122
+        },
+        {
+          "symbol": "orc",
+          "x": 279,
+          "y": 390
+        }
+      ]
+    },
+    "3": {
+      "binFile": "city_3d_mundi_p1_3.bin",
+      "playerPos": {
+        "x": 0,
+        "y": 0
+      },
+      "entities": []
+    },
+    "-2": {
+      "binFile": "city_3d_mundi_p1_-2.bin",
+      "playerPos": {
+        "x": 0,
+        "y": 0
+      },
+      "entities": [
+        {
+          "symbol": "orc",
+          "x": 401,
+          "y": 308
+        },
+        {
+          "symbol": "orc",
+          "x": 405,
+          "y": 310
+        },
+        {
+          "symbol": "orc",
+          "x": 395,
+          "y": 304
+        },
+        {
+          "symbol": "orc",
+          "x": 387,
+          "y": 304
+        }
+      ]
+    },
+    "-1": {
+      "binFile": "city_3d_mundi_p1_-1.bin",
+      "playerPos": {
+        "x": 0,
+        "y": 0
+      },
+      "entities": [
+        {
+          "symbol": "rat",
+          "x": 118,
+          "y": 111
+        },
+        {
+          "symbol": "rat",
+          "x": 133,
+          "y": 110
+        },
+        {
+          "symbol": "rat",
+          "x": 92,
+          "y": 125
+        },
+        {
+          "symbol": "gob",
+          "x": 400,
+          "y": 150
+        },
+        {
+          "symbol": "gob",
+          "x": 413,
+          "y": 140
+        },
+        {
+          "symbol": "orc",
+          "x": 395,
+          "y": 320
+        },
+        {
+          "symbol": "orc",
+          "x": 423,
+          "y": 337
+        },
+        {
+          "symbol": "rat",
+          "x": 101,
+          "y": 277
+        },
+        {
+          "symbol": "rat",
+          "x": 233,
+          "y": 406
+        },
+        {
+          "symbol": "rat",
+          "x": 229,
+          "y": 406
+        },
+        {
+          "symbol": "gob",
+          "x": 407,
+          "y": 142
+        }
+      ]
+    }
+  }
+}

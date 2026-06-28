@@ -1,0 +1,10 @@
+{
+  "registryId": "dragon_shield",
+  "spec": "docs\\sprites\\items\\dragon-shield.spec.json",
+  "generatedAt": "2026-06-20T12:01:26.327Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/dragon_shield.png"
+}

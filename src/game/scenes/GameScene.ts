@@ -14,6 +14,7 @@ import { EnemyRegistry } from "../entities/EnemyRegistry";
 import { registerDefaultMagics } from "../entities/EnemyMagicRegistry";
 import { PathfindingManager } from "../systems/PathfindingManager";
 import { PlayerGraphic } from "../graphics/PlayerGraphic";
+import { HeroModularGraphic } from "../graphics/HeroModularGraphic";
 import Player from "../entities/Player";
 import { NPC, NPCData } from "../entities/NPC";
 import { PlayerState } from "../entities/Player/PlayerState";
@@ -158,7 +159,14 @@ export default class GameScene extends Phaser.Scene {
 
   preload(): void {
     TileRegistry.preloadAll(this);
-    PlayerGraphic.preload(this);
+    if (HeroModularGraphic.ENABLED) {
+      HeroModularGraphic.preload(
+        this,
+        PlayerState.getInstance().equippedHairId,
+      );
+    } else {
+      PlayerGraphic.preload(this);
+    }
     EnemyRegistry.preloadAll(this);
     registerDefaultMagics();
     WeaponRegistry.preloadAll(this);
@@ -191,7 +199,7 @@ export default class GameScene extends Phaser.Scene {
     }
     // END: New Game Handling
 
-    this.registry.set("currentMap", data.map || "newmap");
+    this.registry.set("currentMap", data.map || "city_3d_multi");
     this.isRespawning = !!data.isRespawn;
 
     // If NOT new game (and not respawning with specific level), try to load level from data or keep default "0"
@@ -242,7 +250,7 @@ export default class GameScene extends Phaser.Scene {
       return this.processedData.spawnInfo;
     }
 
-    const mapName = this.registry.get("currentMap") || "newmap";
+    const mapName = this.registry.get("currentMap") || "city_3d_multi";
     const mapData =
       this.cache.json.get(`${mapName}_data`) || this.cache.json.get(mapName);
     const fallback = { x: 4096, y: 4096, level: "0" }; // Center of 256x256 map
@@ -371,7 +379,7 @@ export default class GameScene extends Phaser.Scene {
     // Load external enemies metadata
     if (this.cache.json.exists("enemies_data")) {
       const externalArgs = this.cache.json.get("enemies_data");
-      const currentMap = this.registry.get("currentMap") || "newmap";
+      const currentMap = this.registry.get("currentMap") || "city_3d_multi";
       const mapEnemiesBlob = externalArgs[currentMap];
 
       if (Array.isArray(mapEnemiesBlob)) {
@@ -527,7 +535,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private dropHighlights: Phaser.GameObjects.Graphics | null = null;
-  private currentMap: string = "newmap";
+  private currentMap: string = "city_3d_multi";
 
   // Event Handlers (Bound)
   private onStartGroundDrag = () => this.showDropZones();
@@ -626,7 +634,7 @@ export default class GameScene extends Phaser.Scene {
     const nextLevelInt = currentLevelInt + delta;
     const nextLevelStr = nextLevelInt.toString();
 
-    const mapName = this.registry.get("currentMap") || "newmap";
+    const mapName = this.registry.get("currentMap") || "city_3d_multi";
     const mapData = this.cache.json.get(`${mapName}_data`);
 
     if (mapData && mapData.levels && mapData.levels[nextLevelStr]) {
@@ -658,7 +666,7 @@ export default class GameScene extends Phaser.Scene {
   private onRequestPerspectiveDebugMap = (payload?: { mapName?: string }) => {
     if (this.isTransitioning) return;
 
-    const mapName = payload?.mapName || "perspective_debug";
+    const mapName = payload?.mapName || "city_3d_multi";
     const playerState = PlayerState.getInstance();
     playerState.setPerspectiveMode("3D");
 
@@ -704,7 +712,7 @@ export default class GameScene extends Phaser.Scene {
       this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
       this.events.on(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
 
-      const initialMap = this.registry.get("currentMap") || "newmap";
+      const initialMap = this.registry.get("currentMap") || "city_3d_multi";
       this.mapLoader = new MapLoader(this);
 
       await this.mapLoader.loadAllLevels(initialMap);
@@ -1646,7 +1654,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 1. Get exact spawn info from map file (Level 0 priority)
     const spawnInfo = this.getSpawnCoordinate();
-    const currentMap = this.registry.get("currentMap") || "newmap";
+    const currentMap = this.registry.get("currentMap") || "city_3d_multi";
 
     console.log("Respawning at:", spawnInfo);
 
@@ -2788,7 +2796,7 @@ export default class GameScene extends Phaser.Scene {
     if (dead.id.startsWith("ext_")) {
       // Try to find in cache
       const externalArgs = this.cache.json.get("enemies_data");
-      const currentMap = this.registry.get("currentMap") || "newmap";
+      const currentMap = this.registry.get("currentMap") || "city_3d_multi";
       if (externalArgs && externalArgs[currentMap]) {
         // Find matching definition
         // Note: external ID is built as `ext_${level}_${x}_${y}`
@@ -3185,7 +3193,7 @@ export default class GameScene extends Phaser.Scene {
         `[LEVEL:TRANSITION] First visit to Level ${level}. seeding Map Items.`,
       );
       this.mapLoader.seedMapItemsToPersistence(
-        this.registry.get("currentMap") || "newmap",
+        this.registry.get("currentMap") || "city_3d_multi",
         level,
       );
       playerState.markLevelVisited(level);

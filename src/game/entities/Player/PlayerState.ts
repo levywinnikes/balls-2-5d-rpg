@@ -7,6 +7,12 @@
 import { ItemType } from "../../../config/ItemConstants";
 import { EventEmitter } from "events";
 import { WeaponDefinition, WeaponRegistry } from "../weapons/WeaponRegistry";
+import {
+  getHeroSkinDefinition,
+  heroSkinsUnlockedByName,
+  isHeroSkinId,
+  type HeroSkinId,
+} from "../../cosmetics/HeroSkinRegistry";
 import { ReflexXpTable } from "../../data/ReflexXpTable";
 import { StrengthXpTable } from "../../data/StrengthXpTable";
 import { DexterityXpTable } from "../../data/DexterityXpTable";
@@ -342,6 +348,7 @@ export class PlayerState extends EventEmitter {
   public inventory: InventoryItem[] = [];
 
   public equippedHelmetId: string | null = null;
+  public equippedHairId: string | null = "hair_classic";
   public equippedNeckId: string | null = null; // Added
   public equippedArmorId: string | null = null;
   public equippedLegsId: string | null = null;
@@ -351,7 +358,9 @@ export class PlayerState extends EventEmitter {
   public equippedRingId: string | null = null; // Added
   public equippedAmmoId: string | null = null; // Added
 
-  // --- DASHBOARD HELPERS ---
+  /** Cosmetic hero skins (full-body swap). Persisted in save. */
+  private unlockedHeroSkinIds: HeroSkinId[] = [];
+  private activeHeroSkinId: HeroSkinId | null = null;
 
   // --- DASHBOARD HELPERS ---
   // (getEquipment moved to bottom)
@@ -484,6 +493,10 @@ export class PlayerState extends EventEmitter {
 
   // 3D world sector persistence: enemies killed in 3D runtime, keyed by level
   private deadEnemies3d: Map<string, Set<string>> = new Map();
+  private doorStates: Map<
+    string,
+    { open: boolean; locked?: boolean; keyId?: string | null }
+  > = new Map();
 
   private _debugCollision: boolean = false;
   private _cloudShadowsEnabled: boolean = true;
@@ -2865,6 +2878,8 @@ export class PlayerState extends EventEmitter {
     this.experience = 0;
     this.attackDamage = 10; // Base?
     this.characterName = "";
+    this.unlockedHeroSkinIds = [];
+    this.activeHeroSkinId = null;
     this.playTime = 0;
     this.sessionStartTime = Date.now();
     this.balance = 0;
@@ -2882,6 +2897,7 @@ export class PlayerState extends EventEmitter {
     this.equippedWeaponId = "sword_t1"; // Start with sword? Or null? Let's give default sword.
     this.equippedShieldId = "torch"; // Start with torch?
     this.equippedHelmetId = null;
+    this.equippedHairId = "hair_classic";
     this.equippedArmorId = null;
     this.equippedLegsId = null;
     this.equippedBootsId = null;
@@ -2903,6 +2919,7 @@ export class PlayerState extends EventEmitter {
     this.activeBuffs.clear();
     this.droppedItems.clear();
     this.exploredAreas.clear();
+    this.doorStates.clear();
     // this.visitedLevels? (checked before, variable name check needed)
 
     // Add Starting Items to Inventory (if not equipping directly)
@@ -2998,6 +3015,87 @@ export class PlayerState extends EventEmitter {
     });
   }
 
+  public getDoorState(uuid: string) {
+    return this.doorStates.get(uuid) || null;
+  }
+
+  public getDoorStatesSnapshot(): Record<
+    string,
+    { open: boolean; locked?: boolean; keyId?: string | null }
+  > {
+    const out: Record<
+      string,
+      { open: boolean; locked?: boolean; keyId?: string | null }
+    > = {};
+    this.doorStates.forEach((state, uuid) => {
+      out[uuid] = { ...state };
+    });
+    return out;
+  }
+
+  public loadDoorStates(
+    data: Record<string, { open: boolean; locked?: boolean; keyId?: string | null }>,
+  ): void {
+    this.doorStates.clear();
+    Object.entries(data).forEach(([uuid, state]) => {
+      this.doorStates.set(uuid, {
+        open: !!state.open,
+        locked: state.locked,
+        keyId: state.keyId ?? null,
+      });
+    });
+    this.emit("doorStatesChanged");
+  }
+
+  public seedDoorState(
+    uuid: string,
+    defaults: { open?: boolean; locked?: boolean; keyId?: string | null } = {},
+  ): void {
+    if (!uuid || this.doorStates.has(uuid)) {
+      return;
+    }
+
+    this.doorStates.set(uuid, {
+      open: !!defaults.open,
+      locked: defaults.locked,
+      keyId: defaults.keyId ?? null,
+    });
+    this.emit("doorStatesChanged");
+  }
+
+  public setDoorOpen(uuid: string, open: boolean): void {
+    const current = this.doorStates.get(uuid);
+    const next = {
+      open,
+      locked: current?.locked,
+      keyId: current?.keyId ?? null,
+    };
+    this.doorStates.set(uuid, next);
+    this.emit("doorStatesChanged", { uuid, state: next });
+  }
+
+  public setDoorLockState(
+    uuid: string,
+    lockState: { locked?: boolean; keyId?: string | null },
+  ): void {
+    const current = this.doorStates.get(uuid) || { open: false };
+    const next = {
+      ...current,
+      locked: lockState.locked ?? current.locked,
+      keyId:
+        lockState.keyId === undefined ? (current.keyId ?? null) : lockState.keyId,
+    };
+    this.doorStates.set(uuid, next);
+    this.emit("doorStatesChanged", { uuid, state: next });
+  }
+
+  public toggleDoor(uuid: string): boolean {
+    const current = this.doorStates.get(uuid);
+    const nextOpen = !(current?.open ?? false);
+    this.setDoorOpen(uuid, nextOpen);
+    return nextOpen;
+  }
+
   public loadState(data: any, saveTimestamp?: number) {
     // saveTimestamp added
     if (!data) return;
@@ -3014,7 +3112,28 @@ export class PlayerState extends EventEmitter {
       this.deadEnemies3d.clear();
     }
 
+    if (data.doorStates) {
+      this.loadDoorStates(data.doorStates);
+    } else {
+      this.doorStates.clear();
+    }
+
     if (data.characterName) this.characterName = data.characterName;
+
+    if (Array.isArray(data.unlockedHeroSkinIds)) {
+      this.unlockedHeroSkinIds = data.unlockedHeroSkinIds.filter(isHeroSkinId);
+    } else {
+      this.unlockedHeroSkinIds = [];
+    }
+    this.activeHeroSkinId =
+      data.activeHeroSkinId && isHeroSkinId(data.activeHeroSkinId)
+        ? data.activeHeroSkinId
+        : null;
+    if (this.activeHeroSkinId && !this.isHeroSkinUnlocked(this.activeHeroSkinId)) {
+      this.activeHeroSkinId = null;
+    }
+    this.evaluateHeroSkinUnlocks();
+
     if (data.health !== undefined) this.health = data.health;
     if (data.level !== undefined) {
       this.level = data.level;
@@ -3149,6 +3268,8 @@ export class PlayerState extends EventEmitter {
         ? { itemId: this.equippedHelmetId, count: 1, uid: "equipped_helmet" }
         : null);
 
+    this.equippedHairId = data.equippedHairId ?? "hair_classic";
+
     this.equippedArmorId = data.equippedArmorId || null;
     this.equippedArmorItem =
       data.equippedArmorItem ||
@@ -3266,7 +3387,71 @@ export class PlayerState extends EventEmitter {
 
   public setName(n: string) {
     this.characterName = n;
+    this.evaluateHeroSkinUnlocks();
     this.emit("nameChanged", n);
+  }
+
+  public getUnlockedHeroSkinIds(): HeroSkinId[] {
+    return [...this.unlockedHeroSkinIds];
+  }
+
+  public getActiveHeroSkinId(): HeroSkinId | null {
+    return this.activeHeroSkinId;
+  }
+
+  public isHeroSkinUnlocked(skinId: HeroSkinId): boolean {
+    return this.unlockedHeroSkinIds.includes(skinId);
+  }
+
+  public unlockHeroSkin(skinId: HeroSkinId): boolean {
+    if (!isHeroSkinId(skinId)) {
+      return false;
+    }
+    if (this.unlockedHeroSkinIds.includes(skinId)) {
+      return false;
+    }
+    this.unlockedHeroSkinIds.push(skinId);
+    this.emit("heroSkinUnlocked", skinId);
+    return true;
+  }
+
+  /** Select active cosmetic skin, or null for default hero body. */
+  public setActiveHeroSkin(skinId: HeroSkinId | null): boolean {
+    if (skinId !== null && !this.isHeroSkinUnlocked(skinId)) {
+      return false;
+    }
+    if (this.activeHeroSkinId === skinId) {
+      return true;
+    }
+    this.activeHeroSkinId = skinId;
+    this.emit("heroSkinChanged", skinId);
+    return true;
+  }
+
+  /**
+   * Applies name-based unlock rules and auto-equips the first newly unlocked skin.
+   */
+  public evaluateHeroSkinUnlocks(): HeroSkinId[] {
+    const newlyUnlocked: HeroSkinId[] = [];
+
+    heroSkinsUnlockedByName(this.characterName).forEach((skinId) => {
+      if (this.unlockHeroSkin(skinId)) {
+        newlyUnlocked.push(skinId);
+      }
+    });
+
+    if (newlyUnlocked.length > 0 && this.activeHeroSkinId === null) {
+      this.setActiveHeroSkin(newlyUnlocked[0]);
+    }
+
+    return newlyUnlocked;
+  }
+
+  public getActiveHeroSkinDisplayName(): string | null {
+    if (!this.activeHeroSkinId) {
+      return null;
+    }
+    return getHeroSkinDefinition(this.activeHeroSkinId).displayName;
   }
 
   public loadFromData(data: any) {
@@ -3274,6 +3459,14 @@ export class PlayerState extends EventEmitter {
 
     // Restore Name
     if (data.characterName) this.characterName = data.characterName;
+
+    if (Array.isArray(data.unlockedHeroSkinIds)) {
+      this.unlockedHeroSkinIds = data.unlockedHeroSkinIds.filter(isHeroSkinId);
+    }
+    if (data.activeHeroSkinId && isHeroSkinId(data.activeHeroSkinId)) {
+      this.activeHeroSkinId = data.activeHeroSkinId;
+    }
+    this.evaluateHeroSkinUnlocks();
 
     // Restore Core Vitals
     if (data.level !== undefined) this.level = data.level;
@@ -3345,6 +3538,9 @@ export class PlayerState extends EventEmitter {
         (data.equippedHelmetId
           ? { itemId: data.equippedHelmetId, count: 1, uid: "equipped_helmet" }
           : null);
+    }
+    if (data.equippedHairId !== undefined) {
+      this.equippedHairId = data.equippedHairId;
     }
     if (data.equippedArmorId !== undefined) {
       this.equippedArmorId = data.equippedArmorId;
@@ -3544,6 +3740,8 @@ export class PlayerState extends EventEmitter {
     return {
       // --- Identity & Vitals ---
       characterName: this.characterName,
+      unlockedHeroSkinIds: [...this.unlockedHeroSkinIds],
+      activeHeroSkinId: this.activeHeroSkinId,
       health: this.health,
       maxHealth: this.maxHealth,
       level: this.level,
@@ -3579,6 +3777,8 @@ export class PlayerState extends EventEmitter {
       equippedHelmetId: this.equippedHelmetId || null,
       equippedHelmetItem: this.getEquippedItemInSlot("helmet"),
 
+      equippedHairId: this.equippedHairId || null,
+
       equippedArmorId: this.equippedArmorId || null,
       equippedArmorItem: this.getEquippedItemInSlot("armor"),
 
@@ -3608,6 +3808,7 @@ export class PlayerState extends EventEmitter {
       containers: Array.from(this.containers.entries()),
       visitedLevels: Array.from(this.visitedLevels),
       deadEnemies3d: this.getDeadEnemies3dSnapshot(),
+      doorStates: this.getDoorStatesSnapshot(),
 
       // --- Altar & Magic ---
       altarStorage: Array.from(this.altarStorage.entries()),

@@ -54,6 +54,11 @@ import { FoundationWallGraphic } from "./wall/FoundationWallGraphic";
 import { StoneWallGraphic } from "./wall/StoneWallGraphic";
 import { StoneStatueGraphic } from "./decoration/StoneStatueGraphic";
 import { WoodenRoofGraphic } from "./roof/WoodenRoofGraphic";
+import {
+  OakTreePropGraphic,
+  WildFlowerPropGraphic,
+} from "../props/GeneratedAnimatedPropGraphic";
+import { PROP_DEFS } from "../props/PropRegistry";
 
 // Central registry for all game tiles
 const COLORS = {
@@ -258,6 +263,26 @@ export class TileRegistry {
         blocksRanged: true,
         bodySize: { width: 32, height: 32 },
         bodyOffset: { x: 0, y: 0 },
+      },
+      {
+        id: "oak_tree",
+        graphic: OakTreePropGraphic,
+        color: "#166534",
+        isCollidable: PROP_DEFS.oak_tree.isCollidable,
+        baseDepth: PROP_DEFS.oak_tree.baseDepth,
+        blocksRanged: PROP_DEFS.oak_tree.blocksRanged,
+        origin: PROP_DEFS.oak_tree.origin,
+        bodySize: PROP_DEFS.oak_tree.bodySize,
+        bodyOffset: PROP_DEFS.oak_tree.bodyOffset,
+      },
+      {
+        id: "wild_flower",
+        graphic: WildFlowerPropGraphic,
+        color: "#ec4899",
+        isCollidable: PROP_DEFS.wild_flower.isCollidable,
+        baseDepth: PROP_DEFS.wild_flower.baseDepth,
+        blocksRanged: PROP_DEFS.wild_flower.blocksRanged,
+        origin: PROP_DEFS.wild_flower.origin,
       },
       {
         id: "rock",

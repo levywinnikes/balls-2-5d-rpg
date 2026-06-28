@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "viking_helmet",
+  "registry_id": "viking_helmet",
+  "name": "Viking Helmet",
+  "category": "item_icon",
+  "item_type": "helmet",
+  "links": {
+    "weapon_registry_id": "viking_helmet"
+  },
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "path": "public/assets/items/viking_helmet.png",
+    "public_url": "assets/items/viking_helmet.png"
+  },
+  "production_prompts": {
+    "description": "pixel art viking helmet item icon, grey metal helm with horns, cartoon adventure game style, low top-down perspective, clean dark outline, silver grey flat colors, centered, readable silhouette, transparent background, 32x32",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character full body, scene background"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux",
+    "no_background": true
+  }
+}

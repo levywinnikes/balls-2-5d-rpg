@@ -44,6 +44,7 @@ export const translations = {
     quality_mid: "MID",
     quality_high: "HIGH",
     open_perspective_debug_map: "Open 3D Debug Map",
+    open_debug_sandbox_map: "Open Debug Sandbox (all items & enemies)",
 
     // Settings — Display section (3D runtime)
     display_settings: "Display",
@@ -822,6 +823,7 @@ export const translations = {
     quality_mid: "MÉDIA",
     quality_high: "ALTA",
     open_perspective_debug_map: "Abrir Mapa Debug 3D",
+    open_debug_sandbox_map: "Abrir Sandbox Debug (todos itens e inimigos)",
 
     // Settings — Display section (3D runtime)
     display_settings: "Vídeo",

@@ -1,0 +1,17 @@
+{
+  "characterId": "08eeac51-25a0-4281-8c30-4c9aa9f736f5",
+  "createdAt": "2026-06-27T16:25:09.210Z",
+  "entityId": "skeleton",
+  "description": "low top-down angle pixel art undead skeleton warrior, bone white skull and ribcage, dark purple joints, humanoid biped empty hands no weapons no sword, neutral standing pose facing camera, same scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+  "view": "low top-down",
+  "imageSize": {
+    "width": 64,
+    "height": 64
+  },
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\skeleton\\character_rotations\\south.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\skeleton\\character_rotations\\west.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\skeleton\\character_rotations\\east.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\skeleton\\character_rotations\\north.png"
+  }
+}

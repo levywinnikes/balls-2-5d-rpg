@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "id": "wild_flower",
+  "name": "Wild Flower",
+  "category": "prop",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "dir": "public/assets/sprites/generated/wild_flower"
+  },
+  "production_prompts": {
+    "base_description": "small wild flower patch prop, pink and yellow petals, green stem, cartoon pixel art ground decoration, low top-down, clean dark outline, transparent background, 32x32",
+    "negative_prompt": "tree, character, humanoid, large bush, blurry, realistic photo, text, watermark, solid background"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux + animate-with-text-v3",
+    "no_background": true,
+    "direction": "south"
+  },
+  "animations": [
+    {
+      "name": "sway_gentle",
+      "frame_count": 4,
+      "frame_rate": 8,
+      "action": "gentle breeze sway, petals and stem bob softly, seamless looping animation"
+    },
+    {
+      "name": "sway_strong",
+      "frame_count": 4,
+      "frame_rate": 10,
+      "action": "strong wind gust, flower bends and petals flutter more, seamless looping animation"
+    }
+  ]
+}

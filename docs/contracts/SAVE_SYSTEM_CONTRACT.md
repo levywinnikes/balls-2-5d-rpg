@@ -22,13 +22,17 @@ The canonical save payload is assembled from scene state plus the serialized `Pl
 | Survival stats         | `willpowerExp`, `willpowerTarget`, `hunger`, `playTime`                                                                                                                                             | Persistent character progression state.                                                               |
 | Equipment              | `equippedWeaponId`, `equippedShieldId`, `equippedHelmetId`, `equippedArmorId`, `equippedLegsId`, `equippedBootsId`, `equippedNeckId`, `equippedRingId`, `equippedAmmoId` and matching item payloads | Must preserve item identities when present.                                                           |
 | Inventory              | `inventory`, `shieldInventoryIds`, `inventoryWeaponIds`                                                                                                                                             | Inventory entries must keep `uid` values when available.                                              |
-| World progress         | `exploredAreas`, `persistentItems`, `containers`                                                                                                                                                    | Keyed collections that encode per-level/world progression.                                            |
+| World progress         | `exploredAreas`, `persistentItems`, `containers`, `doorStates`                                                                                                                                      | Keyed collections that encode per-level/world progression.                                            |
 | Global progression     | `visitedLevels`                                                                                                                                                                                     | Set of visited level IDs that must roundtrip intact.                                                  |
 | Altars and runes       | `altarStorage`, `enchantedRunes`                                                                                                                                                                    | `altarStorage` is keyed by altar ID; `enchantedRunes` is global rune progression and inventory state. |
 | Quest and status state | `quests`, `activeBuffs`, `markers`                                                                                                                                                                  | Global player progression and transient status snapshot.                                              |
-| Scene state            | `deadEnemies`, `activeEnemies`, `ui`                                                                                                                                                                | Restored by the scene after load; not the source of truth for gameplay logic.                         |
+| Scene state            | `deadEnemies`, `activeEnemies`, `ui`                                                                                                                                                                | **2D `GameScene` only.** 3D uses `playerState.deadEnemies3d` inside snapshot — see [SAVE_LOAD_3D.md](../three-d/SAVE_LOAD_3D.md). |
+| 3D enemy kills         | `playerState.deadEnemies3d` in snapshot                                                                                                                                                             | `Record<level, spawnKey[]>` — must roundtrip via `exportSnapshot` / `loadState`. |
+| 3D door states         | `playerState.doorStates` in snapshot                                                                                                                                                                | `Record<doorUuid, { open, locked?, keyId? }>` — authoritative for interactive 3D door state. |
 
 ## 4. Save Flow
+
+### 2D (`GameScene`)
 
 1. `GameScene` injects the live player, map, and transition context into `SaveSystem`.
 2. `SaveSystem.saveGame()` reads `currentMap` and `currentLevel` from the scene registry.
@@ -36,6 +40,13 @@ The canonical save payload is assembled from scene state plus the serialized `Pl
 4. The final payload is built from `PlayerState.exportSnapshot()` plus scene data such as position, enemies, UI state, timestamp, and version.
 5. In Electron mode, the payload is written to disk via `window.electronAPI.saveGame()`.
 6. In browser mode, the payload is stored only in `memorySaveData` and is lost when the session ends.
+
+### 3D (`createDebugSliceScene`)
+
+1. Slice calls **`SaveSystem.saveGameDirect({ map, currentLevel, playerPos })`** — no Phaser scene.
+2. Progression comes entirely from **`PlayerState.exportSnapshot()`** (includes `deadEnemies3d`, `persistentItems`, `doorStates`, …).
+3. Top-level `deadEnemies` / `activeEnemies` arrays are left empty in 3D saves.
+4. Auto-save every 60 s + manual F5 / system menu — see [SAVE_LOAD_3D.md](../three-d/SAVE_LOAD_3D.md).
 
 ## 5. Load Flow
 
@@ -49,6 +60,7 @@ The canonical save payload is assembled from scene state plus the serialized `Pl
 
 - Global player state belongs in `PlayerState` and must survive save/load roundtrips.
 - Per-level or per-map collections such as `exploredAreas`, `persistentItems`, and `containers` must remain keyed by the level/map context they belong to.
+- Per-door mutable state must remain keyed by stable **door UUID**, not by array index or transient runtime mesh id.
 - `altarStorage` must remain keyed by altar ID, not by level or map.
 - `visitedLevels` is a global progression set of visited level IDs and must roundtrip intact.
 - Derived values such as movement speed, attack speed, and other stat totals are not stored as authoritative values; they are recalculated on load.

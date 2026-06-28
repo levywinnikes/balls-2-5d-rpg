@@ -5,7 +5,14 @@
   "height": 256,
   "config": {
     "startLevel": "0",
-    "mapName": "World v1 — Ilha Principal"
+    "mapName": "World v1 — Ilha Principal",
+    "smokeTests": [
+      {
+        "id": "spawn-point",
+        "type": "spawn",
+        "level": "0"
+      }
+    ]
   },
   "tileAtlas": [
     "...",
@@ -169,8 +176,8 @@
     },
     "rof": {
       "id": "roof-tile",
-      "color": "#b91c1c",
-      "height": 2.8,
+      "color": "#c2622d",
+      "height": 0.45,
       "renderAs": "floor"
     },
     "arc": {
@@ -319,6 +326,14 @@
     },
     "2": {
       "binFile": "city_3d_multi_2.bin",
+      "playerPos": {
+        "x": 0,
+        "y": 0
+      },
+      "entities": []
+    },
+    "3": {
+      "binFile": "city_3d_multi_3.bin",
       "playerPos": {
         "x": 0,
         "y": 0

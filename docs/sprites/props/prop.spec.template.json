@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "id": "CHANGE_ME",
+  "name": "Human Readable Name",
+  "category": "prop",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "dir": "public/assets/sprites/generated/CHANGE_ME"
+  },
+  "production_prompts": {
+    "base_description": "pixel art PROP_NAME, cartoon readable style, low top-down angle, clean dark outline, vibrant flat colors, transparent background",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character, humanoid"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux + animate-with-text-v3",
+    "no_background": true,
+    "direction": "south"
+  },
+  "animations": [
+    {
+      "name": "sway_gentle",
+      "frame_count": 4,
+      "frame_rate": 6,
+      "action": "gentle cartoon wind sway, subtle looping motion, seamless loop"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import { DemonGraphic } from "../graphics/enemies/DemonGraphic";
 import { DragonGraphic } from "../graphics/enemies/DragonGraphic";
 import { GodGraphic } from "../graphics/enemies/GodGraphic";
 import { RedWizardGraphic } from "../graphics/enemies/RedWizardGraphic";
+import { BearGraphic } from "../graphics/enemies/BearGraphic";
 
 // Interface para itens de loot
 export interface LootItem {
@@ -120,6 +121,35 @@ export class EnemyRegistry {
       bloodColor: 0xe0e0e0, // Bone / dust
       resistances: { fire: -0.2 }, // 20% Inherent Vulnerability
       defenseResistances: { fire: 0.05 }, // Only 5% mitigated on block
+    },
+    {
+      id: "bear",
+      graphic: BearGraphic,
+      scale: 1.55,
+      hitboxSize: 40,
+      health: 70,
+      damage: 14,
+      speed: 150,
+      exp: 40 * this.EXP_RATE,
+      rangeVision: 5,
+      aggroRange: 4,
+      chaseRange: 9,
+      returnToSpawn: true,
+      pursuitRange: 6 * 32,
+      stopDistance: 36,
+      attackRange: 36,
+      cooldown: 1100,
+      respawnTime: 90000,
+      defenseExp: 100,
+      stability: 120,
+      defense: 10,
+      stabilityDamage: 100,
+      armor: 4,
+      loot: [
+        { itemId: "rat_meat", chance: 0.6, minQuantity: 2, maxQuantity: 4 },
+        { itemId: "leather_armor", chance: 0.08, starChance: 25 },
+      ],
+      bloodColor: 0x8b0000,
     },
     {
       id: "goblin",

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { HeroModularGraphic } from "../graphics/HeroModularGraphic";
 import { PlayerGraphic } from "../graphics/PlayerGraphic";
 import { WeaponDefinition } from "./weapons/WeaponRegistry";
 import Enemy from "./Enemy";
@@ -42,7 +43,14 @@ export default class Player {
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string) {
     this.state = PlayerState.getInstance();
     this.currentSpeed = this.state.getCurrentSpeed();
-    this.sprite = PlayerGraphic.create(scene, x, y);
+    this.sprite = HeroModularGraphic.ENABLED
+      ? HeroModularGraphic.create(
+          scene,
+          x,
+          y,
+          this.state.equippedHairId,
+        )
+      : PlayerGraphic.create(scene, x, y);
     this.sprite.setCollideWorldBounds(true);
 
     // Initial shadow creation

@@ -19,8 +19,7 @@ const {
 //   - template mode: uses stored skeleton on same character_id → max consistency, 1 gen/direction
 //   - v3 mode (action_description): free text, 4-16 frames — used for death (no standard template)
 // ─────────────────────────────────────────────
-const ANIMATION_PLAN = [
-  // template mode (skeleton-based, guaranteed consistent with stored character)
+const HUMANOID_ANIMATION_PLAN = [
   {
     name: "walk",
     mode: "template",
@@ -39,7 +38,6 @@ const ANIMATION_PLAN = [
     templateId: "lead-jab",
     directions: ["south", "north", "east", "west"],
   },
-  // v3 mode — no official template for death; frame_count gives sequential frames
   {
     name: "death",
     mode: "v3",
@@ -48,6 +46,43 @@ const ANIMATION_PLAN = [
     directions: ["south"],
   },
 ];
+
+/** PixelLab quadruped templates (cat/dog/bear/horse/lion) use different template IDs. */
+const QUADRUPED_ANIMATION_PLAN = [
+  {
+    name: "walk",
+    mode: "template",
+    templateId: "walk-4-frames",
+    directions: ["south", "north", "east", "west"],
+  },
+  {
+    name: "idle",
+    mode: "template",
+    templateId: "idle",
+    directions: ["south", "north", "east", "west"],
+  },
+  {
+    name: "attack",
+    mode: "v3",
+    actionDescription: "bite attack lunge forward on four legs",
+    frameCount: 4,
+    directions: ["south", "north", "east", "west"],
+  },
+  {
+    name: "death",
+    mode: "v3",
+    actionDescription: "dying, collapsing to the ground, death fall on four legs",
+    frameCount: 8,
+    directions: ["south"],
+  },
+];
+
+function resolveAnimationPlan(spec) {
+  const bodyType = spec.rawSpec?.body_type;
+  return bodyType === "quadruped"
+    ? QUADRUPED_ANIMATION_PLAN
+    : HUMANOID_ANIMATION_PLAN;
+}
 
 // ─────────────────────────────────────────────
 // TIER FRAME PROFILES — spec validation only (not sent to API)
@@ -192,6 +227,40 @@ function validateSpecSchema(spec, specPath) {
     );
   }
 
+  const category =
+    typeof spec?.category === "string" ? spec.category.trim().toLowerCase() : "";
+  const bodyType =
+    typeof spec?.body_type === "string" ? spec.body_type.trim().toLowerCase() : "";
+  if (category === "enemy" && entityId !== "goblin_lanceiro" && bodyType !== "quadruped") {
+    const combined = `${prompt} ${spec?.production_prompts?.negative_prompt || ""}`.toLowerCase();
+    const armedHints = [
+      "sword",
+      "spear",
+      "lance",
+      "weapon",
+      "shield",
+      "axe",
+      "dagger",
+      "staff",
+      "bow",
+      "holding a",
+      "wielding",
+      "swordsman",
+      "spearman",
+      "lanceiro",
+    ];
+    const unarmedHints = ["no weapon", "empty hand", "unarmed", "no sword"];
+    const looksArmed = armedHints.some(
+      (hint) => combined.includes(hint) && !combined.includes(`no ${hint}`),
+    );
+    const looksUnarmed = unarmedHints.some((hint) => combined.includes(hint));
+    if (looksArmed && !looksUnarmed) {
+      errors.push(
+        "Enemy specs must be unarmed (see MODULAR_SPRITE_AND_NPC_GENERATION_GUIDE.md §3.0). Use 'empty hands no weapons' in base_generation_prompt.",
+      );
+    }
+  }
+
   if (errors.length > 0) {
     throw new Error(
       `Invalid sprite spec '${specPath}':\n- ${errors.join("\n- ")}`,
@@ -292,6 +361,32 @@ async function saveFrameToPath(frame, filePath) {
 // ─────────────────────────────────────────────
 // PHASE A — Create character (persistent character_id)
 // ─────────────────────────────────────────────
+function resolveCharacterCreationOptions(spec) {
+  const bodyType = spec.rawSpec?.body_type;
+  const explicitTemplate = spec.rawSpec?.pipeline?.template_id;
+  if (explicitTemplate) {
+    return { templateId: explicitTemplate };
+  }
+  if (bodyType === "quadruped") {
+    if (spec.entityId === "bear") {
+      return { templateId: "bear" };
+    }
+    if (spec.entityId === "rat") {
+      return { templateId: "cat" };
+    }
+    return { templateId: "dog" };
+  }
+  return { templateId: "mannequin" };
+}
+
+function buildCharacterDescription(spec) {
+  const negative = spec.negativePrompt?.trim();
+  if (!negative) {
+    return spec.prompt;
+  }
+  return `${spec.prompt} Avoid: ${negative}.`;
+}
+
 async function phaseA(config, spec, outBaseDir) {
   console.log("\n[pixellab] ═══ Phase A — Create Character ═══");
   console.log(`[pixellab]   entity      : ${spec.entityId}`);
@@ -299,11 +394,15 @@ async function phaseA(config, spec, outBaseDir) {
   console.log(`[pixellab]   size        : ${spec.width}×${spec.height}`);
 
   const view = spec.rawSpec?.production_prompts?.view || "low top-down";
+  const { templateId } = resolveCharacterCreationOptions(spec);
+  const description = buildCharacterDescription(spec);
+  console.log(`[pixellab]   template_id : ${templateId}`);
 
   const { characterId, backgroundJobId } = await createCharacter(config, {
-    description: spec.prompt,
+    description,
     image_size: { width: spec.width, height: spec.height },
     view,
+    template_id: templateId,
     outline: "single color black outline",
     shading: "basic shading",
     detail: "medium detail",
@@ -382,6 +481,46 @@ async function phaseA(config, spec, outBaseDir) {
   return { characterId, sidecarPath, rotations: savedRotations };
 }
 
+const DIRECTION_JOB_DELAY_MS = 20000;
+const RATE_LIMIT_RETRY_MAX = 8;
+const RATE_LIMIT_RETRY_BASE_MS = 30000;
+
+function isRateLimitError(error) {
+  const message = String(error?.message || error).toLowerCase();
+  return (
+    message.includes("429") ||
+    message.includes("rate limit") ||
+    message.includes("job limits") ||
+    message.includes("high demand") ||
+    message.includes("temporarily limit") ||
+    message.includes("generation failed")
+  );
+}
+
+async function animateDirectionJob(config, animArgs, dir, label, animEntry) {
+  const singleArgs = { ...animArgs, directions: [dir] };
+  const deathPollAttempts = animEntry?.mode === "v3" ? 450 : undefined;
+  for (let attempt = 1; attempt <= RATE_LIMIT_RETRY_MAX; attempt += 1) {
+    try {
+      const { backgroundJobIds } = await animateCharacter(config, singleArgs);
+      const jobId = backgroundJobIds[0];
+      return await waitForJob(config, jobId, label, {
+        maxAttempts: deathPollAttempts,
+      });
+    } catch (error) {
+      if (!isRateLimitError(error) || attempt === RATE_LIMIT_RETRY_MAX) {
+        throw error;
+      }
+      const waitMs = RATE_LIMIT_RETRY_BASE_MS * attempt;
+      console.log(
+        `[pixellab] ⚠️  ${label} rate-limited; retry ${attempt}/${RATE_LIMIT_RETRY_MAX} in ${waitMs / 1000}s…`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+  throw new Error(`animateDirectionJob exhausted retries for ${label}`);
+}
+
 // ─────────────────────────────────────────────
 // PHASE B — Animate (one ANIMATION_PLAN entry)
 // ─────────────────────────────────────────────
@@ -400,7 +539,6 @@ async function phaseBAnimation(
     character_id: characterId,
     animation_name: name,
     mode,
-    directions,
   };
   if (mode === "template") {
     animArgs.template_animation_id = templateId;
@@ -409,17 +547,38 @@ async function phaseBAnimation(
     if (frameCount) animArgs.frame_count = frameCount;
   }
 
-  const { backgroundJobIds, directions: returnedDirs } = await animateCharacter(
-    config,
-    animArgs,
+  console.log(
+    `[pixellab]   Submitting ${directions.length} direction job(s), one at a time`,
   );
-  console.log(`[pixellab]   Submitted ${backgroundJobIds.length} job(s)`);
 
-  for (let i = 0; i < backgroundJobIds.length; i++) {
-    const jobId = backgroundJobIds[i];
-    const dir = returnedDirs?.[i] || directions[i] || "south";
+  for (let i = 0; i < directions.length; i += 1) {
+    const dir = directions[i];
+    const frameDir = path.join(outBaseDir, spec.entityId, `${name}_${dir}`);
+    const existingMetaPath = path.join(frameDir, "meta.json");
+    if (
+      fs.existsSync(existingMetaPath) &&
+      fs.existsSync(path.join(frameDir, "frame_00.png"))
+    ) {
+      const existingMeta = JSON.parse(fs.readFileSync(existingMetaPath, "utf8"));
+      console.log(
+        `[pixellab] ↷ skip existing ${name}/${dir} (${existingMeta.frameCount} frames)`,
+      );
+      continue;
+    }
 
-    const job = await waitForJob(config, jobId, `${name}/${dir}`);
+    if (i > 0) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, DIRECTION_JOB_DELAY_MS),
+      );
+    }
+
+    const job = await animateDirectionJob(
+      config,
+      animArgs,
+      dir,
+      `${name}/${dir}`,
+      animEntry,
+    );
     process.stdout.write("\n");
 
     const frames = extractFrames(job.last_response);
@@ -434,7 +593,6 @@ async function phaseBAnimation(
       continue;
     }
 
-    const frameDir = path.join(outBaseDir, spec.entityId, `${name}_${dir}`);
     fs.mkdirSync(frameDir, { recursive: true });
 
     for (let fi = 0; fi < frames.length; fi++) {
@@ -530,16 +688,17 @@ async function main() {
 
   // ── Phase B ────────────────────────────────
   if (phase === "all" || phase === "animate") {
+    const animationPlan = resolveAnimationPlan(spec);
     const animFilter = args.anim
       ? args.anim.split(",").map((s) => s.trim())
       : null;
     const plan = animFilter
-      ? ANIMATION_PLAN.filter((a) => animFilter.includes(a.name))
-      : ANIMATION_PLAN;
+      ? animationPlan.filter((a) => animFilter.includes(a.name))
+      : animationPlan;
 
     if (plan.length === 0) {
       throw new Error(
-        `No animations matched filter '${args.anim}'. Available: ${ANIMATION_PLAN.map((a) => a.name).join(", ")}`,
+        `No animations matched filter '${args.anim}'. Available: ${animationPlan.map((a) => a.name).join(", ")}`,
       );
     }
 

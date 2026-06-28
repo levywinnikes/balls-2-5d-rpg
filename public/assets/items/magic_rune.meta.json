@@ -1,0 +1,10 @@
+{
+  "registryId": "magic_rune",
+  "spec": "docs\\sprites\\items\\magic-rune.spec.json",
+  "generatedAt": "2026-06-20T12:02:08.577Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/magic_rune.png"
+}

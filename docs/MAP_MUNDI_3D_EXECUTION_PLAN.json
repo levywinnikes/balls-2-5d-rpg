@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "planId": "mundi-3d-giant-v1",
+  "scope": "3d-mode-only",
+  "objective": "Entregar um mapa mundi gigante no modo 3D com alta variacao visual, coerencia ecologica e estabilidade de runtime.",
+  "status": "approved-for-preproduction",
+  "governance": {
+    "orchestrator": "Design Orchestrator",
+    "requiredApprovals": [
+      "Global Map Design Lead",
+      "World Design Lead",
+      "City Design Lead",
+      "House Tech Lead",
+      "Dungeon Design Lead",
+      "Map Generation Gatekeeper"
+    ],
+    "blockingPolicy": "Nao gerar mapa final se qualquer aprovador retornar bloqueio critico aberto.",
+    "contracts": [
+      "docs/contracts/WORLD_MAP_CONTRACT.md",
+      "docs/contracts/MAP_SYSTEM_CONTRACT.md",
+      "docs/THREE_D_INTEGRATION_BLUEPRINT.md"
+    ]
+  },
+  "targetScale": {
+    "phase1": "512x512",
+    "phase2": "512x512 enriched",
+    "phase3Candidate": "1024x1024",
+    "rule": "A fase 3 so pode iniciar se os criterios de performance e estabilidade da fase 2 estiverem verdes."
+  },
+  "phases": [
+    {
+      "id": "P0",
+      "name": "Design Gate e Backlog Tecnico",
+      "owner": "Design Orchestrator",
+      "durationSprints": 1,
+      "deliverables": [
+        "Aprovacao formal dos especialistas",
+        "Backlog tecnico com prioridade, dono e DoD",
+        "Matriz de risco com mitigacao"
+      ],
+      "acceptanceCriteria": [
+        "100% dos aprovadores exigidos com status aprovado ou aprovado-com-ressalvas",
+        "0 bloqueio critico aberto",
+        "Backlog com dono e criterio de aceite para todos os itens P0/P1"
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "Macro Mundo e Coerencia Natural",
+      "owner": "Global Map Design Lead",
+      "durationSprints": 2,
+      "deliverables": [
+        "Layout macro global com macrozonas",
+        "Gradientes climaticos e transicoes ecologicas",
+        "Posicionamento de macro POIs e rotas principais"
+      ],
+      "acceptanceCriteria": [
+        "Transicoes abruptas abaixo do limite definido no validador",
+        "Conectividade macro valida entre regioes",
+        "Borda maritima conforme contrato de mundo"
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Cidade e Residencial em Escala",
+      "owner": "City Design Lead",
+      "durationSprints": 2,
+      "deliverables": [
+        "Malha urbana policentrica por distrito",
+        "Biblioteca de tipologias de casas por bioma/distrito",
+        "Regras anti-repeticao de quarteirao e fachada"
+      ],
+      "acceptanceCriteria": [
+        "Indice de repeticao de quarteirao abaixo do limite",
+        "Tipologias residenciais validas pelo House Tech Lead",
+        "Navegacao urbana legivel no top-down e no 3D"
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Dungeons, Segredos e Risco/Recompensa",
+      "owner": "Dungeon Design Lead",
+      "durationSprints": 2,
+      "deliverables": [
+        "Blueprint de dungeons nao repetitivas",
+        "Plano de spawn por zona de encounter",
+        "Backlog de armadilhas e passagens secretas"
+      ],
+      "acceptanceCriteria": [
+        "Toda dungeon com fluxo completo entrada-progressao-saida",
+        "Distribuicao de dificuldade por tier de progressao",
+        "Segredos integrados com recompensa e lore"
+      ]
+    },
+    {
+      "id": "P4",
+      "name": "Integracao 3D, Performance e Hardening",
+      "owner": "Map Generation Gatekeeper",
+      "durationSprints": 2,
+      "deliverables": [
+        "Mapa piloto 512x512 jogavel",
+        "Telemetria de frame/memoria por macrozona",
+        "Plano de tuning por hotspot"
+      ],
+      "acceptanceCriteria": [
+        "Metas de p50/p95 de frame dentro do budget",
+        "Memoria estavel em sessao longa",
+        "Smoke e validacoes contratuais sem regressao"
+      ]
+    }
+  ],
+  "workstreams": {
+    "WS-01-runtime": {
+      "owner": "Engineering",
+      "items": [
+        "Orcamento de densidade estrutural por chunk",
+        "Telemetria por macrozona",
+        "Politica de LOD semantico para estruturas distantes"
+      ]
+    },
+    "WS-02-generation": {
+      "owner": "World Design Lead",
+      "items": [
+        "Gerador de macro relevo + litoral organico",
+        "Gerador de transicoes ecologicas",
+        "Validador automatico de repeticao e conectividade"
+      ]
+    },
+    "WS-03-urban": {
+      "owner": "City Design Lead",
+      "items": [
+        "Gerador de distritos e hierarquia viaria",
+        "Regras de implantacao residencial",
+        "Biblioteca de variacoes de quarteirao"
+      ]
+    },
+    "WS-04-dungeons": {
+      "owner": "Dungeon Design Lead",
+      "items": [
+        "Encounter director por zona",
+        "Secret graph de atalhos e passagens",
+        "Especificacao de armadilhas v1"
+      ]
+    }
+  },
+  "minimumResourcesBeforeGeneration": [
+    "Aprovacao formal da equipe especialista",
+    "Backlog P0/P1 fechado com owner e DoD",
+    "Validador de coerencia de bioma e transicao ativo",
+    "Validador anti-repeticao de layout ativo",
+    "Telemetria de runtime por macrozona ativa"
+  ],
+  "exitGate": {
+    "name": "Go-NoGo-Final",
+    "authority": "Map Generation Gatekeeper",
+    "mustPass": [
+      "Sem bloqueio critico",
+      "KPI de performance e memoria dentro do budget",
+      "Checklist de contratos 100%",
+      "Amostra jogavel validada em biomas, cidade, casas e dungeon"
+    ]
+  }
+}

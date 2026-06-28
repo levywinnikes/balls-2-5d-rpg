@@ -134,7 +134,7 @@ const TILE_DEFS = {
     renderAs: "block",
     block: true,
   },
-  rof: { id: "roof-tile", color: "#b91c1c", height: 2.8, renderAs: "floor" },
+  rof: { id: "roof-tile", color: "#c2622d", height: 0.45, renderAs: "floor" },
   arc: {
     id: "archway",
     color: "#a8a29e",
@@ -537,12 +537,8 @@ function buildLevel1() {
     const stairX = h.x + Math.floor(h.w / 2);
     const stairY = y1 - 2;
     set(g, stairX, stairY, "std");
-    // Roof covers entire footprint INCLUDING walls (same level as walls — §4 contract)
-    fill(g, h.x, h.y, x1, y1, "rof");
-    // Re-draw walls over roof on same level so they show as walls not roof
-    border(g, h.x, h.y, x1, y1, "bwl");
-    // Re-place floor over roof interior
-    fill(g, h.x + 1, h.y + 1, x1 - 1, y1 - 1, "flr");
+    // Upper structure is represented by regular tiles in level 2.
+    // Keep the stair marker for transitions after the roof paint pass.
     set(g, stairX, stairY, "std");
   }
 
@@ -562,6 +558,23 @@ function buildLevel1() {
     set(g, tx + 2, ty + 1, "stu");
   }
 
+  // 1-floor houses: thin cap over the full building footprint at this level.
+  // rof (height=0.15, renderAs=floor) sits flush on top of the level-0 walls.
+  const oneFloorHouses = [
+    { x: 114, y: 96, w: 5, h: 5 },
+    { x: 104, y: 106, w: 5, h: 5 },
+    { x: 143, y: 96, w: 5, h: 5 },
+    { x: 114, y: 135, w: 5, h: 5 },
+    { x: 143, y: 135, w: 5, h: 5 },
+  ];
+
+  for (const h of oneFloorHouses) {
+    const x1 = h.x + h.w - 1,
+      y1 = h.y + h.h - 1;
+    // Cover walls AND interior (full footprint) with flat cap tile.
+    fill(g, h.x, h.y, x1, y1, "rof");
+  }
+
   return g;
 }
 
@@ -569,7 +582,7 @@ function buildLevel1() {
 function buildLevel2() {
   const g = makeGrid("...");
 
-  // Tower top floor + roof
+  // Tower top floor (no roof marked here)
   {
     const tx = 148,
       ty = 93,
@@ -580,11 +593,40 @@ function buildLevel2() {
     border(g, tx, ty, tx1, ty1, "bwl");
     fill(g, tx + 1, ty + 1, tx1 - 1, ty1 - 1, "flr");
     set(g, tx + 2, ty1 - 1, "std"); // std same pos as stu from level 1
-    // Roof on this level (same as walls)
+    // stu to level 3 (tower roof)
+    set(g, tx + 2, ty + 1, "stu");
+  }
+
+  // 2-floor houses: thin cap over the full building footprint at this level.
+  const twoFloorHouses = [
+    { x: 104, y: 96, w: 7, h: 7 },
+    { x: 133, y: 96, w: 7, h: 7 },
+    { x: 104, y: 135, w: 7, h: 7 },
+    { x: 133, y: 135, w: 7, h: 7 },
+  ];
+
+  for (const h of twoFloorHouses) {
+    const x1 = h.x + h.w - 1,
+      y1 = h.y + h.h - 1;
+    fill(g, h.x, h.y, x1, y1, "rof");
+  }
+
+  return g;
+}
+
+// ─── Level 3 (tower roof) ────────────────────────────────────────────────────
+function buildLevel3() {
+  const g = makeGrid("...");
+
+  // Tower: thin cap over full tower footprint.
+  {
+    const tx = 148,
+      ty = 93,
+      tw = 5,
+      th = 5;
+    const tx1 = tx + tw - 1,
+      ty1 = ty + th - 1;
     fill(g, tx, ty, tx1, ty1, "rof");
-    border(g, tx, ty, tx1, ty1, "bwl");
-    fill(g, tx + 1, ty + 1, tx1 - 1, ty1 - 1, "flr");
-    set(g, tx + 2, ty1 - 1, "std");
   }
 
   return g;
@@ -734,12 +776,7 @@ function injectStairsLevel0(g) {
     fill(g, h.x + 1, h.y + 1, x1 - 1, y1 - 1, "flr");
     // Door
     set(g, h.x + Math.floor(h.w / 2), y1, "cob");
-    // Roof in same level (1-floor rule §4)
-    fill(g, h.x, h.y, x1, y1, "rof");
-    // Re-draw walls and floor on top of roof tiles (so roof is under walls visually)
-    border(g, h.x, h.y, x1, y1, "bwl");
-    fill(g, h.x + 1, h.y + 1, x1 - 1, y1 - 1, "flr");
-    set(g, h.x + Math.floor(h.w / 2), y1, "cob");
+    // Upper structure is represented by regular tiles in level 1.
   }
 }
 
@@ -791,7 +828,11 @@ function writeMap(levels) {
     tileSize: 32,
     width: W,
     height: H,
-    config: { startLevel: "0", mapName: "World v1 — Ilha Principal" },
+    config: {
+      startLevel: "0",
+      mapName: "World v1 — Ilha Principal",
+      smokeTests: [{ id: "spawn-point", type: "spawn", level: "0" }],
+    },
     tileAtlas: ATLAS,
     tileDefinitions: TILE_DEFS,
     entityTemplates: ENTITY_TEMPLATES,
@@ -832,10 +873,11 @@ function main() {
   injectStairsLevel0(l0); // house walls + stairs on top of biome tiles
   const l1 = buildLevel1();
   const l2 = buildLevel2();
+  const l3 = buildLevel3();
   const lm1 = buildLevelMinus1(rng);
   const lm2 = buildLevelMinus2(rng);
 
-  writeMap({ "-2": lm2, "-1": lm1, 0: l0, 1: l1, 2: l2 });
+  writeMap({ "-2": lm2, "-1": lm1, 0: l0, 1: l1, 2: l2, 3: l3 });
 
   console.log(
     `\n[world-v1] Done. Spawn: tile 128,128 (world coords ${128 * 32},${128 * 32})`,

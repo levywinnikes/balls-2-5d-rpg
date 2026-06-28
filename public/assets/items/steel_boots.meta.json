@@ -1,0 +1,10 @@
+{
+  "registryId": "steel_boots",
+  "spec": "docs\\sprites\\items\\steel-boots.spec.json",
+  "generatedAt": "2026-06-20T12:00:40.382Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/steel_boots.png"
+}

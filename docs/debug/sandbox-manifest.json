@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "mapName": "debug_sandbox",
+  "description": "Generated debug arena — all gameplay enemies + item icons. Do not edit entities by hand; run npm run generate:debug-sandbox.",
+  "layout": {
+    "tileSize": 32,
+    "itemCols": 8,
+    "itemStep": 2,
+    "margin": 1,
+    "roomWidth": 7,
+    "roomHeight": 6,
+    "enemyRoomCols": 3,
+    "roomGap": 2,
+    "hubHeight": 5,
+    "sectionGap": 3,
+    "enableDoors": true,
+    "doorTemplateId": "wooden_door"
+  },
+  "excludeEnemies": [
+    "demon"
+  ],
+  "props": [
+    "oak_tree",
+    "wild_flower"
+  ],
+  "enemies": [
+    "bear",
+    "dragon",
+    "goblin",
+    "goblin_lanceiro",
+    "god",
+    "orc",
+    "rat",
+    "red_wizard",
+    "skeleton"
+  ],
+  "items": [
+    "dragon_armor",
+    "dragon_axe",
+    "dragon_shield",
+    "iron_axe",
+    "iron_helmet",
+    "iron_shield",
+    "leather_armor",
+    "leather_boots",
+    "leather_helmet",
+    "leather_legs",
+    "light_torch",
+    "magic_rune",
+    "plate_armor",
+    "plate_legs",
+    "rat_meat",
+    "short_bow",
+    "steel_boots",
+    "throwing_star",
+    "torch",
+    "tower_shield",
+    "viking_helmet",
+    "wooden_shield",
+    "wooden_sword"
+  ],
+  "symbols": {
+    "enemies": {
+      "demon": "en00",
+      "dragon": "en01",
+      "goblin": "en02",
+      "goblin_lanceiro": "en03",
+      "god": "en04",
+      "orc": "en05",
+      "rat": "en06",
+      "red_wizard": "en07",
+      "skeleton": "en08",
+      "bear": "en09"
+    },
+    "items": {
+      "dragon_armor": "it00",
+      "dragon_axe": "it01",
+      "dragon_shield": "it02",
+      "iron_axe": "it03",
+      "iron_helmet": "it04",
+      "iron_shield": "it05",
+      "leather_armor": "it06",
+      "leather_boots": "it07",
+      "leather_helmet": "it08",
+      "leather_legs": "it09",
+      "light_torch": "it10",
+      "magic_rune": "it11",
+      "plate_armor": "it12",
+      "plate_legs": "it13",
+      "rat_meat": "it14",
+      "short_bow": "it15",
+      "steel_boots": "it16",
+      "throwing_star": "it17",
+      "torch": "it18",
+      "tower_shield": "it19",
+      "viking_helmet": "it20",
+      "wooden_shield": "it21",
+      "wooden_sword": "it22"
+    },
+    "props": {
+      "oak_tree": "pr00",
+      "wild_flower": "pr01"
+    }
+  },
+  "generatedAt": "2026-06-28T17:36:28.030Z"
+}

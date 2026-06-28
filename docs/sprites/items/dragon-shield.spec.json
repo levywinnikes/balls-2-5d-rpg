@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "dragon_shield",
+  "registry_id": "dragon_shield",
+  "name": "Dragon Shield",
+  "category": "item_icon",
+  "item_type": "shield",
+  "links": {
+    "weapon_registry_id": "dragon_shield"
+  },
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "path": "public/assets/items/dragon_shield.png",
+    "public_url": "assets/items/dragon_shield.png"
+  },
+  "production_prompts": {
+    "description": "pixel art dragon scale shield item icon, dark metal with red scale pattern, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered, readable silhouette, transparent background, 32x32",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character full body, scene background"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux",
+    "no_background": true
+  }
+}

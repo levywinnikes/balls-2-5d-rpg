@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "sprint": 17,
+  "phase": "P0",
+  "updatedAt": "2026-05-16T22:45:00Z",
+  "items": [
+    {
+      "id": "P0-RUNTIME-01",
+      "title": "Definir orcamento de densidade estrutural por chunk",
+      "priority": "P0",
+      "owner": "Engineering",
+      "dependencies": [],
+      "dod": [
+        "Documento de limites por macrozona publicado",
+        "Limites consumidos por geradores via config",
+        "Check de violacao emitido pelo validador"
+      ]
+    },
+    {
+      "id": "P0-RUNTIME-02",
+      "title": "Ativar telemetria por macrozona no runtime 3D",
+      "priority": "P0",
+      "owner": "Engineering",
+      "dependencies": ["P0-RUNTIME-01"],
+      "dod": [
+        "Metricas p50/p95 e memoria por macrozona registradas",
+        "Saida em JSON para gate",
+        "Sem impacto critico no frame budget"
+      ]
+    },
+    {
+      "id": "P0-GEN-01",
+      "title": "Validador de transicao ecologica",
+      "priority": "P0",
+      "owner": "World Design Lead",
+      "dependencies": [],
+      "dod": [
+        "Detecta pares proibidos ou abruptos de bioma",
+        "Gera relatorio com top transicoes",
+        "Falha com exit code 1 quando fora do limiar"
+      ]
+    },
+    {
+      "id": "P0-GEN-02",
+      "title": "Validador anti-repeticao de layout",
+      "priority": "P0",
+      "owner": "City Design Lead",
+      "dependencies": [],
+      "dod": [
+        "Calcula indice de fragmentacao e repeticao",
+        "Aponta hotspots de padrao repetido",
+        "Integra ao script npm check:world-mundi"
+      ]
+    },
+    {
+      "id": "P0-HOUSE-01",
+      "title": "Matriz de tipologias residenciais por bioma/distrito",
+      "priority": "P1",
+      "owner": "House Tech Lead",
+      "dependencies": ["P0-GEN-02"],
+      "dod": [
+        "Matriz publicada em JSON",
+        "Cada tipologia com regra de silhouette e cobertura",
+        "Validacao de constraints de levels"
+      ]
+    },
+    {
+      "id": "P0-DUNGEON-01",
+      "title": "Backlog tecnico de dungeons (traps/secret graph/encounter director)",
+      "priority": "P1",
+      "owner": "Dungeon Design Lead",
+      "dependencies": [],
+      "dod": [
+        "Escopo minimo de runtime para cada recurso",
+        "Plano de rollout por versao",
+        "Criterios de aceite por feature"
+      ]
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "p0": 4,
+    "p1": 2,
+    "allWithOwner": true,
+    "allWithDoD": true
+  }
+}

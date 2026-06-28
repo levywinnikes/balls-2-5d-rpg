@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "id": "hair_classic",
+  "name": "Classic Brown Hair",
+  "category": "hair",
+  "family": "human",
+  "overlay": {
+    "type": "static_4_directions",
+    "anchor": "hero_base_head",
+    "animated": false
+  },
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 92,
+      "height": 92
+    },
+    "directions": {
+      "count": 4,
+      "names": ["south", "north", "east", "west"]
+    }
+  },
+  "pipeline": {
+    "method": "create-character-state",
+    "extract": "pixel-diff",
+    "source_entity": "hero_base",
+    "source_character_id": "d8bfd55a-a30b-4821-b2d9-36d8b234063f"
+  },
+  "production_prompts": {
+    "edit_description": "classic short brown hair on bald head, natural hairline, same body proportions unchanged, low top-down view, clean dark outline",
+    "negative_prompt": "blurry, muddy colors, long hair past shoulders, hat, helmet, body changes, skin tone changes"
+  }
+}

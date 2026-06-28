@@ -1,0 +1,257 @@
+{
+  "mapName": "debug_vertical",
+  "tileSize": 32,
+  "width": 56,
+  "height": 56,
+  "config": {
+    "startLevel": "0",
+    "mapName": "Debug Vertical World",
+    "debugVertical": true,
+    "zones": {
+      "spawn": {
+        "x": 28,
+        "y": 28
+      },
+      "tower": {
+        "upL0": {
+          "x": 32,
+          "y": 14,
+          "level": "0"
+        },
+        "landingL1": {
+          "x": 32,
+          "y": 14,
+          "level": "1"
+        },
+        "downL1": {
+          "x": 32,
+          "y": 33,
+          "level": "1"
+        },
+        "upL1": {
+          "x": 24,
+          "y": 23,
+          "level": "1"
+        },
+        "downL2": {
+          "x": 24,
+          "y": 31,
+          "level": "2"
+        }
+      },
+      "dungeon": {
+        "downL0": {
+          "x": 28,
+          "y": 37,
+          "level": "0"
+        },
+        "upL1": {
+          "x": 28,
+          "y": 11,
+          "level": "-1"
+        }
+      },
+      "lake": {
+        "x": 41,
+        "y": 28,
+        "level": "0"
+      },
+      "pit": {
+        "x": 28,
+        "y": 28,
+        "levels": [
+          "0",
+          "-1",
+          "-2"
+        ]
+      },
+      "ramp": {
+        "x": 16,
+        "y": 28,
+        "level": "0",
+        "note": "walk south"
+      },
+      "balconyFall": {
+        "x": 32,
+        "y": 37,
+        "level": "1"
+      }
+    }
+  },
+  "tileAtlas": [
+    "...",
+    "cob",
+    "wal",
+    "grs",
+    "stu",
+    "std",
+    "rfu",
+    "wat",
+    "wtr",
+    "sfl",
+    "swl",
+    "cfl",
+    "cwl",
+    "bal",
+    "stn"
+  ],
+  "tileDefinitions": {
+    "...": {
+      "id": "void",
+      "color": "#1e293b",
+      "height": 0.02,
+      "renderAs": "floor"
+    },
+    "cob": {
+      "id": "cobblestone",
+      "color": "#64748b",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "grs": {
+      "id": "grass",
+      "color": "#4ade80",
+      "height": 0.05,
+      "renderAs": "floor"
+    },
+    "stn": {
+      "id": "stone-plaza",
+      "color": "#94a3b8",
+      "height": 0.07,
+      "renderAs": "floor"
+    },
+    "wal": {
+      "id": "wall",
+      "block": true,
+      "color": "#475569",
+      "height": 2.4,
+      "renderAs": "block"
+    },
+    "stu": {
+      "id": "stairs-up",
+      "color": "#c4a07a",
+      "height": 0.5,
+      "renderAs": "floor",
+      "geometryProfile": "stair",
+      "stairDir": "up"
+    },
+    "std": {
+      "id": "stairs-down",
+      "color": "#a8845c",
+      "height": 0.5,
+      "renderAs": "floor",
+      "geometryProfile": "stair",
+      "stairDir": "down"
+    },
+    "rfu": {
+      "id": "ramp-floor-up",
+      "color": "#ca8a04",
+      "height": 2,
+      "rampRise": 2,
+      "levelTransition": "up",
+      "renderAs": "floor",
+      "geometryProfile": "ramp-n"
+    },
+    "wat": {
+      "id": "water",
+      "color": "#1d4ed8",
+      "height": 0.08,
+      "renderAs": "floor",
+      "waterProfile": {
+        "mode": "swimming",
+        "surfaceLevel": 0.58,
+        "bodyCover": 0.82,
+        "speedMultiplier": 0.45,
+        "sinkOffset": -0.26
+      }
+    },
+    "wtr": {
+      "id": "water-shallow",
+      "color": "#60a5fa",
+      "height": 0.04,
+      "renderAs": "floor",
+      "waterProfile": {
+        "mode": "wading",
+        "surfaceLevel": 0.3,
+        "bodyCover": 0.4,
+        "speedMultiplier": 0.65,
+        "sinkOffset": -0.05
+      }
+    },
+    "sfl": {
+      "id": "sewer-floor",
+      "color": "#57534e",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "swl": {
+      "id": "sewer-wall",
+      "block": true,
+      "color": "#44403c",
+      "height": 2.2,
+      "renderAs": "block"
+    },
+    "cfl": {
+      "id": "cave-floor",
+      "color": "#78716c",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "cwl": {
+      "id": "cave-wall",
+      "block": true,
+      "color": "#57534e",
+      "height": 2.4,
+      "renderAs": "block"
+    },
+    "bal": {
+      "id": "balcony",
+      "color": "#cbd5e1",
+      "height": 0.08,
+      "renderAs": "floor"
+    }
+  },
+  "entityTemplates": {},
+  "levels": {
+    "0": {
+      "binFile": "debug_vertical_0.bin",
+      "playerPos": {
+        "x": 912,
+        "y": 912
+      },
+      "entities": []
+    },
+    "1": {
+      "binFile": "debug_vertical_1.bin",
+      "playerPos": {
+        "x": 912,
+        "y": 912
+      },
+      "entities": []
+    },
+    "2": {
+      "binFile": "debug_vertical_2.bin",
+      "playerPos": {
+        "x": 912,
+        "y": 912
+      },
+      "entities": []
+    },
+    "-2": {
+      "binFile": "debug_vertical_-2.bin",
+      "playerPos": {
+        "x": 912,
+        "y": 912
+      },
+      "entities": []
+    },
+    "-1": {
+      "binFile": "debug_vertical_-1.bin",
+      "playerPos": {
+        "x": 912,
+        "y": 912
+      },
+      "entities": []
+    }
+  }
+}

@@ -199,7 +199,7 @@ const GameLayout: React.FC = () => {
     const timer = window.setTimeout(() => {
       handleStartGame({
         isNewGame: true,
-        map: "smoke_test",
+        map: "city_3d_multi",
         benchmarkMode: true,
         benchmarkName,
         benchmarkAutoClose,

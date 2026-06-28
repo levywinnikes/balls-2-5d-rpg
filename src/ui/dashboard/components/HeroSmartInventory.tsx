@@ -21,14 +21,16 @@ const InventorySlot: React.FC<{
   onClick: (index: number) => void;
   onHover: (item: any) => void;
   onLeave: () => void;
-}> = React.memo(({ item, index, isFocused, onClick, onHover, onLeave }) => {
-  const score = calculateItemScore(item);
-  const tier = getItemTier(score);
-  const tierBorder = getItemBorder(score);
+  onContextMenu: (event: React.MouseEvent, item: InventoryItem) => void;
+}> = React.memo(
+  ({ item, index, isFocused, onClick, onHover, onLeave, onContextMenu }) => {
+    const score = calculateItemScore(item);
+    const tier = getItemTier(score);
+    const tierBorder = getItemBorder(score);
 
-  return (
-    <div
-      className={`
+    return (
+      <div
+        className={`
             relative w-14 h-14 rounded border flex items-center justify-center bg-black/60
             transition-all duration-150 cursor-pointer group
             ${
@@ -38,70 +40,76 @@ const InventorySlot: React.FC<{
             }
             ${tier.shadow}
             `}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick(index);
-      }}
-      onMouseEnter={() => onHover(item)}
-      onMouseLeave={onLeave}
-      title={`Inventory Item: ${item.itemId}`}
-    >
-      {/* Rarity BG Glow */}
-      <div
-        className={`absolute inset-0 ${tier.bg || TIER_BG.common} opacity-10 group-hover:opacity-20 transition-opacity`}
-      />
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick(index);
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onContextMenu(e, item);
+        }}
+        onMouseEnter={() => onHover(item)}
+        onMouseLeave={onLeave}
+        title={`Inventory Item: ${item.itemId}`}
+      >
+        {/* Rarity BG Glow */}
+        <div
+          className={`absolute inset-0 ${tier.bg || TIER_BG.common} opacity-10 group-hover:opacity-20 transition-opacity`}
+        />
 
-      {item && (
-        <>
-          <img
-            src={`assets/items/${item.itemId}.png`}
-            alt={item.itemId}
-            className="w-10 h-10 pixelated object-contain relative z-10"
-          />
+        {item && (
+          <>
+            <img
+              src={`assets/items/${item.itemId}.png`}
+              alt={item.itemId}
+              className="w-10 h-10 pixelated object-contain relative z-10"
+            />
 
-          {/* Count Indicator - Only if count > 1 */}
-          {item.count > 1 && (
-            <div className="absolute bottom-1 right-1 text-[9px] font-bold text-white drop-shadow-md z-20 bg-black/60 px-1 rounded-full border border-white/10">
-              {item.count}
-            </div>
-          )}
+            {/* Count Indicator - Only if count > 1 */}
+            {item.count > 1 && (
+              <div className="absolute bottom-1 right-1 text-[9px] font-bold text-white drop-shadow-md z-20 bg-black/60 px-1 rounded-full border border-white/10">
+                {item.count}
+              </div>
+            )}
 
-          {/* Star / Tier Indicator */}
-          {(() => {
-            const stars = getItemStars(item);
-            if (stars.length > 0) {
-              return (
-                <div className="absolute top-1 right-1 z-20 flex flex-col gap-[1px]">
-                  {stars.map((quality, i) => (
-                    <StarIcon key={i} quality={quality} size={6} />
-                  ))}
-                </div>
-              );
-            }
+            {/* Star / Tier Indicator */}
+            {(() => {
+              const stars = getItemStars(item);
+              if (stars.length > 0) {
+                return (
+                  <div className="absolute top-1 right-1 z-20 flex flex-col gap-[1px]">
+                    {stars.map((quality, i) => (
+                      <StarIcon key={i} quality={quality} size={6} />
+                    ))}
+                  </div>
+                );
+              }
 
-            // Non-Equipment Indicator
-            const def = WeaponRegistry.getWeaponDefinition(item.itemId);
-            if (
-              def &&
-              (def.consumable ||
-                def.type === ItemType.FOOD ||
-                def.type === ItemType.RESOURCE ||
-                def.type === ItemType.POTION)
-            ) {
-              return (
-                <div className="absolute top-1 right-1 z-20 text-white/40">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-                </div>
-              );
-            }
+              // Non-Equipment Indicator
+              const def = WeaponRegistry.getWeaponDefinition(item.itemId);
+              if (
+                def &&
+                (def.consumable ||
+                  def.type === ItemType.FOOD ||
+                  def.type === ItemType.RESOURCE ||
+                  def.type === ItemType.POTION)
+              ) {
+                return (
+                  <div className="absolute top-1 right-1 z-20 text-white/40">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                  </div>
+                );
+              }
 
-            return null;
-          })()}
-        </>
-      )}
-    </div>
-  );
-});
+              return null;
+            })()}
+          </>
+        )}
+      </div>
+    );
+  },
+);
 
 export const HeroSmartInventory: React.FC<{
   activeSection: "EQUIPMENT" | "INVENTORY";
@@ -112,6 +120,7 @@ export const HeroSmartInventory: React.FC<{
   onItemClick: (index: number) => void;
   onHoverItem: (item: any) => void;
   onLeaveItem: () => void;
+  onItemContextMenu: (event: React.MouseEvent, item: InventoryItem) => void;
   filterMode?: "equipment" | "backpack" | "all";
 }> = React.memo(
   ({
@@ -123,6 +132,7 @@ export const HeroSmartInventory: React.FC<{
     onItemClick,
     onHoverItem,
     onLeaveItem,
+    onItemContextMenu,
     filterMode = "all",
   }) => {
     const { t } = useLanguage();
@@ -149,6 +159,7 @@ export const HeroSmartInventory: React.FC<{
                 onClick={onItemClick}
                 onHover={onHoverItem}
                 onLeave={onLeaveItem}
+                onContextMenu={onItemContextMenu}
               />
             ))}
           </div>

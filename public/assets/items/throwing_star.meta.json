@@ -1,0 +1,10 @@
+{
+  "registryId": "throwing_star",
+  "spec": "docs\\sprites\\items\\throwing-star.spec.json",
+  "generatedAt": "2026-06-20T11:56:55.354Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/throwing_star.png"
+}

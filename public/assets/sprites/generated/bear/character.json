@@ -1,0 +1,17 @@
+{
+  "characterId": "9698f30e-1460-4c7f-8e60-8bae2b876396",
+  "createdAt": "2026-06-27T18:07:44.990Z",
+  "entityId": "bear",
+  "description": "low top-down angle pixel art brown bear quadruped, stocky body on four paws, no clothes, no weapons, neutral standing pose facing camera, same map scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+  "view": "low top-down",
+  "imageSize": {
+    "width": 64,
+    "height": 64
+  },
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\bear\\character_rotations\\south.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\bear\\character_rotations\\west.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\bear\\character_rotations\\east.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\bear\\character_rotations\\north.png"
+  }
+}

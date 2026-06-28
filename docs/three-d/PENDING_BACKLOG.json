@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "lastUpdatedAt": "2026-06-28",
+  "owner": "agent",
+  "activeTrack": "vertical-world-d",
+  "completedRecently": [
+    {
+      "id": "VERT-CULL",
+      "title": "VerticalLevelVisibility3D — culling por coluna",
+      "status": "completed"
+    },
+    {
+      "id": "DEBUG-VERTICAL-MAP",
+      "title": "Mapa debug_vertical (-2…+2 torres/poços)",
+      "status": "completed"
+    },
+    {
+      "id": "ELEV-P2-RAMP",
+      "title": "Rampas levelTransition + queda de borda + fix escada activeLevel",
+      "status": "completed"
+    },
+    {
+      "id": "SURFACE-RESOLVER",
+      "title": "TileSurfaceResolver — regra única de altura (chão + pés + água)",
+      "status": "completed"
+    },
+    {
+      "id": "SANDBOX-VERTICAL",
+      "title": "Sandbox vertical demo — torre +1, subsolo -1, lago, rampas",
+      "status": "completed"
+    },
+    {
+      "id": "WATER-P0",
+      "title": "Água 3D gameplay (wading/swimming, colisão, sink, sandbox)",
+      "status": "completed"
+    },
+    {
+      "id": "WATER-P1",
+      "title": "Água 3D visual procedural (overlay, superfície animada, splash)",
+      "status": "completed"
+    },
+    {
+      "id": "ELEV-P1",
+      "title": "Elevação Phase 1 — GroundHeightQuery3D + demo sandbox oeste",
+      "status": "completed"
+    },
+    {
+      "id": "DEPTH-FIX",
+      "title": "Depth sorting — sprites no grupo 0 + alphatest",
+      "status": "completed"
+    },
+    {
+      "id": "PROPS-ANIM",
+      "title": "Props animados oak_tree + wild_flower (PixelLab + runtime)",
+      "status": "completed"
+    }
+  ],
+  "pending": [
+    {
+      "id": "WATER-P2-A",
+      "track": "water",
+      "title": "Shader tint aquático no sprite (substituir overlay mesh)",
+      "priority": 1,
+      "status": "completed",
+      "doc": "docs/three-d/WATER_SYSTEM_3D.md"
+    },
+    {
+      "id": "WATER-P2-B",
+      "track": "water",
+      "title": "Superfície de água respeita oclusão de andar superior",
+      "priority": 2,
+      "status": "completed",
+      "doc": "docs/three-d/WATER_SYSTEM_3D.md"
+    },
+    {
+      "id": "WATER-P3-LIQUID",
+      "track": "water",
+      "title": "Motor líquido: poço + volume translúcido + fundo visível",
+      "priority": 1,
+      "status": "completed",
+      "doc": "docs/three-d/WATER_SYSTEM_3D.md"
+    },
+    {
+      "id": "ELEV-P2",
+      "track": "elevation",
+      "title": "Rampas rampRise 2.0 como transição de andar",
+      "priority": 3,
+      "status": "completed",
+      "doc": "docs/three-d/ELEVATION_AND_TRANSITION_PLAN.md"
+    },
+    {
+      "id": "ELEV-P3-FOREST",
+      "track": "elevation",
+      "title": "Gerador floresta — morros hlm + noise",
+      "priority": 4,
+      "status": "pending",
+      "doc": "docs/three-d/ELEVATION_AND_TRANSITION_PLAN.md"
+    },
+    {
+      "id": "ELEV-P3-CITY",
+      "track": "elevation",
+      "title": "Gerador cidade — grades rpn entre quarteirões",
+      "priority": 5,
+      "status": "pending",
+      "doc": "docs/three-d/ELEVATION_AND_TRANSITION_PLAN.md"
+    },
+    {
+      "id": "ELEV-P4",
+      "track": "elevation",
+      "title": "Pathfinding/colisão em inclinação + AI em rampas",
+      "priority": 6,
+      "status": "pending",
+      "doc": "docs/three-d/ELEVATION_AND_TRANSITION_PLAN.md"
+    },
+    {
+      "id": "ELEV-P5",
+      "track": "elevation",
+      "title": "Paridade 2D para relevo (deferred — 3D é source of truth)",
+      "priority": 99,
+      "status": "deferred"
+    },
+    {
+      "id": "ELEV-CONTRACT",
+      "track": "elevation",
+      "title": "Registrar símbolos rpn/hlm em WORLD_MAP_CONTRACT.md",
+      "priority": 7,
+      "status": "pending"
+    },
+    {
+      "id": "ENEMY-ORC",
+      "track": "sprites",
+      "title": "Inimigo PixelLab: orc (próximo da fila)",
+      "priority": 8,
+      "status": "pending"
+    },
+    {
+      "id": "ENEMY-WIZARD",
+      "track": "sprites",
+      "title": "Inimigo PixelLab: red_wizard",
+      "priority": 9,
+      "status": "pending"
+    },
+    {
+      "id": "ENEMY-GOBLIN",
+      "track": "sprites",
+      "title": "Inimigo PixelLab: goblin desarmado",
+      "priority": 10,
+      "status": "pending"
+    },
+    {
+      "id": "ENEMY-DRAGON",
+      "track": "sprites",
+      "title": "Inimigo PixelLab: dragon",
+      "priority": 11,
+      "status": "pending"
+    },
+    {
+      "id": "ENEMY-GOD",
+      "track": "sprites",
+      "title": "Inimigo PixelLab: god",
+      "priority": 12,
+      "status": "pending"
+    },
+    {
+      "id": "PROPS-3D",
+      "track": "sprites",
+      "title": "Props 3D billboards (oak_tree/wild_flower no slice)",
+      "priority": 13,
+      "status": "pending"
+    }
+  ]
+}

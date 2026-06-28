@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "sprint": 17,
+  "phase": "P0",
+  "updatedAt": "2026-05-16T22:45:00Z",
+  "kpiBudget": {
+    "frameTimeMs": {
+      "p50Max": 20,
+      "p95Max": 33,
+      "p99Max": 50
+    },
+    "memory": {
+      "heapGrowthPer10MinMBMax": 40,
+      "longSessionCriticalMB": 350
+    },
+    "streaming": {
+      "maxChunkQueueDepth": 96,
+      "maxChunkBuildPerTick": 10,
+      "maxChunkUnloadPerTick": 8
+    },
+    "generation": {
+      "maxGenerationTimeSec512": 120,
+      "maxGenerationTimeSec1024Candidate": 420
+    }
+  },
+  "macrozoneTargets": [
+    {
+      "zone": "urban-core",
+      "maxStructuralDensityPerChunk": 0.62,
+      "maxMultiLevelRatio": 0.45
+    },
+    {
+      "zone": "residential-belt",
+      "maxStructuralDensityPerChunk": 0.48,
+      "maxMultiLevelRatio": 0.35
+    },
+    {
+      "zone": "wild-biome",
+      "maxStructuralDensityPerChunk": 0.30,
+      "maxMultiLevelRatio": 0.20
+    },
+    {
+      "zone": "dungeon-cluster",
+      "maxStructuralDensityPerChunk": 0.55,
+      "maxMultiLevelRatio": 0.50
+    }
+  ],
+  "gateRules": [
+    "Falhar gate se p95 > 33ms em duas macrozonas ou mais",
+    "Falhar gate se crescimento de heap exceder limite por 2 amostras consecutivas",
+    "Falhar gate se validador ecologico ou anti-repeticao retornar erro"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "characterId": "180c2156-87bb-48a8-acac-b849cd14ed8b",
+  "sourceCharacterId": "d8bfd55a-a30b-4821-b2d9-36d8b234063f",
+  "createdAt": "2026-06-17T19:13:24.205Z",
+  "entityId": "hair_classic",
+  "editDescription": "classic short brown hair on bald head, natural hairline, same body proportions unchanged, low top-down view, clean dark outline",
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\hair_classic\\_state\\character_rotations\\south.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\hair_classic\\_state\\character_rotations\\north.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\hair_classic\\_state\\character_rotations\\east.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\hair_classic\\_state\\character_rotations\\west.png"
+  }
+}

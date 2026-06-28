@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "phase": "P1",
+  "mapSize": {
+    "width": 512,
+    "height": 512,
+    "tileSize": 32
+  },
+  "objective": "Definir estrutura macro do mundi para guiar a geracao sem repeticao e com coerencia ecologica.",
+  "globalRules": {
+    "islandModel": true,
+    "seaBorderMinTiles": 20,
+    "edgeTileRequired": "wat",
+    "upperLevelsDefault": "...",
+    "notes": [
+      "Nao gerar estrutura tecnica especial de roof.",
+      "Cobertura e volumes por composicao de levels."
+    ]
+  },
+  "macrozones": [
+    {
+      "id": "Z1-NW-FOREST",
+      "name": "Floresta Umbra",
+      "bbox": { "x0": 34, "y0": 38, "x1": 188, "y1": 182 },
+      "biomeCore": ["grs", "tre", "pat"],
+      "secondary": ["mud", "rok"],
+      "hazard": "low-mid",
+      "role": "Exploracao inicial e hub de caverna natural",
+      "keyPoi": ["caverna_natural_01", "clareira_ritual"]
+    },
+    {
+      "id": "Z2-NORTH-URBAN",
+      "name": "Arco Urbano Septentrional",
+      "bbox": { "x0": 190, "y0": 52, "x1": 330, "y1": 190 },
+      "biomeCore": ["cob", "stn", "pav"],
+      "secondary": ["grs", "pat"],
+      "hazard": "mid",
+      "role": "Centro de servicos, comercio e progressao",
+      "keyPoi": ["capital_norte", "plaza_central", "bairro_residencial_n1"]
+    },
+    {
+      "id": "Z3-NE-SWAMP",
+      "name": "Marisma Verde",
+      "bbox": { "x0": 332, "y0": 72, "x1": 462, "y1": 224 },
+      "biomeCore": ["mud", "wtr", "pat"],
+      "secondary": ["grs", "tre"],
+      "hazard": "mid-high",
+      "role": "Risco ambiental e rotas alternativas",
+      "keyPoi": ["ponte_podre", "ruina_afundada"]
+    },
+    {
+      "id": "Z4-CENTRAL-PLAINS",
+      "name": "Planicie Cardinal",
+      "bbox": { "x0": 176, "y0": 194, "x1": 346, "y1": 320 },
+      "biomeCore": ["grs", "pat", "snd"],
+      "secondary": ["cob", "stn"],
+      "hazard": "mid",
+      "role": "Conector de rotas e area de expansao residencial",
+      "keyPoi": ["mercado_aberto", "estacao_caravanas"]
+    },
+    {
+      "id": "Z5-WEST-HIGHLANDS",
+      "name": "Serra Ferrugem",
+      "bbox": { "x0": 52, "y0": 190, "x1": 172, "y1": 346 },
+      "biomeCore": ["rok", "grs", "pat"],
+      "secondary": ["snd", "mud"],
+      "hazard": "mid-high",
+      "role": "Topografia acidentada com acessos verticais",
+      "keyPoi": ["mirante_ferro", "passagem_fenda_oeste"]
+    },
+    {
+      "id": "Z6-SE-DESERT",
+      "name": "Dunas de Ember",
+      "bbox": { "x0": 332, "y0": 246, "x1": 470, "y1": 398 },
+      "biomeCore": ["snd", "rok", "pat"],
+      "secondary": ["mud", "grs"],
+      "hazard": "high",
+      "role": "Zona de desafio medio-tardio",
+      "keyPoi": ["necropole_areia", "obselisco_partido"]
+    },
+    {
+      "id": "Z7-SOUTH-COAST",
+      "name": "Costa Rubra",
+      "bbox": { "x0": 162, "y0": 332, "x1": 348, "y1": 470 },
+      "biomeCore": ["snd", "wat", "grs"],
+      "secondary": ["rok", "pat"],
+      "hazard": "mid-high",
+      "role": "Litoral com rotas de risco e dungeons costeiras",
+      "keyPoi": ["porto_quebrado", "gruta_marinha"]
+    }
+  ],
+  "transitionPolicy": {
+    "minBandTiles": 6,
+    "recommendedBandTiles": 10,
+    "hardForbiddenPairs": ["wat-cob", "wat-stn"],
+    "softAlertPairs": ["mud-snd", "grs-wat"],
+    "rule": "Toda fronteira de macrozona deve ter faixa tampao de transicao sem salto direto proibido."
+  },
+  "progressionRoutes": {
+    "main": [
+      "capital_norte -> planicie_cardinal -> costa_rubra",
+      "capital_norte -> marisma_verde -> dunas_ember"
+    ],
+    "secondary": [
+      "floresta_umbra -> serra_ferrugem -> planicie_cardinal",
+      "costa_rubra -> porto_quebrado -> arco_urbano"
+    ],
+    "lateGameShortcuts": [
+      "passagem_fenda_oeste <-> necropole_areia",
+      "gruta_marinha <-> ruina_afundada"
+    ]
+  },
+  "p1AcceptanceTargets": {
+    "seaBorderCompliance": 1.0,
+    "maxCriticalTransitionViolations": 0,
+    "maxStructuralRepeatRatio": 0.22,
+    "requiredMacrozoneCount": 7,
+    "requiredMainRoutes": 2
+  }
+}

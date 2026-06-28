@@ -1,0 +1,10 @@
+{
+  "animation": "attack",
+  "direction": "west",
+  "mode": "template",
+  "templateId": "lead-jab",
+  "actionDescription": null,
+  "frameCount": 3,
+  "generatedAt": "2026-06-27T18:32:32.780Z",
+  "characterId": "9698f30e-1460-4c7f-8e60-8bae2b876396"
+}

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "id": "oak_tree",
+  "canvas": {
+    "width": 64,
+    "height": 96
+  },
+  "direction": "south",
+  "animations": {
+    "sway_gentle": {
+      "frame_count": 4,
+      "frame_rate": 6
+    },
+    "sway_strong": {
+      "frame_count": 4,
+      "frame_rate": 8
+    }
+  },
+  "generated_at": "2026-06-28T00:53:01.761Z",
+  "source_spec": "docs/sprites/props/oak-tree.spec.json"
+}

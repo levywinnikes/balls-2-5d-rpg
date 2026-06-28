@@ -1,0 +1,17 @@
+{
+  "characterId": "d8bfd55a-a30b-4821-b2d9-36d8b234063f",
+  "createdAt": "2026-06-17T17:20:30.605Z",
+  "entityId": "hero_base",
+  "description": "low top-down angle pixel art bald humanoid base body character model, plain skin, wearing simple shorts or underwear, no hair, no armor, no clothes, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+  "view": "low top-down",
+  "imageSize": {
+    "width": 64,
+    "height": 64
+  },
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\hero_base\\character_rotations\\south.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\hero_base\\character_rotations\\west.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\hero_base\\character_rotations\\east.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\hero_base\\character_rotations\\north.png"
+  }
+}

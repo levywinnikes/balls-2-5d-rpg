@@ -274,8 +274,8 @@ export const SettingsContent: React.FC = () => {
   const handleFpsTarget = (n: 0 | 30 | 60 | 120) => ps.setFpsTarget(n);
   const handleAntialias = () => ps.setAntialiasEnabled(!display.antialias);
 
-  const handleOpenPerspectiveDebugMap = () => {
-    ps.requestPerspectiveDebugMap("perspective_debug");
+  const handleOpenDebugSandboxMap = () => {
+    ps.requestPerspectiveDebugMap("debug_sandbox");
   };
 
   return (
@@ -292,7 +292,10 @@ export const SettingsContent: React.FC = () => {
       }}
     >
       {/* ── DISPLAY ── */}
-      <Section title={t("display_settings" as any)} icon={<Monitor size={14} />}>
+      <Section
+        title={t("display_settings" as any)}
+        icon={<Monitor size={14} />}
+      >
         <Row
           label={t("render_scale" as any)}
           hint={t("render_scale_desc" as any)}
@@ -357,9 +360,7 @@ export const SettingsContent: React.FC = () => {
 
       {/* ── AUDIO ── */}
       <Section title={t("audio_settings" as any)} icon={<Volume2 size={14} />}>
-        <Row
-          label={t("music_playlist" as any)}
-        >
+        <Row label={t("music_playlist" as any)}>
           <Toggle
             on={!musicOff}
             onText={t("activated" as any)}
@@ -501,7 +502,7 @@ export const SettingsContent: React.FC = () => {
           />
         </Row>
         <button
-          onClick={handleOpenPerspectiveDebugMap}
+          onClick={handleOpenDebugSandboxMap}
           style={{
             padding: 9,
             width: "100%",
@@ -517,15 +518,12 @@ export const SettingsContent: React.FC = () => {
             transition: "all 0.18s",
           }}
         >
-          {t("open_perspective_debug_map" as any)}
+          {t("open_debug_sandbox_map" as any)}
         </button>
       </Section>
 
       {/* ── Hidden / unused icon imports referenced via lucide tree-shaking ── */}
-      <span
-        style={{ display: "none" }}
-        aria-hidden
-      >
+      <span style={{ display: "none" }} aria-hidden>
         <Gauge size={1} />
         <Eye size={1} />
         <EyeOff size={1} />

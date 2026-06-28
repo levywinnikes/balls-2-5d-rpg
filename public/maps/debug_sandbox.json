@@ -1,0 +1,704 @@
+{
+  "mapName": "debug_sandbox",
+  "tileSize": 32,
+  "width": 27,
+  "height": 44,
+  "config": {
+    "startLevel": "0",
+    "mapName": "Debug Sandbox",
+    "debugSandbox": true,
+    "manifestPath": "docs/debug/sandbox-manifest.json",
+    "layoutMode": "enemy_rooms",
+    "zones": {
+      "player": {
+        "x": 13,
+        "y": 3
+      },
+      "enemies": {
+        "mode": "rooms",
+        "cols": 3,
+        "rows": 3,
+        "rooms": [
+          {
+            "id": "bear",
+            "x": 4,
+            "y": 11,
+            "door": {
+              "uuid": "debug_sandbox_room_door_1",
+              "x": 4,
+              "y": 8
+            }
+          },
+          {
+            "id": "dragon",
+            "x": 13,
+            "y": 11,
+            "door": {
+              "uuid": "debug_sandbox_room_door_2",
+              "x": 13,
+              "y": 8
+            }
+          },
+          {
+            "id": "goblin",
+            "x": 22,
+            "y": 11,
+            "door": {
+              "uuid": "debug_sandbox_room_door_3",
+              "x": 22,
+              "y": 8
+            }
+          },
+          {
+            "id": "goblin_lanceiro",
+            "x": 4,
+            "y": 19,
+            "door": {
+              "uuid": "debug_sandbox_room_door_4",
+              "x": 4,
+              "y": 16
+            }
+          },
+          {
+            "id": "god",
+            "x": 13,
+            "y": 19,
+            "door": {
+              "uuid": "debug_sandbox_room_door_5",
+              "x": 13,
+              "y": 16
+            }
+          },
+          {
+            "id": "orc",
+            "x": 22,
+            "y": 19,
+            "door": {
+              "uuid": "debug_sandbox_room_door_6",
+              "x": 22,
+              "y": 16
+            }
+          },
+          {
+            "id": "rat",
+            "x": 4,
+            "y": 27,
+            "door": {
+              "uuid": "debug_sandbox_room_door_7",
+              "x": 4,
+              "y": 24
+            }
+          },
+          {
+            "id": "red_wizard",
+            "x": 13,
+            "y": 27,
+            "door": {
+              "uuid": "debug_sandbox_room_door_8",
+              "x": 13,
+              "y": 24
+            }
+          },
+          {
+            "id": "skeleton",
+            "x": 22,
+            "y": 27,
+            "door": {
+              "uuid": "debug_sandbox_room_door_9",
+              "x": 22,
+              "y": 24
+            }
+          }
+        ]
+      },
+      "items": {
+        "startY": 35,
+        "rows": 3,
+        "cols": 8
+      },
+      "verticalDemo": {
+        "towerStairX": 23,
+        "towerStairY": 3,
+        "towerDownX": 23,
+        "towerDownY": 8,
+        "cellarStairX": 3,
+        "cellarStairY": 4,
+        "lake": {
+          "x": 21,
+          "y": 2,
+          "w": 4,
+          "h": 3
+        },
+        "ramps": {
+          "x": 2,
+          "y": 3
+        },
+        "floorRamp": {
+          "x": 13,
+          "y": 3
+        },
+        "balconyFall": {
+          "x": 23,
+          "y": 11
+        }
+      }
+    }
+  },
+  "tileAtlas": [
+    "...",
+    "cob",
+    "wal",
+    "flr",
+    "wat",
+    "wtr",
+    "rpn",
+    "rps",
+    "hlm",
+    "stu",
+    "std",
+    "rfu",
+    "en09",
+    "en01",
+    "en02",
+    "en03",
+    "en04",
+    "en05",
+    "en06",
+    "en07",
+    "en08",
+    "it00",
+    "it01",
+    "it02",
+    "it03",
+    "it04",
+    "it05",
+    "it06",
+    "it07",
+    "it08",
+    "it09",
+    "it10",
+    "it11",
+    "it12",
+    "it13",
+    "it14",
+    "it15",
+    "it16",
+    "it17",
+    "it18",
+    "it19",
+    "it20",
+    "it21",
+    "it22",
+    "pr00",
+    "pr01",
+    "dor"
+  ],
+  "tileDefinitions": {
+    "cob": {
+      "id": "cobblestone",
+      "color": "#64748b",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "wal": {
+      "id": "wall",
+      "block": true,
+      "color": "#475569",
+      "height": 2.4,
+      "renderAs": "block"
+    },
+    "flr": {
+      "id": "floor",
+      "color": "#78350f",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "wat": {
+      "id": "water",
+      "color": "#1d4ed8",
+      "height": 0.08,
+      "renderAs": "floor",
+      "block": true,
+      "waterProfile": {
+        "mode": "swimming",
+        "surfaceLevel": 0.58,
+        "bodyCover": 0.82,
+        "speedMultiplier": 0.45,
+        "sinkOffset": -0.26
+      }
+    },
+    "wtr": {
+      "id": "water-shallow",
+      "color": "#60a5fa",
+      "height": 0.04,
+      "renderAs": "floor",
+      "waterProfile": {
+        "mode": "wading",
+        "surfaceLevel": 0.3,
+        "bodyCover": 0.4,
+        "speedMultiplier": 0.65,
+        "sinkOffset": -0.05
+      }
+    },
+    "rpn": {
+      "id": "ramp-n",
+      "color": "#84cc16",
+      "height": 0.32,
+      "rampRise": 0.32,
+      "renderAs": "floor",
+      "geometryProfile": "ramp-n"
+    },
+    "rps": {
+      "id": "plateau-high",
+      "color": "#4d7c0f",
+      "height": 0.38,
+      "renderAs": "floor",
+      "geometryProfile": "slab"
+    },
+    "hlm": {
+      "id": "hill-mound",
+      "color": "#65a30d",
+      "height": 0.22,
+      "renderAs": "floor",
+      "geometryProfile": "slab"
+    },
+    "stu": {
+      "id": "stairs-up",
+      "color": "#c4a07a",
+      "height": 0.5,
+      "renderAs": "floor",
+      "geometryProfile": "stair",
+      "stairDir": "up"
+    },
+    "std": {
+      "id": "stairs-down",
+      "color": "#a8845c",
+      "height": 0.5,
+      "renderAs": "floor",
+      "geometryProfile": "stair",
+      "stairDir": "down"
+    },
+    "rfu": {
+      "id": "ramp-floor-up",
+      "color": "#ca8a04",
+      "height": 2,
+      "rampRise": 2,
+      "levelTransition": "up",
+      "renderAs": "floor",
+      "geometryProfile": "ramp-n"
+    }
+  },
+  "entityTemplates": {
+    "en09": {
+      "type": "enemy",
+      "id": "bear"
+    },
+    "en01": {
+      "type": "enemy",
+      "id": "dragon"
+    },
+    "en02": {
+      "type": "enemy",
+      "id": "goblin"
+    },
+    "en03": {
+      "type": "enemy",
+      "id": "goblin_lanceiro"
+    },
+    "en04": {
+      "type": "enemy",
+      "id": "god"
+    },
+    "en05": {
+      "type": "enemy",
+      "id": "orc"
+    },
+    "en06": {
+      "type": "enemy",
+      "id": "rat"
+    },
+    "en07": {
+      "type": "enemy",
+      "id": "red_wizard"
+    },
+    "en08": {
+      "type": "enemy",
+      "id": "skeleton"
+    },
+    "it00": {
+      "type": "item",
+      "id": "dragon_armor"
+    },
+    "it01": {
+      "type": "item",
+      "id": "dragon_axe"
+    },
+    "it02": {
+      "type": "item",
+      "id": "dragon_shield"
+    },
+    "it03": {
+      "type": "item",
+      "id": "iron_axe"
+    },
+    "it04": {
+      "type": "item",
+      "id": "iron_helmet"
+    },
+    "it05": {
+      "type": "item",
+      "id": "iron_shield"
+    },
+    "it06": {
+      "type": "item",
+      "id": "leather_armor"
+    },
+    "it07": {
+      "type": "item",
+      "id": "leather_boots"
+    },
+    "it08": {
+      "type": "item",
+      "id": "leather_helmet"
+    },
+    "it09": {
+      "type": "item",
+      "id": "leather_legs"
+    },
+    "it10": {
+      "type": "item",
+      "id": "light_torch"
+    },
+    "it11": {
+      "type": "item",
+      "id": "magic_rune"
+    },
+    "it12": {
+      "type": "item",
+      "id": "plate_armor"
+    },
+    "it13": {
+      "type": "item",
+      "id": "plate_legs"
+    },
+    "it14": {
+      "type": "item",
+      "id": "rat_meat"
+    },
+    "it15": {
+      "type": "item",
+      "id": "short_bow"
+    },
+    "it16": {
+      "type": "item",
+      "id": "steel_boots"
+    },
+    "it17": {
+      "type": "item",
+      "id": "throwing_star"
+    },
+    "it18": {
+      "type": "item",
+      "id": "torch"
+    },
+    "it19": {
+      "type": "item",
+      "id": "tower_shield"
+    },
+    "it20": {
+      "type": "item",
+      "id": "viking_helmet"
+    },
+    "it21": {
+      "type": "item",
+      "id": "wooden_shield"
+    },
+    "it22": {
+      "type": "item",
+      "id": "wooden_sword"
+    },
+    "pr00": {
+      "type": "decoration",
+      "id": "oak_tree",
+      "isCollidable": true
+    },
+    "pr01": {
+      "type": "decoration",
+      "id": "wild_flower",
+      "isCollidable": false
+    },
+    "dor": {
+      "type": "door",
+      "id": "wooden_door",
+      "block": true,
+      "locked": false,
+      "keyId": null
+    }
+  },
+  "levels": {
+    "0": {
+      "binFile": "debug_sandbox_0.bin",
+      "playerPos": {
+        "x": 432,
+        "y": 112
+      },
+      "entities": [
+        {
+          "x": 4,
+          "y": 8,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_room_door_1"
+        },
+        {
+          "x": 4,
+          "y": 11,
+          "symbol": "en09"
+        },
+        {
+          "x": 13,
+          "y": 8,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_room_door_2"
+        },
+        {
+          "x": 13,
+          "y": 11,
+          "symbol": "en01"
+        },
+        {
+          "x": 22,
+          "y": 8,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_room_door_3"
+        },
+        {
+          "x": 22,
+          "y": 11,
+          "symbol": "en02"
+        },
+        {
+          "x": 4,
+          "y": 16,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_room_door_4"
+        },
+        {
+          "x": 4,
+          "y": 19,
+          "symbol": "en03"
+        },
+        {
+          "x": 13,
+          "y": 16,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_room_door_5"
+        },
+        {
+          "x": 13,
+          "y": 19,
+          "symbol": "en04"
+        },
+        {
+          "x": 22,
+          "y": 16,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_room_door_6"
+        },
+        {
+          "x": 22,
+          "y": 19,
+          "symbol": "en05"
+        },
+        {
+          "x": 4,
+          "y": 24,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_room_door_7"
+        },
+        {
+          "x": 4,
+          "y": 27,
+          "symbol": "en06"
+        },
+        {
+          "x": 13,
+          "y": 24,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_room_door_8"
+        },
+        {
+          "x": 13,
+          "y": 27,
+          "symbol": "en07"
+        },
+        {
+          "x": 22,
+          "y": 24,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_room_door_9"
+        },
+        {
+          "x": 22,
+          "y": 27,
+          "symbol": "en08"
+        },
+        {
+          "x": 2,
+          "y": 35,
+          "symbol": "it00"
+        },
+        {
+          "x": 4,
+          "y": 35,
+          "symbol": "it01"
+        },
+        {
+          "x": 6,
+          "y": 35,
+          "symbol": "it02"
+        },
+        {
+          "x": 8,
+          "y": 35,
+          "symbol": "it03"
+        },
+        {
+          "x": 10,
+          "y": 35,
+          "symbol": "it04"
+        },
+        {
+          "x": 12,
+          "y": 35,
+          "symbol": "it05"
+        },
+        {
+          "x": 14,
+          "y": 35,
+          "symbol": "it06"
+        },
+        {
+          "x": 16,
+          "y": 35,
+          "symbol": "it07"
+        },
+        {
+          "x": 2,
+          "y": 37,
+          "symbol": "it08"
+        },
+        {
+          "x": 4,
+          "y": 37,
+          "symbol": "it09"
+        },
+        {
+          "x": 6,
+          "y": 37,
+          "symbol": "it10"
+        },
+        {
+          "x": 8,
+          "y": 37,
+          "symbol": "it11"
+        },
+        {
+          "x": 10,
+          "y": 37,
+          "symbol": "it12"
+        },
+        {
+          "x": 12,
+          "y": 37,
+          "symbol": "it13"
+        },
+        {
+          "x": 14,
+          "y": 37,
+          "symbol": "it14"
+        },
+        {
+          "x": 16,
+          "y": 37,
+          "symbol": "it15"
+        },
+        {
+          "x": 2,
+          "y": 39,
+          "symbol": "it16"
+        },
+        {
+          "x": 4,
+          "y": 39,
+          "symbol": "it17"
+        },
+        {
+          "x": 6,
+          "y": 39,
+          "symbol": "it18"
+        },
+        {
+          "x": 8,
+          "y": 39,
+          "symbol": "it19"
+        },
+        {
+          "x": 10,
+          "y": 39,
+          "symbol": "it20"
+        },
+        {
+          "x": 12,
+          "y": 39,
+          "symbol": "it21"
+        },
+        {
+          "x": 14,
+          "y": 39,
+          "symbol": "it22"
+        },
+        {
+          "x": 3,
+          "y": 3,
+          "symbol": "pr00"
+        },
+        {
+          "x": 23,
+          "y": 3,
+          "symbol": "pr00"
+        },
+        {
+          "x": 10,
+          "y": 2,
+          "symbol": "pr01"
+        },
+        {
+          "x": 15,
+          "y": 3,
+          "symbol": "pr01"
+        },
+        {
+          "x": 13,
+          "y": 4,
+          "symbol": "pr01"
+        }
+      ]
+    },
+    "1": {
+      "binFile": "debug_sandbox_1.bin",
+      "playerPos": {
+        "x": 432,
+        "y": 112
+      },
+      "entities": []
+    },
+    "-1": {
+      "binFile": "debug_sandbox_-1.bin",
+      "playerPos": {
+        "x": 432,
+        "y": 112
+      },
+      "entities": []
+    }
+  }
+}

@@ -1,12 +1,12 @@
 {
-  "updatedAt": "2026-05-10T00:00:00-03:00",
-  "task": "Implementar telhados gable/cumeeira 3D para os prédios nos mapas giant_city_3d e cidade_suspensa. Geometry worker recebe novas funções de slope panel e ridge. Geradores de mapa criam nível 1 com tiles de telhado direcional (rsn/rss/rse/rsw/rrd).",
+  "updatedAt": "2026-05-17T00:22:00-03:00",
+  "task": "Iniciar S17-P1-05: aumentar densidade e variedade de POIs por macrozona no city_3d_mundi_p1 sem quebrar validadores.",
   "contractsRead": [
-    "THREE_D_INTEGRATION_BLUEPRINT.md",
+    "WORLD_MAP_CONTRACT.md",
     "MAP_SYSTEM_CONTRACT.md",
-    "PERSPECTIVE_MODE_CONTRACT.md"
+    "THREE_D_INTEGRATION_BLUEPRINT.md"
   ],
-  "understanding": "Cada prédio retangular no nível 0 receberá telhado no nível 1 com geometria gable (cumeeira): metade norte com painéis inclinados norte, metade sul com painéis sul; cumeeira no centro. O geometry.worker recebe novos tipos (roof-slope-n/s/e/w, roof-ridge) e produz quads inclinados em vez de pirâmides por tile.",
-  "riskConflict": "O mapa giant_city_3d atualmente só tem nível 0; adicionar nível 1 requer regenerar o JSON e os .bin. O campo 'height' dos tiles de telhado é interpretado pelo main thread com min/max clamping - os novos tiles de slope ignoram esse campo no worker (usam constantes ROOF_EAVE_H/ROOF_RIDGE_H). tileId.includes('roof') já garante isRoofTile=true para todos os novos IDs.",
-  "objectiveQuestion": "Nenhuma dúvida pendente. Todos os novos tile IDs contêm 'roof' → isRoofTile=true → fade S12-T2 funciona. Nível 1 default '...' preservado (contrato MAP_SYSTEM_CONTRACT). Sem texturas PNG - geometria procedural."
+  "understanding": "O usuario aprovou continuar para a fase de densificacao, aumentando variedade de pontos de interesse em cada macrozona sem perder coerencia de mundo.",
+  "riskConflict": "Se a densidade crescer sem curadoria, o mapa pode ficar artificial/repetitivo e degradar fragmentacao/transicoes. Vou aplicar incremento controlado e validar apos gerar.",
+  "objectiveQuestion": "Nenhuma duvida pendente para este incremento controlado; inicio com um passe de POIs secundarios e conexoes leves."
 }

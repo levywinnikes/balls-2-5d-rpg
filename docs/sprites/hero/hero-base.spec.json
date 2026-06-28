@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "id": "hero_base",
+  "name": "Hero Base Body",
+  "category": "hero",
+  "family": "human",
+  "modular_base": {
+    "role": "human_mannequin",
+    "supports_layers": ["hair", "helmet", "weapon_socket", "shield_socket"],
+    "head_margin_px": 11,
+    "notes": "Approved as modular skeleton. Keep character_id stable for create-character-state derivatives."
+  },
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 92,
+      "height": 92
+    },
+    "api_requested_canvas": {
+      "width": 64,
+      "height": 64
+    },
+    "canvas_note": "PixelLab create-character-with-4-directions returns 92x92 PNGs even when 64x64 is requested.",
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "trash",
+    "frame_targets": {
+      "idle": 4,
+      "walk": 4,
+      "attack": 3,
+      "death": 9
+    },
+    "frame_targets_note": "Walk/attack use PixelLab template frame counts (walking-4-frames, lead-jab). Death uses v3 mode."
+  },
+  "pipeline": {
+    "model_primary": "pixflux",
+    "character_id": "d8bfd55a-a30b-4821-b2d9-36d8b234063f"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "low top-down angle pixel art bald humanoid base body character model, plain skin, wearing simple shorts or underwear, no hair, no armor, no clothes, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+    "regeneration_prompt": "low top-down pixel art bald humanoid mannequin base, slim neutral proportions, not muscular, plain skin, simple grey shorts, no hair, no armor, no clothes, clean dark outline, flat vibrant colors, extra empty transparent padding above the head for hair and helmet overlays, readable silhouette, transparent background, 64x64",
+    "negative_prompt": "blurry, noisy, muddy colors, clothes, armor, hair, weapons, shields, extra limbs, shoes, muscular bodybuilder",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "humanoid base model"
+  }
+}

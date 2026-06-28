@@ -1,0 +1,10 @@
+{
+  "registryId": "torch",
+  "spec": "docs\\sprites\\items\\torch.spec.json",
+  "generatedAt": "2026-06-20T11:54:04.533Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/torch.png"
+}

@@ -1,0 +1,10 @@
+{
+  "registryId": "viking_helmet",
+  "spec": "docs\\sprites\\items\\viking-helmet.spec.json",
+  "generatedAt": "2026-06-20T11:59:40.474Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/viking_helmet.png"
+}

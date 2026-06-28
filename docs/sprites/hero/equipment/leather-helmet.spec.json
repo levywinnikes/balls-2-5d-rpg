@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "status": "rejected_archived",
+  "id": "leather_helmet",
+  "registry_id": "leather_helmet",
+  "reason": "Head overlay / pixel diff / 4× pixflux failed QA. Alpha uses fixed body — no helmet on sprite.",
+  "use_instead": {
+    "gameplay": "WeaponRegistry leather_helmet (unchanged)",
+    "visual_alpha": "docs/sprites/items/leather-helmet.spec.json → public/assets/items/leather_helmet.png",
+    "body_scope": "docs/CHARACTER_VISUAL_SCOPE.md"
+  },
+  "do_not_run": ["generate:head-overlay", "generate:hair-layer with this spec"]
+}

@@ -33,7 +33,7 @@
   - Tiles can have an `under` property.
   - If `under: "..."`, it means "transparent to the level below".
   - The renderer recursively fetches the lower level's tile for that coordinate.
-- **Transparency (The "Roof" Effect)**: When a player is physically under a tile from an upper level, the upper level tiles become semi-transparent or are culled via the `update()` loop.
+- **Transparency (Upper-Structure Occlusion)**: When a player is physically under tiles from upper levels, those upper level tiles become semi-transparent or are culled via the `update()` loop. This applies to any structure type; no special roof category is required.
 
 ## 5. Map Loader (`MapLoader.ts`)
 
@@ -45,12 +45,68 @@
 
 ## 6. Map Data Structure
 
-- **Format**: `levels: { [id: string]: { map: string[][] } }`.
-- **Symbols**: Each tile in the 2D array is a key into the `tiles` or `entities` dictionaries.
-- **Respawn**: Entities can specify a `respawn` time in milliseconds.
+- **Canonical BMS shape**:
+  - `tileAtlas`: symbol table for binary levels
+  - `tileDefinitions`: per-symbol tile metadata
+  - `entityTemplates`: per-symbol entity metadata
+  - `levels[level].binFile`: binary layer
+  - `levels[level].entities[]`: per-instance placed entities
+- **Symbols**:
+  - binary tile cells resolve through `tileAtlas` -> `tileDefinitions`
+  - `levels[level].entities[].symbol` resolves through `entityTemplates`
+- **Per-instance overrides**: entities may carry `uuid`, `contents`, `locked`, `keyId`, and similar state-seeding fields when the map needs multiple instances of the same template with different defaults.
+- **Respawn**: entities can specify a `respawn` time in milliseconds.
+
+### 6.1 Interactive door entity
+
+Doors are **entity instances**, not a special save-only concept.
+
+Suggested template:
+
+```json
+{
+  "type": "door",
+  "id": "wooden_door",
+  "block": true,
+  "locked": false,
+  "keyId": null
+}
+```
+
+Suggested placed instance:
+
+```json
+{
+  "x": 12,
+  "y": 8,
+  "symbol": "dor",
+  "uuid": "door_debug_01",
+  "locked": false,
+  "keyId": "bronze_key"
+}
+```
+
+Rules:
+
+- **`uuid` is required** for persistent doors.
+- `locked` / `keyId` may live on the template and be overridden per instance.
+- Closed doors must be treated as **blocking** for collision, LOS, and pathfinding.
+- Open doors must be treated as **non-blocking**.
+- Runtime should persist mutable door state separately from the static map file.
 
 ## 7. Entities & Items
 
 - **DroppedItem**: Display size `24×24px` (75% of 32px tile). Body size `20×20`, offset `2, 2`.
 - **ContainerRegistry**: All containers use procedural textures. No PNG assets.
 - **Enemy Size**: World integration baseline remains tile-compatible (32x32 world unit). Source sprite canvases can be larger according to `SPRITE_PIPELINE_CONTRACT.md`.
+
+## 8. Geometry Profiles (3D Natural Composition)
+
+- **No Special Roof Category**: "Roof" is not a runtime category. Any overhead/cap is just structure assembled in upper levels.
+- **Per-Tile Geometry Piece**: Tiles may declare `geometryProfile` to select a generic mesh piece in the worker pipeline.
+- **Current Canonical Profiles**:
+  - `box`: full block (default for structural tiles)
+  - `stair`: stepped ramp
+  - `slab`: thin top surface piece
+  - `ramp-n`, `ramp-s`, `ramp-e`, `ramp-w`: sloped wedge pieces
+- **Composition Rule**: New geometry types must snap to the same tile grid/level coordinates and height conventions so pieces fit together without ad-hoc offsets.

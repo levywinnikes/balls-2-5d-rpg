@@ -15,7 +15,7 @@ import { useUI } from "../../context/UIContext";
 import { SystemMenuUI } from "../../ui/windows/SystemMenuUI";
 
 // Default map for new 3D games. Will become the world map in Phase 3.
-const DEFAULT_3D_MAP = "city_3d_multi";
+const DEFAULT_3D_MAP = "city_3d_mundi_p1";
 
 export function ThreeDSliceView() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -96,6 +96,20 @@ export function ThreeDSliceView() {
     window.addEventListener("returnToTitle", handler);
     return () => window.removeEventListener("returnToTitle", handler);
   }, [handleReturnToMenu]);
+
+  // URL: ?map=debug_sandbox&autostart=1 (used by play-debug-sandbox.bat)
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (autoStartedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("autostart") !== "1") return;
+    autoStartedRef.current = true;
+    handleThreeDStart({
+      isNewGame: true,
+      map: params.get("map") || "debug_sandbox",
+      charName: params.get("charName") || "Debug",
+    });
+  }, [handleThreeDStart]);
 
   // ── 1.1: Only start Babylon when isInGame = true ──────────────────────────
   useEffect(() => {

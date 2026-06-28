@@ -265,3 +265,167 @@
   - npm run benchmark:e2e (pass, 14/14)
 - Rollback Hint:
   - restore previous enemy visual registry and re-enable root lookAt in enemy path advance
+
+## Delta Entry
+
+- Date: 2026-06-17
+- Task: hero modular 3D polish — grounding, hair idle sync, walk audio, top-down camera lock
+- Scope: 3D player avatar presentation and camera follow aligned with top-down product direction
+- Domain: perspective / sprite pipeline
+- Modules:
+  - src/three-d/runtime/TwoDParitySpriteFactory.ts
+  - src/three-d/runtime/createDebugSliceScene.ts
+  - src/game/systems/AudioManager.ts
+  - docs/sprites/MODULAR_SPRITE_AND_NPC_GENERATION_GUIDE.md
+  - docs/contracts/PERSPECTIVE_MODE_CONTRACT.md
+  - docs/contracts/SPRITE_PIPELINE_CONTRACT.md
+- Previous Behavior:
+  - hero billboard Y offset (~0.66) caused visible floating above ground shadow
+  - hair overlay was static on canvas while body idle animation moved the head
+  - footstep SFX fired on movement input before walk animation updated
+  - top-down camera used lazy lerp (0.12) on target — player drifted toward screen edge when moving fast
+- New Behavior:
+  - `HERO_BILLBOARD_LAYOUT.anchorY` aligns feet to ground from measured PNG feet row
+  - hair overlay offset per frame via head anchor vs idle reference per direction
+  - walk footstep ticks on animation frames 0/2 + initial walk enter; `playFootstep(..., force=true)` for sync
+  - top-down camera target snaps to player each frame (ARPG center-lock)
+  - animation state/direction updates before physical movement in the render loop
+- Invariants Preserved:
+  - movement speed, collision, combat, first-person toggle, and minimap axis conventions unchanged
+  - `PlayerState.equippedHairId` remains source of truth for hair layer id
+- Risks:
+  - head tracking is heuristic (34% bbox); extreme poses (death) may need per-frame hair assets later
+  - first load composes all hero frames to textures — may spike CPU on low-end machines during material ready
+- Validation:
+  - npx tsc --noEmit (pass)
+  - manual: idle hair follow, walk foot sync, center-locked camera while running (pending user test)
+- Rollback Hint:
+  - restore billboard Y 0.66, remove head tracking in compositeHeroFrame, restore movement-block playFootstep and camera Lerp 0.12
+
+## Delta Entry
+
+- Date: 2026-06-17
+- Task: document 3D hero body equipment layers (helmet through bow)
+- Scope: canonical design doc for modular equipment on Babylon billboard — no runtime code change
+- Domain: sprite pipeline / 3D perspective
+- Modules:
+  - docs/three-d/HERO_BODY_EQUIPMENT.md (new)
+  - docs/sprites/hero/equipment/equipment-layer.spec.template.json (new)
+  - docs/sprites/MODULAR_SPRITE_AND_NPC_GENERATION_GUIDE.md
+  - docs/sprites/README.md
+  - docs/contracts/SPRITE_PIPELINE_CONTRACT.md
+  - docs/PROJECT_DOCUMENTATION_INDEX.md
+  - docs/THREE_D_INTEGRATION_BLUEPRINT.md
+- Previous Behavior:
+  - equipment on hero body in 3D was only partially described in modular sprite guide (weapons sockets sketch, armor as one paragraph)
+- New Behavior:
+  - full slot map, layer stack order, per-category pipelines, conflict rules, implementation status matrix, runtime API target, spec template, acceptance checklist, implementation order
+- Invariants Preserved:
+  - existing gameplay slots (`EquipmentSlot`, `PlayerState` snapshot keys) unchanged
+  - current 3D runtime still renders body + hair only until follow-up implementation tasks
+- Risks:
+  - doc describes target API not yet coded — implementers must treat §5 status table as source of truth for what ships today
+- Validation:
+  - docs-only; cross-links from index and sprite contracts
+- Rollback Hint:
+  - remove `docs/three-d/HERO_BODY_EQUIPMENT.md` and revert index/contract cross-links
+
+## Delta Entry
+
+- Date: 2026-06-17
+- Task: item icon-first pipeline + leather_helmet pilot specs
+- Scope: document two-phase equipment visuals (32x32 icon then body layer) tied to existing WeaponRegistry ids; add generate:item-icon script
+- Domain: sprite pipeline
+- Modules:
+  - docs/sprites/items/ITEM_VISUAL_PIPELINE.md (new)
+  - docs/sprites/items/leather-helmet.spec.json (new)
+  - docs/sprites/items/item-icon.spec.template.json (new)
+  - docs/sprites/hero/equipment/leather-helmet.spec.json (new)
+  - scripts/generate-item-icon.js, scripts/pixellab-client.js, package.json
+- Previous Behavior:
+  - UI expected assets/items/{id}.png but no canonical generation workflow; ItemGraphic used procedural circles; no link icon→body layer documented
+- New Behavior:
+  - Phase A icon (menu/chão/containers) then Phase B body layer on equip; registry_id must match WeaponRegistry; leather_helmet pilot specs and npm run generate:item-icon
+- Invariants Preserved:
+  - leather_helmet stats/slots in WeaponRegistry unchanged
+- Validation:
+  - docs-only until PNG generated via API
+- Rollback Hint:
+  - remove docs/sprites/items/* pipeline files and generate:item-icon script
+
+## Delta Entry
+
+- Date: 2026-06-17
+- Task: character visual profile alpha — fixed body, no helmet overlay
+- Scope: simplify 3D hero to visual profiles; alpha always hero_default; equipment = stats + icons only on body
+- Domain: 3D runtime / sprite pipeline
+- Modules:
+  - src/three-d/runtime/CharacterVisualProfile.ts (new)
+  - src/three-d/runtime/TwoDParitySpriteFactory.ts
+  - src/three-d/runtime/createDebugSliceScene.ts
+  - docs/CHARACTER_VISUAL_SCOPE.md (new)
+  - docs/sprites/profiles/hero-default.profile.json (new)
+  - docs/sprites/items/ITEM_VISUAL_PIPELINE.md
+  - docs/PROJECT_DOCUMENTATION_INDEX.md
+- Previous Behavior:
+  - createDebugSliceScene tried helmet overlay via equipment/ and generated/leather_helmet paths; modular elmo diff rejected in practice
+- New Behavior:
+  - resolveCharacterVisualProfile → hero_base + hair; equipment slots do not affect body sprite
+  - _setVisualProfile on modular material; HeroAppearanceLayers / helmet overlay paths removed
+- Invariants Preserved:
+  - PlayerState equipment slots and leather_helmet stats unchanged
+  - item icons and ground drops unchanged
+- Validation:
+  - TypeScript compile; manual 3D slice with equip/unequip helmet (stats/UI only on body)
+- Rollback Hint:
+  - revert CharacterVisualProfile.ts and TwoDParitySpriteFactory hero modular section; restore appearance layers API
+
+## Delta Entry
+
+- Date: 2026-06-17
+- Task: archive dead helmet body assets; remove head-overlay script
+- Scope: cleanup after alpha fixed-body decision; reduce AI trap paths
+- Domain: sprite pipeline / 3D runtime
+- Modules:
+  - deleted public/assets/sprites/equipment/leather_helmet/
+  - deleted public/assets/sprites/generated/leather_helmet/
+  - deleted scripts/generate-equipment-head-overlay.js
+  - package.json (removed generate:head-overlay)
+  - docs/sprites/hero/equipment/leather-helmet.spec.json (status rejected_archived)
+  - docs/sprites/hero/equipment/README.md (new)
+  - docs/three-d/HERO_BODY_EQUIPMENT.md (alpha banner + §4.1 trim)
+  - docs/CHARACTER_VISUAL_SCOPE.md
+- Previous Behavior:
+  - dead overlay PNG folders and head-overlay npm script still in repo; docs mixed alpha vs rejected helmet pipelines
+- New Behavior:
+  - leather_helmet gameplay + public/assets/items/leather_helmet.png only; body compositor unchanged on equip
+- Invariants Preserved:
+  - WeaponRegistry leather_helmet; item icon PNG; hero_default runtime
+- Validation:
+  - grep src/three-d for leather_helmet / equipment/ paths → none
+- Rollback Hint:
+  - restore deleted asset folders from git if needed; re-add generate:head-overlay script
+
+## Delta Entry
+
+- Date: 2026-06-17
+- Task: debug sandbox map — auto all enemies + items
+- Scope: generated playtest map with manifest-driven sync from registries
+- Domain: map system / debug tooling
+- Modules:
+  - docs/debug/DEBUG_SANDBOX_MAP.md, docs/debug/sandbox-manifest.json
+  - scripts/lib/sandbox-registry.js, sync/generate/validate scripts
+  - public/maps/debug_sandbox.json, debug_sandbox_0.bin
+  - package.json (sync/generate/validate:debug-sandbox)
+  - MainMenuUI (DEBUG SANDBOX button), SettingsUI, createDebugSliceScene default map
+  - docs/PROJECT_DOCUMENTATION_INDEX.md
+- Previous Behavior:
+  - perspective_debug had 1 goblin + 1 sword; no single map for all registry content
+- New Behavior:
+  - debug_sandbox auto-spawns 9 enemies + 23 items; npm run generate:debug-sandbox after registry changes
+- Invariants Preserved:
+  - smoke_test benchmark unchanged; BMS MapLoader entity parsing unchanged
+- Validation:
+  - npm run validate:debug-sandbox
+- Rollback Hint:
+  - remove debug_sandbox map files and scripts; revert menu/settings defaults

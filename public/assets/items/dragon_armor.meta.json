@@ -1,0 +1,10 @@
+{
+  "registryId": "dragon_armor",
+  "spec": "docs\\sprites\\items\\dragon-armor.spec.json",
+  "generatedAt": "2026-06-20T12:01:44.648Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/dragon_armor.png"
+}

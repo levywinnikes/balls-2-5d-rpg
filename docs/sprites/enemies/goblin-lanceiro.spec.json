@@ -32,5 +32,11 @@
     "view": "low top-down",
     "direction": "south",
     "animation_description": "goblin spearman"
+  },
+  "direction_validation": {
+    "reference": "hero_base",
+    "status": "runtime_swap_east_west",
+    "validated_at": null,
+    "note": "LEGACY: armed spearman (pre unarmed-enemy policy). Do not copy for new enemies. Runtime swap east/west vs hero_base."
   }
 }

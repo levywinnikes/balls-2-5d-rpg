@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "leather_helmet",
+  "registry_id": "leather_helmet",
+  "name": "Leather Helmet",
+  "category": "item_icon",
+  "item_type": "helmet",
+  "links": {
+    "weapon_registry_id": "leather_helmet"
+  },
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "path": "public/assets/items/leather_helmet.png",
+    "public_url": "assets/items/leather_helmet.png"
+  },
+  "production_prompts": {
+    "description": "pixel art brown leather helmet item icon, cartoon adventure game style, simple rounded leather cap with small nose guard, low top-down perspective, clean dark outline, vibrant flat brown and tan colors, centered, readable silhouette, transparent background, 32x32",
+    "negative_prompt": "blurry, noisy, realistic metal, full character, face, gradient background, solid background, text, watermark, chainmail, plate armor"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux",
+    "no_background": true
+  }
+}

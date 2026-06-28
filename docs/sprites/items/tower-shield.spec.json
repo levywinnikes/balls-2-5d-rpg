@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "id": "tower_shield",
+  "registry_id": "tower_shield",
+  "name": "Tower Shield",
+  "category": "item_icon",
+  "item_type": "shield",
+  "links": {
+    "weapon_registry_id": "tower_shield"
+  },
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "path": "public/assets/items/tower_shield.png",
+    "public_url": "assets/items/tower_shield.png"
+  },
+  "production_prompts": {
+    "description": "pixel art large tower shield item icon, tall rectangular metal shield, cartoon adventure game style, low top-down perspective, clean dark outline, grey steel flat colors, centered, readable silhouette, transparent background, 32x32",
+    "negative_prompt": "blurry, noisy, realistic photo, gradient background, solid background, text, watermark, character full body, scene background"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux",
+    "no_background": true
+  }
+}

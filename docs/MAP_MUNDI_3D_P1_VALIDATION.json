@@ -1,0 +1,14 @@
+{
+  "blueprintFile": "docs\\MAP_MUNDI_3D_P1_BLUEPRINT_512.json",
+  "checkedAt": "2026-06-04T20:02:57.401Z",
+  "dimensions": {
+    "width": 512,
+    "height": 512
+  },
+  "seaBorderMinTiles": 20,
+  "macrozoneCount": 7,
+  "mainRouteCount": 2,
+  "warnings": [],
+  "errors": [],
+  "pass": true
+}

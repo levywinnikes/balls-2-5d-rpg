@@ -1,0 +1,10 @@
+{
+  "registryId": "short_bow",
+  "spec": "docs\\sprites\\items\\short-bow.spec.json",
+  "generatedAt": "2026-06-20T11:56:32.026Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/short_bow.png"
+}

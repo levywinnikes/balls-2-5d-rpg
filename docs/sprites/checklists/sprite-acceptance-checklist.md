@@ -11,14 +11,19 @@ Use this checklist before merging any sprite-related implementation.
 
 ## B. Direction and Animation
 
+**Canonical direction rules:** `docs/sprites/DIRECTION_CONVENTION.md`
+
 1. Idle, walk, and attack exist in all four directions and share the same proportions.
-2. Mandatory states exist: idle, walk, attack, death.
-3. Death animation can be single-direction for 2D monsters and must contain 4 to 8 frames.
-4. Default death direction is south, unless a per-creature override is documented with readability justification.
-5. Target frame counts are met or explicitly justified.
-6. Frame targets match the declared tier profile (trash, elite, or boss).
-7. Attack keyframe communicates impact direction clearly.
-8. Death sequence reads clearly and does not look like idle/walk drift.
+2. **`character_rotations/east.png` and `west.png` must match `hero_base` left/right orientation** (visual compare before merge).
+3. Mandatory states exist: idle, walk, attack, death.
+4. Death animation can be single-direction for 2D monsters and must contain 4 to 8 frames.
+5. Default death direction is south, unless a per-creature override is documented with readability justification.
+6. Target frame counts are met or explicitly justified.
+7. Frame targets match the declared tier profile (trash, elite, or boss).
+8. Attack keyframe communicates impact direction clearly.
+9. Death sequence reads clearly and does not look like idle/walk drift.
+10. 3D sandbox test: player below / above / left / right of enemy — sprite faces correctly (DEBUG SANDBOX room).
+11. If `direction_validation.status` is `runtime_swap_east_west`, spec must cite reason and link to DIRECTION_CONVENTION §6.
 
 ## C. Technical Consistency
 

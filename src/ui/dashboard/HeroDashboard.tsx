@@ -13,10 +13,12 @@ import { DPSDetailPanel } from "./components/DPSDetailPanel";
 import { AttackSpeedDetailPanel } from "./components/AttackSpeedDetailPanel";
 import { StarPointsDetailPanel } from "./components/StarPointsDetailPanel";
 import { ConditionDetailPanel } from "./components/ConditionDetailPanel";
+import { ContextMenu, type ContextMenuOption } from "../components/ContextMenu";
 import { useHeroNavigation } from "./hooks/useHeroNavigation";
 
 // Game Data
 import { PlayerState } from "../../game/entities/Player/PlayerState";
+import type { InventoryItem } from "../../game/entities/Player/PlayerState";
 import { usePlayerState } from "../../hooks/usePlayerState";
 import { useLanguage } from "../../context/LanguageContext";
 import { WeaponRegistry } from "../../game/entities/weapons/WeaponRegistry";
@@ -152,6 +154,12 @@ export const HeroDashboard: React.FC = () => {
 
   // Hover State (Visual Preview Only)
   const [hoveredItem, setHoveredItem] = useState<any | null>(null);
+  const [inventoryContextMenu, setInventoryContextMenu] = useState<{
+    x: number;
+    y: number;
+    item: InventoryItem;
+    options: ContextMenuOption[];
+  } | null>(null);
 
   // Get selected equipped item (when equipment slot is clicked)
   // Get selected equipped item (when equipment slot is clicked)
@@ -317,6 +325,88 @@ export const HeroDashboard: React.FC = () => {
   const handleSlotHover = useCallback((slot: EquipmentSlot) => {
     // No-op
   }, []);
+
+  const buildInventoryContextOptions = useCallback(
+    (item: InventoryItem): ContextMenuOption[] => {
+      const def =
+        WeaponRegistry.getWeaponDefinition(item.itemId) ||
+        FoodRegistry.foods.find((food) => food.id === item.itemId);
+      if (!def) {
+        return [{ label: "Largar", action: "drop" }];
+      }
+
+      const isConsumable =
+        !!def.consumable ||
+        def.type === ItemType.FOOD ||
+        def.type === ItemType.POTION;
+      const isEquippable =
+        !isConsumable &&
+        def.type !== ItemType.RUNE &&
+        def.type !== ItemType.RESOURCE &&
+        def.type !== ItemType.CONTAINER;
+
+      const options: ContextMenuOption[] = [];
+      if (isConsumable) {
+        options.push({ label: "Usar", action: "use" });
+      }
+      if (isEquippable) {
+        options.push({ label: "Equipar", action: "equip" });
+      }
+      options.push({ label: "Largar", action: "drop" });
+      return options;
+    },
+    [],
+  );
+
+  const handleInventoryContextMenu = useCallback(
+    (event: React.MouseEvent, item: InventoryItem) => {
+      setFocusedItemIndex(filteredItems.findIndex((entry) => entry.uid === item.uid));
+      setFocusedSlotIndex(-1);
+      setActiveSection("INVENTORY");
+      setHoveredItem(item);
+      setLeftPanelMode("item");
+      setInventoryContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        item,
+        options: buildInventoryContextOptions(item),
+      });
+    },
+    [
+      buildInventoryContextOptions,
+      filteredItems,
+      setActiveSection,
+      setFocusedItemIndex,
+      setFocusedSlotIndex,
+    ],
+  );
+
+  const handleInventoryContextSelect = useCallback(
+    (action: string) => {
+      if (!inventoryContextMenu) {
+        return;
+      }
+
+      const item = inventoryContextMenu.item;
+      const globalIndex = inventory.findIndex((entry: any) => entry.uid === item.uid);
+      if (globalIndex === -1) {
+        setInventoryContextMenu(null);
+        return;
+      }
+
+      const ps = PlayerState.getInstance();
+      if (action === "equip") {
+        ps.equipItem(item.uid);
+      } else if (action === "use") {
+        ps.useInventoryItem(globalIndex);
+      } else if (action === "drop") {
+        ps.dropItem(globalIndex);
+      }
+
+      setInventoryContextMenu(null);
+    },
+    [inventory, inventoryContextMenu],
+  );
 
   const handleStatSelect = useCallback((statKey: string, label: string) => {
     // Check if it's a core attribute (use condition panel) or derived stat (use stat panel)
@@ -564,6 +654,7 @@ export const HeroDashboard: React.FC = () => {
                         onItemClick={handleItemClick}
                         onHoverItem={handleItemHover}
                         onLeaveItem={handleItemLeave} // NEW PROP
+                        onItemContextMenu={handleInventoryContextMenu}
                       />
                     </div>
                   </div>
@@ -601,6 +692,15 @@ export const HeroDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+        {inventoryContextMenu && (
+          <ContextMenu
+            x={inventoryContextMenu.x}
+            y={inventoryContextMenu.y}
+            options={inventoryContextMenu.options}
+            onSelect={handleInventoryContextSelect}
+            onClose={() => setInventoryContextMenu(null)}
+          />
+        )}
       </div>
     </>
   );

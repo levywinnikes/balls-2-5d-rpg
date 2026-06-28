@@ -1,0 +1,10 @@
+{
+  "registryId": "leather_boots",
+  "spec": "docs\\sprites\\items\\leather-boots.spec.json",
+  "generatedAt": "2026-06-20T11:55:10.984Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/leather_boots.png"
+}

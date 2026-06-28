@@ -1,0 +1,10 @@
+{
+  "registryId": "leather_armor",
+  "spec": "docs\\sprites\\items\\leather-armor.spec.json",
+  "generatedAt": "2026-06-20T11:54:27.029Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/leather_armor.png"
+}

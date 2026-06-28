@@ -22,6 +22,7 @@ Rationale:
 
 ## Folder Structure
 
+- **`DIRECTION_CONVENTION.md`**: canonical south/north/east/west rules, validation, common bugs (read before any sprite integration).
 - `templates/sprite-spec.template.yaml`: reusable spec template for any actor/enemy/prop.
 - `enemies/goblin-lanceiro.spec.yaml`: pilot enemy spec to bootstrap production.
 - `enemies/goblin-lanceiro.spec.json`: machine-ready pilot spec for script execution.
@@ -29,9 +30,18 @@ Rationale:
 
 ## PixelLab API Integration (Implemented)
 
-Runtime script:
+Runtime scripts:
 
 - `npm run generate:pixellab-sprite -- --spec docs/sprites/enemies/goblin-lanceiro.spec.json --entity goblin_lanceiro_v1`
+- `npm run generate:hair-layer -- --spec docs/sprites/hero/hair-classic.spec.json`
+
+Hero modular base:
+
+- Spec: `docs/sprites/hero/hero-base.spec.json` (approved mannequin, canvas 92×92)
+- Hair overlay: derived from `hero_base` via `create-character-state` + pixel diff (see `docs/sprites/MODULAR_SPRITE_AND_NPC_GENERATION_GUIDE.md` §2.3)
+- **Item icons (menu/chão/containers) + link to body layers:** `docs/sprites/items/ITEM_VISUAL_PIPELINE.md`
+- 3D runtime integration (billboard, head tracking, footstep sync, camera): see modular guide §4.2
+- Body equipment (helmet, armor, legs, boots, shield, weapons, bow): `docs/three-d/HERO_BODY_EQUIPMENT.md`
 
 Required environment variable:
 
@@ -79,6 +89,7 @@ Spec validation rules (JSON):
 3. Required: `animation_profile.tier` as `trash`, `elite`, or `boss`.
 4. Required: `animation_profile.frame_targets` (`idle`, `walk`, `attack`, `death`) within tier range.
 5. Required: `sprite_sheet.directions.death_shared_direction`; if not `south`, provide `death_direction_override_reason`.
+6. Recommended: `direction_validation` object (`reference`, `status`, `note`) — see `docs/sprites/DIRECTION_CONVENTION.md`.
 
 ## Required Baseline
 
@@ -95,7 +106,8 @@ Every gameplay sprite spec must include:
 Direction/frame policy baseline:
 
 1. Idle, walk, and attack must be authored in 4 directions.
-2. Death can be authored in 1 shared direction for 2D monsters.
+2. **Orientation must match `hero_base`** — see `docs/sprites/DIRECTION_CONVENTION.md`.
+3. Death can be authored in 1 shared direction for 2D monsters.
 3. Default death direction is south.
 4. If a creature needs a different death direction, record a readability justification in the sprite spec.
 5. Death animation should use 4 to 8 frames (target 6).

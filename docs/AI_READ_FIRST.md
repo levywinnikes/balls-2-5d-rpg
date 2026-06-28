@@ -66,6 +66,8 @@
 
 - `src/game/graphics/tiles/**`: procedural tile registry and tile renderers; tile definitions must include step sound, speed modifier, and minimap/world-map color metadata for walkable terrain.
 - `src/game/graphics/PlayerGraphic.ts`: legacy procedural fallback for player visuals; canonical gameplay sprite policy is in `docs/contracts/SPRITE_PIPELINE_CONTRACT.md`.
+- **Sprite directions (south/north/east/west):** before integrating generated NPC/enemy PNGs, read **`docs/sprites/DIRECTION_CONVENTION.md`** and compare against `hero_base/character_rotations/`.
+- `src/three-d/runtime/TwoDParitySpriteFactory.ts`: generated enemy/hero billboard materials; `resolveWorldBmsDirection`, `GENERATED_SWAP_EAST_WEST_ASSET_DIRS`.
 - `src/game/graphics/ItemGraphic.ts`: procedural item texture generator.
 - `src/game/hud/PlayerHud.ts`: cached static/dynamic player bar with animated health and XP rendering.
 - `src/game/hud/EnemyHud.ts`: enemy health bar visibility is controlled by damage state and z-level matching.
@@ -154,6 +156,22 @@ Tiles are drawn procedurally in `src/game/graphics/tiles/`.
 - Map impacted modules using [ARCHITECTURE_MAP.md](./ARCHITECTURE_MAP.md) before code edits.
 - Determine required validations using [VALIDATION_MATRIX.md](./VALIDATION_MATRIX.md).
 - Do not mark a task as complete without reporting executed validations and outcomes.
+
+## 13. 3D RUNTIME — DESIGN RULES (MANDATORY)
+
+**Product mode is 3D top-down** (`src/three-d/**`). Before any 3D change, read:
+
+1. **`docs/three-d/DESIGN_RULES_3D.md`** — obrigatório: oclusão de andar superior, altura, água, anti-padrões, checklist.
+2. **`docs/three-d/PRODUCT_3D_VISION.md`** — visão do mundo vertical.
+
+Hard rules (do not skip):
+
+- **Oclusão:** andar de cima **some** quando o herói está embaixo. Só `syncVerticalLevelVisibility` controla visibilidade por andar.
+- **Altura:** `TileSurfaceResolver` é a única fonte de Y dos pés.
+- **Água:** buraco (`water-hole`) + superfície — nunca adesivo plano no chão.
+- **Teste:** `debug_sandbox` / `debug_vertical` após mudanças verticais ou de visibilidade.
+
+Hub: `docs/three-d/README.md`
 
 ---
 

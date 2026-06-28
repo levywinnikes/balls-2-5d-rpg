@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "id": "wild_flower",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "direction": "south",
+  "animations": {
+    "sway_gentle": {
+      "frame_count": 4,
+      "frame_rate": 8
+    },
+    "sway_strong": {
+      "frame_count": 4,
+      "frame_rate": 10
+    }
+  },
+  "generated_at": "2026-06-28T00:57:08.938Z",
+  "source_spec": "docs/sprites/props/wild-flower.spec.json"
+}

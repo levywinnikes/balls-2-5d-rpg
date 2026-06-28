@@ -7,6 +7,8 @@ If a domain is not documented here, implementation in that domain must pause unt
 
 For fast behavior lookup after each change, use [MECHANICS_DELTA_TEMPLATE.md](./MECHANICS_DELTA_TEMPLATE.md) to register concise mechanics deltas.
 
+For **documentation-only work** (audit gaps, write canonical docs without product scope decisions), use [DOCUMENTATION_AUDIT.md](./DOCUMENTATION_AUDIT.md).
+
 ## Mandatory Rule
 
 Before any code change:
@@ -24,21 +26,21 @@ Before any code change:
 | Global execution workflow       | `docs/AI_RUNBOOK.md`, `docs/VALIDATION_MATRIX.md`                                                                              | All tasks                                                                                    |
 | Project architecture map        | `docs/ARCHITECTURE_MAP.md`, `docs/ARCHITECTURE_OVERVIEW.md`                                                                    | All cross-module changes                                                                     |
 | Map system / BMS                | `docs/contracts/MAP_SYSTEM_CONTRACT.md`, `docs/SYSTEM_BMS.md`                                                                  | `src/game/maps/**`, `src/services/WorldMapService.ts`, map loaders                           |
-| Perspective / 2.5D-3D           | `docs/contracts/PERSPECTIVE_MODE_CONTRACT.md`, `docs/PERSPECTIVE_MODE_MASTER_PLAN.md`, `docs/THREE_D_INTEGRATION_BLUEPRINT.md` | `src/game/maps/LevelRenderer.ts`, `src/game/maps/PerspectiveProjection.ts`, `src/three-d/**` |
+| Perspective / 2.5D-3D           | **`docs/three-d/DESIGN_RULES_3D.md`**, **`docs/three-d/PRODUCT_3D_VISION.md`**, `docs/contracts/PERSPECTIVE_MODE_CONTRACT.md`, **`docs/THREE_D_INTEGRATION_BLUEPRINT.md`**, **`docs/three-d/README.md`**, **`docs/three-d/SLICE_RUNTIME.md`**, **`docs/three-d/COMBAT_3D_PARITY.md`**, **`docs/three-d/SAVE_LOAD_3D.md`**, **`docs/three-d/CHUNK_STREAMING_3D.md`**, **`docs/three-d/PLAYER_STATE_EVENTS_3D.md`**, **`docs/three-d/SYSTEMS_INVENTORY.md`**, **`docs/three-d/COMPATIBILITY_AUDIT.md`**, **`docs/world/MUNDI_P1_README.md`**, **`docs/three-d/HERO_BODY_EQUIPMENT.md`**, **`docs/three-d/ENEMY_SPRITE_RUNTIME.md`**, **`docs/debug/DEBUG_VERTICAL_MAP.md`** | `src/three-d/**` |
 | Player state and sync           | `docs/contracts/PLAYER_STATE_CONTRACT.md`                                                                                      | `src/game/entities/Player/PlayerState.ts`, state sync paths                                  |
 | Save/load persistence           | `docs/contracts/SAVE_SYSTEM_CONTRACT.md`                                                                                       | `src/game/systems/SaveSystem.ts`, save/load bridges                                          |
 | Combat                          | `docs/contracts/BATTLE_SYSTEM_CONTRACT.md`                                                                                     | `src/game/systems/BattleSystem.ts`, combat registries                                        |
 | UI/HUD/window behavior          | `docs/contracts/UI_DESIGN_CONTRACT.md`                                                                                         | `src/ui/**`, HUD and window layers                                                           |
 | Localization                    | `docs/contracts/LOCALIZATION_CONTRACT.md`                                                                                      | All player-facing labels/messages/content                                                    |
-| Benchmark and smoke harness     | `docs/contracts/BENCHMARK_CONTRACT.md`                                                                                         | `scripts/run-benchmark-e2e.js`, `public/maps/smoke_test.json`, benchmark runners             |
+| Benchmark and smoke harness     | `docs/contracts/BENCHMARK_CONTRACT.md`, **`docs/debug/DEBUG_SANDBOX_MAP.md`**                                                                                         | `scripts/run-benchmark-e2e.js`, `public/maps/smoke_test.json`, `public/maps/debug_sandbox.json`, benchmark runners             |
 | Editor                          | `docs/contracts/EDITOR_CONTRACT.md`                                                                                            | `src/editor/**`, editor scenes and save flow                                                 |
 | Generation / biome / tooling    | `docs/contracts/GENERATOR_CONTRACT.md`, `docs/contracts/BIOME_SYSTEM_CONTRACT.md`                                              | map generation scripts and biome logic                                                       |
-| **World map / island / biomes** | **`docs/contracts/WORLD_MAP_CONTRACT.md`**                                                                                     | `scripts/generate-*.js`, `public/maps/city_3d_multi.*`, tile atlas, structure rules          |
+| **World map / island / biomes** | **`docs/contracts/WORLD_MAP_CONTRACT.md`**, **`docs/world/MUNDI_P1_README.md`**, `docs/MAP_MUNDI_3D_P1_BLUEPRINT_512.json` | `scripts/generate-world-p1-macro-map.js`, `public/maps/city_3d_mundi_p1.*` |
 | Map UI mechanics                | `docs/MAP_UI_MECHANICS.md`                                                                                                     | `src/ui/components/SidebarMinimap.tsx`, `src/ui/windows/ExpandedMapWindow.tsx`                |
 
 Additional canonical domain:
 
-- Sprite pipeline / visual identity: `docs/contracts/SPRITE_PIPELINE_CONTRACT.md` (plus perspective and 3D integration docs for parity-sensitive changes). Operational production pack: `docs/sprites/**`. Primary areas: `src/game/graphics/**`, `src/game/entities/EnemyRegistry.ts`, `src/three-d/runtime/**`.
+- Sprite pipeline / visual identity: `docs/contracts/SPRITE_PIPELINE_CONTRACT.md`, **`docs/sprites/DIRECTION_CONVENTION.md`**, **`docs/CHARACTER_VISUAL_SCOPE.md`**, **`docs/sprites/items/ITEM_VISUAL_PIPELINE.md`**, `docs/three-d/HERO_BODY_EQUIPMENT.md`, **`docs/three-d/ENEMY_SPRITE_RUNTIME.md`** (plus perspective and 3D integration docs for parity-sensitive changes). Operational production pack: `docs/sprites/**`. Primary areas: `src/game/graphics/**`, `src/game/entities/EnemyRegistry.ts`, `src/three-d/runtime/**`.
 
 ## Divergence Protocol (Doc vs Code)
 

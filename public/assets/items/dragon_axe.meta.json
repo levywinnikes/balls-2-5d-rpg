@@ -1,0 +1,10 @@
+{
+  "registryId": "dragon_axe",
+  "spec": "docs\\sprites\\items\\dragon-axe.spec.json",
+  "generatedAt": "2026-06-20T11:57:39.577Z",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "publicUrl": "assets/items/dragon_axe.png"
+}

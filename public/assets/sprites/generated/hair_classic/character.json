@@ -1,0 +1,18 @@
+{
+  "entityId": "hair_classic",
+  "category": "hair",
+  "pipeline": {
+    "method": "create-character-state",
+    "extract": "pixel-diff",
+    "sourceEntity": "hero_base"
+  },
+  "editDescription": "classic short brown hair on bald head, natural hairline, same body proportions unchanged, low top-down view, clean dark outline",
+  "extractedAt": "2026-06-17T19:14:37.286Z",
+  "keptPixels": {
+    "south": 192,
+    "north": 307,
+    "east": 252,
+    "west": 283
+  },
+  "spec": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\docs\\sprites\\hero\\hair-classic.spec.json"
+}

@@ -1,0 +1,109 @@
+{
+  "map": "city_3d_mundi_p1",
+  "dimensions": {
+    "width": 512,
+    "height": 512,
+    "levels": 6
+  },
+  "edgeWaterRatio": 1,
+  "tileCounts": {
+    "wat": 41521,
+    "snd": 48673,
+    "grs": 108012,
+    "tre": 2369,
+    "cob": 16865,
+    "stn": 1776,
+    "wtr": 2166,
+    "mud": 17314,
+    "wal": 276,
+    "arc": 5,
+    "bwl": 375,
+    "flr": 547,
+    "rok": 18920,
+    "stu": 8,
+    "std": 4,
+    "pat": 2587,
+    "bal": 24,
+    "swl": 18,
+    "hol": 5,
+    "sfl": 22,
+    "dwl": 178,
+    "sdw": 50,
+    "pil": 9,
+    "dfn": 164,
+    "pav": 256
+  },
+  "topTransitions": [
+    [
+      "grs-snd",
+      2832
+    ],
+    [
+      "snd-wat",
+      2382
+    ],
+    [
+      "grs-tre",
+      1870
+    ],
+    [
+      "mud-wtr",
+      1357
+    ],
+    [
+      "grs-pat",
+      1260
+    ],
+    [
+      "rok-snd",
+      1147
+    ],
+    [
+      "grs-rok",
+      902
+    ],
+    [
+      "cob-stn",
+      581
+    ],
+    [
+      "grs-mud",
+      526
+    ],
+    [
+      "cob-grs",
+      523
+    ],
+    [
+      "pat-snd",
+      370
+    ],
+    [
+      "pat-rok",
+      304
+    ],
+    [
+      "mud-pat",
+      293
+    ],
+    [
+      "cob-pat",
+      171
+    ],
+    [
+      "pav-snd",
+      109
+    ]
+  ],
+  "fragmentation": {
+    "grs": 22,
+    "snd": 4,
+    "mud": 4,
+    "wat": 9,
+    "pat": 20
+  },
+  "repetitionRatio": 0.04851752021563342,
+  "warnings": [],
+  "errors": [],
+  "pass": true
+}

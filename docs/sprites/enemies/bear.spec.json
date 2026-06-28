@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "id": "bear",
+  "name": "Brown Bear",
+  "category": "enemy",
+  "family": "beast",
+  "body_type": "quadruped",
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "trash",
+    "frame_targets": {
+      "idle": 4,
+      "walk": 6,
+      "attack": 6,
+      "death": 6
+    }
+  },
+  "pipeline": {
+    "model_primary": "pixflux"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "low top-down angle pixel art brown bear quadruped, stocky body on four paws, no clothes, no weapons, neutral standing pose facing camera, same map scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+    "negative_prompt": "blurry, noisy, humanoid, biped, standing upright, sword, weapon, shield, spear, clothes, armor, rider, saddle",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "unarmed quadruped bear"
+  },
+  "direction_validation": {
+    "reference": "hero_base",
+    "status": "pending",
+    "validated_at": null,
+    "note": "Quadruped unarmed enemy. Validate east/west profile vs hero_base facing convention."
+  }
+}

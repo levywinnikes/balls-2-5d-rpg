@@ -1,0 +1,10 @@
+{
+  "animation": "attack",
+  "direction": "south",
+  "mode": "v3",
+  "templateId": null,
+  "actionDescription": "bite attack lunge forward on four legs",
+  "frameCount": 5,
+  "generatedAt": "2026-06-28T00:05:11.524Z",
+  "characterId": "d35a62b8-d258-4d6e-855e-7e68e4291ed6"
+}

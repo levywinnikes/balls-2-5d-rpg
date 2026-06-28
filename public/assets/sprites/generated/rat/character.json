@@ -1,0 +1,17 @@
+{
+  "characterId": "d35a62b8-d258-4d6e-855e-7e68e4291ed6",
+  "createdAt": "2026-06-27T23:47:49.868Z",
+  "entityId": "rat",
+  "description": "tiny grey dungeon rat rodent, pink ears, long tail, four short legs on ground, crouched scurrying posture on all fours, low top-down pixel art, clean dark outline, transparent background, 64x64",
+  "view": "low top-down",
+  "imageSize": {
+    "width": 64,
+    "height": 64
+  },
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\rat\\character_rotations\\south.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\rat\\character_rotations\\west.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\rat\\character_rotations\\east.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\rat\\character_rotations\\north.png"
+  }
+}

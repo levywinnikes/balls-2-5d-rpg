@@ -21,11 +21,26 @@ export interface TileDescriptor {
   symbol: string;
   tileId: string;
   isBlocking: boolean;
-  isRoof: boolean;
-  isStair: boolean;
+  geometryProfile?:
+    | "box"
+    | "stair"
+    | "slab"
+    | "water-hole"
+    | "ramp-n"
+    | "ramp-s"
+    | "ramp-e"
+    | "ramp-w";
+  // Backward compatibility with old descriptors.
+  isStair?: boolean;
+  /** `up` = climb north; `down` = descend north (mirrored mesh + height). */
+  stairDir?: "up" | "down";
   height: number; // world-unit height of this tile
   levelOffsetY: number; // world Y of the floor for this level
   materialKey: string; // "kind:hexcolor" — determined by main thread
+  /** Depth below rim for `water-hole` profile. */
+  pitDepth?: number;
+  /** Bit mask: 1=N, 2=S, 4=E, 8=W — wall when neighbor is not water. */
+  pitWallMask?: number;
 }
 
 export interface GeometryWorkerRequest {
@@ -35,7 +50,6 @@ export interface GeometryWorkerRequest {
 
 export interface GeometryGroupBuffer {
   materialKey: string;
-  isRoof: boolean;
   positions: Float32Array;
   indices: Uint32Array;
   normals: Float32Array;
@@ -54,18 +68,8 @@ export interface GeometryWorkerResponse {
 // ---------------------------------------------------------------------------
 
 const LEVEL_HEIGHT_UNITS = 2.0;
-const STEP_COUNT = 4;
-
-// ---------------------------------------------------------------------------
-// Roof geometry constants (shared by all roof shape functions)
-// ---------------------------------------------------------------------------
-
-/** Height above levelOffsetY where the eave (low edge of a slope panel) sits.
- *  Matches the current pyramid base height so plain-rof tiles blend naturally. */
-const ROOF_EAVE_H = 0.4;
-
-/** Height above levelOffsetY where the ridge (peak/high edge) sits. */
-const ROOF_RIDGE_H = 1.1;
+/** Keep in sync with `StairConfig3D.ts` STAIR_STEP_COUNT. */
+const STEP_COUNT = 8;
 
 // ---------------------------------------------------------------------------
 // Per-group geometry accumulator
@@ -203,63 +207,6 @@ function buildBoxVerts(
 }
 
 // ---------------------------------------------------------------------------
-// Roof geometry (pyramid with 4 triangular faces)
-// ---------------------------------------------------------------------------
-
-function buildRoofVerts(
-  x: number,
-  y: number,
-  baseY: number,
-  ridgeH: number,
-): { positions: number[]; indices: number[]; uvs: number[] } {
-  const x0 = x,
-    x1 = x + 1;
-  const z0 = y,
-    z1 = y + 1;
-  const xM = x + 0.5,
-    zM = y + 0.5;
-  const yBase = baseY,
-    yRidge = baseY + ridgeH;
-
-  const positions = [
-    x0,
-    yBase,
-    z0, // 0 front-left
-    x1,
-    yBase,
-    z0, // 1 front-right
-    x1,
-    yBase,
-    z1, // 2 back-right
-    x0,
-    yBase,
-    z1, // 3 back-left
-    xM,
-    yRidge,
-    zM, // 4 peak
-  ];
-
-  const indices = [
-    0,
-    4,
-    1, // front
-    1,
-    4,
-    2, // right
-    2,
-    4,
-    3, // back
-    3,
-    4,
-    0, // left
-  ];
-
-  const uvs = [0, 0, 1, 0, 1, 1, 0, 1, 0.5, 0.5];
-
-  return { positions, indices, uvs };
-}
-
-// ---------------------------------------------------------------------------
 // Stair geometry (4-step staircase, south→north)
 // ---------------------------------------------------------------------------
 
@@ -267,6 +214,7 @@ function buildStairVerts(
   x: number,
   y: number,
   baseY: number,
+  stairDir: "up" | "down" = "up",
 ): { positions: number[]; indices: number[]; uvs: number[] } {
   const stepDepth = 1.0 / STEP_COUNT;
   const stepRise = LEVEL_HEIGHT_UNITS / STEP_COUNT;
@@ -280,8 +228,18 @@ function buildStairVerts(
     const x1 = x + 1;
     const z0 = y + (STEP_COUNT - 1 - i) * stepDepth;
     const z1 = y + (STEP_COUNT - i) * stepDepth;
-    const y0 = baseY;
-    const y1 = baseY + (i + 1) * stepRise;
+
+    let y0: number;
+    let y1: number;
+    if (stairDir === "up") {
+      y0 = baseY + i * stepRise;
+      y1 = baseY + (i + 1) * stepRise;
+    } else {
+      // South (+Z) meets current floor; north (-Z) drops toward the level below.
+      const heightStep = STEP_COUNT - 1 - i;
+      y0 = baseY + heightStep * stepRise;
+      y1 = baseY + (heightStep + 1) * stepRise;
+    }
 
     const base = allPositions.length / 3;
     allPositions.push(
@@ -357,100 +315,133 @@ function buildStairVerts(
 }
 
 // ---------------------------------------------------------------------------
-// Gable roof — directional slope panel (quad, one edge at eave, one at ridge)
-// ---------------------------------------------------------------------------
-//
-// direction 'n': eave (low) at north (z0), ridge (high) at south (z1)
-//                normal faces north-up  → place in NORTH half of building
-// direction 's': eave at south (z1), ridge at north (z0)
-//                normal faces south-up  → place in SOUTH half
-// direction 'e': eave at east (x1), ridge at west (x0)
-//                normal faces east-up   → place in EAST half (N-S ridge)
-// direction 'w': eave at west (x0), ridge at east (x1)
-//                normal faces west-up   → place in WEST half (N-S ridge)
-//
-// Winding verified so that computeNormals() produces outward-facing normals.
+// Ramp wedge geometry (closed prism with sloped top)
 // ---------------------------------------------------------------------------
 
-function buildRoofSlopePanelVerts(
+function buildRampVerts(
   x: number,
   y: number,
   levelOffsetY: number,
+  height: number,
   direction: "n" | "s" | "e" | "w",
 ): { positions: number[]; indices: number[]; uvs: number[] } {
-  const x0 = x,
-    x1 = x + 1;
-  const z0 = y,
-    z1 = y + 1;
-  const yEave = levelOffsetY + ROOF_EAVE_H;
-  const yRidge = levelOffsetY + ROOF_RIDGE_H;
+  const x0 = x;
+  const x1 = x + 1;
+  const z0 = y;
+  const z1 = y + 1;
+  const yBot = levelOffsetY;
 
-  let positions: number[];
+  // Corner heights for top surface (NW, SW, SE, NE)
+  let yNW = yBot;
+  let ySW = yBot;
+  let ySE = yBot;
+  let yNE = yBot;
 
   if (direction === "n") {
-    // Eave at north (z0=low), ridge at south (z1=high).
-    // Winding NW-eave → SW-ridge → SE-ridge → NE-eave gives normal (0,1,-0.7) ✓
-    positions = [
-      x0, yEave, z0, // 0 NW eave
-      x0, yRidge, z1, // 1 SW ridge
-      x1, yRidge, z1, // 2 SE ridge
-      x1, yEave, z0, // 3 NE eave
-    ];
+    ySW = yBot + height;
+    ySE = yBot + height;
   } else if (direction === "s") {
-    // Eave at south (z1=low), ridge at north (z0=high).
-    // Winding SW-eave → SE-eave → NE-ridge → NW-ridge gives normal (0,1,0.7) ✓
-    positions = [
-      x0, yEave, z1, // 0 SW eave
-      x1, yEave, z1, // 1 SE eave
-      x1, yRidge, z0, // 2 NE ridge
-      x0, yRidge, z0, // 3 NW ridge
-    ];
+    yNW = yBot + height;
+    yNE = yBot + height;
   } else if (direction === "e") {
-    // Eave at east (x1=low), ridge at west (x0=high).
-    // Winding NW-ridge → SW-ridge → SE-eave → NE-eave gives normal (0.7,1,0) ✓
-    positions = [
-      x0, yRidge, z0, // 0 NW ridge
-      x0, yRidge, z1, // 1 SW ridge
-      x1, yEave, z1, // 2 SE eave
-      x1, yEave, z0, // 3 NE eave
-    ];
+    yNW = yBot + height;
+    ySW = yBot + height;
   } else {
-    // direction === 'w'
-    // Eave at west (x0=low), ridge at east (x1=high).
-    // Winding NW-eave → SW-eave → SE-ridge → NE-ridge gives normal (-0.7,1,0) ✓
-    positions = [
-      x0, yEave, z0, // 0 NW eave
-      x0, yEave, z1, // 1 SW eave
-      x1, yRidge, z1, // 2 SE ridge
-      x1, yRidge, z0, // 3 NE ridge
-    ];
+    yNE = yBot + height;
+    ySE = yBot + height;
   }
 
-  const indices = [0, 1, 2, 0, 2, 3];
-  const uvs = [0, 0, 0, 1, 1, 1, 1, 0];
+  const positions = [
+    // top (+Y-ish)
+    x0,
+    yNW,
+    z0,
+    x0,
+    ySW,
+    z1,
+    x1,
+    ySE,
+    z1,
+    x1,
+    yNE,
+    z0,
+    // bottom (-Y)
+    x0,
+    yBot,
+    z1,
+    x0,
+    yBot,
+    z0,
+    x1,
+    yBot,
+    z0,
+    x1,
+    yBot,
+    z1,
+    // north face (-Z)
+    x0,
+    yBot,
+    z0,
+    x0,
+    yNW,
+    z0,
+    x1,
+    yNE,
+    z0,
+    x1,
+    yBot,
+    z0,
+    // south face (+Z)
+    x1,
+    yBot,
+    z1,
+    x1,
+    ySE,
+    z1,
+    x0,
+    ySW,
+    z1,
+    x0,
+    yBot,
+    z1,
+    // east face (+X)
+    x1,
+    yBot,
+    z0,
+    x1,
+    yNE,
+    z0,
+    x1,
+    ySE,
+    z1,
+    x1,
+    yBot,
+    z1,
+    // west face (-X)
+    x0,
+    yBot,
+    z1,
+    x0,
+    ySW,
+    z1,
+    x0,
+    yNW,
+    z0,
+    x0,
+    yBot,
+    z0,
+  ];
 
-  return { positions, indices, uvs };
-}
+  const indices: number[] = [];
+  for (let f = 0; f < 6; f++) {
+    const base = f * 4;
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
 
-// ---------------------------------------------------------------------------
-// Gable roof — flat ridge cap (horizontal quad at ridge height)
-// ---------------------------------------------------------------------------
-
-function buildRoofRidgePanelVerts(
-  x: number,
-  y: number,
-  levelOffsetY: number,
-): { positions: number[]; indices: number[]; uvs: number[] } {
-  const x0 = x,
-    x1 = x + 1;
-  const z0 = y,
-    z1 = y + 1;
-  const yTop = levelOffsetY + ROOF_RIDGE_H;
-
-  // CCW from above → normal (0,1,0)
-  const positions = [x0, yTop, z0, x0, yTop, z1, x1, yTop, z1, x1, yTop, z0];
-  const indices = [0, 1, 2, 0, 2, 3];
-  const uvs = [0, 0, 0, 1, 1, 1, 1, 0];
+  const uvs: number[] = [];
+  for (let f = 0; f < 6; f++) {
+    uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+  }
 
   return { positions, indices, uvs };
 }
@@ -470,6 +461,70 @@ function buildFloorQuadVerts(
 
   const indices = [0, 1, 2, 0, 2, 3];
   const uvs = [0, 0, 0, 1, 1, 1, 1, 0];
+
+  return { positions, indices, uvs };
+}
+
+/** Quake-style pool: depressed floor + inner walls; water surface is a separate effect at rim. */
+function buildWaterHoleVerts(
+  x: number,
+  y: number,
+  levelOffsetY: number,
+  holeDepth: number,
+  pitWallMask: number,
+  rimOffsetY: number,
+): { positions: number[]; indices: number[]; uvs: number[] } {
+  const x0 = x;
+  const x1 = x + 1;
+  const z0 = y;
+  const z1 = y + 1;
+  const rimY = levelOffsetY + rimOffsetY;
+  const bottomY = rimY - Math.max(0.08, holeDepth);
+
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const uvs: number[] = [];
+
+  const pushQuad = (
+    ax: number,
+    ay: number,
+    az: number,
+    bx: number,
+    by: number,
+    bz: number,
+    cx: number,
+    cy: number,
+    cz: number,
+    dx: number,
+    dy: number,
+    dz: number,
+  ) => {
+    const base = positions.length / 3;
+    positions.push(ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz);
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+  };
+
+  pushQuad(x0, bottomY, z0, x0, bottomY, z1, x1, bottomY, z1, x1, bottomY, z0);
+
+  const inset = 0.03;
+  const ix0 = x0 + inset;
+  const ix1 = x1 - inset;
+  const iz0 = z0 + inset;
+  const iz1 = z1 - inset;
+
+  if (pitWallMask & 1) {
+    pushQuad(ix0, bottomY, z0, ix1, bottomY, z0, ix1, rimY, z0, ix0, rimY, z0);
+  }
+  if (pitWallMask & 2) {
+    pushQuad(ix1, bottomY, z1, ix0, bottomY, z1, ix0, rimY, z1, ix1, rimY, z1);
+  }
+  if (pitWallMask & 4) {
+    pushQuad(x1, bottomY, iz1, x1, bottomY, iz0, x1, rimY, iz0, x1, rimY, iz1);
+  }
+  if (pitWallMask & 8) {
+    pushQuad(x0, bottomY, iz0, x0, bottomY, iz1, x0, rimY, iz1, x0, rimY, iz0);
+  }
 
   return { positions, indices, uvs };
 }
@@ -541,9 +596,8 @@ function computeNormals(positions: number[], indices: number[]): number[] {
 self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
   const { requestId, tiles } = evt.data;
 
-  // Group tiles by materialKey + isRoof flag
+  // Group tiles by materialKey
   const accums = new Map<string, GeomAccum>();
-  const roofKeys = new Set<string>();
 
   const getAccum = (key: string): GeomAccum => {
     let a = accums.get(key);
@@ -558,67 +612,89 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
     const {
       x,
       y,
-        tileId,
-        isRoof,
+      geometryProfile,
       isStair,
-      isBlocking,
       height,
       levelOffsetY,
       materialKey,
     } = tile;
 
-    if (isRoof) {
-      roofKeys.add(materialKey);
-        if (tileId.includes("slope")) {
-          // Directional gable slope panel: roof-slope-n/s/e/w
-          const dir =
-            tileId.endsWith("-n")
-              ? "n"
-              : tileId.endsWith("-s")
-                ? "s"
-                : tileId.endsWith("-e")
-                  ? "e"
-                  : "w";
-          const { positions, indices, uvs } = buildRoofSlopePanelVerts(
-            x,
-            y,
-            levelOffsetY,
-            dir as "n" | "s" | "e" | "w",
-          );
-          mergeInto(getAccum(materialKey), positions, indices, uvs);
-        } else if (tileId.includes("ridge")) {
-          // Flat ridge cap tile
-          const { positions, indices, uvs } = buildRoofRidgePanelVerts(
-            x,
-            y,
-            levelOffsetY,
-          );
-          mergeInto(getAccum(materialKey), positions, indices, uvs);
-        } else {
-          // Legacy plain pyramid (for old 'rof' tiles)
-          const wallBaseH = Math.max(0.4, height);
-          const ridgeH = 0.65;
-          const { positions, indices, uvs } = buildRoofVerts(
-            x,
-            y,
-            levelOffsetY + wallBaseH,
-            ridgeH,
-          );
-          mergeInto(getAccum(materialKey), positions, indices, uvs);
-        }
-    } else if (isStair) {
-      const { positions, indices, uvs } = buildStairVerts(x, y, levelOffsetY);
-      mergeInto(getAccum(materialKey), positions, indices, uvs);
-    } else {
-      const tileHeight = Math.max(0.03, height);
-      const { positions, indices, uvs } = buildBoxVerts(
+    const profile = (geometryProfile || (isStair ? "stair" : "box")) as
+      | "box"
+      | "stair"
+      | "slab"
+      | "water-hole"
+      | "ramp-n"
+      | "ramp-s"
+      | "ramp-e"
+      | "ramp-w";
+    const tileHeight = Math.max(0.03, height);
+
+    if (profile === "stair") {
+      const stairDir = tile.stairDir === "down" ? "down" : "up";
+      const stairBaseY =
+        stairDir === "down"
+          ? levelOffsetY - LEVEL_HEIGHT_UNITS
+          : levelOffsetY;
+      const { positions, indices, uvs } = buildStairVerts(
         x,
         y,
-        tileHeight,
-        levelOffsetY,
+        stairBaseY,
+        stairDir,
       );
       mergeInto(getAccum(materialKey), positions, indices, uvs);
+      continue;
     }
+
+    if (profile === "slab") {
+      const { positions, indices, uvs } = buildFloorQuadVerts(
+        x,
+        y,
+        levelOffsetY + tileHeight,
+      );
+      mergeInto(getAccum(materialKey), positions, indices, uvs);
+      continue;
+    }
+
+    if (profile === "water-hole") {
+      const depth = Math.max(0.08, tile.pitDepth ?? 0.22);
+      const { positions, indices, uvs } = buildWaterHoleVerts(
+        x,
+        y,
+        levelOffsetY,
+        depth,
+        tile.pitWallMask ?? 0,
+        0.06,
+      );
+      mergeInto(getAccum(materialKey), positions, indices, uvs);
+      continue;
+    }
+
+    if (
+      profile === "ramp-n" ||
+      profile === "ramp-s" ||
+      profile === "ramp-e" ||
+      profile === "ramp-w"
+    ) {
+      const dir = profile.split("-")[1] as "n" | "s" | "e" | "w";
+      const { positions, indices, uvs } = buildRampVerts(
+        x,
+        y,
+        levelOffsetY,
+        tileHeight,
+        dir,
+      );
+      mergeInto(getAccum(materialKey), positions, indices, uvs);
+      continue;
+    }
+
+    const { positions, indices, uvs } = buildBoxVerts(
+      x,
+      y,
+      tileHeight,
+      levelOffsetY,
+    );
+    mergeInto(getAccum(materialKey), positions, indices, uvs);
   }
 
   // Build response groups with transferable buffers
@@ -637,7 +713,6 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
 
     groups.push({
       materialKey,
-      isRoof: roofKeys.has(materialKey),
       positions,
       indices,
       normals: normalsF,
