@@ -82,6 +82,10 @@ import {
   resolveVerticalVisibleLevels,
 } from "./VerticalLevelVisibility3D";
 import { probeStairLevelTransition } from "./StairConfig3D";
+import {
+  createPropBillboard,
+  isKnownPropId,
+} from "./PropBillboardFactory";
 import type { SliceTileDefinition } from "./SliceTileTypes";
 import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
@@ -275,6 +279,13 @@ type EnemySpawnData = {
   y: number;
 };
 
+type PropSpawnData = {
+  propId: string;
+  tileX: number;
+  tileY: number;
+  isCollidable: boolean;
+};
+
 type SliceEnemy = {
   uid: string;
   spawnKey: string; // deterministic key for persistence (level_type_index)
@@ -297,6 +308,15 @@ type SliceEnemy = {
   animState: EnemyVisualAnimState;
   animDirection: HeroBmsDirection;
   animLockedUntil: number;
+};
+
+type SliceProp = {
+  uid: string;
+  level: string;
+  propId: string;
+  tileX: number;
+  tileY: number;
+  meshRoot: TransformNode;
 };
 
 type SliceDoor = {
@@ -740,6 +760,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let runeTargetingMode = false;
   let targetingRuneId: string | null = null;
   const seededEnemyLevels = new Set<string>();
+  const props = new Map<string, SliceProp>();
+  const collidablePropTilesByLevel = new Map<string, Set<string>>();
+  const seededPropLevels = new Set<string>();
   let mapDataCache: SliceMapData | null = null;
   let worldMapReady = false;
   const recentPlayerDamagePopups = new Map<
@@ -1725,6 +1748,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     void ensureLevelDoorsSeeded(newLevel);
     void ensureLevelEnemiesSeeded(newLevel);
     void ensureLevelItemsSeeded(newLevel);
+    void ensureLevelPropsSeeded(newLevel);
     pushLogEvent("level.change", {
       from: previousLevel,
       to: newLevel,
@@ -1758,6 +1782,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const isVoidSymbol = (symbol: string | null) => !symbol || symbol === "...";
+
+  const getPropTileKey = (tileX: number, tileY: number) =>
+    `${tileX},${tileY}`;
+
+  const isCollidablePropAtTile = (
+    level: string,
+    tileX: number,
+    tileY: number,
+  ) => collidablePropTilesByLevel.get(level)?.has(getPropTileKey(tileX, tileY)) ?? false;
 
   const isStaticTileBlocking = (
     symbol: string | null,
@@ -1808,6 +1841,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const door = getDoorAtTile(options.level, options.tileX, options.tileY);
       if (door) {
         return !isDoorOpenAtTile(options.level, options.tileX, options.tileY);
+      }
+
+      if (
+        isCollidablePropAtTile(options.level, options.tileX, options.tileY)
+      ) {
+        return true;
       }
     }
 
@@ -3080,6 +3119,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     await renderMapLevel(resolvedLevel);
+    await ensureLevelPropsSeeded(resolvedLevel);
 
     const mapWidth = mapData.width ?? 0;
     const mapHeight = mapData.height ?? 0;
@@ -3228,6 +3268,117 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     return spawns;
+  };
+
+  const getPropSpawnsForLevel = async (
+    level: string,
+  ): Promise<PropSpawnData[]> => {
+    const mapData = await loadMapData();
+    if (!mapData) {
+      return [];
+    }
+
+    const levelData = mapData.levels?.[level];
+    const templates = mapData.entityTemplates || {};
+    if (!levelData?.entities) {
+      return [];
+    }
+
+    const spawns: PropSpawnData[] = [];
+    for (const entity of levelData.entities) {
+      const template = templates[entity.symbol];
+      if (!template || template.type !== "decoration" || !template.id) {
+        continue;
+      }
+      if (!isKnownPropId(template.id)) {
+        continue;
+      }
+
+      spawns.push({
+        propId: template.id,
+        tileX: entity.x,
+        tileY: entity.y,
+        isCollidable: template.isCollidable ?? false,
+      });
+    }
+
+    return spawns;
+  };
+
+  const clearProps = () => {
+    props.forEach((prop) => {
+      const observer = (prop.meshRoot as any)._propAnimObserver;
+      if (observer) {
+        scene.onBeforeRenderObservable.remove(observer);
+      }
+      prop.meshRoot.dispose();
+    });
+    props.clear();
+    collidablePropTilesByLevel.clear();
+    seededPropLevels.clear();
+  };
+
+  const spawnProp = (spawn: PropSpawnData, index: number, level: string) => {
+    const meshRoot = createPropBillboard(
+      scene,
+      spawn.propId,
+      `slice-prop-${level}-${spawn.propId}-${index}`,
+      spawn.tileX,
+      spawn.tileY,
+    );
+    if (!meshRoot) {
+      return;
+    }
+
+    const uid = `${level}_${spawn.propId}_${spawn.tileX}_${spawn.tileY}`;
+    const worldPos = new Vector3(
+      spawn.tileX + 0.5,
+      levelToWorldY(level),
+      spawn.tileY + 0.5,
+    );
+    applyActorAquaticY(worldPos, level);
+    meshRoot.parent = mapRoot;
+    meshRoot.position = worldPos;
+    meshRoot.setEnabled(level === activeLevel);
+
+    props.set(uid, {
+      uid,
+      level,
+      propId: spawn.propId,
+      tileX: spawn.tileX,
+      tileY: spawn.tileY,
+      meshRoot,
+    });
+
+    if (spawn.isCollidable) {
+      const tileSet =
+        collidablePropTilesByLevel.get(level) ?? new Set<string>();
+      tileSet.add(getPropTileKey(spawn.tileX, spawn.tileY));
+      collidablePropTilesByLevel.set(level, tileSet);
+    }
+  };
+
+  const ensureLevelPropsSeeded = async (level: string) => {
+    if (seededPropLevels.has(level)) {
+      return;
+    }
+
+    const spawns = await getPropSpawnsForLevel(level);
+    spawns.forEach((spawn, index) => {
+      spawnProp(spawn, index, level);
+    });
+    seededPropLevels.add(level);
+
+    if (level === activeLevel) {
+      rebuildNavigationGrid(level);
+    }
+
+    (window as any).__slice3dProps = {
+      level,
+      count: props.size,
+      onLevel: Array.from(props.values()).filter((p) => p.level === level)
+        .length,
+    };
   };
 
   const clearEnemies = () => {
@@ -4175,6 +4326,20 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const updateEnemyAI = (deltaSeconds: number) => {
     const now = Date.now();
 
+    props.forEach((prop) => {
+      const onActiveLevel = prop.level === activeLevel;
+      prop.meshRoot.setEnabled(onActiveLevel);
+      if (!onActiveLevel) {
+        return;
+      }
+      const footY = getGroundFootY(
+        prop.meshRoot.position.x,
+        prop.meshRoot.position.z,
+        prop.level,
+      );
+      prop.meshRoot.position.y = footY;
+    });
+
     enemies.forEach((enemy) => {
       const onActiveLevel = enemy.level === activeLevel;
       if (!onActiveLevel) {
@@ -4331,6 +4496,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       void ensureLevelDoorsSeeded(currentLevel);
       void ensureLevelItemsSeeded(currentLevel);
       void ensureLevelEnemiesSeeded(currentLevel);
+      void ensureLevelPropsSeeded(currentLevel);
       setSelectedEnemy(null);
       pushLogEvent("level.change", {
         from: previousLevel,
@@ -4598,6 +4764,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   void ensureMapLevelReady(activeLevel);
   void ensureLevelItemsSeeded(activeLevel);
   void ensureLevelEnemiesSeeded(activeLevel);
+  void ensureLevelPropsSeeded(activeLevel);
   syncDroppedItems();
 
   const pressedKeys = new Set<string>();
@@ -5848,6 +6015,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             void ensureLevelDoorsSeeded(landing.landingLevel);
             void ensureLevelEnemiesSeeded(landing.landingLevel);
             void ensureLevelItemsSeeded(landing.landingLevel);
+            void ensureLevelPropsSeeded(landing.landingLevel);
           }
         }
       }
@@ -6137,6 +6305,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       });
       doors.clear();
       doorByLevelTile.clear();
+      clearProps();
       clearEnemies();
       // S7-FP4: torus marker removed — no dispose needed
       delete (window as any).__slice3dLogs;

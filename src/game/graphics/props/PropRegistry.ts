@@ -7,6 +7,8 @@ export type PropDef = {
   id: string;
   size: { width: number; height: number };
   origin: { x: number; y: number };
+  /** Lowest opaque pixel row (0-indexed) for 3D billboard feet anchor. */
+  feetY?: number;
   direction: "south";
   animations: Record<string, PropAnimationDef>;
   defaultAnimation: string;
@@ -37,6 +39,7 @@ export const PROP_DEFS: Record<string, PropDef> = {
     baseDepth: 2,
     bodySize: { width: 32, height: 32 },
     bodyOffset: { x: 0, y: -16 },
+    feetY: 92,
   },
   wild_flower: {
     id: "wild_flower",
@@ -53,6 +56,7 @@ export const PROP_DEFS: Record<string, PropDef> = {
     isCollidable: false,
     blocksRanged: false,
     baseDepth: 1,
+    feetY: 27,
   },
 };
 

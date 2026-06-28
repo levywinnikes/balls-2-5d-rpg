@@ -35,8 +35,8 @@
   },
   "direction_validation": {
     "reference": "hero_base",
-    "status": "runtime_swap_east_west",
-    "validated_at": null,
-    "note": "LEGACY: armed spearman (pre unarmed-enemy policy). Do not copy for new enemies. Runtime swap east/west vs hero_base."
+    "status": "ok",
+    "validated_at": "2026-06-28",
+    "note": "east/west folders swapped on disk via npm run fix:sprite-east-west (2026-06-28). LEGACY armed spearman — do not copy for new enemies."
   }
 }

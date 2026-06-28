@@ -72,13 +72,13 @@ Câmera top-down (`createDebugSliceScene.ts`):
 Função canônica para inimigos — `resolveWorldBmsDirection(deltaX, deltaZ)` em `TwoDParitySpriteFactory.ts`:
 
 ```
-+deltaX  →  east
-−deltaX  →  west
-+deltaZ  →  south    (NÃO north)
-−deltaZ  →  north
+screen-right = −deltaX
+screen-up    = −deltaZ
+|screen-up| ≥ |screen-right|  →  north / south
+senão                         →  east / west
 ```
 
-Paridade 2D: `src/game/entities/Enemy.ts` (~197–200) usa `velocity.y > 0 → down` e `velocity.x > 0 → right`.
+Paridade com herói: `resolveHeroBmsDirection` usa WASD na tela; inimigos usam o mesmo eixo (câmera top-down α=π/2).
 
 ### Herói vs inimigo (não misturar)
 
@@ -108,7 +108,9 @@ Nunca trocar north/south ou east/west no código “no feeling” — primeiro v
 Ordem de preferência:
 
 1. **Regenerar** com `npm run generate:pixellab-sprite -- --spec … --entity {id}` e revalidar contra `hero_base`.
-2. **Renomear pastas** no disco se só east/west estiverem trocados (ex.: trocar conteúdo de `walk_east` ↔ `walk_west`).
+2. **Renomear pastas** no disco se só east/west estiverem trocados (ex.: trocar conteúdo de `walk_east` ↔ `walk_west`):
+
+   `npm run fix:sprite-east-west -- --entity {id}`
 3. **Runtime swap (último recurso)** — ver §6.
 
 Após corrigir assets, remover o id de `GENERATED_SWAP_EAST_WEST_ASSET_DIRS` em `TwoDParitySpriteFactory.ts`.
@@ -132,9 +134,11 @@ O que faz:
 
 Entidades atuais:
 
-| Entity | Status | Ação futura |
-| :--- | :--- | :--- |
-| `goblin_lanceiro` (alias `goblin`) | `runtime_swap_east_west` | Regenerar; validar; remover do Set |
+| Entity | Status |
+| :--- | :--- |
+| *(nenhuma)* | `GENERATED_SWAP_EAST_WEST_ASSET_DIRS` vazio — corrigir no disco |
+
+Preferir `npm run fix:sprite-east-west -- --entity {id}` em vez de runtime swap.
 
 Registrar no spec JSON do personagem:
 

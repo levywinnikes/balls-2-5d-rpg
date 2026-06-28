@@ -32,13 +32,15 @@ Summary (details + validation + post-mortem in that file):
 **Runtime mapping** (`resolveWorldBmsDirection` in `TwoDParitySpriteFactory.ts`):
 
 ```
-+deltaX → east
-−deltaX → west
-+deltaZ → south   (NOT north — matches 2D +Y = down)
-−deltaZ → north
+screen-right = −deltaX
+screen-up    = −deltaZ
+|screen-up| ≥ |screen-right|  →  north / south
+senão                         →  east / west
 ```
 
-**Asset folder remap (goblin_lanceiro only):** see `docs/sprites/DIRECTION_CONVENTION.md` §6 — `GENERATED_SWAP_EAST_WEST_ASSET_DIRS`. Temporary until assets match `hero_base`.
+Same screen axes as `resolveHeroBmsDirection` (camera top-down α=π/2). See `docs/sprites/DIRECTION_CONVENTION.md` §3.
+
+**Asset folder remap:** only if `direction_validation.status` is `runtime_swap_east_west` — fix assets on disk instead (`npm run fix:sprite-east-west`).
 
 Hero input uses `resolveHeroBmsDirection(moveForward, moveRight)` (screen-relative WASD). Enemies use world delta — do **not** copy the hero function for pathfinding.
 
@@ -122,4 +124,3 @@ AI direction updates:
 - **Implemented generated enemies:** `goblin_lanceiro`, `skeleton`, `bear`, `rat` (quadruped `template_id: cat`).
 - Death animation is south-only (PixelLab default).
 - Goblin canvas is 64×64 vs hero 92×92 — billboard scale may differ slightly.
-- `goblin_lanceiro` uses runtime east/west folder swap until spec `direction_validation.status` is `ok`.

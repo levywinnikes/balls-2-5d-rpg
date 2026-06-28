@@ -64,9 +64,12 @@
     "sync:debug-sandbox": "node scripts/sync-sandbox-manifest.js",
     "generate:debug-sandbox": "node scripts/sync-sandbox-manifest.js && node scripts/generate-debug-sandbox-map.js",
     "generate:debug-vertical": "node scripts/generate-debug-vertical-map.js",
+    "generate:debug-forest": "node scripts/generate-debug-forest-map.js",
+    "fix:sprite-east-west": "node scripts/swap-sprite-east-west.js",
     "validate:debug-sandbox": "node scripts/validate-debug-sandbox.js",
     "play:debug-sandbox": "play-debug-sandbox.bat",
-    "play:debug-vertical": "play-debug-vertical.bat"
+    "play:debug-vertical": "play-debug-vertical.bat",
+    "play:debug-forest": "play-debug-forest.bat"
   },
   "build": {
     "appId": "com.balls.balls-2-5d-rpg",

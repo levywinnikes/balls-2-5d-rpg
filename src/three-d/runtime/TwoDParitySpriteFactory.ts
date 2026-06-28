@@ -76,7 +76,7 @@ const GENERATED_ANIM_DEFS: Record<string, GeneratedAnimDef[]> = {
   bear: [
     ...buildDirectionalAnimDefs([
       { state: "idle", frameCount: 4 },
-      { state: "walk", frameCount: 4 },
+      { state: "walk", frameCount: 3 },
       { state: "attack", frameCount: 3 },
     ]),
     { state: "death", direction: "south", frameCount: 9 },
@@ -127,10 +127,9 @@ const GENERATED_SPRITE_PROFILES: Record<
  * Some PixelLab batches swapped east/west folder labels vs hero_base.
  * Remap runtime direction → on-disk folder. Document in spec.direction_validation.
  * See docs/sprites/DIRECTION_CONVENTION.md §6 — prefer fixing assets over keeping this.
+ * Fix on disk: npm run fix:sprite-east-west -- --entity <id>
  */
-const GENERATED_SWAP_EAST_WEST_ASSET_DIRS = new Set<string>([
-  "goblin_lanceiro",
-]);
+const GENERATED_SWAP_EAST_WEST_ASSET_DIRS = new Set<string>([]);
 
 function resolveGeneratedAssetDirection(
   entityId: string,
@@ -189,7 +188,7 @@ export function getGeneratedAttackDurationMs(entityId: string): number {
 
 /**
  * Maps world-space movement (BMS X → world X, BMS Y → world Z) to sprite direction.
- * Must match 2D Enemy.ts: +velocity.y → down/south, −velocity.y → up/north.
+ * Must match hero screen axes: top-down camera alpha=π/2 → screen-right = −world X.
  * Full rules + validation: docs/sprites/DIRECTION_CONVENTION.md
  */
 export function resolveWorldBmsDirection(
@@ -200,10 +199,12 @@ export function resolveWorldBmsDirection(
   if (Math.abs(deltaX) < 0.001 && Math.abs(deltaZ) < 0.001) {
     return fallback;
   }
-  if (Math.abs(deltaZ) >= Math.abs(deltaX)) {
-    return deltaZ > 0 ? "south" : "north";
+  const screenRight = -deltaX;
+  const screenUp = -deltaZ;
+  if (Math.abs(screenUp) >= Math.abs(screenRight)) {
+    return screenUp > 0 ? "north" : "south";
   }
-  return deltaX > 0 ? "east" : "west";
+  return screenRight > 0 ? "east" : "west";
 }
 
 function buildGeneratedFrameUrls(
@@ -877,6 +878,14 @@ const HERO_BODY_ANIMS: HeroBodyAnimDef[] = [
   { state: "death", directions: ["south"], frameCount: 9 },
 ];
 
+/** Per-body overrides — bad frames in generated batches (see bear walk_south). */
+const HERO_BODY_FRAME_COUNT: Record<
+  string,
+  Partial<Record<HeroAnimState, number>>
+> = {
+  bear: { walk: 3 },
+};
+
 const HERO_FRAME_INTERVAL_MS: Record<HeroAnimState, number> = {
   idle: 1000 / 6,
   walk: 1000 / 10,
@@ -1300,8 +1309,10 @@ async function buildHeroModularTextureMap(
       const refHeadAnchor =
         refHeadAnchorByDirection.get(direction) ?? null;
       const frames: Texture[] = [];
+      const frameCount =
+        HERO_BODY_FRAME_COUNT[bodyEntityId]?.[anim.state] ?? anim.frameCount;
 
-      for (let frameIndex = 0; frameIndex < anim.frameCount; frameIndex += 1) {
+      for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
         const bodyUrl = `/assets/sprites/generated/${bodyEntityId}/${anim.state}_${direction}/frame_${String(frameIndex).padStart(2, "0")}.png`;
         const bodyImg = await loadImageElement(bodyUrl);
         const bodyHeadAnchor = getHeadAnchor(bodyImg);
