@@ -10,6 +10,7 @@ import {
   type CharacterVisualProfile,
 } from "./CharacterVisualProfile";
 import { configureBillboardSpriteMaterial } from "./BillboardDepthConfig";
+import { shouldSwapGeneratedEastWestAssets } from "./GeneratedSpriteDirectionMeta";
 
 // Entities that have pre-generated PNG sprites under public/assets/sprites/generated/{id}/
 const GENERATED_SPRITE_ENTITIES = new Set<string>([
@@ -17,6 +18,9 @@ const GENERATED_SPRITE_ENTITIES = new Set<string>([
   "skeleton",
   "bear",
   "rat",
+  "orc",
+  "dragon",
+  "demon",
 ]);
 
 /** Until each enemy has its own folder, reuse generated assets. */
@@ -89,16 +93,43 @@ const GENERATED_ANIM_DEFS: Record<string, GeneratedAnimDef[]> = {
     ]),
     { state: "death", direction: "south", frameCount: 9 },
   ],
+  orc: [
+    ...buildDirectionalAnimDefs([
+      { state: "idle", frameCount: 4 },
+      { state: "walk", frameCount: 4 },
+      { state: "attack", frameCount: 3 },
+    ]),
+    { state: "death", direction: "south", frameCount: 9 },
+  ],
+  dragon: [
+    ...buildDirectionalAnimDefs([
+      { state: "idle", frameCount: 9 },
+      { state: "walk", frameCount: 4 },
+      { state: "attack", frameCount: 7 },
+    ]),
+    { state: "death", direction: "south", frameCount: 9 },
+  ],
+  demon: [
+    ...buildDirectionalAnimDefs([
+      { state: "idle", frameCount: 4 },
+      { state: "walk", frameCount: 4 },
+      { state: "attack", frameCount: 9 },
+    ]),
+    { state: "death", direction: "south", frameCount: 9 },
+  ],
 };
 
-/** Feet row in generated 64×64 enemy PNGs (audit per entity after first batch). */
+/** Feet row in generated enemy PNGs (PixelLab canvas is 92×92). */
 const GENERATED_ENEMY_FEET_Y: Record<string, number> = {
-  goblin_lanceiro: 58,
-  skeleton: 58,
-  bear: 56,
-  rat: 54,
+  goblin_lanceiro: 77,
+  skeleton: 76,
+  bear: 78,
+  rat: 65,
+  orc: 78,
+  dragon: 67,
+  demon: 78,
 };
-const GENERATED_ENEMY_CANVAS_SIZE = 64;
+const GENERATED_ENEMY_CANVAS_SIZE = 92;
 
 export function getGeneratedEnemyAnchorY(
   entityId: string,
@@ -117,6 +148,10 @@ const GENERATED_FRAME_INTERVAL_MS: Record<GeneratedSpriteState, number> = {
   death: 1000 / 12,
 };
 
+/** Hold last death frame on the ground before fade-out. */
+const GENERATED_DEATH_CORPSE_HOLD_MS = 2500;
+const GENERATED_DEATH_FADE_MS = 1500;
+
 /** Fallback when only character_rotations/ exist (no frame_XX folders). */
 const GENERATED_SPRITE_PROFILES: Record<
   string,
@@ -124,18 +159,14 @@ const GENERATED_SPRITE_PROFILES: Record<
 > = {};
 
 /**
- * Some PixelLab batches swapped east/west folder labels vs hero_base.
- * Remap runtime direction → on-disk folder. Document in spec.direction_validation.
- * See docs/sprites/DIRECTION_CONVENTION.md §6 — prefer fixing assets over keeping this.
- * Fix on disk: npm run fix:sprite-east-west -- --entity <id>
+ * Some PixelLab batches label east/west folders inverted vs hero_base.
+ * Source of truth: src/three-d/runtime/sprite-direction-meta.json (npm run audit:sprite-directions).
  */
-const GENERATED_SWAP_EAST_WEST_ASSET_DIRS = new Set<string>([]);
-
 function resolveGeneratedAssetDirection(
   entityId: string,
   direction: GeneratedSpriteDirection,
 ): GeneratedSpriteDirection {
-  if (!GENERATED_SWAP_EAST_WEST_ASSET_DIRS.has(entityId)) {
+  if (!shouldSwapGeneratedEastWestAssets(entityId)) {
     return direction;
   }
   if (direction === "east") {
@@ -168,9 +199,12 @@ export function getGeneratedDeathDurationMs(entityId: string): number {
   }
   const deathDef = defs.find((def) => def.state === "death");
   if (!deathDef) {
-    return 750;
+    return 750 + GENERATED_DEATH_CORPSE_HOLD_MS + GENERATED_DEATH_FADE_MS;
   }
-  return Math.ceil(deathDef.frameCount * GENERATED_FRAME_INTERVAL_MS.death);
+  const animMs = Math.ceil(
+    deathDef.frameCount * GENERATED_FRAME_INTERVAL_MS.death,
+  );
+  return animMs + GENERATED_DEATH_CORPSE_HOLD_MS + GENERATED_DEATH_FADE_MS;
 }
 
 export function getGeneratedAttackDurationMs(entityId: string): number {
@@ -187,9 +221,8 @@ export function getGeneratedAttackDurationMs(entityId: string): number {
 }
 
 /**
- * Maps world-space movement (BMS X → world X, BMS Y → world Z) to sprite direction.
- * Must match hero screen axes: top-down camera alpha=π/2 → screen-right = −world X.
- * Full rules + validation: docs/sprites/DIRECTION_CONVENTION.md
+ * @deprecated Use resolveBmsDirectionFromWorldDelta with active camera context.
+ * Kept for unit tests (top-down α=π/2 only).
  */
 export function resolveWorldBmsDirection(
   deltaX: number,
@@ -206,6 +239,9 @@ export function resolveWorldBmsDirection(
   }
   return screenRight > 0 ? "east" : "west";
 }
+
+// Re-export canonical resolver (camera-aware).
+export { resolveBmsDirectionFromWorldDelta } from "./BmsDirectionResolver";
 
 function buildGeneratedFrameUrls(
   entityId: string,
@@ -284,6 +320,9 @@ export function createGeneratedSpriteAnimatedMaterial(
   let currentDirection: GeneratedSpriteDirection = "south";
   let frame = 0;
   let lastFrameAt = 0;
+  let deathPhase: "none" | "playing" | "hold" | "fade" = "none";
+  let deathHoldStartedAt = 0;
+  let deathFadeStartedAt = 0;
 
   const applyFrame = () => {
     const direction =
@@ -301,6 +340,27 @@ export function createGeneratedSpriteAnimatedMaterial(
 
   const obs = scene.onBeforeRenderObservable.add(() => {
     const now = Date.now();
+
+    if (currentState === "death" && deathPhase === "hold") {
+      mat.emissiveColor = Color3.White();
+      mat.alpha = 1;
+      if (now - deathHoldStartedAt >= GENERATED_DEATH_CORPSE_HOLD_MS) {
+        deathPhase = "fade";
+        deathFadeStartedAt = now;
+      }
+      return;
+    }
+
+    if (currentState === "death" && deathPhase === "fade") {
+      mat.emissiveColor = Color3.White();
+      const fadeT = Math.min(
+        1,
+        (now - deathFadeStartedAt) / GENERATED_DEATH_FADE_MS,
+      );
+      mat.alpha = 1 - fadeT;
+      return;
+    }
+
     const interval = GENERATED_FRAME_INTERVAL_MS[currentState];
     if (now - lastFrameAt < interval) {
       return;
@@ -318,6 +378,14 @@ export function createGeneratedSpriteAnimatedMaterial(
 
     if (currentState === "attack" || currentState === "death") {
       frame = Math.min(frame + 1, frames.length - 1);
+      if (
+        currentState === "death" &&
+        frame >= frames.length - 1 &&
+        deathPhase === "playing"
+      ) {
+        deathPhase = "hold";
+        deathHoldStartedAt = now;
+      }
     } else {
       frame = (frame + 1) % frames.length;
     }
@@ -334,6 +402,16 @@ export function createGeneratedSpriteAnimatedMaterial(
     currentState = state;
     frame = 0;
     lastFrameAt = 0;
+    if (state === "death") {
+      deathPhase = "playing";
+      deathHoldStartedAt = 0;
+      deathFadeStartedAt = 0;
+      mat.alpha = 1;
+      mat.emissiveColor = Color3.White();
+    } else {
+      deathPhase = "none";
+      mat.alpha = 1;
+    }
     applyFrame();
   };
 
@@ -412,12 +490,23 @@ function createGeneratedRotationSpriteMaterial(
       return;
     }
     const elapsed = Date.now() - deathStartedAt;
-    const duration = getGeneratedDeathDurationMs(entityId);
-    const t = Math.min(1, elapsed / duration);
-    mat.alpha = 1 - t * 0.85;
-    if (t >= 1) {
-      mat.alpha = 0.15;
+    const animMs = getGeneratedDeathDurationMs(entityId) -
+      GENERATED_DEATH_CORPSE_HOLD_MS -
+      GENERATED_DEATH_FADE_MS;
+    if (elapsed <= animMs) {
+      mat.emissiveColor = Color3.White();
+      mat.alpha = 1;
+      return;
     }
+    const holdElapsed = elapsed - animMs;
+    if (holdElapsed <= GENERATED_DEATH_CORPSE_HOLD_MS) {
+      mat.emissiveColor = Color3.White();
+      mat.alpha = 1;
+      return;
+    }
+    const fadeElapsed = holdElapsed - GENERATED_DEATH_CORPSE_HOLD_MS;
+    mat.emissiveColor = Color3.White();
+    mat.alpha = 1 - Math.min(1, fadeElapsed / GENERATED_DEATH_FADE_MS);
   });
 
   (mat as any)._setAnimState = (state: GeneratedSpriteState) => {

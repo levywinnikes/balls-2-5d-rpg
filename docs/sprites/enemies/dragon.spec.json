@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "id": "dragon",
+  "name": "Red Dragon",
+  "category": "enemy",
+  "family": "dragon",
+  "body_type": "quadruped",
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "elite",
+    "frame_targets": {
+      "idle": 4,
+      "walk": 6,
+      "attack": 6,
+      "death": 8
+    }
+  },
+  "pipeline": {
+    "model_primary": "pixflux",
+    "template_id": "lion",
+    "character_id": "10e19c07-6909-4315-ae4a-4525b3efe5dc"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "low top-down angle pixel art young red dragon quadruped on four legs, dark crimson scales, orange underbelly and glowing orange eyes, small backward-folded wings on back visible from above, short curved horns, long tail with scale ridges, no rider, no weapons, fills most of 64x64 frame slightly larger silhouette than a bear, neutral standing pose facing camera, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+    "negative_prompt": "biped, bipedal, standing upright, humanoid, rider, saddle, sword, shield, spear, axe, wings spread wide blocking body, wyvern two legs, blurry, noisy, extra heads, tiny rat-sized, purple blob placeholder, smoke cloud only",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "quadruped fire dragon with folded wings",
+    "attack_action_description": "fire breath blast forward from open mouth, head lifts slightly, quadruped dragon on four legs with folded wings, low top-down view, no separate projectile sprite",
+    "death_action_description": "dying dragon collapsing to the ground on four legs, wings slack, death fall, low top-down"
+  },
+  "direction_validation": {
+    "reference": "hero_base",
+    "status": "ok",
+    "validated_at": "2026-06-28T21:30:00.000Z",
+    "note": "Quadruped lion template. audit:sprite-directions OK. Actual frame counts: idle 9, walk 4, attack 7, death 9. Runtime feetY=64 on 92×92 canvas."
+  },
+  "runtime_notes": {
+    "billboard_scale": "Uses ThreeDEnemyVisualRegistry dragon profile (largest enemy billboard). Canvas 64x64 matches other generated enemies.",
+    "consistency_workflow": [
+      "npm run generate:pixellab-sprite -- --spec docs/sprites/enemies/dragon.spec.json --phase character",
+      "npm run audit:sprite-directions -- --entity dragon [--fix]",
+      "npm run generate:pixellab-sprite -- --spec docs/sprites/enemies/dragon.spec.json --phase animate",
+      "Register in TwoDParitySpriteFactory + audit + sandbox room test"
+    ]
+  }
+}

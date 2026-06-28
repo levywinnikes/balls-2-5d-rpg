@@ -234,6 +234,646 @@ function buildVerticalLevelBuffers(
   return { levelUp, levelDown };
 }
 
+/** U-shaped alcove — open on the south side onto a row corridor. */
+function carveAlcove(
+  buffer,
+  width,
+  height,
+  x,
+  y,
+  alcoveW,
+  alcoveH,
+  floorIdx,
+  wallIdx,
+) {
+  for (let dy = 0; dy < alcoveH; dy += 1) {
+    for (let dx = 0; dx < alcoveW; dx += 1) {
+      const onNorth = dy === 0;
+      const onWest = dx === 0;
+      const onEast = dx === alcoveW - 1;
+      const onSouth = dy === alcoveH - 1;
+      const tile =
+        onSouth || (!onNorth && !onWest && !onEast) ? floorIdx : wallIdx;
+      setTile(buffer, width, height, x + dx, y + dy, tile);
+    }
+  }
+}
+
+function isWalkBlockedTile(tileIdx, wallIdx, watIdx) {
+  return tileIdx === wallIdx || tileIdx === watIdx;
+}
+
+/** BFS from player spawn — flags enemies on unreachable tiles. */
+function validateEnemyReachability(
+  buffer,
+  width,
+  height,
+  playerTileX,
+  playerTileY,
+  roomMeta,
+  wallIdx,
+  watIdx,
+) {
+  const visited = new Uint8Array(width * height);
+  const queue = [[playerTileX, playerTileY]];
+  visited[playerTileY * width + playerTileX] = 1;
+  const dirs = [
+    [0, 1],
+    [0, -1],
+    [1, 0],
+    [-1, 0],
+  ];
+  while (queue.length > 0) {
+    const [x, y] = queue.shift();
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+        continue;
+      }
+      const idx = ny * width + nx;
+      if (visited[idx]) {
+        continue;
+      }
+      const tile = buffer[idx];
+      if (isWalkBlockedTile(tile, wallIdx, watIdx)) {
+        continue;
+      }
+      visited[idx] = 1;
+      queue.push([nx, ny]);
+    }
+  }
+
+  const unreachable = [];
+  roomMeta.forEach((meta) => {
+    const key = meta.enemyTileY * width + meta.enemyTileX;
+    if (!visited[key]) {
+      unreachable.push(meta.enemyId);
+    }
+  });
+  return unreachable;
+}
+
+/**
+ * Isolated chambers — one enemy per sealed room; spine on the west, optional doors.
+ * Default playtest layout: enter only the creature you want to fight.
+ */
+function buildIsolatedChambersLayoutMap(
+  enemies,
+  items,
+  layout,
+  indexOf,
+  props = [],
+) {
+  const margin = layout.margin ?? 2;
+  const roomW = layout.roomWidth ?? 8;
+  const roomH = layout.roomHeight ?? 7;
+  const roomCols = layout.enemyRoomCols ?? 3;
+  const roomGap = layout.roomGap ?? 1;
+  const hubH = layout.hubHeight ?? 7;
+  const sectionGap = layout.sectionGap ?? 3;
+  const rowGap = layout.rowGap ?? 2;
+  const spineW = layout.spineWidth ?? 3;
+  const spineGap = layout.spineGap ?? 1;
+  const itemCols = layout.itemCols ?? 8;
+  const itemStep = layout.itemStep ?? 2;
+  const doorTemplateId = layout.doorTemplateId || "wooden_door";
+  const doorsEnabled = layout.enableDoors !== false;
+
+  const floorIdx = indexOf("cob");
+  const wallIdx = indexOf("wal");
+  const itemFloorIdx = indexOf("flr");
+  const watIdx = indexOf("wat");
+  const wtrIdx = indexOf("wtr");
+  const rpnIdx = indexOf("rpn");
+  const rpsIdx = indexOf("rps");
+  const hlmIdx = indexOf("hlm");
+  const stuIdx = indexOf("stu");
+  const stdIdx = indexOf("std");
+  const rfuIdx = indexOf("rfu");
+
+  const roomRows = Math.ceil(enemies.length / roomCols) || 1;
+  const enemyBlockW =
+    spineW + spineGap + roomCols * roomW + (roomCols - 1) * roomGap;
+  const enemyBlockH =
+    hubH + rowGap + roomRows * roomH + Math.max(0, roomRows - 1) * rowGap;
+
+  const itemRows = Math.ceil(items.length / itemCols) || 1;
+  const itemBlockW = Math.max(enemyBlockW, itemCols * itemStep + 2);
+  const itemBlockH = itemRows * itemStep + 4;
+
+  const width = Math.max(30, enemyBlockW + margin * 2, itemBlockW + margin * 2);
+  const height = margin + enemyBlockH + sectionGap + itemBlockH + margin;
+
+  const buffer = Buffer.alloc(width * height, floorIdx);
+
+  for (let x = 0; x < width; x += 1) {
+    setTile(buffer, width, height, x, 0, wallIdx);
+    setTile(buffer, width, height, x, height - 1, wallIdx);
+  }
+  for (let y = 0; y < height; y += 1) {
+    setTile(buffer, width, height, 0, y, wallIdx);
+    setTile(buffer, width, height, width - 1, y, wallIdx);
+  }
+
+  const hubX = margin;
+  const hubY = margin;
+  const hubW = enemyBlockW;
+  fillRect(buffer, width, height, hubX, hubY, hubW, hubH, floorIdx);
+
+  const spineX = margin;
+  const spineRight = spineX + spineW - 1;
+  const roomsStartX = spineX + spineW + spineGap;
+  const playerTileX = spineX + Math.floor(spineW / 2);
+  const playerTileY = hubY + Math.floor(hubH / 2);
+  const hubSouthY = hubY + hubH - 1;
+  const itemSectionY = margin + enemyBlockH + sectionGap;
+
+  fillRect(
+    buffer,
+    width,
+    height,
+    spineX,
+    hubSouthY,
+    spineW,
+    itemSectionY - hubSouthY + 1,
+    floorIdx,
+  );
+
+  const lakeW = 4;
+  const lakeH = 3;
+  const lakeX = hubX + hubW - lakeW - 1;
+  const lakeY = hubY + 1;
+  carveWaterLake(buffer, width, height, lakeX, lakeY, lakeW, lakeH, watIdx, wtrIdx);
+
+  const rampRowY = hubY + 2;
+  let rampX = hubX + hubW - 7;
+  for (let i = 0; i < 3; i += 1) {
+    setTile(buffer, width, height, rampX, rampRowY, rpnIdx);
+    rampX += 1;
+  }
+  for (let i = 0; i < 2; i += 1) {
+    setTile(buffer, width, height, rampX, rampRowY, rpsIdx);
+    rampX += 1;
+  }
+  setTile(buffer, width, height, rampX, rampRowY - 1, hlmIdx);
+
+  const towerStairX = hubX + hubW - 3;
+  const towerStairY = hubY + Math.floor(hubH / 2);
+  const towerDownX = towerStairX;
+  const towerDownY = towerStairY + 5;
+  const cellarStairX = hubX + hubW - 6;
+  const cellarStairY = hubY + hubH - 2;
+  setTile(buffer, width, height, towerStairX, towerStairY, stuIdx);
+  setTile(buffer, width, height, cellarStairX, cellarStairY, stdIdx);
+  setTile(buffer, width, height, hubX + hubW - 5, hubY + 2, rfuIdx);
+
+  const entities = [];
+  const roomMeta = [];
+
+  for (let i = 0; i < enemies.length; i += 1) {
+    const col = i % roomCols;
+    const row = Math.floor(i / roomCols);
+    const roomX = roomsStartX + col * (roomW + roomGap);
+    const roomY = hubY + hubH + rowGap + row * (roomH + rowGap);
+
+    carveRoom(buffer, width, height, roomX, roomY, roomW, roomH, floorIdx, wallIdx);
+
+    const doorX = roomX;
+    const doorY = roomY + Math.floor(roomH / 2);
+    carveDoor(buffer, width, height, doorX, doorY, floorIdx);
+
+    if (spineRight + 1 < doorX) {
+      fillRect(
+        buffer,
+        width,
+        height,
+        spineRight + 1,
+        doorY,
+        doorX - spineRight - 1,
+        1,
+        floorIdx,
+      );
+    }
+
+    if (col < roomCols - 1) {
+      const gapX = roomX + roomW;
+      for (let gy = 0; gy < roomGap; gy += 1) {
+        for (let ry = roomY; ry < roomY + roomH; ry += 1) {
+          setTile(buffer, width, height, gapX + gy, ry, wallIdx);
+        }
+      }
+    }
+
+    if (row > 0) {
+      const prevRoomY = hubY + hubH + rowGap + (row - 1) * (roomH + rowGap);
+      const gapStartY = prevRoomY + roomH;
+      const gapEndY = roomY - 1;
+      for (let gy = gapStartY; gy <= gapEndY; gy += 1) {
+        for (let x = margin; x < margin + enemyBlockW; x += 1) {
+          if (x < spineX || x > spineRight) {
+            setTile(buffer, width, height, x, gy, wallIdx);
+          }
+        }
+      }
+    }
+
+    const enemyTileX = roomX + Math.floor(roomW / 2);
+    const enemyTileY = roomY + Math.floor(roomH / 2);
+    roomMeta.push({
+      enemyId: enemies[i],
+      roomX,
+      roomY,
+      roomW,
+      roomH,
+      doorX,
+      doorY,
+      enemyTileX,
+      enemyTileY,
+    });
+
+    if (doorsEnabled) {
+      entities.push({
+        x: doorX,
+        y: doorY,
+        symbol: null,
+        _doorId: doorTemplateId,
+        _doorUuid: `debug_sandbox_chamber_door_${i + 1}`,
+      });
+    }
+
+    entities.push({
+      x: enemyTileX,
+      y: enemyTileY,
+      symbol: null,
+      _enemyId: enemies[i],
+    });
+  }
+
+  fillRect(
+    buffer,
+    width,
+    height,
+    margin,
+    itemSectionY,
+    width - margin * 2,
+    itemBlockH,
+    itemFloorIdx,
+  );
+  for (let x = margin; x < width - margin; x += 1) {
+    setTile(buffer, width, height, x, itemSectionY, wallIdx);
+    if (x >= spineX && x <= spineRight) {
+      setTile(buffer, width, height, x, itemSectionY, floorIdx);
+    }
+  }
+
+  const itemStartY = itemSectionY + 2;
+  const itemPositions = gridPositions(
+    items.length,
+    itemCols,
+    margin + 1,
+    itemStartY,
+    itemStep,
+    itemStep,
+  );
+  items.forEach((id, index) => {
+    entities.push({
+      x: itemPositions[index].x,
+      y: itemPositions[index].y,
+      symbol: null,
+      _itemId: id,
+    });
+  });
+
+  const propPlacements = [
+    { propId: "wild_flower", x: lakeX, y: lakeY + lakeH },
+    { propId: "wild_flower", x: lakeX + 1, y: lakeY + lakeH },
+  ];
+  propPlacements.forEach(({ propId, x, y }) => {
+    if (!props.includes(propId)) {
+      return;
+    }
+    entities.push({ x, y, symbol: null, _propId: propId });
+  });
+
+  const unreachable = validateEnemyReachability(
+    buffer,
+    width,
+    height,
+    playerTileX,
+    playerTileY,
+    roomMeta,
+    wallIdx,
+    watIdx,
+  );
+  if (unreachable.length > 0) {
+    throw new Error(
+      `Unreachable enemies in isolated_chambers layout: ${unreachable.join(", ")}`,
+    );
+  }
+
+  return {
+    width,
+    height,
+    buffer,
+    entities,
+    roomMeta,
+    playerTileX,
+    playerTileY,
+    itemSectionY,
+    itemRows,
+    enemyBlockH,
+    roomRows,
+    roomCols,
+    layoutMode: "isolated_chambers",
+    verticalDemo: {
+      towerStairX,
+      towerStairY,
+      towerDownX,
+      towerDownY,
+      cellarStairX,
+      cellarStairY,
+      lake: { x: lakeX, y: lakeY, w: lakeW, h: lakeH },
+      ramps: { x: hubX + hubW - 7, y: rampRowY },
+      floorRamp: { x: hubX + hubW - 5, y: hubY + 2 },
+      balconyFall: { x: towerDownX, y: towerDownY + 3 },
+    },
+  };
+}
+
+/**
+ * Open gallery — hub, central spine, row corridors, alcoves open to the south.
+ * All enemies loose on shared corridors (legacy / stress-test layout).
+ */
+function buildOpenGalleryLayoutMap(
+  enemies,
+  items,
+  layout,
+  indexOf,
+  props = [],
+  propSymbols = {},
+) {
+  const margin = layout.margin ?? 2;
+  const alcoveW = layout.alcoveWidth ?? layout.roomWidth ?? 7;
+  const alcoveH = layout.alcoveHeight ?? 5;
+  const roomCols = layout.enemyRoomCols ?? 3;
+  const roomGap = layout.roomGap ?? 2;
+  const hubH = layout.hubHeight ?? 7;
+  const sectionGap = layout.sectionGap ?? 3;
+  const rowGap = layout.rowGap ?? 2;
+  const corridorH = layout.rowCorridorHeight ?? 2;
+  const spineW = layout.spineWidth ?? 3;
+  const itemCols = layout.itemCols ?? 8;
+  const itemStep = layout.itemStep ?? 2;
+
+  const floorIdx = indexOf("cob");
+  const wallIdx = indexOf("wal");
+  const itemFloorIdx = indexOf("flr");
+  const watIdx = indexOf("wat");
+  const wtrIdx = indexOf("wtr");
+  const rpnIdx = indexOf("rpn");
+  const rpsIdx = indexOf("rps");
+  const hlmIdx = indexOf("hlm");
+  const stuIdx = indexOf("stu");
+  const stdIdx = indexOf("std");
+
+  const roomRows = Math.ceil(enemies.length / roomCols) || 1;
+  const enemyBlockW = roomCols * alcoveW + (roomCols - 1) * roomGap;
+  const enemyBlockH =
+    hubH +
+    rowGap +
+    roomRows * (alcoveH + corridorH) +
+    Math.max(0, roomRows - 1) * rowGap;
+
+  const itemRows = Math.ceil(items.length / itemCols) || 1;
+  const itemBlockW = Math.max(enemyBlockW, itemCols * itemStep + 2);
+  const itemBlockH = itemRows * itemStep + 4;
+
+  const width = Math.max(28, enemyBlockW + margin * 2, itemBlockW + margin * 2);
+  const height = margin + enemyBlockH + sectionGap + itemBlockH + margin;
+
+  const buffer = Buffer.alloc(width * height, floorIdx);
+
+  for (let x = 0; x < width; x += 1) {
+    setTile(buffer, width, height, x, 0, wallIdx);
+    setTile(buffer, width, height, x, height - 1, wallIdx);
+  }
+  for (let y = 0; y < height; y += 1) {
+    setTile(buffer, width, height, 0, y, wallIdx);
+    setTile(buffer, width, height, width - 1, y, wallIdx);
+  }
+
+  const hubX = margin;
+  const hubY = margin;
+  const hubW = enemyBlockW;
+  fillRect(buffer, width, height, hubX, hubY, hubW, hubH, floorIdx);
+
+  const hubCenterX = hubX + Math.floor(hubW / 2);
+  const spineLeft = hubCenterX - Math.floor(spineW / 2);
+  const hubSouthY = hubY + hubH - 1;
+  const itemSectionY = margin + enemyBlockH + sectionGap;
+
+  fillRect(
+    buffer,
+    width,
+    height,
+    spineLeft,
+    hubSouthY,
+    spineW,
+    itemSectionY - hubSouthY + 1,
+    floorIdx,
+  );
+
+  const lakeW = 4;
+  const lakeH = 3;
+  const lakeX = hubX + hubW - lakeW - 1;
+  const lakeY = hubY + 1;
+  carveWaterLake(buffer, width, height, lakeX, lakeY, lakeW, lakeH, watIdx, wtrIdx);
+
+  const rampRowY = hubY + 2;
+  let rampX = hubX + 1;
+  for (let i = 0; i < 3; i += 1) {
+    setTile(buffer, width, height, rampX, rampRowY, rpnIdx);
+    rampX += 1;
+  }
+  for (let i = 0; i < 2; i += 1) {
+    setTile(buffer, width, height, rampX, rampRowY, rpsIdx);
+    rampX += 1;
+  }
+  setTile(buffer, width, height, hubX + 1, rampRowY - 1, hlmIdx);
+
+  const towerStairX = hubX + hubW - 3;
+  const towerStairY = hubY + Math.floor(hubH / 2);
+  const towerDownX = towerStairX;
+  const towerDownY = towerStairY + 5;
+  const cellarStairX = hubX + 1;
+  const cellarStairY = hubY + hubH - 2;
+  setTile(buffer, width, height, towerStairX, towerStairY, stuIdx);
+  setTile(buffer, width, height, cellarStairX, cellarStairY, stdIdx);
+
+  const rfuIdx = indexOf("rfu");
+  setTile(
+    buffer,
+    width,
+    height,
+    hubX + Math.floor(hubW / 2),
+    hubY + 2,
+    rfuIdx,
+  );
+
+  const entities = [];
+  const roomMeta = [];
+
+  for (let i = 0; i < enemies.length; i += 1) {
+    const col = i % roomCols;
+    const row = Math.floor(i / roomCols);
+    const rowBaseY =
+      hubY + hubH + rowGap + row * (alcoveH + corridorH + rowGap);
+
+    const alcoveX = margin + col * (alcoveW + roomGap);
+    const alcoveY = rowBaseY;
+    const corridorY = alcoveY + alcoveH;
+
+    carveAlcove(
+      buffer,
+      width,
+      height,
+      alcoveX,
+      alcoveY,
+      alcoveW,
+      alcoveH,
+      floorIdx,
+      wallIdx,
+    );
+    fillRect(
+      buffer,
+      width,
+      height,
+      margin,
+      corridorY,
+      hubW,
+      corridorH,
+      floorIdx,
+    );
+
+    const enemyTileX = alcoveX + Math.floor(alcoveW / 2);
+    const enemyTileY = alcoveY + Math.floor(alcoveH / 2) + 1;
+    roomMeta.push({
+      enemyId: enemies[i],
+      roomX: alcoveX,
+      roomY: alcoveY,
+      roomW: alcoveW,
+      roomH: alcoveH,
+      doorX: null,
+      doorY: null,
+      enemyTileX,
+      enemyTileY,
+    });
+    entities.push({
+      x: enemyTileX,
+      y: enemyTileY,
+      symbol: null,
+      _enemyId: enemies[i],
+    });
+  }
+
+  fillRect(
+    buffer,
+    width,
+    height,
+    margin,
+    itemSectionY,
+    width - margin * 2,
+    itemBlockH,
+    itemFloorIdx,
+  );
+  for (let x = margin; x < width - margin; x += 1) {
+    setTile(buffer, width, height, x, itemSectionY, wallIdx);
+    if (x >= spineLeft && x < spineLeft + spineW) {
+      setTile(buffer, width, height, x, itemSectionY, floorIdx);
+    }
+  }
+
+  const itemStartY = itemSectionY + 2;
+  const itemPositions = gridPositions(
+    items.length,
+    itemCols,
+    margin + 1,
+    itemStartY,
+    itemStep,
+    itemStep,
+  );
+  items.forEach((id, index) => {
+    entities.push({
+      x: itemPositions[index].x,
+      y: itemPositions[index].y,
+      symbol: null,
+      _itemId: id,
+    });
+  });
+
+  const propPlacements = [
+    { propId: "oak_tree", x: hubX + 4, y: hubY + 1 },
+    { propId: "oak_tree", x: hubX + hubW - 4, y: hubY + hubH - 2 },
+    { propId: "wild_flower", x: hubX + 3, y: hubY + hubH - 2 },
+    { propId: "wild_flower", x: hubX + hubW - 5, y: hubY + 1 },
+    { propId: "wild_flower", x: hubCenterX + 3, y: hubY + hubH - 2 },
+  ];
+  propPlacements.forEach(({ propId, x, y }) => {
+    if (!props.includes(propId)) {
+      return;
+    }
+    entities.push({ x, y, symbol: null, _propId: propId });
+  });
+
+  const playerTileX = hubCenterX;
+  const playerTileY = hubY + Math.floor(hubH / 2);
+
+  const unreachable = validateEnemyReachability(
+    buffer,
+    width,
+    height,
+    playerTileX,
+    playerTileY,
+    roomMeta,
+    wallIdx,
+    watIdx,
+  );
+  if (unreachable.length > 0) {
+    throw new Error(
+      `Unreachable enemies in open_gallery layout: ${unreachable.join(", ")}`,
+    );
+  }
+
+  return {
+    width,
+    height,
+    buffer,
+    entities,
+    roomMeta,
+    playerTileX,
+    playerTileY,
+    itemSectionY,
+    itemRows,
+    enemyBlockH,
+    roomRows,
+    roomCols,
+    layoutMode: "open_gallery",
+    verticalDemo: {
+      towerStairX,
+      towerStairY,
+      towerDownX,
+      towerDownY,
+      cellarStairX,
+      cellarStairY,
+      lake: { x: lakeX, y: lakeY, w: lakeW, h: lakeH },
+      ramps: { x: hubX + 1, y: rampRowY },
+      floorRamp: { x: hubX + Math.floor(hubW / 2), y: hubY + 2 },
+      balconyFall: { x: towerDownX, y: towerDownY + 3 },
+    },
+  };
+}
+
 function buildRoomLayoutMap(enemies, items, layout, indexOf, props = [], propSymbols = {}) {
   const margin = layout.margin ?? 1;
   const roomW = layout.roomWidth ?? 7;
@@ -388,6 +1028,12 @@ function buildRoomLayoutMap(enemies, items, layout, indexOf, props = [], propSym
       );
     }
 
+    // South exit from upper room into the inter-row gap (north-only door trapped rows 2+).
+    const rowCount = Math.ceil(enemies.length / roomCols) || 1;
+    if (row < rowCount - 1) {
+      carveDoor(buffer, width, height, doorX, roomY + roomH - 1, floorIdx);
+    }
+
     const enemyTileX = roomX + Math.floor(roomW / 2);
     const enemyTileY = roomY + Math.floor(roomH / 2);
     roomMeta.push({
@@ -514,6 +1160,7 @@ function buildRoomLayoutMap(enemies, items, layout, indexOf, props = [], propSym
     enemyBlockH,
     roomRows,
     roomCols,
+    layoutMode: "enemy_rooms",
     verticalDemo: {
       towerStairX,
       towerStairY,
@@ -538,6 +1185,7 @@ function main() {
 
   const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
   const layout = manifest.layout || {};
+  const layoutMode = layout.mode || "isolated_chambers";
   const enemies = manifest.enemies || [];
   const items = manifest.items || [];
   const props = manifest.props || [];
@@ -584,7 +1232,37 @@ function main() {
   };
   if (!tileAtlas.includes("dor")) tileAtlas.push("dor");
 
-  const built = buildRoomLayoutMap(enemies, items, layout, indexOf, props, propSymbols);
+  const built = (() => {
+    if (layoutMode === "enemy_rooms") {
+      return buildRoomLayoutMap(
+        enemies,
+        items,
+        layout,
+        indexOf,
+        props,
+        propSymbols,
+      );
+    }
+    if (layoutMode === "open_gallery") {
+      return buildOpenGalleryLayoutMap(
+        enemies,
+        items,
+        layout,
+        indexOf,
+        props,
+        propSymbols,
+      );
+    }
+    return buildIsolatedChambersLayoutMap(
+      enemies,
+      items,
+      layout,
+      indexOf,
+      props,
+    );
+  })();
+
+  const layoutModeResolved = built.layoutMode || layoutMode;
 
   const entities = built.entities.map((entry) => {
     if (entry._doorId) {
@@ -633,22 +1311,31 @@ function main() {
       mapName: "Debug Sandbox",
       debugSandbox: true,
       manifestPath: "docs/debug/sandbox-manifest.json",
-      layoutMode: "enemy_rooms",
+      layoutMode: layoutModeResolved,
       zones: {
         player: { x: built.playerTileX, y: built.playerTileY },
         enemies: {
-          mode: "rooms",
+          mode:
+            layoutModeResolved === "open_gallery"
+              ? "alcoves"
+              : layoutModeResolved === "isolated_chambers"
+                ? "chambers"
+                : "rooms",
           cols: built.roomCols,
           rows: built.roomRows,
           rooms: built.roomMeta.map((room, index) => ({
             id: room.enemyId,
             x: room.enemyTileX,
             y: room.enemyTileY,
-            door: {
-              uuid: `debug_sandbox_room_door_${index + 1}`,
-              x: room.doorX,
-              y: room.doorY,
-            },
+            ...(room.doorX != null
+              ? {
+                  door: {
+                    uuid: `debug_sandbox_room_door_${index + 1}`,
+                    x: room.doorX,
+                    y: room.doorY,
+                  },
+                }
+              : {}),
           })),
         },
         items: {
@@ -806,7 +1493,7 @@ function main() {
   );
 
   console.log(
-    `[debug-sandbox] map=${mapName} size=${built.width}x${built.height} layout=enemy_rooms`,
+    `[debug-sandbox] map=${mapName} size=${built.width}x${built.height} layout=${layoutModeResolved}`,
   );
   console.log(
     `[debug-sandbox] enemies=${enemies.length} (${built.roomCols}x${built.roomRows} rooms) items=${items.length}`,

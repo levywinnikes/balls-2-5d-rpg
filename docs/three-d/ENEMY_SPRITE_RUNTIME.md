@@ -29,14 +29,15 @@ Summary (details + validation + post-mortem in that file):
 - Map tile `x` → world `X`
 - Map tile `y` → world `Z` (see `worldToSliceCoord` / spawn in `createDebugSliceScene.ts`)
 
-**Runtime mapping** (`resolveWorldBmsDirection` in `TwoDParitySpriteFactory.ts`):
+**Runtime mapping** — `resolveBmsDirectionFromWorldDelta` in `BmsDirectionResolver.ts`:
 
-```
-screen-right = −deltaX
-screen-up    = −deltaZ
-|screen-up| ≥ |screen-right|  →  north / south
-senão                         →  east / west
-```
+1. Project world `(deltaX, deltaZ)` through the **active camera** (top-down *or* first-person).
+2. Convert to screen `(moveRight, moveForward)` — same axes as hero WASD.
+3. Call `resolveHeroBmsDirection` — **one function for hero + all enemies**.
+
+Asset E/W remap (only when PixelLab folders are mislabeled): `src/three-d/runtime/sprite-direction-meta.json` (from `npm run audit:sprite-directions`).
+
+Regression: `npm run test:sprite-direction`
 
 Same screen axes as `resolveHeroBmsDirection` (camera top-down α=π/2). See `docs/sprites/DIRECTION_CONVENTION.md` §3.
 
@@ -45,6 +46,18 @@ Same screen axes as `resolveHeroBmsDirection` (camera top-down α=π/2). See `do
 Hero input uses `resolveHeroBmsDirection(moveForward, moveRight)` (screen-relative WASD). Enemies use world delta — do **not** copy the hero function for pathfinding.
 
 Reference 2D parity: `src/game/entities/Enemy.ts` lines ~197–200.
+
+### Why E/W keeps breaking (read this once)
+
+| Space | Horizontal rule | Example |
+| :--- | :--- | :--- |
+| **Phaser 2D** | `velocity.x > 0` → anim `right` / folder `east` | Tile X increases to the right on canvas |
+| **3D slice world** | `screen-right = −deltaX` → folder `east` | Camera α=π/2: world **+X** appears on the **left** of the screen |
+
+Same PNG folders, **different axis mapping**. Copying the Phaser rule into `resolveWorldBmsDirection` inverts every enemy left/right in 3D.
+
+**Fix assets:** `npm run audit:sprite-directions -- --fix`  
+**Fix runtime:** `npm run test:sprite-direction` (must pass before merge)
 
 ---
 
@@ -82,7 +95,8 @@ When adding a new generated enemy (copy from `skeleton`):
 4. **`GENERATED_SPRITE_ALIASES`** — map legacy registry IDs (e.g. `goblin` → `goblin_lanceiro`).
 5. **`EnemyRegistry.ts`** — enemy stats unchanged; visual is resolved by ID.
 6. **`ThreeDEnemyVisualRegistry.ts`** — optional billboard size tweak in `PROFILE_BY_ENEMY_ID`.
-7. **`createDebugSliceScene.ts`** — no change if registry ID resolves; AI already calls `resolveWorldBmsDirection` on move and toward-player on attack.
+7. **`createDebugSliceScene.ts`** — uses `resolveBmsDirectionFromWorldDelta`; no per-enemy hacks.
+8. **Gate:** `npm run test:sprite-direction` before merging sprite or AI changes.
 
 Runtime picks **animated** mode by default. `GENERATED_SPRITE_PROFILES` with `mode: "rotations"` is fallback-only when frame folders are missing.
 
@@ -101,7 +115,7 @@ Runtime picks **animated** mode by default. `GENERATED_SPRITE_PROFILES` with `mo
 
 AI direction updates:
 
-- **While chasing or in melee:** face player (`faceEnemyToward` → `resolveWorldBmsDirection` toward player)
+- **While chasing or in melee:** face player via `resolveBmsDirectionFromWorldDelta` (active camera)
 - **While returning to spawn:** movement delta
 - **While attacking:** face player before `applyEnemyAttackToPlayer`; idle between swings after lock expires
 

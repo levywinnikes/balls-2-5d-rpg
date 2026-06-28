@@ -79,9 +79,31 @@ const QUADRUPED_ANIMATION_PLAN = [
 
 function resolveAnimationPlan(spec) {
   const bodyType = spec.rawSpec?.body_type;
-  return bodyType === "quadruped"
-    ? QUADRUPED_ANIMATION_PLAN
-    : HUMANOID_ANIMATION_PLAN;
+  const basePlan =
+    bodyType === "quadruped"
+      ? QUADRUPED_ANIMATION_PLAN
+      : HUMANOID_ANIMATION_PLAN;
+  const prompts = spec.rawSpec?.production_prompts || {};
+  const targets = spec.frameTargets || {};
+
+  return basePlan.map((entry) => {
+    const resolved = { ...entry };
+    if (entry.name === "attack" && prompts.attack_action_description) {
+      resolved.mode = "v3";
+      resolved.actionDescription = prompts.attack_action_description;
+      delete resolved.templateId;
+      if (targets.attack) {
+        resolved.frameCount = targets.attack;
+      }
+    }
+    if (entry.name === "death" && prompts.death_action_description) {
+      resolved.actionDescription = prompts.death_action_description;
+    }
+    if (entry.mode === "v3" && targets[entry.name]) {
+      resolved.frameCount = targets[entry.name];
+    }
+    return resolved;
+  });
 }
 
 // ─────────────────────────────────────────────
@@ -373,6 +395,9 @@ function resolveCharacterCreationOptions(spec) {
     }
     if (spec.entityId === "rat") {
       return { templateId: "cat" };
+    }
+    if (spec.entityId === "dragon") {
+      return { templateId: "lion" };
     }
     return { templateId: "dog" };
   }

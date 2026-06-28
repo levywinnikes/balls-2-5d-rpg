@@ -1,145 +1,155 @@
 {
   "mapName": "debug_sandbox",
   "tileSize": 32,
-  "width": 27,
-  "height": 44,
+  "width": 34,
+  "height": 60,
   "config": {
     "startLevel": "0",
     "mapName": "Debug Sandbox",
     "debugSandbox": true,
     "manifestPath": "docs/debug/sandbox-manifest.json",
-    "layoutMode": "enemy_rooms",
+    "layoutMode": "isolated_chambers",
     "zones": {
       "player": {
-        "x": 13,
-        "y": 3
+        "x": 3,
+        "y": 5
       },
       "enemies": {
-        "mode": "rooms",
+        "mode": "chambers",
         "cols": 3,
-        "rows": 3,
+        "rows": 4,
         "rooms": [
           {
             "id": "bear",
-            "x": 4,
-            "y": 11,
+            "x": 10,
+            "y": 14,
             "door": {
               "uuid": "debug_sandbox_room_door_1",
-              "x": 4,
-              "y": 8
+              "x": 6,
+              "y": 14
+            }
+          },
+          {
+            "id": "demon",
+            "x": 19,
+            "y": 14,
+            "door": {
+              "uuid": "debug_sandbox_room_door_2",
+              "x": 15,
+              "y": 14
             }
           },
           {
             "id": "dragon",
-            "x": 13,
-            "y": 11,
+            "x": 28,
+            "y": 14,
             "door": {
-              "uuid": "debug_sandbox_room_door_2",
-              "x": 13,
-              "y": 8
+              "uuid": "debug_sandbox_room_door_3",
+              "x": 24,
+              "y": 14
             }
           },
           {
             "id": "goblin",
-            "x": 22,
-            "y": 11,
+            "x": 10,
+            "y": 23,
             "door": {
-              "uuid": "debug_sandbox_room_door_3",
-              "x": 22,
-              "y": 8
+              "uuid": "debug_sandbox_room_door_4",
+              "x": 6,
+              "y": 23
             }
           },
           {
             "id": "goblin_lanceiro",
-            "x": 4,
-            "y": 19,
+            "x": 19,
+            "y": 23,
             "door": {
-              "uuid": "debug_sandbox_room_door_4",
-              "x": 4,
-              "y": 16
+              "uuid": "debug_sandbox_room_door_5",
+              "x": 15,
+              "y": 23
             }
           },
           {
             "id": "god",
-            "x": 13,
-            "y": 19,
+            "x": 28,
+            "y": 23,
             "door": {
-              "uuid": "debug_sandbox_room_door_5",
-              "x": 13,
-              "y": 16
+              "uuid": "debug_sandbox_room_door_6",
+              "x": 24,
+              "y": 23
             }
           },
           {
             "id": "orc",
-            "x": 22,
-            "y": 19,
+            "x": 10,
+            "y": 32,
             "door": {
-              "uuid": "debug_sandbox_room_door_6",
-              "x": 22,
-              "y": 16
+              "uuid": "debug_sandbox_room_door_7",
+              "x": 6,
+              "y": 32
             }
           },
           {
             "id": "rat",
-            "x": 4,
-            "y": 27,
+            "x": 19,
+            "y": 32,
             "door": {
-              "uuid": "debug_sandbox_room_door_7",
-              "x": 4,
-              "y": 24
+              "uuid": "debug_sandbox_room_door_8",
+              "x": 15,
+              "y": 32
             }
           },
           {
             "id": "red_wizard",
-            "x": 13,
-            "y": 27,
+            "x": 28,
+            "y": 32,
             "door": {
-              "uuid": "debug_sandbox_room_door_8",
-              "x": 13,
-              "y": 24
+              "uuid": "debug_sandbox_room_door_9",
+              "x": 24,
+              "y": 32
             }
           },
           {
             "id": "skeleton",
-            "x": 22,
-            "y": 27,
+            "x": 10,
+            "y": 41,
             "door": {
-              "uuid": "debug_sandbox_room_door_9",
-              "x": 22,
-              "y": 24
+              "uuid": "debug_sandbox_room_door_10",
+              "x": 6,
+              "y": 41
             }
           }
         ]
       },
       "items": {
-        "startY": 35,
+        "startY": 50,
         "rows": 3,
         "cols": 8
       },
       "verticalDemo": {
-        "towerStairX": 23,
-        "towerStairY": 3,
-        "towerDownX": 23,
-        "towerDownY": 8,
-        "cellarStairX": 3,
-        "cellarStairY": 4,
+        "towerStairX": 29,
+        "towerStairY": 5,
+        "towerDownX": 29,
+        "towerDownY": 10,
+        "cellarStairX": 26,
+        "cellarStairY": 7,
         "lake": {
-          "x": 21,
-          "y": 2,
+          "x": 27,
+          "y": 3,
           "w": 4,
           "h": 3
         },
         "ramps": {
-          "x": 2,
-          "y": 3
+          "x": 25,
+          "y": 4
         },
         "floorRamp": {
-          "x": 13,
-          "y": 3
+          "x": 27,
+          "y": 4
         },
         "balconyFall": {
-          "x": 23,
-          "y": 11
+          "x": 29,
+          "y": 13
         }
       }
     }
@@ -158,6 +168,7 @@
     "std",
     "rfu",
     "en09",
+    "en00",
     "en01",
     "en02",
     "en03",
@@ -292,6 +303,10 @@
     "en09": {
       "type": "enemy",
       "id": "bear"
+    },
+    "en00": {
+      "type": "enemy",
+      "id": "demon"
     },
     "en01": {
       "type": "enemy",
@@ -439,247 +454,243 @@
     "0": {
       "binFile": "debug_sandbox_0.bin",
       "playerPos": {
-        "x": 432,
-        "y": 112
+        "x": 112,
+        "y": 176
       },
       "entities": [
         {
-          "x": 4,
-          "y": 8,
+          "x": 6,
+          "y": 14,
           "symbol": "dor",
-          "uuid": "debug_sandbox_room_door_1"
+          "uuid": "debug_sandbox_chamber_door_1"
         },
         {
-          "x": 4,
-          "y": 11,
+          "x": 10,
+          "y": 14,
           "symbol": "en09"
         },
         {
-          "x": 13,
-          "y": 8,
+          "x": 15,
+          "y": 14,
           "symbol": "dor",
-          "uuid": "debug_sandbox_room_door_2"
+          "uuid": "debug_sandbox_chamber_door_2"
         },
         {
-          "x": 13,
-          "y": 11,
+          "x": 19,
+          "y": 14,
+          "symbol": "en00"
+        },
+        {
+          "x": 24,
+          "y": 14,
+          "symbol": "dor",
+          "uuid": "debug_sandbox_chamber_door_3"
+        },
+        {
+          "x": 28,
+          "y": 14,
           "symbol": "en01"
         },
         {
-          "x": 22,
-          "y": 8,
+          "x": 6,
+          "y": 23,
           "symbol": "dor",
-          "uuid": "debug_sandbox_room_door_3"
+          "uuid": "debug_sandbox_chamber_door_4"
         },
         {
-          "x": 22,
-          "y": 11,
+          "x": 10,
+          "y": 23,
           "symbol": "en02"
         },
         {
-          "x": 4,
-          "y": 16,
+          "x": 15,
+          "y": 23,
           "symbol": "dor",
-          "uuid": "debug_sandbox_room_door_4"
+          "uuid": "debug_sandbox_chamber_door_5"
         },
         {
-          "x": 4,
-          "y": 19,
+          "x": 19,
+          "y": 23,
           "symbol": "en03"
         },
         {
-          "x": 13,
-          "y": 16,
+          "x": 24,
+          "y": 23,
           "symbol": "dor",
-          "uuid": "debug_sandbox_room_door_5"
+          "uuid": "debug_sandbox_chamber_door_6"
         },
         {
-          "x": 13,
-          "y": 19,
+          "x": 28,
+          "y": 23,
           "symbol": "en04"
         },
         {
-          "x": 22,
-          "y": 16,
+          "x": 6,
+          "y": 32,
           "symbol": "dor",
-          "uuid": "debug_sandbox_room_door_6"
+          "uuid": "debug_sandbox_chamber_door_7"
         },
         {
-          "x": 22,
-          "y": 19,
+          "x": 10,
+          "y": 32,
           "symbol": "en05"
         },
         {
-          "x": 4,
-          "y": 24,
+          "x": 15,
+          "y": 32,
           "symbol": "dor",
-          "uuid": "debug_sandbox_room_door_7"
+          "uuid": "debug_sandbox_chamber_door_8"
         },
         {
-          "x": 4,
-          "y": 27,
+          "x": 19,
+          "y": 32,
           "symbol": "en06"
         },
         {
-          "x": 13,
-          "y": 24,
+          "x": 24,
+          "y": 32,
           "symbol": "dor",
-          "uuid": "debug_sandbox_room_door_8"
+          "uuid": "debug_sandbox_chamber_door_9"
         },
         {
-          "x": 13,
-          "y": 27,
+          "x": 28,
+          "y": 32,
           "symbol": "en07"
         },
         {
-          "x": 22,
-          "y": 24,
+          "x": 6,
+          "y": 41,
           "symbol": "dor",
-          "uuid": "debug_sandbox_room_door_9"
+          "uuid": "debug_sandbox_chamber_door_10"
         },
         {
-          "x": 22,
-          "y": 27,
+          "x": 10,
+          "y": 41,
           "symbol": "en08"
         },
         {
-          "x": 2,
-          "y": 35,
+          "x": 3,
+          "y": 50,
           "symbol": "it00"
         },
         {
-          "x": 4,
-          "y": 35,
+          "x": 5,
+          "y": 50,
           "symbol": "it01"
         },
         {
-          "x": 6,
-          "y": 35,
+          "x": 7,
+          "y": 50,
           "symbol": "it02"
         },
         {
-          "x": 8,
-          "y": 35,
+          "x": 9,
+          "y": 50,
           "symbol": "it03"
         },
         {
-          "x": 10,
-          "y": 35,
+          "x": 11,
+          "y": 50,
           "symbol": "it04"
         },
         {
-          "x": 12,
-          "y": 35,
+          "x": 13,
+          "y": 50,
           "symbol": "it05"
         },
         {
-          "x": 14,
-          "y": 35,
+          "x": 15,
+          "y": 50,
           "symbol": "it06"
         },
         {
-          "x": 16,
-          "y": 35,
+          "x": 17,
+          "y": 50,
           "symbol": "it07"
         },
         {
-          "x": 2,
-          "y": 37,
+          "x": 3,
+          "y": 52,
           "symbol": "it08"
         },
         {
-          "x": 4,
-          "y": 37,
+          "x": 5,
+          "y": 52,
           "symbol": "it09"
         },
         {
-          "x": 6,
-          "y": 37,
+          "x": 7,
+          "y": 52,
           "symbol": "it10"
         },
         {
-          "x": 8,
-          "y": 37,
+          "x": 9,
+          "y": 52,
           "symbol": "it11"
         },
         {
-          "x": 10,
-          "y": 37,
+          "x": 11,
+          "y": 52,
           "symbol": "it12"
         },
         {
-          "x": 12,
-          "y": 37,
+          "x": 13,
+          "y": 52,
           "symbol": "it13"
         },
         {
-          "x": 14,
-          "y": 37,
+          "x": 15,
+          "y": 52,
           "symbol": "it14"
         },
         {
-          "x": 16,
-          "y": 37,
+          "x": 17,
+          "y": 52,
           "symbol": "it15"
         },
         {
-          "x": 2,
-          "y": 39,
+          "x": 3,
+          "y": 54,
           "symbol": "it16"
         },
         {
-          "x": 4,
-          "y": 39,
+          "x": 5,
+          "y": 54,
           "symbol": "it17"
         },
         {
-          "x": 6,
-          "y": 39,
+          "x": 7,
+          "y": 54,
           "symbol": "it18"
         },
         {
-          "x": 8,
-          "y": 39,
+          "x": 9,
+          "y": 54,
           "symbol": "it19"
         },
         {
-          "x": 10,
-          "y": 39,
+          "x": 11,
+          "y": 54,
           "symbol": "it20"
         },
         {
-          "x": 12,
-          "y": 39,
+          "x": 13,
+          "y": 54,
           "symbol": "it21"
         },
         {
-          "x": 14,
-          "y": 39,
+          "x": 15,
+          "y": 54,
           "symbol": "it22"
         },
         {
-          "x": 3,
-          "y": 3,
-          "symbol": "pr00"
-        },
-        {
-          "x": 23,
-          "y": 3,
-          "symbol": "pr00"
-        },
-        {
-          "x": 10,
-          "y": 2,
+          "x": 27,
+          "y": 6,
           "symbol": "pr01"
         },
         {
-          "x": 15,
-          "y": 3,
-          "symbol": "pr01"
-        },
-        {
-          "x": 13,
-          "y": 4,
+          "x": 28,
+          "y": 6,
           "symbol": "pr01"
         }
       ]
@@ -687,16 +698,16 @@
     "1": {
       "binFile": "debug_sandbox_1.bin",
       "playerPos": {
-        "x": 432,
-        "y": 112
+        "x": 112,
+        "y": 176
       },
       "entities": []
     },
     "-1": {
       "binFile": "debug_sandbox_-1.bin",
       "playerPos": {
-        "x": 432,
-        "y": 112
+        "x": 112,
+        "y": 176
       },
       "entities": []
     }

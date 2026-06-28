@@ -1,0 +1,17 @@
+{
+  "characterId": "520a05d5-19eb-44e6-995f-5fca8fefaf17",
+  "createdAt": "2026-06-28T19:10:37.657Z",
+  "entityId": "orc",
+  "description": "low top-down angle pixel art bulky orc warrior, lime green skin, muscular humanoid biped, lower tusks, small pointed ears, brown leather belt and loincloth, empty hands no weapons, slightly taller and wider than a goblin, neutral standing pose facing camera, same scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+  "view": "low top-down",
+  "imageSize": {
+    "width": 64,
+    "height": 64
+  },
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\orc\\character_rotations\\south.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\orc\\character_rotations\\west.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\orc\\character_rotations\\east.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\orc\\character_rotations\\north.png"
+  }
+}

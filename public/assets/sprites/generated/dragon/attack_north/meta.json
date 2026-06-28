@@ -1,0 +1,10 @@
+{
+  "animation": "attack",
+  "direction": "north",
+  "mode": "v3",
+  "templateId": null,
+  "actionDescription": "fire breath blast forward from open mouth, head lifts slightly, quadruped dragon on four legs with folded wings, low top-down view, no separate projectile sprite",
+  "frameCount": 7,
+  "generatedAt": "2026-06-28T21:16:50.618Z",
+  "characterId": "10e19c07-6909-4315-ae4a-4525b3efe5dc"
+}

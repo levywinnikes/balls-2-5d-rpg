@@ -43,24 +43,32 @@ flowchart LR
 
 ---
 
-## 3. Layout (gerado — modo `enemy_rooms`)
+## 3. Layout (gerado — modo `isolated_chambers` padrão)
 
 ```text
 ┌── parede ─────────────────────────────────────────────┐
-│              hub (spawn do jogador)                    │
-│                        │                               │
-│    [sala E1]    [sala E2]    [sala E3]                │
-│    [sala E4]    [sala E5]    [sala E6]                │
-│    [sala E7]    [sala E8]    [sala E9]                │
-│                        │                               │
-│              galeria de itens (chão flr)               │
+│  hub (spawn na spine)     demos (lago, Z) à direita   │
+│  ║                                                    │
+│  ║══[porta]→[ sala E1 ] [ sala E2 ] [ sala E3 ]       │
+│  ║                                                    │
+│  ║══[porta]→[ sala E4 ] [ sala E5 ] [ sala E6 ]       │
+│  ║                                                    │
+│  ║══[porta]→[ sala E7 ] [ sala E8 ] [ sala E9 ]       │
+│  ║                                                    │
+│              galeria de itens                          │
 └────────────────────────────────────────────────────────┘
 ```
 
-- **1 inimigo por sala** (grade 3×3, configurável em `manifest.layout`).
-- Corredor central liga o hub a cada sala e à galeria de itens.
-- Cada sala pode receber uma **porta persistente** com `uuid`; no rollout inicial de portas, os inimigos ficam presos até a porta abrir.
-- Parâmetros em `docs/debug/sandbox-manifest.json` → `layout.roomWidth`, `roomHeight`, `enemyRoomCols`, etc.
+- **1 inimigo por sala fechada** — só entra pela porta (ou arco aberto).
+- **`layout.enableDoors: true`** (padrão) — portas bloqueiam até abrir; teste uma criatura por vez.
+- **`layout.enableDoors: false`** — mesmas salas, sem porta (útil se a porta 3D atrapalhar).
+- Spine vertical à **esquerda**: desce do hub, entra só na sala que quiser.
+- Modos alternativos em `manifest.layout.mode`:
+  - `isolated_chambers` — **padrão** (recomendado)
+  - `open_gallery` — todos soltos nos corredores (stress test)
+  - `enemy_rooms` — legado (não usar)
+
+Parâmetros: `docs/debug/sandbox-manifest.json` → `roomWidth`, `roomHeight`, `enableDoors`, etc.
 - Símbolos 3 letras (`en00`… inimigos, `it00`… itens) ficam em `manifest.symbols`.
 
 ---
@@ -75,7 +83,9 @@ flowchart LR
 | URL | `http://localhost:4000/?map=debug_sandbox&autostart=1` |
 | npm | `npm run play:debug-sandbox` |
 
-Spawn: level `0`, **hub superior central** (corredor para salas de inimigo). Entre numa sala por vez para testar combate isolado. Itens ficam na galeria inferior.
+Spawn: level `0`, **hub na spine oeste** (corredor vertical). Desça e abra **uma porta** por vez para testar combate isolado. Itens na galeria inferior.
+
+**Modos:** `isolated_chambers` (padrão, salas + portas) · `open_gallery` (todos soltos) · `enableDoors: false` (salas sem porta).
 
 **Teste de direção sprite:** uma sala = um inimigo. Matriz N/S/E/W documentada em `docs/sprites/DIRECTION_CONVENTION.md` §2.
 

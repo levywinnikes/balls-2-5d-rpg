@@ -23,8 +23,15 @@ function main() {
 
   const manifestEnemies = manifest.enemies || [];
   const manifestItems = manifest.items || [];
+  const manifestProps = manifest.props || [];
+  const excludeEnemies = new Set(manifest.excludeEnemies || []);
+  const expectedRegistryEnemies = registryEnemies.filter(
+    (id) => !excludeEnemies.has(id),
+  );
 
-  const missingEnemies = registryEnemies.filter((id) => !manifestEnemies.includes(id));
+  const missingEnemies = expectedRegistryEnemies.filter(
+    (id) => !manifestEnemies.includes(id),
+  );
   const missingItems = registryItems.filter((id) => !manifestItems.includes(id));
   const extraEnemies = manifestEnemies.filter((id) => !registryEnemies.includes(id));
   const extraItems = manifestItems.filter((id) => !registryItems.includes(id));
@@ -53,7 +60,18 @@ function main() {
   } else {
     const mapData = JSON.parse(fs.readFileSync(MAP_JSON, "utf8"));
     const entityCount = mapData.levels?.["0"]?.entities?.length || 0;
-    const expected = manifestEnemies.length + manifestItems.length;
+    const doorsEnabled = manifest.layout?.enableDoors === true;
+    const propSymbols = new Set(
+      Object.values(manifest.symbols?.props || {}),
+    );
+    const propEntityCount = (mapData.levels?.["0"]?.entities || []).filter(
+      (entry) => propSymbols.has(entry.symbol),
+    ).length;
+    const expected =
+      manifestEnemies.length +
+      manifestItems.length +
+      propEntityCount +
+      (doorsEnabled ? manifestEnemies.length : 0);
     if (entityCount !== expected) {
       failed = true;
       console.error(

@@ -38,18 +38,20 @@ import {
 import { PathfindingManager } from "../../game/systems/PathfindingManager";
 import { WorldMapService } from "../../services/WorldMapService";
 import {
+  applyEnemyTargetVisual,
   createEnemyVisual,
+  restoreEnemyTargetVisual,
   setEnemyVisualAnimState,
   setEnemyVisualDirection,
   type EnemyVisualAnimState,
 } from "./ThreeDEnemyVisualRegistry";
+import { resolveBmsDirectionFromWorldDelta } from "./BmsDirectionResolver";
 import {
   createHeroModularSpriteMaterial,
   resolveHeroBmsDirection,
   HERO_BILLBOARD_LAYOUT,
   getGeneratedDeathDurationMs,
   getGeneratedAttackDurationMs,
-  resolveWorldBmsDirection,
   type HeroAnimState,
   type HeroBmsDirection,
 } from "./TwoDParitySpriteFactory";
@@ -304,7 +306,6 @@ type SliceEnemy = {
   magicCooldowns: Map<string, number>;
   isDead: boolean;
   isProvoked: boolean;
-  selectionRing: Mesh | null;
   animState: EnemyVisualAnimState;
   animDirection: HeroBmsDirection;
   animLockedUntil: number;
@@ -2881,26 +2882,25 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const DOOR_INTERACT_RADIUS = 1.2;
+  const DOOR_INTERACT_RADIUS = 2.25;
+  /** Slightly farther when the player clicked the door mesh directly. */
+  const DOOR_PICK_INTERACT_RADIUS = 3.0;
+
+  const getDoorInteractDistance = (door: SliceDoor): number => {
+    const px = player.position.x;
+    const pz = player.position.z;
+    const closestX = Math.max(door.tileX, Math.min(door.tileX + 1, px));
+    const closestZ = Math.max(door.tileY, Math.min(door.tileY + 1, pz));
+    const dx = px - closestX;
+    const dz = pz - closestZ;
+    return Math.sqrt(dx * dx + dz * dz);
+  };
 
   const isPlayerOnDoorTile = (door: SliceDoor) => {
-    const doorTileX = door.tileX;
-    const doorTileY = door.tileY;
-    const radius = 0.32;
-    const samplePoints: Array<[number, number]> = [
-      [player.position.x, player.position.z],
-      [player.position.x - radius, player.position.z],
-      [player.position.x + radius, player.position.z],
-      [player.position.x, player.position.z - radius],
-      [player.position.x, player.position.z + radius],
-    ];
-
-    for (const [sx, sz] of samplePoints) {
-      if (Math.floor(sx) === doorTileX && Math.floor(sz) === doorTileY) {
-        return true;
-      }
-    }
-    return false;
+    return (
+      Math.floor(player.position.x) === door.tileX &&
+      Math.floor(player.position.z) === door.tileY
+    );
   };
 
   const canCloseDoor = (door: SliceDoor) => {
@@ -2937,14 +2937,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return true;
   };
 
-  const tryInteractNearbyDoor = (): boolean => {
-    const nearbyDoor = findNearbyDoor(DOOR_INTERACT_RADIUS);
-    if (!nearbyDoor) {
-      return false;
-    }
-    return interactDoorByUuid(nearbyDoor.uuid);
-  };
-
   const findNearbyDoor = (maxDistanceUnits = DOOR_INTERACT_RADIUS): SliceDoor | null => {
     let nearestDoor: SliceDoor | null = null;
     let nearestDistance = maxDistanceUnits + 1;
@@ -2953,11 +2945,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       if (door.level !== activeLevel) {
         return;
       }
-      const centerX = door.tileX + 0.5;
-      const centerZ = door.tileY + 0.5;
-      const dx = player.position.x - centerX;
-      const dz = player.position.z - centerZ;
-      const distance = Math.sqrt(dx * dx + dz * dz);
+      const distance = getDoorInteractDistance(door);
       if (distance > maxDistanceUnits || distance >= nearestDistance) {
         return;
       }
@@ -2966,6 +2954,38 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
 
     return nearestDoor;
+  };
+
+  const findDoorUuidFromPick = (pickResult: { pickedMesh?: any } | null | undefined) => {
+    let currentMesh = pickResult?.pickedMesh;
+    while (currentMesh) {
+      const uuid = (currentMesh.metadata as { sliceDoorUuid?: string } | undefined)
+        ?.sliceDoorUuid;
+      if (uuid) {
+        return uuid;
+      }
+      currentMesh = currentMesh.parent;
+    }
+    return null;
+  };
+
+  const tryInteractPickedDoor = (doorUuid: string): boolean => {
+    const door = doors.get(doorUuid);
+    if (!door || door.level !== activeLevel) {
+      return false;
+    }
+    if (getDoorInteractDistance(door) > DOOR_PICK_INTERACT_RADIUS) {
+      return false;
+    }
+    return interactDoorByUuid(doorUuid);
+  };
+
+  const tryInteractNearbyDoor = (): boolean => {
+    const nearbyDoor = findNearbyDoor(DOOR_INTERACT_RADIUS);
+    if (!nearbyDoor) {
+      return false;
+    }
+    return interactDoorByUuid(nearbyDoor.uuid);
   };
 
   const ensureLevelDoorsSeeded = async (level: string) => {
@@ -3385,41 +3405,24 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     enemies.forEach((enemy) => enemy.meshRoot.dispose());
     enemies.clear();
     selectedEnemyUid = null;
-    // S7-FP4: clear emissive on all enemies when deselecting all
-    enemies.forEach((e) => {
-      e.meshRoot.getChildMeshes().forEach((m) => {
-        const mat = m.material as
-          | import("@babylonjs/core").StandardMaterial
-          | null;
-        if (mat) mat.emissiveColor = new Color3(0, 0, 0);
-      });
-    });
   };
 
   const setSelectedEnemy = (enemyUid: string | null) => {
-    // S7-FP4: clear emissive on previously selected enemy
     if (selectedEnemyUid && selectedEnemyUid !== enemyUid) {
       const prev = enemies.get(selectedEnemyUid);
       if (prev) {
-        prev.meshRoot.getChildMeshes().forEach((m) => {
-          const mat = m.material as
-            | import("@babylonjs/core").StandardMaterial
-            | null;
-          if (mat) mat.emissiveColor = new Color3(0, 0, 0);
-        });
-        prev.selectionRing?.setEnabled(false);
+        restoreEnemyTargetVisual(prev.meshRoot);
       }
     }
     selectedEnemyUid = enemyUid;
-    if (!enemyUid) return;
+    if (!enemyUid) {
+      return;
+    }
 
     const enemy = enemies.get(enemyUid);
     if (!enemy || enemy.isDead) {
       selectedEnemyUid = null;
-      return;
     }
-
-    enemy.selectionRing?.setEnabled(true);
   };
 
   const spawnEnemy = (
@@ -3453,12 +3456,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     applyActorAquaticY(worldPos, level);
     meshRoot.position = worldPos.clone();
     meshRoot.metadata = { sliceEnemyUid: uid };
-    const selectionRing =
-      (meshRoot
-        .getChildMeshes()
-        .find((m) => m.name.endsWith("-selection-ring")) as Mesh | undefined) ||
-      null;
-    selectionRing?.setEnabled(false);
 
     const instance: SliceEnemy = {
       uid,
@@ -3478,7 +3475,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       magicCooldowns: new Map<string, number>(),
       isDead: false,
       isProvoked: false,
-      selectionRing,
       animState: "idle",
       animDirection: "south",
       animLockedUntil: 0,
@@ -4304,6 +4300,24 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     enemy.meshRoot.position = enemy.worldPos;
   };
 
+  const resolveEnemyBmsDirection = (
+    enemy: SliceEnemy,
+    deltaX: number,
+    deltaZ: number,
+  ): HeroBmsDirection => {
+    const activeCamera = scene.activeCamera ?? camera;
+    return resolveBmsDirectionFromWorldDelta(
+      deltaX,
+      deltaZ,
+      enemy.animDirection,
+      {
+        scene,
+        camera: activeCamera,
+        origin: enemy.worldPos,
+      },
+    );
+  };
+
   const faceEnemyToward = (
     enemy: SliceEnemy,
     targetX: number,
@@ -4317,10 +4331,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (Math.abs(dx) < 0.001 && Math.abs(dz) < 0.001) {
       return;
     }
-    setEnemyDirection(
-      enemy,
-      resolveWorldBmsDirection(dx, dz, enemy.animDirection),
-    );
+    setEnemyDirection(enemy, resolveEnemyBmsDirection(enemy, dx, dz));
   };
 
   const updateEnemyAI = (deltaSeconds: number) => {
@@ -4454,10 +4465,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       } else if (movedSq > 0.0001) {
         setEnemyDirection(
           enemy,
-          resolveWorldBmsDirection(
+          resolveEnemyBmsDirection(
+            enemy,
             enemy.worldPos.x - prevX,
             enemy.worldPos.z - prevZ,
-            enemy.animDirection,
           ),
         );
       }
@@ -5372,6 +5383,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
+    const pickedDoorUuid = findDoorUuidFromPick(pickResult);
+    if (pickedDoorUuid && tryInteractPickedDoor(pickedDoorUuid)) {
+      return;
+    }
+
     if (isRightClick) {
       tryInteractNearbyDoor();
       return;
@@ -5951,22 +5967,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
-    // S7-FP4: emissive pulse on selected enemy — soft red flicker
+    // Target highlight: warm sprite + amber floor spot (no 3D ring).
     enemyHighlightPulseT += deltaSeconds;
     if (selectedEnemyUid) {
       const selectedEnemy = enemies.get(selectedEnemyUid);
       if (!selectedEnemy || selectedEnemy.isDead) {
         setSelectedEnemy(null);
       } else {
-        // sine wave: oscillates between 0 and 0.45 at ~1.8 Hz
         const pulse =
-          (Math.sin(enemyHighlightPulseT * Math.PI * 1.8) * 0.5 + 0.5) * 0.45;
-        selectedEnemy.meshRoot.getChildMeshes().forEach((m) => {
-          const mat = m.material as
-            | import("@babylonjs/core").StandardMaterial
-            | null;
-          if (mat) mat.emissiveColor = new Color3(pulse, 0, 0);
-        });
+          (Math.sin(enemyHighlightPulseT * Math.PI * 1.8) * 0.5 + 0.5) * 0.22;
+        applyEnemyTargetVisual(selectedEnemy.meshRoot, pulse);
       }
     }
 

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "id": "orc",
+  "name": "Orc Warrior",
+  "category": "enemy",
+  "family": "orc",
+  "body_type": "humanoid",
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "trash",
+    "frame_targets": {
+      "idle": 4,
+      "walk": 6,
+      "attack": 6,
+      "death": 6
+    }
+  },
+  "pipeline": {
+    "model_primary": "pixflux",
+    "character_id": "520a05d5-19eb-44e6-995f-5fca8fefaf17"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "low top-down angle pixel art bulky orc warrior, lime green skin, muscular humanoid biped, lower tusks, small pointed ears, brown leather belt and loincloth, empty hands no weapons, slightly taller and wider than a goblin, neutral standing pose facing camera, same scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+    "negative_prompt": "blurry, noisy, muddy colors, extra limbs, goblin, skeleton, tiny, thin, quadruped, sword, weapon, shield, spear, axe, dagger, staff, bow, holding, wielding",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "unarmed orc warrior"
+  },
+  "direction_validation": {
+    "reference": "hero_base",
+    "status": "pending",
+    "validated_at": null,
+    "note": "Unarmed enemy. Validate east/west vs hero_base after generation."
+  }
+}

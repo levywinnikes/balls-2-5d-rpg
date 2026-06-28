@@ -82,4 +82,8 @@ function main() {
   swapEntityEastWest(entity);
 }
 
-main();
+module.exports = { swapEntityEastWest };
+
+if (require.main === module) {
+  main();
+}

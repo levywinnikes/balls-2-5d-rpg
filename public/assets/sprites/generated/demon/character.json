@@ -1,0 +1,17 @@
+{
+  "characterId": "350e5d9e-6085-42ef-b202-9d356b97e2dc",
+  "createdAt": "2026-06-28T22:42:39.092Z",
+  "entityId": "demon",
+  "description": "low top-down angle pixel art large demonic brawler, dark crimson maroon skin, muscular humanoid biped, big curved black horns, glowing orange eyes, sharp fangs, small folded bat wings on back visible from above, clawed empty hands no weapons, black torn loincloth, taller and bulkier than an orc, menacing neutral standing pose facing camera, same scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+  "view": "low top-down",
+  "imageSize": {
+    "width": 64,
+    "height": 64
+  },
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\demon\\character_rotations\\south.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\demon\\character_rotations\\west.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\demon\\character_rotations\\east.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\demon\\character_rotations\\north.png"
+  }
+}

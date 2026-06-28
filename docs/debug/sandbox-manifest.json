@@ -3,28 +3,34 @@
   "mapName": "debug_sandbox",
   "description": "Generated debug arena — all gameplay enemies + item icons. Do not edit entities by hand; run npm run generate:debug-sandbox.",
   "layout": {
+    "mode": "isolated_chambers",
     "tileSize": 32,
     "itemCols": 8,
     "itemStep": 2,
-    "margin": 1,
-    "roomWidth": 7,
-    "roomHeight": 6,
+    "margin": 2,
+    "spineWidth": 3,
+    "spineGap": 1,
+    "roomWidth": 8,
+    "roomHeight": 7,
     "enemyRoomCols": 3,
-    "roomGap": 2,
-    "hubHeight": 5,
+    "roomGap": 1,
+    "rowGap": 2,
+    "hubHeight": 7,
     "sectionGap": 3,
     "enableDoors": true,
-    "doorTemplateId": "wooden_door"
+    "doorTemplateId": "wooden_door",
+    "alcoveWidth": 7,
+    "alcoveHeight": 5,
+    "rowCorridorHeight": 2
   },
-  "excludeEnemies": [
-    "demon"
-  ],
+  "excludeEnemies": [],
   "props": [
     "oak_tree",
     "wild_flower"
   ],
   "enemies": [
     "bear",
+    "demon",
     "dragon",
     "goblin",
     "goblin_lanceiro",
@@ -102,5 +108,5 @@
       "wild_flower": "pr01"
     }
   },
-  "generatedAt": "2026-06-28T17:36:28.030Z"
+  "generatedAt": "2026-06-28T23:08:27.225Z"
 }

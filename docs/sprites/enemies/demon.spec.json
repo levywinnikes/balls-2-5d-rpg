@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "demon",
+  "name": "Demon Brute",
+  "category": "enemy",
+  "family": "demon",
+  "body_type": "humanoid",
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "elite",
+    "frame_targets": {
+      "idle": 6,
+      "walk": 8,
+      "attack": 8,
+      "death": 8
+    }
+  },
+  "pipeline": {
+    "model_primary": "pixflux",
+    "character_id": "350e5d9e-6085-42ef-b202-9d356b97e2dc"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "low top-down angle pixel art large demonic brawler, dark crimson maroon skin, muscular humanoid biped, big curved black horns, glowing orange eyes, sharp fangs, small folded bat wings on back visible from above, clawed empty hands no weapons, black torn loincloth, taller and bulkier than an orc, menacing neutral standing pose facing camera, same scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+    "negative_prompt": "blurry, noisy, muddy colors, extra limbs, cute, chibi, goblin, orc, skeleton, angel, holy, paladin, sword, spear, axe, shield, staff, bow, weapon, holding, wielding, wings spread wide blocking body, quadruped, tiny, thin",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "unarmed demonic brawler with horns and folded wings",
+    "attack_action_description": "demonic claw slash swipe forward with both clawed hands extended, empty hands no weapons, muscular humanoid biped, low top-down view",
+    "death_action_description": "demon brawler collapsing to knees then falling backward dying, folded wings slack, death fall, low top-down"
+  },
+  "direction_validation": {
+    "reference": "hero_base",
+    "status": "ok",
+    "validated_at": "2026-06-28T22:50:00.000Z",
+    "note": "Elite humanoid brawler. audit:sprite-directions OK. Actual frame counts: idle 4, walk 4, attack 9, death 9. Runtime feetY=78 on 92×92 canvas."
+  }
+}

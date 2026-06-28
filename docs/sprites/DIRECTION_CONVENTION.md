@@ -51,8 +51,8 @@ Se `east` do novo personagem parecer `west` do herói → **assets invertidos**.
 2. Entrar numa **sala com um único inimigo** (layout `enemy_rooms`).
 3. Ficar **ao sul** do inimigo (aumentar Z / descer na tela) → sprite **frente** (`south`).
 4. Ficar **ao norte** (diminuir Z) → sprite **costas** (`north`).
-5. Ficar **à direita** (+X) → perfil **east** (olhando para você).
-6. Ficar **à esquerda** (−X) → perfil **west**.
+5. Ficar **à direita na tela** (world **−X**, menor X que o inimigo) → perfil **east**.
+6. Ficar **à esquerda na tela** (world **+X**) → perfil **west**.
 7. Em melee: animação **attack** usa 3 frames na direção correta; não trava no frame 0.
 
 ---
@@ -69,23 +69,21 @@ Câmera top-down (`createDebugSliceScene.ts`):
 - `ArcRotateCamera` com `alpha = π/2` (travado)
 - **`+Z` na tela = para baixo = `south`** (igual minimap / Phaser `+y = down`)
 
-Função canônica para inimigos — `resolveWorldBmsDirection(deltaX, deltaZ)` em `TwoDParitySpriteFactory.ts`:
+Função canônica — `resolveBmsDirectionFromWorldDelta` (`BmsDirectionResolver.ts`):
 
 ```
-screen-right = −deltaX
-screen-up    = −deltaZ
-|screen-up| ≥ |screen-right|  →  north / south
-senão                         →  east / west
+world delta → project through activeCamera → (moveRight, moveForward)
+→ resolveHeroBmsDirection (same as hero WASD)
 ```
 
-Paridade com herói: `resolveHeroBmsDirection` usa WASD na tela; inimigos usam o mesmo eixo (câmera top-down α=π/2).
+Funciona em **top-down e primeira pessoa**. Não use fórmula manual `screenRight=−deltaX` no gameplay — só no teste unitário top-down.
 
 ### Herói vs inimigo (não misturar)
 
 | Actor | Função | Entrada |
 | :--- | :--- | :--- |
 | Herói 3D | `resolveHeroBmsDirection` | WASD **relativo à tela** (`moveForward`, `moveRight`) |
-| Inimigo 3D | `resolveWorldBmsDirection` | Vetor **mundo** (para jogador ou delta de movimento) |
+| Inimigo 3D | `resolveBmsDirectionFromWorldDelta` | Delta mundo + **câmera ativa** |
 
 Nunca trocar north/south ou east/west no código “no feeling” — primeiro valide assets contra `hero_base`.
 
@@ -96,7 +94,8 @@ Nunca trocar north/south ou east/west no código “no feeling” — primeiro v
 | Sintoma | Causa usual | Correção correta |
 | :--- | :--- | :--- |
 | Corre de **costas** ao perseguir (N/S) | `+deltaZ` mapeado para `north` | Usar `+deltaZ → south` em `resolveWorldBmsDirection` |
-| **Esquerda/direita** invertidos | Pastas `east_*` / `west_*` **rotuladas ao contrário** no disco (vs `hero_base`) | Validar PNGs; renomear pastas ou regenerar PixelLab |
+| **Esquerda/direita** invertidos em **1ª pessoa** | Fórmula top-down fixa ignorava rotação da câmera FP | Usar `resolveBmsDirectionFromWorldDelta` (projeção pela câmera ativa) |
+| **Esquerda/direita** invertidos em **todos** modos | Pastas `east_*`/`west_*` trocadas vs `hero_base` | `npm run audit:sprite-directions -- --fix` |
 | Ataque não anima / fica no frame 0 | `_setAnimState("attack")` ignorado se já em attack | Passar `restart=true`; lock ≥ `getGeneratedAttackDurationMs` |
 | Perfil errado em diagonal | Só path delta, não olhar para alvo | `faceEnemyToward(player)` ao perseguir/atacar |
 | “Consertei invertendo no AI” | Gambiarra por asset errado | Corrigir asset; ver §5 |
@@ -119,38 +118,9 @@ Após corrigir assets, remover o id de `GENERATED_SWAP_EAST_WEST_ASSET_DIRS` em 
 
 ## 6. Runtime swap east/west (exceção documentada)
 
-Constante: `GENERATED_SWAP_EAST_WEST_ASSET_DIRS` em `src/three-d/runtime/TwoDParitySpriteFactory.ts`.
+Arquivo: `src/three-d/runtime/sprite-direction-meta.json` (gerado por `npm run audit:sprite-directions`).
 
-Quando usar:
-
-- Assets já commitados com east/west invertidos **e** regeneração imediata não é possível.
-- Validação visual confirmou divergência vs `hero_base`.
-
-O que faz:
-
-- Runtime pede direção lógica `east` → carrega pasta `*_west/*`.
-- Runtime pede `west` → carrega pasta `*_east/*`.
-- **Não altera** north/south.
-
-Entidades atuais:
-
-| Entity | Status |
-| :--- | :--- |
-| *(nenhuma)* | `GENERATED_SWAP_EAST_WEST_ASSET_DIRS` vazio — corrigir no disco |
-
-Preferir `npm run fix:sprite-east-west -- --entity {id}` em vez de runtime swap.
-
-Registrar no spec JSON do personagem:
-
-```json
-"direction_validation": {
-  "reference": "hero_base",
-  "status": "runtime_swap_east_west",
-  "note": "east/west folders inverted vs hero_base; see DIRECTION_CONVENTION.md §6"
-}
-```
-
-Quando `status` for `"ok"`, o id **não** deve estar em `GENERATED_SWAP_EAST_WEST_ASSET_DIRS`.
+Quando `swapEastWestAssets: true` para um entity id, o runtime troca pastas east↔west ao carregar frames. Preferir corrigir no disco com `--fix`.
 
 ---
 
@@ -158,7 +128,8 @@ Quando `status` for `"ok"`, o id **não** deve estar em `GENERATED_SWAP_EAST_WES
 
 | Arquivo | Responsabilidade |
 | :--- | :--- |
-| `TwoDParitySpriteFactory.ts` | `resolveWorldBmsDirection`, `resolveGeneratedAssetDirection`, anim material |
+| `BmsDirectionResolver.ts` | `resolveBmsDirectionFromWorldDelta` (camera projection) |
+| `TwoDParitySpriteFactory.ts` | `resolveGeneratedAssetDirection`, anim material |
 | `createDebugSliceScene.ts` | `faceEnemyToward`, AI chase/attack, lock de anim |
 | `ThreeDEnemyVisualRegistry.ts` | Billboard + `_setDirection` / `_setAnimState` |
 | `Enemy.ts` (2D) | Paridade velocity → down/up/left/right |

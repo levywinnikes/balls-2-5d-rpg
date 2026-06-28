@@ -83,16 +83,16 @@ const PROFILE_BY_ENEMY_ID: Record<string, EnemyVisualProfile> = {
   demon: {
     baseColor: "#7f1d1d",
     accentColor: "#dc2626",
-    radius: 0.52,
-    height: 1.75,
-    headScale: 0.66,
+    radius: 0.58,
+    height: 1.95,
+    headScale: 0.68,
     hasHorns: true,
   },
   dragon: {
     baseColor: "#8b1f1f",
     accentColor: "#f97316",
-    radius: 0.62,
-    height: 2.1,
+    radius: 0.74,
+    height: 2.5,
     headScale: 0.75,
     hasHorns: true,
   },
@@ -111,17 +111,6 @@ const PROFILE_BY_ENEMY_ID: Record<string, EnemyVisualProfile> = {
     headScale: 0.7,
   },
 };
-
-function createLitMaterial(
-  scene: Scene,
-  name: string,
-  hexColor: string,
-): StandardMaterial {
-  const material = new StandardMaterial(name, scene);
-  material.diffuseColor = Color3.FromHexString(hexColor);
-  material.specularColor = new Color3(0.06, 0.06, 0.06);
-  return material;
-}
 
 export function getEnemyVisualProfile(enemyId: string): EnemyVisualProfile {
   return PROFILE_BY_ENEMY_ID[enemyId] || DEFAULT_PROFILE;
@@ -195,31 +184,6 @@ export function createEnemyVisual(
   groundShadow.rotation.x = Math.PI / 2;
   groundShadow.isPickable = false;
 
-  const selectionRingMat = new StandardMaterial(
-    `${nodeName}-selection-ring-mat`,
-    scene,
-  );
-  selectionRingMat.diffuseColor = Color3.FromHexString("#ffd54a");
-  selectionRingMat.emissiveColor = Color3.FromHexString("#f59e0b").scale(0.5);
-  selectionRingMat.specularColor = Color3.Black();
-  selectionRingMat.alpha = 0.95;
-
-  const selectionRing = MeshBuilder.CreateTorus(
-    `${nodeName}-selection-ring`,
-    {
-      diameter: Math.max(0.6, profile.radius * 2.9),
-      thickness: 0.05,
-      tessellation: 24,
-    },
-    scene,
-  );
-  selectionRing.material = selectionRingMat;
-  selectionRing.parent = root;
-  selectionRing.position.y = 0.04;
-  selectionRing.rotation.x = Math.PI / 2;
-  selectionRing.isPickable = false;
-  selectionRing.setEnabled(false);
-
   const pickProxy = MeshBuilder.CreatePlane(
     `${nodeName}-pick-proxy`,
     {
@@ -241,26 +205,83 @@ export function createEnemyVisual(
   pickProxy.billboardMode = Mesh.BILLBOARDMODE_Y;
   pickProxy.isPickable = true;
 
-  const markerMat = createLitMaterial(
-    scene,
-    `${nodeName}-marker-mat`,
-    profile.accentColor,
-  );
-  const marker = MeshBuilder.CreateCylinder(
-    `${nodeName}-marker`,
-    {
-      diameterTop: Math.max(0.08, profile.radius * 0.4),
-      diameterBottom: Math.max(0.08, profile.radius * 0.4),
-      height: 0.06,
-      tessellation: 8,
-    },
-    scene,
-  );
-  marker.material = markerMat;
-  marker.parent = root;
-  marker.position.y = 0.03;
-
   return root;
+}
+
+export function getEnemySpriteMesh(
+  enemyRoot: TransformNode,
+): Mesh | undefined {
+  return enemyRoot
+    .getChildMeshes()
+    .find((mesh) => mesh.name.endsWith("-sprite")) as Mesh | undefined;
+}
+
+export function getEnemySpriteMaterial(
+  enemyRoot: TransformNode,
+): StandardMaterial | null {
+  const sprite = getEnemySpriteMesh(enemyRoot);
+  return (sprite?.material as StandardMaterial | undefined) ?? null;
+}
+
+export function getEnemyGroundShadowMesh(
+  enemyRoot: TransformNode,
+): Mesh | undefined {
+  return enemyRoot
+    .getChildMeshes()
+    .find((mesh) => mesh.name.endsWith("-ground-shadow")) as Mesh | undefined;
+}
+
+export function getEnemyGroundShadowMaterial(
+  enemyRoot: TransformNode,
+): StandardMaterial | null {
+  const shadow = getEnemyGroundShadowMesh(enemyRoot);
+  return (shadow?.material as StandardMaterial | undefined) ?? null;
+}
+
+/** Reset sprite + floor shadow after target is cleared. */
+export function restoreEnemyTargetVisual(enemyRoot: TransformNode): void {
+  const spriteMat = getEnemySpriteMaterial(enemyRoot);
+  if (spriteMat) {
+    spriteMat.emissiveColor = new Color3(1, 1, 1);
+  }
+
+  const shadowMat = getEnemyGroundShadowMaterial(enemyRoot);
+  if (shadowMat) {
+    shadowMat.diffuseColor = Color3.Black();
+    shadowMat.emissiveColor = Color3.Black();
+    shadowMat.alpha = 0.26;
+  }
+
+  const shadow = getEnemyGroundShadowMesh(enemyRoot);
+  if (shadow) {
+    shadow.scaling.set(1, 1, 1);
+  }
+}
+
+/** Target highlight: warm sprite tint + amber floor spot (no 3D ring). */
+export function applyEnemyTargetVisual(
+  enemyRoot: TransformNode,
+  pulse: number,
+): void {
+  const spriteMat = getEnemySpriteMaterial(enemyRoot);
+  if (spriteMat) {
+    spriteMat.emissiveColor = new Color3(1, 0.76 + pulse * 0.2, 0.66 + pulse * 0.16);
+  }
+
+  const shadowMat = getEnemyGroundShadowMaterial(enemyRoot);
+  if (shadowMat) {
+    shadowMat.diffuseColor = Color3.FromHexString("#d97706");
+    shadowMat.emissiveColor = Color3.FromHexString("#fbbf24").scale(
+      0.12 + pulse * 0.12,
+    );
+    shadowMat.alpha = 0.34 + pulse * 0.2;
+  }
+
+  const shadow = getEnemyGroundShadowMesh(enemyRoot);
+  if (shadow) {
+    const scale = 1.08 + pulse * 0.1;
+    shadow.scaling.set(scale, scale, scale);
+  }
 }
 
 export function setEnemyVisualAnimState(

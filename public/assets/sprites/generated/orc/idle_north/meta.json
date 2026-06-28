@@ -1,0 +1,10 @@
+{
+  "animation": "idle",
+  "direction": "north",
+  "mode": "template",
+  "templateId": "breathing-idle",
+  "actionDescription": null,
+  "frameCount": 4,
+  "generatedAt": "2026-06-28T19:21:28.257Z",
+  "characterId": "520a05d5-19eb-44e6-995f-5fca8fefaf17"
+}

@@ -66,6 +66,8 @@
     "generate:debug-vertical": "node scripts/generate-debug-vertical-map.js",
     "generate:debug-forest": "node scripts/generate-debug-forest-map.js",
     "fix:sprite-east-west": "node scripts/swap-sprite-east-west.js",
+    "audit:sprite-directions": "node scripts/audit-sprite-directions.js",
+    "test:sprite-direction": "node scripts/test-world-bms-direction.js && node scripts/audit-sprite-directions.js",
     "validate:debug-sandbox": "node scripts/validate-debug-sandbox.js",
     "play:debug-sandbox": "play-debug-sandbox.bat",
     "play:debug-vertical": "play-debug-vertical.bat",

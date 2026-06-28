@@ -37,6 +37,6 @@
     "reference": "hero_base",
     "status": "ok",
     "validated_at": "2026-06-28",
-    "note": "east/west folders swapped on disk via npm run fix:sprite-east-west (2026-06-28). LEGACY armed spearman — do not copy for new enemies."
+    "note": "east/west folders swapped on disk via npm run fix:sprite-east-west (2026-06-28, re-applied). LEGACY armed spearman — do not copy for new enemies."
   }
 }
