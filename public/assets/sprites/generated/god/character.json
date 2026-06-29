@@ -1,0 +1,17 @@
+{
+  "characterId": "ed14f082-f0f6-4883-8cce-e4faf9816d64",
+  "createdAt": "2026-06-29T01:01:29.356Z",
+  "entityId": "god",
+  "description": "low top-down angle pixel art divine god boss humanoid, tall majestic figure in flowing white and gold robes, glowing golden halo ring behind head, small golden crown, radiant pale gold skin, glowing white eyes, empty open hands no weapons, barefoot or golden sandals, tallest and most imposing humanoid silhouette larger than a demon, neutral standing pose facing camera, same map scale as RPG hero sprite but bigger body, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+  "view": "low top-down",
+  "imageSize": {
+    "width": 64,
+    "height": 64
+  },
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\god\\character_rotations\\south.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\god\\character_rotations\\west.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\god\\character_rotations\\east.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\god\\character_rotations\\north.png"
+  }
+}

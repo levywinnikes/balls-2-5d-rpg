@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "god",
+  "name": "Divine God",
+  "category": "enemy",
+  "family": "divine",
+  "body_type": "humanoid",
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "elite",
+    "frame_targets": {
+      "idle": 6,
+      "walk": 6,
+      "attack": 8,
+      "death": 8
+    }
+  },
+  "pipeline": {
+    "model_primary": "pixflux",
+    "character_id": "ed14f082-f0f6-4883-8cce-e4faf9816d64"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "low top-down angle pixel art divine god boss humanoid, tall majestic figure in flowing white and gold robes, glowing golden halo ring behind head, small golden crown, radiant pale gold skin, glowing white eyes, empty open hands no weapons, barefoot or golden sandals, tallest and most imposing humanoid silhouette larger than a demon, neutral standing pose facing camera, same map scale as RPG hero sprite but bigger body, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+    "negative_prompt": "blurry, noisy, muddy colors, extra limbs, cute, chibi, goblin, orc, skeleton, demon, red wizard, sword, spear, axe, shield, staff, bow, holding, wielding, quadruped, tiny, thin, grey beard, hood, bat wings",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "divine god boss in white gold robes with halo",
+    "attack_action_description": "divine god raising both empty open hands forward channeling holy wrath blast, golden halo glow, no weapon, majestic humanoid biped, low top-down view",
+    "death_action_description": "divine god collapsing and fading dying, halo dimming, robes falling, death fall, low top-down"
+  },
+  "direction_validation": {
+    "reference": "hero_base",
+    "status": "ok",
+    "validated_at": "2026-06-29T01:00:00.000Z",
+    "note": "Debug boss. audit:sprite-directions OK. Actual frame counts: idle 4, walk 4, attack 9, death 9. Runtime feetY=79 on 92×92 canvas."
+  }
+}

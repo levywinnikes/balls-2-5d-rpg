@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "red_wizard",
+  "name": "Red Wizard",
+  "category": "enemy",
+  "family": "wizard",
+  "body_type": "humanoid",
+  "sprite_sheet": {
+    "source_canvas": {
+      "width": 64,
+      "height": 64
+    },
+    "directions": {
+      "death_shared_direction": "south",
+      "death_direction_override_reason": ""
+    }
+  },
+  "animation_profile": {
+    "tier": "elite",
+    "frame_targets": {
+      "idle": 6,
+      "walk": 6,
+      "attack": 8,
+      "death": 8
+    }
+  },
+  "pipeline": {
+    "model_primary": "pixflux",
+    "character_id": "f1e0777d-01b0-45f6-82b0-77f124db8b3b"
+  },
+  "production_prompts": {
+    "base_generation_prompt": "low top-down angle pixel art evil red wizard humanoid, long dark crimson red hooded robe covering body, bright red pointed wizard hat, shadowed face under hood with glowing yellow eyes, empty open hands no staff no weapons, black boots visible at hem, slightly taller silhouette than hero due to hat, neutral standing pose facing camera, same map scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+    "negative_prompt": "blurry, noisy, muddy colors, extra limbs, cute, chibi, goblin, orc, skeleton, demon, sword, spear, axe, shield, staff, wand, bow, book, holding, wielding, holy, paladin, angel, quadruped, tiny, thin, white beard old man",
+    "view": "low top-down",
+    "direction": "south",
+    "animation_description": "hooded red wizard caster with empty hands",
+    "attack_action_description": "wizard casting spell with both empty hands thrust forward palms out, magic gesture no staff no weapon, red hooded robe, low top-down view",
+    "death_action_description": "wizard collapsing backward dying, hood and robe crumpling, death fall, low top-down"
+  },
+  "direction_validation": {
+    "reference": "hero_base",
+    "status": "ok",
+    "validated_at": "2026-06-29T00:00:00.000Z",
+    "note": "Elite caster. audit:sprite-directions OK. Actual frame counts: idle 4, walk 4, attack 9, death 9. Runtime feetY=79 on 92×92 canvas."
+  }
+}

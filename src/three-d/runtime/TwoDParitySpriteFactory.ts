@@ -21,6 +21,8 @@ const GENERATED_SPRITE_ENTITIES = new Set<string>([
   "orc",
   "dragon",
   "demon",
+  "red_wizard",
+  "god",
 ]);
 
 /** Until each enemy has its own folder, reuse generated assets. */
@@ -117,6 +119,22 @@ const GENERATED_ANIM_DEFS: Record<string, GeneratedAnimDef[]> = {
     ]),
     { state: "death", direction: "south", frameCount: 9 },
   ],
+  red_wizard: [
+    ...buildDirectionalAnimDefs([
+      { state: "idle", frameCount: 4 },
+      { state: "walk", frameCount: 4 },
+      { state: "attack", frameCount: 9 },
+    ]),
+    { state: "death", direction: "south", frameCount: 9 },
+  ],
+  god: [
+    ...buildDirectionalAnimDefs([
+      { state: "idle", frameCount: 4 },
+      { state: "walk", frameCount: 4 },
+      { state: "attack", frameCount: 9 },
+    ]),
+    { state: "death", direction: "south", frameCount: 9 },
+  ],
 };
 
 /** Feet row in generated enemy PNGs (PixelLab canvas is 92×92). */
@@ -128,6 +146,8 @@ const GENERATED_ENEMY_FEET_Y: Record<string, number> = {
   orc: 78,
   dragon: 67,
   demon: 78,
+  red_wizard: 79,
+  god: 79,
 };
 const GENERATED_ENEMY_CANVAS_SIZE = 92;
 
@@ -941,6 +961,36 @@ export const HERO_BILLBOARD_LAYOUT = {
     return this.height * 0.5 - feetFromBottom * this.height;
   },
 };
+
+/** Visible body height from feet to sprite top (world units). */
+export function getHeroVisibleBodyHeight(): number {
+  return (
+    (HERO_BILLBOARD_LAYOUT.feetY / HERO_BILLBOARD_LAYOUT.canvasSize) *
+    HERO_BILLBOARD_LAYOUT.height
+  );
+}
+
+/** Nominal humanoid reference in PROFILE_BY_ENEMY_ID — maps to hero billboard height. */
+export const GENERATED_ENEMY_PROFILE_BASE_HEIGHT = 1.2;
+
+/** World billboard size for PixelLab enemies (same canvas scale as hero_base). */
+export function getGeneratedEnemyBillboardDimensions(profile: {
+  height: number;
+}): { width: number; height: number } {
+  const scale = profile.height / GENERATED_ENEMY_PROFILE_BASE_HEIGHT;
+  return {
+    width: HERO_BILLBOARD_LAYOUT.width * scale,
+    height: HERO_BILLBOARD_LAYOUT.height * scale,
+  };
+}
+
+/** Fraction of visible body height used for first-person eye line (lower = more grounded view). */
+export const HERO_FIRST_PERSON_EYE_BODY_RATIO = 0.58;
+
+/** First-person eye height from feet — chest-level view aligned with NPC billboards in FP. */
+export function getHeroFirstPersonEyeHeight(): number {
+  return getHeroVisibleBodyHeight() * HERO_FIRST_PERSON_EYE_BODY_RATIO;
+}
 
 type HeroBodyAnimDef = {
   state: HeroAnimState;

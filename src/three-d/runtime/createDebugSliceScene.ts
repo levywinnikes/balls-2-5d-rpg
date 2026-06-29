@@ -50,6 +50,7 @@ import {
   createHeroModularSpriteMaterial,
   resolveHeroBmsDirection,
   HERO_BILLBOARD_LAYOUT,
+  getHeroFirstPersonEyeHeight,
   getGeneratedDeathDurationMs,
   getGeneratedAttackDurationMs,
   type HeroAnimState,
@@ -373,8 +374,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const FLOOR_SURFACE_Y = 0.06;
   // Player root = feet on floor (hero billboard anchorY targets local y=0).
   const PLAYER_GROUND_OFFSET = FLOOR_SURFACE_Y;
-  // Preserve prior FP eye world height (old center 0.8 + eye 0.55 ≈ 1.35).
-  const FIRST_PERSON_EYE_ABOVE_FEET = 1.29;
+  // Eye line ~58% of hero body height — chest-level FP view (see HERO_FIRST_PERSON_EYE_BODY_RATIO).
+  const FIRST_PERSON_EYE_ABOVE_FEET = getHeroFirstPersonEyeHeight();
 
   // ── S12-T1/T4: Layer Semantics & Ownership (canonical, top-down is the product mode) ───────────
   // Layer conventions:

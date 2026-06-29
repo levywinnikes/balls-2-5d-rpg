@@ -34,6 +34,8 @@ const DEFAULT_ENTITIES = [
   "bear",
   "dragon",
   "demon",
+  "red_wizard",
+  "god",
 ];
 
 function loadRgba(filePath) {

@@ -132,7 +132,7 @@ Auto-save runs in a **separate** observer (60 s interval).
 ### First-person (debug only)
 
 - Key **`V`** toggles; console warns on enter  
-- `UniversalCamera`, eye height **0.55**  
+- `UniversalCamera`, eye height from `getHeroFirstPersonEyeHeight()` (~**0.86** world units above feet; 58% of hero billboard body height)  
 - Hero billboard hidden; crosshair via React (`slice3d:cameraModeChanged`)  
 - Pointer lock on canvas click  
 

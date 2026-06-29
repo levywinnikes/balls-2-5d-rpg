@@ -1,0 +1,17 @@
+{
+  "characterId": "f1e0777d-01b0-45f6-82b0-77f124db8b3b",
+  "createdAt": "2026-06-29T00:27:30.218Z",
+  "entityId": "red_wizard",
+  "description": "low top-down angle pixel art evil red wizard humanoid, long dark crimson red hooded robe covering body, bright red pointed wizard hat, shadowed face under hood with glowing yellow eyes, empty open hands no staff no weapons, black boots visible at hem, slightly taller silhouette than hero due to hat, neutral standing pose facing camera, same map scale as RPG hero sprite, vibrant flat colors, clean dark outline, readable silhouette, transparent background, 64x64",
+  "view": "low top-down",
+  "imageSize": {
+    "width": 64,
+    "height": 64
+  },
+  "rotations": {
+    "south": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\red_wizard\\character_rotations\\south.png",
+    "west": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\red_wizard\\character_rotations\\west.png",
+    "east": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\red_wizard\\character_rotations\\east.png",
+    "north": "C:\\Users\\kifit\\OneDrive\\Documentos\\GitHub\\balls-2-5d2-rpg\\public\\assets\\sprites\\generated\\red_wizard\\character_rotations\\north.png"
+  }
+}

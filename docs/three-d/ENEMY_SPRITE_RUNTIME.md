@@ -94,7 +94,8 @@ When adding a new generated enemy (copy from `skeleton`):
 3. **`GENERATED_ANIM_DEFS`** — list frame counts per state/direction (death usually `south` only).
 4. **`GENERATED_SPRITE_ALIASES`** — map legacy registry IDs (e.g. `goblin` → `goblin_lanceiro`).
 5. **`EnemyRegistry.ts`** — enemy stats unchanged; visual is resolved by ID.
-6. **`ThreeDEnemyVisualRegistry.ts`** — optional billboard size tweak in `PROFILE_BY_ENEMY_ID`.
+6. **`ThreeDEnemyVisualRegistry.ts`** — optional billboard size tweak in `PROFILE_BY_ENEMY_ID`.  
+   Generated enemies use `getGeneratedEnemyBillboardDimensions`: `profile.height / 1.2 * HERO_BILLBOARD_LAYOUT` (hero-parity canvas scale). Use `height: 1.2` for humanoid/quadruped enemies at hero map scale (e.g. bear).
 7. **`createDebugSliceScene.ts`** — uses `resolveBmsDirectionFromWorldDelta`; no per-enemy hacks.
 8. **Gate:** `npm run test:sprite-direction` before merging sprite or AI changes.
 
@@ -135,6 +136,6 @@ AI direction updates:
 ## 6. Known limitations
 
 - Only entities in `GENERATED_SPRITE_ENTITIES` use PNG sheets; others keep procedural placeholders.
-- **Implemented generated enemies:** `goblin_lanceiro`, `skeleton`, `bear`, `rat` (quadruped `template_id: cat`).
+- **Implemented generated enemies:** `goblin_lanceiro`, `skeleton`, `bear`, `rat`, `orc`, `dragon`, `demon`, `red_wizard`, `god`.
 - Death animation is south-only (PixelLab default).
 - Goblin canvas is 64×64 vs hero 92×92 — billboard scale may differ slightly.
