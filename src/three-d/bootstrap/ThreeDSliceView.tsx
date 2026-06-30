@@ -220,6 +220,15 @@ export function ThreeDSliceView() {
       }
 
       const key = event.key.toLowerCase();
+      const menuBlockingGameplay =
+        isWindowOpen("hero_menu") || windows.systemMenu;
+
+      if (menuBlockingGameplay) {
+        const menuKeys = new Set(["i", "tab", "escape", "f5"]);
+        if (!menuKeys.has(key) && event.key !== "Tab" && event.key !== "Escape") {
+          return;
+        }
+      }
 
       if (key === "i" || event.key === "Tab") {
         event.preventDefault();

@@ -199,11 +199,49 @@ export class PlayerState extends EventEmitter {
   private baseSpeed: number = 400;
   private sprintMultiplier: number = 1.3;
 
-  // Input Blocking
+  // Input Blocking (hero menu, system menu, etc.)
   private isInputBlocked: boolean = false;
+  private gameplayPaused: boolean = false;
+  private gameplayPauseSources = new Set<string>();
 
   public setInputBlocked(blocked: boolean) {
     this.isInputBlocked = blocked;
+  }
+
+  /** Stackable pause — multiple UI surfaces can block gameplay independently. */
+  public pushGameplayPause(source: string) {
+    const sizeBefore = this.gameplayPauseSources.size;
+    this.gameplayPauseSources.add(source);
+    if (this.gameplayPauseSources.size !== sizeBefore) {
+      this.syncGameplayPaused();
+    }
+  }
+
+  public popGameplayPause(source: string) {
+    const sizeBefore = this.gameplayPauseSources.size;
+    this.gameplayPauseSources.delete(source);
+    if (this.gameplayPauseSources.size !== sizeBefore) {
+      this.syncGameplayPaused();
+    }
+  }
+
+  public isGameplayPaused(): boolean {
+    return this.gameplayPaused;
+  }
+
+  private syncGameplayPaused() {
+    const paused = this.gameplayPauseSources.size > 0;
+    if (this.gameplayPaused === paused) {
+      return;
+    }
+    this.gameplayPaused = paused;
+    this.isInputBlocked = paused;
+    this.emit("gameplayPauseChanged", paused);
+    if (paused) {
+      this.pauseGame();
+    } else {
+      this.resumeGame();
+    }
   }
 
   // --- UI PERSISTENCE ---

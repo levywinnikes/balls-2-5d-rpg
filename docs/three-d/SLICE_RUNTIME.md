@@ -133,6 +133,7 @@ Auto-save runs in a **separate** observer (60 s interval).
 
 - Key **`V`** toggles; console warns on enter  
 - `UniversalCamera`, eye height from `getHeroFirstPersonEyeHeight()` (~**0.86** world units above feet; 58% of hero billboard body height)  
+- Entering FP copies `heroDirection` → camera yaw; exiting FP copies yaw → `heroDirection`  
 - Hero billboard hidden; crosshair via React (`slice3d:cameraModeChanged`)  
 - Pointer lock on canvas click  
 
@@ -148,7 +149,7 @@ Contract: [PERSPECTIVE_MODE_CONTRACT.md](../contracts/PERSPECTIVE_MODE_CONTRACT.
 | Space | Jump (`jumpImpulse = 7.2`) | Jump |
 | **Right-click** | Select enemy / trigger stair interact | Select enemy (center pick) |
 | Left-click | Rune targeting only (when active) | Rune targeting |
-| E | Pickup nearest item | Same |
+| E | Pickup nearest item, then door if no closer item | Same |
 | Q | Cast equipped rune | Same |
 | R | Cycle rune slot (3 slots) | Same |
 | F | Toggle fall safety | Same |
@@ -156,6 +157,8 @@ Contract: [PERSPECTIVE_MODE_CONTRACT.md](../contracts/PERSPECTIVE_MODE_CONTRACT.
 | V | Enter FP debug | Exit FP |
 
 **Combat selection (top-down):** right-click enemy pick proxy → `selectedEnemyUid` → `tryAutoPlayerAttack` each frame when in range + LOS.
+
+**Wall reveal (top-down only):** occluded enemies/doors get a **subtle floor ring** + invisible pick target — not a sprite on the wall. See [INTERACTABLE_VISIBILITY_3D.md](./INTERACTABLE_VISIBILITY_3D.md).
 
 ---
 

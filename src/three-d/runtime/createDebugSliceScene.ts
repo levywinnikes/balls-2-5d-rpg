@@ -45,7 +45,11 @@ import {
   setEnemyVisualDirection,
   type EnemyVisualAnimState,
 } from "./ThreeDEnemyVisualRegistry";
-import { resolveBmsDirectionFromWorldDelta } from "./BmsDirectionResolver";
+import {
+  resolveBmsDirectionFromWorldDelta,
+  bmsDirectionToFirstPersonYaw,
+  firstPersonYawToBmsDirection,
+} from "./BmsDirectionResolver";
 import {
   createHeroModularSpriteMaterial,
   resolveHeroBmsDirection,
@@ -67,6 +71,10 @@ import {
   collectWaterEffectTiles,
   WaterEffectSystem,
 } from "./WaterEffectSystem";
+import {
+  InteractableWallRevealSystem,
+  type InteractableRevealTarget,
+} from "./InteractableWallRevealSystem";
 import {
   computeWaterPitWallMask,
   waterHoleDepthForTileId,
@@ -755,6 +763,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const doorByLevelTile = new Map<string, string>();
   const seededDoorLevels = new Set<string>();
   let selectedEnemyUid: string | null = null;
+  let lastFocusedCombatHealthSyncAt = 0;
   let lastPlayerAttackAt = 0;
   let activeRuneSlotIndex = 0;
   let lastRuneCastAt = 0;
@@ -778,6 +787,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const mapRoot = new TransformNode("slice-map-root", scene);
   const waterEffectSystem = new WaterEffectSystem(scene, mapRoot, FLOOR_SURFACE_Y);
+  const wallRevealSystem = new InteractableWallRevealSystem(scene, mapRoot, {
+    revealRadiusTiles: 20,
+  });
   // Chunk streaming constants (visual profile depends on camera mode; gameplay state remains global)
   const CHUNK_SIZE = 16; // tiles per chunk side
   const TOPDOWN_DRAW_RADIUS_CHUNKS = 3;
@@ -789,6 +801,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const FIRST_PERSON_CHUNK_BUILD_BUDGET_PER_TICK = 3;
   const CHUNK_UNLOAD_BUDGET_PER_TICK = 8; // max chunks to unload each update tick
   let isFirstPerson = false;
+  let gameplayPaused = playerState.isGameplayPaused();
+  let fpCaptureSuspendedForMenu = false;
+  let topDownCaptureSuspendedForMenu = false;
   const DROP_SYNC_INTERVAL = 0.2;
   const DROPPED_ITEM_STREAM_RADIUS_UNITS =
     CHUNK_SIZE * (TOPDOWN_DRAW_RADIUS_CHUNKS + 2);
@@ -2883,9 +2898,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const DOOR_INTERACT_RADIUS = 2.25;
-  /** Slightly farther when the player clicked the door mesh directly. */
-  const DOOR_PICK_INTERACT_RADIUS = 3.0;
+  const DOOR_INTERACT_RADIUS = 1.55;
+  /** Direct click on the door mesh — slightly farther than proximity E. */
+  const DOOR_PICK_INTERACT_RADIUS = 2.75;
 
   const getDoorInteractDistance = (door: SliceDoor): number => {
     const px = player.position.x;
@@ -2970,6 +2985,120 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return null;
   };
 
+  const extractEnemyUidFromMeshChain = (mesh: any): string | undefined => {
+    let currentMesh = mesh;
+    while (currentMesh) {
+      const metadata = currentMesh.metadata as { sliceEnemyUid?: string } | undefined;
+      if (metadata?.sliceEnemyUid) {
+        return metadata.sliceEnemyUid;
+      }
+      currentMesh = currentMesh.parent;
+    }
+    return undefined;
+  };
+
+  const projectPointerToGroundXZ = (pointerX: number, pointerY: number) => {
+    const activeCamera = scene.activeCamera;
+    if (!activeCamera) {
+      return null;
+    }
+    const ray = scene.createPickingRay(
+      pointerX,
+      pointerY,
+      Matrix.Identity(),
+      activeCamera,
+    );
+    const planeY = levelToWorldY(activeLevel) + FLOOR_SURFACE_Y;
+    if (Math.abs(ray.direction.y) < 1e-5) {
+      return null;
+    }
+    const t = (planeY - ray.origin.y) / ray.direction.y;
+    if (t < 0) {
+      return null;
+    }
+    return {
+      x: ray.origin.x + ray.direction.x * t,
+      z: ray.origin.z + ray.direction.z * t,
+    };
+  };
+
+  /** multiPick + ground fallback for occluded reveal proxies behind walls. */
+  const resolveEnemyUidFromPointer = (
+    pointerX: number,
+    pointerY: number,
+  ): string | undefined => {
+    const multiHits = scene.multiPick(pointerX, pointerY);
+    if (multiHits) {
+      for (const hit of multiHits) {
+        const uid = extractEnemyUidFromMeshChain(hit.pickedMesh);
+        if (uid && enemies.has(uid)) {
+          return uid;
+        }
+      }
+    }
+
+    const singlePick = scene.pick(pointerX, pointerY);
+    const fromSingle = extractEnemyUidFromMeshChain(singlePick?.pickedMesh);
+    if (fromSingle && enemies.has(fromSingle)) {
+      return fromSingle;
+    }
+
+    if (!isFirstPerson) {
+      const ground = projectPointerToGroundXZ(pointerX, pointerY);
+      if (ground) {
+        const occluded = wallRevealSystem.findOccludedTargetNear(
+          ground.x,
+          ground.z,
+          0.95,
+        );
+        const uid = occluded?.pickMetadata.sliceEnemyUid;
+        if (uid && enemies.has(uid)) {
+          return uid;
+        }
+      }
+    }
+
+    return undefined;
+  };
+
+  const resolveDoorUuidFromPointer = (
+    pointerX: number,
+    pointerY: number,
+  ): string | null => {
+    const multiHits = scene.multiPick(pointerX, pointerY);
+    if (multiHits) {
+      for (const hit of multiHits) {
+        const uuid = findDoorUuidFromPick(hit);
+        if (uuid) {
+          return uuid;
+        }
+      }
+    }
+
+    const singlePick = scene.pick(pointerX, pointerY);
+    const fromSingle = findDoorUuidFromPick(singlePick);
+    if (fromSingle) {
+      return fromSingle;
+    }
+
+    if (!isFirstPerson) {
+      const ground = projectPointerToGroundXZ(pointerX, pointerY);
+      if (ground) {
+        const occluded = wallRevealSystem.findOccludedTargetNear(
+          ground.x,
+          ground.z,
+          0.95,
+        );
+        const uuid = occluded?.pickMetadata.sliceDoorUuid;
+        if (uuid && doors.has(uuid)) {
+          return uuid;
+        }
+      }
+    }
+
+    return null;
+  };
+
   const tryInteractPickedDoor = (doorUuid: string): boolean => {
     const door = doors.get(doorUuid);
     if (!door || door.level !== activeLevel) {
@@ -2981,11 +3110,44 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return interactDoorByUuid(doorUuid);
   };
 
-  const tryInteractNearbyDoor = (): boolean => {
+  const getNearestPickupItemDistance = (): number => {
+    const pickupRange = playerState.pickupRange / 32;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    droppedItemMeshes.forEach((mesh) => {
+      if (!mesh.isEnabled()) {
+        return;
+      }
+      const item = mesh.metadata as SliceDroppedItem | undefined;
+      if (!item) {
+        return;
+      }
+      const distance = Vector3.Distance(player.position, mesh.position);
+      if (distance <= pickupRange && distance < nearestDistance) {
+        nearestDistance = distance;
+      }
+    });
+
+    return nearestDistance;
+  };
+
+  /** E-key door use — skipped when a pickup is closer than the door. */
+  const tryInteractNearbyDoorRespectingPickup = (): boolean => {
+    const pickupRange = playerState.pickupRange / 32;
+    const nearestItemDistance = getNearestPickupItemDistance();
     const nearbyDoor = findNearbyDoor(DOOR_INTERACT_RADIUS);
     if (!nearbyDoor) {
       return false;
     }
+
+    const doorDistance = getDoorInteractDistance(nearbyDoor);
+    if (
+      nearestItemDistance <= pickupRange &&
+      nearestItemDistance + 0.08 < doorDistance
+    ) {
+      return false;
+    }
+
     return interactDoorByUuid(nearbyDoor.uuid);
   };
 
@@ -3417,13 +3579,42 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
     selectedEnemyUid = enemyUid;
     if (!enemyUid) {
+      playerState.emit("combatFocusChanged", { uid: null });
       return;
     }
 
     const enemy = enemies.get(enemyUid);
     if (!enemy || enemy.isDead) {
       selectedEnemyUid = null;
+      playerState.emit("combatFocusChanged", { uid: null });
+      return;
     }
+
+    playerState.emit("combatFocusChanged", {
+      uid: enemy.uid,
+      enemyType: enemy.enemyType,
+      health: enemy.health,
+      maxHealth: enemy.maxHealth,
+    });
+  };
+
+  const emitCombatEnemyHit = (enemy: SliceEnemy, damage: number) => {
+    if (damage <= 0) {
+      return;
+    }
+    playerState.emit("combatEnemyHit", {
+      uid: enemy.uid,
+      enemyType: enemy.enemyType,
+      health: enemy.health,
+      maxHealth: enemy.maxHealth,
+      damage,
+      isFocused: enemy.uid === selectedEnemyUid,
+    });
+    playerState.emit("combatEnemyHealthChanged", {
+      uid: enemy.uid,
+      health: enemy.health,
+      maxHealth: enemy.maxHealth,
+    });
   };
 
   const spawnEnemy = (
@@ -3633,6 +3824,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       setSelectedEnemy(null);
     }
 
+    playerState.emit("combatEnemyRemoved", { uid: enemy.uid });
+
     grantEnemyLoot(enemy);
     playerState.gainExperience(enemy.definition.exp);
 
@@ -3680,6 +3873,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       { damage, target: enemy.enemyType },
       "#ffffff",
     );
+
+    emitCombatEnemyHit(enemy, damage);
 
     if (enemy.health <= 0) {
       const isFireKill =
@@ -3883,6 +4078,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       { damage, target: enemy.enemyType },
       "#ffffff",
     );
+
+    emitCombatEnemyHit(enemy, damage);
 
     if (enemy.health <= 0) {
       destroyEnemy(enemy, {
@@ -4604,6 +4801,64 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     pickupOrb.setEnabled(!hasRealDroppedItems && !fallbackPickupConsumed);
   };
 
+  const collectInteractableRevealTargets = (): InteractableRevealTarget[] => {
+    const targets: InteractableRevealTarget[] = [];
+    const level = activeLevel;
+
+    enemies.forEach((enemy) => {
+      if (enemy.isDead || enemy.level !== level) {
+        return;
+      }
+
+      const pickProxy = enemy.meshRoot
+        .getChildMeshes()
+        .find((mesh) => mesh.name.endsWith("-pick-proxy")) as Mesh | undefined;
+      const pickWidth = pickProxy?.getBoundingInfo().boundingBox.extendSize.x
+        ? pickProxy.getBoundingInfo().boundingBox.extendSize.x * 2
+        : 1.2;
+      const pickHeight = pickProxy?.getBoundingInfo().boundingBox.extendSize.y
+        ? pickProxy.getBoundingInfo().boundingBox.extendSize.y * 2
+        : 1.15;
+      const pickCenterY = pickProxy?.position.y ?? 0.55;
+
+      targets.push({
+        id: enemy.uid,
+        kind: "enemy",
+        level,
+        position: enemy.worldPos.clone(),
+        pickWidth,
+        pickHeight,
+        pickCenterY,
+        pickMetadata: { sliceEnemyUid: enemy.uid },
+      });
+    });
+
+    doors.forEach((door) => {
+      if (door.level !== level) {
+        return;
+      }
+
+      const feetY = levelToWorldY(door.level);
+      const doorHeight = 1.9;
+      targets.push({
+        id: door.uuid,
+        kind: "door",
+        level,
+        position: new Vector3(
+          door.tileX + 0.5,
+          feetY,
+          door.tileY + 0.5,
+        ),
+        pickWidth: door.hingeOnX ? 0.92 : 0.22,
+        pickHeight: doorHeight,
+        pickCenterY: FLOOR_SURFACE_Y + doorHeight / 2,
+        pickMetadata: { sliceDoorUuid: door.uuid },
+      });
+    });
+
+    return targets;
+  };
+
   const tryPickupPersistentItem = (
     item: DroppedItemData,
     requestedCount?: number,
@@ -4835,10 +5090,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         player.position.y + FIRST_PERSON_EYE_ABOVE_FEET,
         player.position.z,
       );
+      firstPersonCamera.rotation.y = bmsDirectionToFirstPersonYaw(heroDirection);
       scene.activeCamera = firstPersonCamera;
-      firstPersonCamera.attachControl(canvas, true);
-      if (shouldRequestPointerLock) {
-        requestPointerLockIfPossible();
+      topDownCaptureSuspendedForMenu = false;
+      if (gameplayPaused) {
+        fpCaptureSuspendedForMenu = true;
+      } else {
+        fpCaptureSuspendedForMenu = false;
+        firstPersonCamera.attachControl(canvas, true);
+        if (shouldRequestPointerLock) {
+          requestPointerLockIfPossible();
+        }
       }
       return;
     }
@@ -4846,9 +5108,72 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     firstPersonCamera.detachControl();
     document.exitPointerLock?.();
     heroBillboard.setEnabled(true);
+    setHeroDirection(
+      firstPersonYawToBmsDirection(
+        firstPersonCamera.rotation.y,
+        heroDirection,
+      ),
+    );
     scene.activeCamera = camera;
-    camera.attachControl(canvas, true);
+    fpCaptureSuspendedForMenu = false;
+    if (gameplayPaused) {
+      topDownCaptureSuspendedForMenu = true;
+    } else {
+      topDownCaptureSuspendedForMenu = false;
+      camera.attachControl(canvas, true);
+    }
   };
+
+  const setCanvasGameplayInputEnabled = (enabled: boolean) => {
+    canvas.style.pointerEvents = enabled ? "auto" : "none";
+    if (!enabled) {
+      canvas.blur();
+    }
+  };
+
+  const suspendCameraCaptureForMenu = () => {
+    setCanvasGameplayInputEnabled(false);
+    if (isFirstPerson) {
+      document.exitPointerLock?.();
+      firstPersonCamera.detachControl();
+      fpCaptureSuspendedForMenu = true;
+      topDownCaptureSuspendedForMenu = false;
+      return;
+    }
+    camera.detachControl();
+    topDownCaptureSuspendedForMenu = true;
+    fpCaptureSuspendedForMenu = false;
+  };
+
+  const resumeCameraCaptureAfterMenu = () => {
+    setCanvasGameplayInputEnabled(true);
+    if (isFirstPerson && fpCaptureSuspendedForMenu) {
+      fpCaptureSuspendedForMenu = false;
+      scene.activeCamera = firstPersonCamera;
+      firstPersonCamera.attachControl(canvas, true);
+      return;
+    }
+    if (!isFirstPerson && topDownCaptureSuspendedForMenu) {
+      topDownCaptureSuspendedForMenu = false;
+      scene.activeCamera = camera;
+      camera.attachControl(canvas, true);
+    }
+  };
+
+  const handleGameplayPauseChanged = (paused: boolean) => {
+    gameplayPaused = paused;
+    pressedKeys.clear();
+    if (paused) {
+      suspendCameraCaptureForMenu();
+      return;
+    }
+    resumeCameraCaptureAfterMenu();
+  };
+
+  playerState.on("gameplayPauseChanged", handleGameplayPauseChanged);
+  if (gameplayPaused) {
+    handleGameplayPauseChanged(true);
+  }
 
   const findVoidFallLanding = (
     startLevel: string,
@@ -5200,6 +5525,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (gameplayPaused) {
+      return;
+    }
     void ensureAudioReady();
 
     const key = event.key.toLowerCase();
@@ -5253,13 +5581,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (key === "e" && !event.repeat) {
-      if (tryInteractNearbyDoor()) {
-        return;
-      }
-
       const pickedRealItem = tryPickupNearestItem();
       if (pickedRealItem) {
         syncDroppedItems(true);
+        return;
+      }
+
+      if (tryInteractNearbyDoorRespectingPickup()) {
         return;
       }
 
@@ -5309,11 +5637,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   canvas.addEventListener("contextmenu", onCanvasContextMenu);
 
   const onCanvasPointerDown = () => {
+    if (gameplayPaused) {
+      return;
+    }
     requestPointerLockIfPossible();
   };
   canvas.addEventListener("pointerdown", onCanvasPointerDown);
 
   const pointerObserver = scene.onPointerObservable.add((pointerInfo) => {
+    if (gameplayPaused) {
+      return;
+    }
     if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) {
       return;
     }
@@ -5323,74 +5657,59 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     // S11-T1: Handle rune targeting mode (Opção A parity)
     if (runeTargetingMode && targetingRuneId && isLeftClick) {
-      let pickResult;
-      if (isFirstPerson) {
-        const cx = engine.getRenderWidth() / 2;
-        const cy = engine.getRenderHeight() / 2;
-        pickResult = scene.pick(cx, cy);
-      } else {
-        pickResult = scene.pick(scene.pointerX, scene.pointerY);
-      }
+      const pointerX = isFirstPerson
+        ? engine.getRenderWidth() / 2
+        : scene.pointerX;
+      const pointerY = isFirstPerson
+        ? engine.getRenderHeight() / 2
+        : scene.pointerY;
 
-      let targetEnemy: SliceEnemy | null = null;
-      let currentMesh: any = pickResult?.pickedMesh;
-      while (currentMesh) {
-        const metadata = currentMesh.metadata as
-          | { sliceEnemyUid?: string }
-          | undefined;
-        if (metadata?.sliceEnemyUid) {
-          targetEnemy = enemies.get(metadata.sliceEnemyUid) || null;
-          break;
+      const enemyUid = resolveEnemyUidFromPointer(pointerX, pointerY);
+      if (enemyUid) {
+        const targetEnemy = enemies.get(enemyUid);
+        if (targetEnemy && !targetEnemy.isDead) {
+          castRuneAtTarget(targetEnemy.uid);
+          return;
         }
-        currentMesh = currentMesh.parent;
       }
 
-      if (targetEnemy && !targetEnemy.isDead) {
-        // Cast rune at target
-        castRuneAtTarget(targetEnemy.uid);
-      } else {
-        playerState.emit("message", t_game("msg_target_obstructed"));
-      }
+      playerState.emit("message", t_game("msg_target_obstructed"));
       return;
     }
 
     // S9-T3: in FP mode both left and right click pick from screen center (crosshair aim)
-    let pickResult;
-    if (isFirstPerson) {
-      if (!isLeftClick && !isRightClick) return;
-      const cx = engine.getRenderWidth() / 2;
-      const cy = engine.getRenderHeight() / 2;
-      pickResult = scene.pick(cx, cy);
-    } else {
-      if (!isRightClick) return;
-      pickResult = scene.pick(scene.pointerX, scene.pointerY);
+    const pointerX = isFirstPerson
+      ? engine.getRenderWidth() / 2
+      : scene.pointerX;
+    const pointerY = isFirstPerson
+      ? engine.getRenderHeight() / 2
+      : scene.pointerY;
+
+    if (isFirstPerson && !isLeftClick && !isRightClick) {
+      return;
+    }
+    if (!isFirstPerson && !isRightClick) {
+      return;
     }
 
-    let enemyUid: string | undefined;
-    let currentMesh: any = pickResult?.pickedMesh;
-    while (currentMesh) {
-      const metadata = currentMesh.metadata as
-        | { sliceEnemyUid?: string }
-        | undefined;
-      if (metadata?.sliceEnemyUid) {
-        enemyUid = metadata.sliceEnemyUid;
-        break;
-      }
-      currentMesh = currentMesh.parent;
-    }
+    const enemyUid = resolveEnemyUidFromPointer(pointerX, pointerY);
 
     if (enemyUid && enemies.has(enemyUid)) {
       setSelectedEnemy(enemyUid);
       return;
     }
 
-    const pickedDoorUuid = findDoorUuidFromPick(pickResult);
-    if (pickedDoorUuid && tryInteractPickedDoor(pickedDoorUuid)) {
+    const pickedDoorUuid = resolveDoorUuidFromPointer(pointerX, pointerY);
+    if (
+      pickedDoorUuid &&
+      isRightClick &&
+      tryInteractPickedDoor(pickedDoorUuid)
+    ) {
       return;
     }
 
     if (isRightClick) {
-      tryInteractNearbyDoor();
+      tryInteractNearbyDoorRespectingPickup();
       return;
     }
 
@@ -5398,6 +5717,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   });
 
   scene.onBeforeRenderObservable.add(() => {
+    if (gameplayPaused) {
+      return;
+    }
     const deltaSeconds = engine.getDeltaTime() / 1000;
     dropSyncTimer += deltaSeconds;
     if (dropSyncTimer >= DROP_SYNC_INTERVAL) {
@@ -5471,6 +5793,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     // Hide upper floors when the hero walks underneath (occlusion wins over column cull).
     syncVerticalLevelVisibility(deltaSeconds);
+
+    wallRevealSystem.update(
+      !isFirstPerson,
+      player.position,
+      activeLevel,
+      collectInteractableRevealTargets(),
+      navigationGrid,
+      navigationGridSize,
+      deltaSeconds,
+      FLOOR_SURFACE_Y + 0.025,
+    );
 
     const aquaticSample = getAquaticSampleAt(
       player.position.x,
@@ -5968,7 +6301,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
-    // Target highlight: warm sprite + amber floor spot (no 3D ring).
+    // Target highlight: warm sprite + amber floor spot + head chevron.
     enemyHighlightPulseT += deltaSeconds;
     if (selectedEnemyUid) {
       const selectedEnemy = enemies.get(selectedEnemyUid);
@@ -5978,6 +6311,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         const pulse =
           (Math.sin(enemyHighlightPulseT * Math.PI * 1.8) * 0.5 + 0.5) * 0.22;
         applyEnemyTargetVisual(selectedEnemy.meshRoot, pulse);
+
+        const nowMs = Date.now();
+        if (nowMs - lastFocusedCombatHealthSyncAt >= 250) {
+          lastFocusedCombatHealthSyncAt = nowMs;
+          playerState.emit("combatEnemyHealthChanged", {
+            uid: selectedEnemy.uid,
+            health: selectedEnemy.health,
+            maxHealth: selectedEnemy.maxHealth,
+          });
+        }
       }
     }
 
@@ -6290,11 +6633,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       playerState.off("equipmentChanged", syncHeroVisualProfile);
       playerState.off("displaySettingsChanged", handleDisplaySettings);
       playerState.off("doorStatesChanged", handleDoorStatesChanged);
+      playerState.off("gameplayPauseChanged", handleGameplayPauseChanged);
       canvas.removeEventListener("contextmenu", onCanvasContextMenu);
       canvas.removeEventListener("pointerdown", onCanvasPointerDown);
       scene.onPointerObservable.remove(pointerObserver);
       document.exitPointerLock?.();
       clearAllChunks();
+      wallRevealSystem.dispose();
       waterEffectSystem.dispose();
       heroAquaticTint.dispose();
       mapRoot.dispose();

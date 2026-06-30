@@ -96,9 +96,29 @@ export default class GameScene extends Phaser.Scene {
     if (!this.levelRenderer) return [];
     return Array.from(this.levelRenderer.activeEnemies.values());
   }
+
+  public getSelectedEnemy(): Enemy | null {
+    return this.selectedEnemy;
+  }
+
+  private emitCombatFocusChanged(enemy: Enemy | null): void {
+    if (!enemy || enemy.isDefeated()) {
+      PlayerState.getInstance().emit("combatFocusChanged", { uid: null });
+      return;
+    }
+
+    PlayerState.getInstance().emit("combatFocusChanged", {
+      uid: enemy.id,
+      enemyType: enemy.enemyType,
+      health: enemy.getHealth(),
+      maxHealth: enemy.getMaxHealth(),
+    });
+  }
+
   private deadEnemies: DeadEnemy[] = [];
   private isInitialized: boolean = false;
   private selectedEnemy: Enemy | null = null;
+  private lastFocusedCombatHealthSyncAt = 0;
   private selectionGraphics: Phaser.GameObjects.Graphics | null = null;
   private transitionSystem!: TransitionSystem;
   private enemySelectionIndicator!: EnemySelectionIndicator;
@@ -2493,6 +2513,18 @@ export default class GameScene extends Phaser.Scene {
       this.clearAllSelection();
     }
 
+    if (this.selectedEnemy && !this.selectedEnemy.isDefeated()) {
+      const nowMs = Date.now();
+      if (nowMs - this.lastFocusedCombatHealthSyncAt >= 250) {
+        this.lastFocusedCombatHealthSyncAt = nowMs;
+        PlayerState.getInstance().emit("combatEnemyHealthChanged", {
+          uid: this.selectedEnemy.id,
+          health: this.selectedEnemy.getHealth(),
+          maxHealth: this.selectedEnemy.getMaxHealth(),
+        });
+      }
+    }
+
     if (
       this.selectedEnemy &&
       !this.selectedEnemy.isDefeated() &&
@@ -2981,7 +3013,6 @@ export default class GameScene extends Phaser.Scene {
     if (!this.isInitialized) return;
 
     this.enemySelectionIndicator.setTarget(null);
-    this.selectedEnemy = null;
     let clickedEnemy: Enemy | null = null;
 
     this.levelRenderer.activeEnemies.forEach((enemy: any) => {
@@ -3000,6 +3031,10 @@ export default class GameScene extends Phaser.Scene {
       this.enemySelectionIndicator.setTarget(clickedEnemy);
       const color = this.getEnemyColor(clickedEnemy);
       this.enemySelectionIndicator.setColor(color);
+      this.emitCombatFocusChanged(clickedEnemy);
+    } else {
+      this.selectedEnemy = null;
+      this.emitCombatFocusChanged(null);
     }
   }
 
@@ -3167,6 +3202,7 @@ export default class GameScene extends Phaser.Scene {
   public clearAllSelection(): void {
     this.clearSelection();
     this.selectedEnemy = null;
+    this.emitCombatFocusChanged(null);
   }
 
   public setCurrentLevel(level: string): void {
@@ -3250,6 +3286,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   public handleEnemyDeath(enemy: Enemy): void {
+    PlayerState.getInstance().emit("combatEnemyRemoved", { uid: enemy.id });
+
     console.warn(
       `[LIFECYCLE:DEATH] Handling death for ${enemy.id}. AlreadyDeadList=${this.deadEnemies.some((d) => d.id === enemy.id)}`,
     );

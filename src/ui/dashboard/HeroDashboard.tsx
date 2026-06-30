@@ -34,17 +34,16 @@ export const HeroDashboard: React.FC = () => {
   const isOpen = isWindowOpen("hero_menu");
   const { t } = useLanguage();
 
-  // Sync Input Blocking and Game Pause
   useEffect(() => {
     const ps = PlayerState.getInstance();
-    ps.setInputBlocked(isOpen);
-
-    // Pause/Resume game to improve FPS
     if (isOpen) {
-      ps.pauseGame();
+      ps.pushGameplayPause("hero_menu");
     } else {
-      ps.resumeGame();
+      ps.popGameplayPause("hero_menu");
     }
+    return () => {
+      ps.popGameplayPause("hero_menu");
+    };
   }, [isOpen]);
 
   // Navigation Hook

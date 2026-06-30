@@ -3,6 +3,7 @@ import { useUI } from "../context/UIContext";
 import { SidebarMinimap } from "./components/SidebarMinimap";
 import { User, BookOpen, Settings, Menu, Zap, Box } from "lucide-react";
 import { SkillProgressHUD } from "./components/SkillProgressHUD";
+import { CombatTargetHealthHUD } from "./components/CombatTargetHealthHUD";
 import { StatusWidget } from "./components/StatusWidget";
 import { PlayerState } from "../game/entities/Player/PlayerState";
 import { useLanguage } from "../context/LanguageContext";
@@ -136,6 +137,11 @@ export const HUD: React.FC = () => {
 
       {/* Status Widget (Absolute Positioned by itself) */}
       <StatusWidget />
+
+      {/* Enemy target HP bars — below player HP/XP, max 4 */}
+      <div className="absolute top-[112px] left-6 z-[45]">
+        <CombatTargetHealthHUD />
+      </div>
     </div>
   );
 };

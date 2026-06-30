@@ -47,9 +47,9 @@ Player attacks are **not** left-click; top-down uses **right-click** to select, 
 | :--- | :--- | :--- |
 | Select enemy | Right-click pick → `metadata.sliceEnemyUid` | Left or right click from screen center |
 | Clear selection | Right-click empty / enemy dies / leaves AI radius | Same |
-| Visual | Emissive highlight + selection ring | Same |
+| Visual | Emissive highlight + amber floor spot + **head chevron** (pulsing) | Same |
 
-`setSelectedEnemy(uid)` clears previous highlight, enables ring on new target.
+`setSelectedEnemy(uid)` clears previous highlight; `applyEnemyTargetVisual` runs each frame on the selected enemy.
 
 Right-click also sets `pendingStairInteract = true` for stair transitions (see SLICE_RUNTIME §11).
 

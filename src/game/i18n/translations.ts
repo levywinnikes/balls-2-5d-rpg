@@ -666,6 +666,18 @@ export const translations = {
     "Intelligence Bonus": "Intelligence Bonus",
     "Reflex Bonus": "Reflex Bonus",
 
+    // Enemy display names (HUD, logs)
+    enemy_rat: "Rat",
+    enemy_skeleton: "Skeleton",
+    enemy_bear: "Bear",
+    enemy_goblin: "Goblin",
+    enemy_goblin_lanceiro: "Goblin Spearman",
+    enemy_orc: "Orc",
+    enemy_demon: "Demon",
+    enemy_dragon: "Dragon",
+    enemy_god: "God",
+    enemy_red_wizard: "Red Wizard",
+
     // UI Polish Keys
     stats_strength: "Strength",
     stats_dexterity: "Dexterity",
@@ -739,6 +751,18 @@ export const translations = {
     "Dexterity Bonus": "Bônus de Destreza",
     "Intelligence Bonus": "Bônus de Inteligência",
     "Reflex Bonus": "Bônus de Reflexo",
+
+    // Enemy display names (HUD, logs)
+    enemy_rat: "Rato",
+    enemy_skeleton: "Esqueleto",
+    enemy_bear: "Urso",
+    enemy_goblin: "Goblin",
+    enemy_goblin_lanceiro: "Goblin Lanceiro",
+    enemy_orc: "Orc",
+    enemy_demon: "Demônio",
+    enemy_dragon: "Dragão",
+    enemy_god: "Deus",
+    enemy_red_wizard: "Mago Vermelho",
 
     // UI Polish Keys
     stats_strength: "Força",

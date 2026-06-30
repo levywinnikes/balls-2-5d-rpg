@@ -110,3 +110,28 @@ export function resolveWorldBmsDirectionTopDownOnly(
   }
   return screenRight > 0 ? "east" : "west";
 }
+
+/** FP look yaw for idle hero facing (matches FP forward = sin/cos on XZ). */
+export function bmsDirectionToFirstPersonYaw(direction: HeroBmsDirection): number {
+  switch (direction) {
+    case "north":
+      return Math.PI;
+    case "east":
+      return -Math.PI / 2;
+    case "west":
+      return Math.PI / 2;
+    case "south":
+    default:
+      return 0;
+  }
+}
+
+/** Map FP camera yaw back to hero sprite BMS direction. */
+export function firstPersonYawToBmsDirection(
+  yaw: number,
+  fallback: HeroBmsDirection = "south",
+): HeroBmsDirection {
+  const forwardX = Math.sin(yaw);
+  const forwardZ = Math.cos(yaw);
+  return resolveWorldBmsDirectionTopDownOnly(forwardX, forwardZ, fallback);
+}

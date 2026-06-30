@@ -66,4 +66,29 @@ if (faceWest !== "west") {
 if (failed) {
   process.exit(1);
 }
+
+// FP yaw ↔ BMS facing round-trip (createDebugSliceScene setCameraMode)
+const YAW_BY_BMS = { south: 0, north: Math.PI, east: -Math.PI / 2, west: Math.PI / 2 };
+function yawToBms(yaw) {
+  const fx = Math.sin(yaw);
+  const fz = Math.cos(yaw);
+  const screenRight = -fx;
+  const screenUp = -fz;
+  if (Math.abs(screenUp) >= Math.abs(screenRight)) {
+    return screenUp > 0 ? "north" : "south";
+  }
+  return screenRight > 0 ? "east" : "west";
+}
+for (const dir of ["south", "north", "east", "west"]) {
+  const yaw = YAW_BY_BMS[dir];
+  const got = yawToBms(yaw);
+  if (got !== dir) {
+    failed += 1;
+    console.error(`yaw round-trip FAIL dir=${dir} yaw=${yaw} got=${got}`);
+  }
+}
+
+if (failed) {
+  process.exit(1);
+}
 console.log("[test-world-bms-direction] ok");

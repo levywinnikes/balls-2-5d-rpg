@@ -40,34 +40,38 @@ export const SystemMenuUI: React.FC<{
   const { t } = useLanguage();
   const sceneRef = React.useRef<any>(null);
 
-  // Handle Pause/Resume (2D runtime)
+  useEffect(() => {
+    const ps = PlayerState.getInstance();
+    if (isOpen) {
+      ps.pushGameplayPause("system_menu");
+    } else {
+      ps.popGameplayPause("system_menu");
+    }
+    return () => {
+      ps.popGameplayPause("system_menu");
+    };
+  }, [isOpen]);
+
+  // Legacy Phaser scene pause when useScenePause (2D overlay path)
   useEffect(() => {
     if (!useScenePause) {
       return;
     }
 
-    // Find and store scene reference ONCE when opening
     if (isOpen) {
       const { scene } = getGameSystems();
       if (scene) {
         sceneRef.current = scene;
         if (scene.scene && typeof scene.scene.pause === "function") {
-          console.log("SystemMenu: Pausing Game");
           scene.scene.pause();
         }
       }
-    } else {
-      // If isOpen is false, try to resume if we have a ref
-      if (sceneRef.current && sceneRef.current.scene) {
-        console.log("SystemMenu: Resuming Game (Effect)");
-        sceneRef.current.scene.resume();
-      }
+    } else if (sceneRef.current?.scene) {
+      sceneRef.current.scene.resume();
     }
 
     return () => {
-      // Safety resume on unmount using the REF (most reliable)
-      if (sceneRef.current && sceneRef.current.scene) {
-        console.log("SystemMenu: Resuming Game (Cleanup)");
+      if (sceneRef.current?.scene) {
         sceneRef.current.scene.resume();
       }
     };

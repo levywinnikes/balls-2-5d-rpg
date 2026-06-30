@@ -1,5 +1,6 @@
 import {
   Color3,
+  DynamicTexture,
   Mesh,
   MeshBuilder,
   Scene,
@@ -15,6 +16,7 @@ import {
 } from "./TwoDParitySpriteFactory";
 import { attachAquaticShaderTint } from "./AquaticSpriteShader";
 import {
+  configureBillboardSpriteMaterial,
   configureBillboardSpriteMesh,
 } from "./BillboardDepthConfig";
 
@@ -117,6 +119,51 @@ export function getEnemyVisualProfile(enemyId: string): EnemyVisualProfile {
   return PROFILE_BY_ENEMY_ID[enemyId] || DEFAULT_PROFILE;
 }
 
+function createTargetHeadMarkerMaterial(
+  scene: Scene,
+  key: string,
+): StandardMaterial {
+  const canvasSize = 64;
+  const texture = new DynamicTexture(
+    `${key}-target-marker-tex`,
+    canvasSize,
+    scene,
+    false,
+  );
+  const ctx = texture.getContext() as CanvasRenderingContext2D;
+  ctx.clearRect(0, 0, canvasSize, canvasSize);
+  ctx.fillStyle = "#fbbf24";
+  ctx.strokeStyle = "#78350f";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(canvasSize * 0.12, canvasSize * 0.28);
+  ctx.lineTo(canvasSize * 0.5, canvasSize * 0.78);
+  ctx.lineTo(canvasSize * 0.88, canvasSize * 0.28);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  texture.update();
+
+  const material = new StandardMaterial(`${key}-target-marker-mat`, scene);
+  material.diffuseTexture = texture;
+  material.emissiveTexture = texture;
+  material.opacityTexture = texture;
+  material.useAlphaFromDiffuseTexture = true;
+  material.emissiveColor = Color3.White();
+  material.disableLighting = true;
+  material.disableDepthWrite = true;
+  configureBillboardSpriteMaterial(material);
+  return material;
+}
+
+export function getEnemyTargetMarkerMesh(
+  enemyRoot: TransformNode,
+): Mesh | undefined {
+  return enemyRoot
+    .getChildMeshes()
+    .find((mesh) => mesh.name.endsWith("-target-marker")) as Mesh | undefined;
+}
+
 export function createEnemyVisual(
   scene: Scene,
   enemyId: string,
@@ -213,6 +260,23 @@ export function createEnemyVisual(
   pickProxy.billboardMode = Mesh.BILLBOARDMODE_Y;
   pickProxy.isPickable = true;
 
+  const markerWidth = Math.max(0.3, spriteWidth * 0.32);
+  const markerHeight = markerWidth * 0.72;
+  const headMarkerY = spriteAnchorY + spriteHeight * 0.5 + markerHeight * 0.15;
+  const targetMarker = MeshBuilder.CreatePlane(
+    `${nodeName}-target-marker`,
+    { width: markerWidth, height: markerHeight },
+    scene,
+  );
+  targetMarker.material = createTargetHeadMarkerMaterial(scene, nodeName);
+  targetMarker.parent = root;
+  targetMarker.position.y = headMarkerY;
+  targetMarker.billboardMode = Mesh.BILLBOARDMODE_Y;
+  targetMarker.renderingGroupId = 1;
+  targetMarker.isPickable = false;
+  targetMarker.setEnabled(false);
+  targetMarker.metadata = { baseY: headMarkerY };
+
   return root;
 }
 
@@ -246,7 +310,7 @@ export function getEnemyGroundShadowMaterial(
   return (shadow?.material as StandardMaterial | undefined) ?? null;
 }
 
-/** Reset sprite + floor shadow after target is cleared. */
+/** Reset sprite tint, floor shadow, and head marker after target is cleared. */
 export function restoreEnemyTargetVisual(enemyRoot: TransformNode): void {
   const spriteMat = getEnemySpriteMaterial(enemyRoot);
   if (spriteMat) {
@@ -264,9 +328,23 @@ export function restoreEnemyTargetVisual(enemyRoot: TransformNode): void {
   if (shadow) {
     shadow.scaling.set(1, 1, 1);
   }
+
+  const marker = getEnemyTargetMarkerMesh(enemyRoot);
+  if (marker) {
+    marker.setEnabled(false);
+    const baseY = (marker.metadata as { baseY?: number } | undefined)?.baseY;
+    if (baseY !== undefined) {
+      marker.position.y = baseY;
+    }
+    marker.scaling.set(1, 1, 1);
+    const markerMat = marker.material as StandardMaterial | undefined;
+    if (markerMat) {
+      markerMat.emissiveColor = Color3.White();
+    }
+  }
 }
 
-/** Target highlight: warm sprite tint + amber floor spot (no 3D ring). */
+/** Target highlight: warm sprite tint + amber floor spot + chevron above head. */
 export function applyEnemyTargetVisual(
   enemyRoot: TransformNode,
   pulse: number,
@@ -289,6 +367,25 @@ export function applyEnemyTargetVisual(
   if (shadow) {
     const scale = 1.08 + pulse * 0.1;
     shadow.scaling.set(scale, scale, scale);
+  }
+
+  const marker = getEnemyTargetMarkerMesh(enemyRoot);
+  if (marker) {
+    marker.setEnabled(true);
+    const baseY = (marker.metadata as { baseY?: number } | undefined)?.baseY;
+    if (baseY !== undefined) {
+      marker.position.y = baseY + pulse * 0.08;
+    }
+    const scale = 1 + pulse * 0.18;
+    marker.scaling.set(scale, scale, scale);
+    const markerMat = marker.material as StandardMaterial | undefined;
+    if (markerMat) {
+      markerMat.emissiveColor = new Color3(
+        1,
+        0.82 + pulse * 0.18,
+        0.28 + pulse * 0.25,
+      );
+    }
   }
 }
 

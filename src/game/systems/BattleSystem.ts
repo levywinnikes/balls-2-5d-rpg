@@ -32,6 +32,28 @@ export default class BattleSystem {
     this.bloodSystem = new BloodSystem(scene);
   }
 
+  private emitCombatEnemyHit(enemy: Enemy, damage: number): void {
+    if (damage <= 0) {
+      return;
+    }
+
+    const gameScene = this.scene as GameScene;
+    const selected = gameScene.getSelectedEnemy();
+    PlayerState.getInstance().emit("combatEnemyHit", {
+      uid: enemy.id,
+      enemyType: enemy.enemyType,
+      health: enemy.getHealth(),
+      maxHealth: enemy.getMaxHealth(),
+      damage,
+      isFocused: selected?.id === enemy.id,
+    });
+    PlayerState.getInstance().emit("combatEnemyHealthChanged", {
+      uid: enemy.id,
+      health: enemy.getHealth(),
+      maxHealth: enemy.getMaxHealth(),
+    });
+  }
+
   private isEnemyFireAttack(enemy: Enemy): boolean {
     const def = EnemyRegistry.getEnemyDefinition(enemy.enemyType);
     const magicAttacks = def?.magicAttacks ?? [];
@@ -468,6 +490,8 @@ export default class BattleSystem {
         { damage: damage, target: enemy.enemyType },
         "#ffffff",
       );
+
+      this.emitCombatEnemyHit(enemy, damage);
 
       if (isCritical) {
         AudioManager.getInstance().playCritical();
@@ -970,6 +994,8 @@ export default class BattleSystem {
           "#ff4444",
         );
       }
+
+      this.emitCombatEnemyHit(enemy, finalDamage);
 
       // Blood/FX
       if (localStorage.getItem("tgs_settings_blood") !== "false") {
