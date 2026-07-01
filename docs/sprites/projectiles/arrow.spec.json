@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "id": "arrow",
+  "name": "Arrow Projectile",
+  "category": "projectile",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "output": {
+    "dir": "public/assets/sprites/generated/arrow"
+  },
+  "production_prompts": {
+    "base_description": "pixel art wooden arrow projectile pointing to the right, sharp grey metal arrowhead on the left, brown wooden shaft, red and white feather fletching on the right tail, cartoon adventure game style, low top-down perspective, clean dark outline, vibrant flat colors, centered on transparent background, 32x32, horizontal flight orientation",
+    "negative_prompt": "bow, character, hand, bowstring, blurry, realistic photo, text, watermark, solid background, vertical arrow, sword, shield"
+  },
+  "style": {
+    "outline": "single color black outline",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux + animate-with-text-v3",
+    "no_background": true,
+    "direction": "east"
+  },
+  "animations": [
+    {
+      "name": "feather_sway_gentle",
+      "frame_count": 4,
+      "frame_rate": 10,
+      "action": "subtle fletching feather quiver and slight shaft wobble, arrow still pointing right, seamless looping animation"
+    },
+    {
+      "name": "feather_sway",
+      "frame_count": 4,
+      "frame_rate": 12,
+      "action": "feather fletching flutters more in wind, tail feathers bend and sway, arrow pointing right, seamless looping animation"
+    },
+    {
+      "name": "fly_loop",
+      "frame_count": 4,
+      "frame_rate": 14,
+      "action": "fast arrow in flight, feathers trail and ripple, slight motion blur feel on fletching, arrow pointing right, seamless looping animation"
+    }
+  ],
+  "runtime": {
+    "default_animation": "fly_loop",
+    "idle_animation": "feather_sway_gentle",
+    "world_size_px": 32
+  }
+}

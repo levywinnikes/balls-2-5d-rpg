@@ -6,9 +6,17 @@ export const STAIR_LEVEL_HEIGHT_UNITS = 2.0;
 /** North edge of tile — `localZ` near 0; climb up and descend both finish here. */
 export const STAIR_TOP_EDGE_Z = 0.14;
 
+/** South side of tile — safe landing after a vertical transition (avoids re-trigger loops). */
+export const STAIR_LANDING_LOCAL_Z = 0.72;
+
+/** Holes only pull the player down when they step into the north portion of the tile. */
+export const HOLE_DESCEND_EDGE_Z = 0.35;
+
 export type StairTileDef = {
   stairDir?: "up" | "down";
   geometryProfile?: string;
+  transition?: "up" | "down" | "dwn";
+  id?: string;
 };
 
 export function sampleStairFootY(
@@ -35,9 +43,16 @@ export function sampleStairFootY(
   return levelBaseY + floorRim - stepIndex * stepRise;
 }
 
-export type StairTransitionProbe = {
+export type VerticalTransitionProbe = {
   targetLevel: string;
+  kind: "stair-up" | "stair-down" | "hole-down";
+  tileX: number;
+  tileZ: number;
+  landingLocalZ: number;
 };
+
+/** @deprecated Use VerticalTransitionProbe */
+export type StairTransitionProbe = VerticalTransitionProbe;
 
 export function probeStairLevelTransition(
   worldX: number,
@@ -49,7 +64,7 @@ export function probeStairLevelTransition(
     parseLevelNumber: (level: string) => number;
     hasLevel: (level: string) => boolean;
   },
-): StairTransitionProbe | null {
+): VerticalTransitionProbe | null {
   const tileX = Math.floor(worldX);
   const tileZ = Math.floor(worldZ);
   const symbol = getTile(activeLevel, tileX, tileZ);
@@ -65,7 +80,13 @@ export function probeStairLevelTransition(
   if (stairDir === "up" && localZ <= STAIR_TOP_EDGE_Z) {
     const targetLevel = String(current + 1);
     if (options.hasLevel(targetLevel)) {
-      return { targetLevel };
+      return {
+        targetLevel,
+        kind: "stair-up",
+        tileX,
+        tileZ,
+        landingLocalZ: STAIR_LANDING_LOCAL_Z,
+      };
     }
   }
 
@@ -73,9 +94,57 @@ export function probeStairLevelTransition(
   if (stairDir === "down" && localZ <= STAIR_TOP_EDGE_Z) {
     const targetLevel = String(current - 1);
     if (options.hasLevel(targetLevel)) {
-      return { targetLevel };
+      return {
+        targetLevel,
+        kind: "stair-down",
+        tileX,
+        tileZ,
+        landingLocalZ: STAIR_LANDING_LOCAL_Z,
+      };
     }
   }
 
   return null;
+}
+
+/** Holes / manholes (`hol`, `transition: "down"`). */
+export function probeHoleLevelTransition(
+  worldX: number,
+  worldZ: number,
+  activeLevel: string,
+  getTile: (level: string, tileX: number, tileY: number) => string | null,
+  getTileDef: (symbol: string | null) => StairTileDef | null | undefined,
+  options: {
+    parseLevelNumber: (level: string) => number;
+    hasLevel: (level: string) => boolean;
+  },
+): VerticalTransitionProbe | null {
+  const tileX = Math.floor(worldX);
+  const tileZ = Math.floor(worldZ);
+  const symbol = getTile(activeLevel, tileX, tileZ);
+  const tileDef = getTileDef(symbol);
+  const goesDown =
+    tileDef?.transition === "down" ||
+    tileDef?.transition === "dwn" ||
+    tileDef?.id === "hole";
+  if (!goesDown) {
+    return null;
+  }
+
+  const localZ = worldZ - tileZ;
+  if (localZ > HOLE_DESCEND_EDGE_Z) {
+    return null;
+  }
+
+  const targetLevel = String(options.parseLevelNumber(activeLevel) - 1);
+  if (!options.hasLevel(targetLevel)) {
+    return null;
+  }
+  return {
+    targetLevel,
+    kind: "hole-down",
+    tileX,
+    tileZ,
+    landingLocalZ: STAIR_LANDING_LOCAL_Z,
+  };
 }

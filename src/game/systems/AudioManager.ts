@@ -40,6 +40,10 @@ export class AudioManager {
   private blockSynth: Tone.MetalSynth;
   private attackSynth: Tone.MembraneSynth;
   private attackWhoosh: Tone.NoiseSynth;
+  private bowStringSynth: Tone.PluckSynth;
+  private bowReleaseWhoosh: Tone.NoiseSynth;
+  private throwingStarSpinSynth: Tone.MetalSynth;
+  private throwingStarWhoosh: Tone.NoiseSynth;
   private pickupSynth: Tone.PluckSynth;
   private clickSynth: Tone.PluckSynth;
   private fireHitSynth: Tone.NoiseSynth;
@@ -359,6 +363,28 @@ export class AudioManager {
       envelope: { attack: 0.005, decay: 0.1, release: 0.1 },
       volume: -15,
     }).connect(this.sfxBus);
+    this.bowStringSynth = new Tone.PluckSynth({
+      attackNoise: 0.35,
+      dampening: 2200,
+      resonance: 0.85,
+      volume: -4,
+    }).connect(this.sfxBus);
+    this.bowReleaseWhoosh = new Tone.NoiseSynth({
+      envelope: { attack: 0.002, decay: 0.18, release: 0.12 },
+      volume: -18,
+    }).connect(new Tone.Filter(1200, "highpass").connect(this.sfxBus));
+    this.throwingStarSpinSynth = new Tone.MetalSynth({
+      envelope: { attack: 0.001, decay: 0.12, release: 0.08 },
+      harmonicity: 8,
+      modulationIndex: 24,
+      resonance: 6000,
+      octaves: 1.5,
+      volume: -8,
+    }).connect(this.sfxBus);
+    this.throwingStarWhoosh = new Tone.NoiseSynth({
+      envelope: { attack: 0.001, decay: 0.08, release: 0.06 },
+      volume: -16,
+    }).connect(new Tone.Filter(2500, "bandpass").connect(this.sfxBus));
     this.pickupSynth = new Tone.PluckSynth({
       attackNoise: 0.2,
       dampening: 3000,
@@ -717,6 +743,39 @@ export class AudioManager {
       this.attackSynth.triggerAttackRelease("G2", "16n", undefined, 0.6);
     }
   }
+
+  /** Bow / short_bow release — string twang + light whoosh. */
+  public playBowShot() {
+    if (this.initialized && this.sfxEnabled) {
+      const now = performance.now();
+      if (now - this._lastAttackSfxAt < this.ATTACK_SFX_MIN_INTERVAL_MS) return;
+      this._lastAttackSfxAt = now;
+      this.bowStringSynth.triggerAttackRelease("G3", "16n", undefined, 0.22);
+      this.bowReleaseWhoosh.triggerAttackRelease("32n", undefined, 0.04);
+    }
+  }
+
+  /** Throwing star launch — metallic ping + swish. */
+  public playThrowingStarThrow() {
+    if (this.initialized && this.sfxEnabled) {
+      const now = performance.now();
+      if (now - this._lastAttackSfxAt < this.ATTACK_SFX_MIN_INTERVAL_MS) return;
+      this._lastAttackSfxAt = now;
+      const toneNow = Tone.now();
+      this.throwingStarSpinSynth.triggerAttackRelease("32n", toneNow, 0.12);
+      this.throwingStarWhoosh.triggerAttackRelease("32n", toneNow, 0.02);
+    }
+  }
+
+  /** Ranged weapon fire SFX by registry id. */
+  public playRangedWeaponShot(weaponId: string) {
+    if (weaponId === "throwing_star") {
+      this.playThrowingStarThrow();
+    } else {
+      this.playBowShot();
+    }
+  }
+
   public playPickup() {
     if (this.initialized && this.sfxEnabled)
       this.pickupSynth.triggerAttackRelease("C5", "16n", undefined, 0.3);

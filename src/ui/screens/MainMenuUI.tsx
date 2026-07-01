@@ -87,7 +87,12 @@ export const MainMenuUI: React.FC<MainMenuUIProps> = ({ onStart }) => {
     // Ensure we start fresh
     PlayerState.getInstance().reset();
     // Just start new game, engine handles save creation on confirm/autosave usually
-    onStart({ isNewGame: true, charName });
+    onStart({
+      isNewGame: true,
+      charName,
+      map: "city_3d_multi",
+      mapName: "city_3d_multi",
+    });
   };
 
   const handleDelete = async (name: string) => {

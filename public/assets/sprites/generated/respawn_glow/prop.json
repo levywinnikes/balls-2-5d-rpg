@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "id": "respawn_glow",
+  "canvas": {
+    "width": 48,
+    "height": 48
+  },
+  "direction": "south",
+  "animations": {
+    "respawn_burst": {
+      "frame_count": 9,
+      "frame_rate": 12
+    }
+  },
+  "generated_at": "2026-07-01T02:24:45.134Z",
+  "source_spec": "docs/sprites/vfx/respawn-glow.spec.json"
+}

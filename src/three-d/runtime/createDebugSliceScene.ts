@@ -39,12 +39,19 @@ import { PathfindingManager } from "../../game/systems/PathfindingManager";
 import { WorldMapService } from "../../services/WorldMapService";
 import {
   applyEnemyTargetVisual,
+  applyEnemyAnimLod,
   createEnemyVisual,
   restoreEnemyTargetVisual,
   setEnemyVisualAnimState,
   setEnemyVisualDirection,
   type EnemyVisualAnimState,
 } from "./ThreeDEnemyVisualRegistry";
+import {
+  Projectile3DSystem,
+  resolveProjectile3DProfile,
+  type Projectile3DGridContext,
+  type ProjectileEnemyTarget,
+} from "./Projectile3DSystem";
 import {
   resolveBmsDirectionFromWorldDelta,
   bmsDirectionToFirstPersonYaw,
@@ -66,6 +73,12 @@ import {
 import { isWaterTileId, sampleAquaticFromTile, type AquaticSample } from "./WaterProfile";
 import { attachAquaticShaderTint } from "./AquaticSpriteShader";
 import { configureBillboardSpriteMesh } from "./BillboardDepthConfig";
+import {
+  createFirstPersonCombatCameraState,
+  FP_CAMERA_FOV,
+  getFirstPersonEnemyProximityScale,
+  updateFirstPersonCombatCamera,
+} from "./FirstPersonCombatPresentation";
 import { computeFallDamageMultiplier, getAquaticVisualPreset } from "./AquaticVisualConfig";
 import {
   collectWaterEffectTiles,
@@ -92,7 +105,13 @@ import {
   DEFAULT_VERTICAL_COLUMN_RADIUS,
   resolveVerticalVisibleLevels,
 } from "./VerticalLevelVisibility3D";
-import { probeStairLevelTransition } from "./StairConfig3D";
+import { findFirstBlockingTileOnWorldLine } from "./WallRevealLos";
+import {
+  probeHoleLevelTransition,
+  probeStairLevelTransition,
+  STAIR_LANDING_LOCAL_Z,
+} from "./StairConfig3D";
+import { playRespawnGlowAt, preloadRespawnGlowTextures } from "./VfxBillboardFactory";
 import {
   createPropBillboard,
   isKnownPropId,
@@ -367,6 +386,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   });
   const scene = new Scene(engine);
   scene.clearColor.set(0.67, 0.8, 0.96, 1);
+  preloadRespawnGlowTextures(scene);
   const playerState = PlayerState.getInstance();
   playerState.setPerspectiveMode("3D");
   const audioManager = AudioManager.getInstance();
@@ -454,6 +474,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
   firstPersonCamera.minZ = 0.05;
   firstPersonCamera.maxZ = 30;
+  firstPersonCamera.fov = FP_CAMERA_FOV;
   firstPersonCamera.inertia = 0.05;
   firstPersonCamera.angularSensibility = 800; // ~CS:GO/Valorant default feel
   firstPersonCamera.speed = 0;
@@ -759,6 +780,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
   const enemies = new Map<string, SliceEnemy>();
+  const ENEMY_RESPAWN_MS = 60_000;
+  const pendingEnemyRespawns = new Map<
+    string,
+    {
+      level: string;
+      spawn: EnemySpawnData;
+      index: number;
+      elapsedMs: number;
+      respawnTimeMs: number;
+    }
+  >();
+  const enemySpawnCatalog = new Map<
+    string,
+    { level: string; spawn: EnemySpawnData; index: number }
+  >();
   const doors = new Map<string, SliceDoor>();
   const doorByLevelTile = new Map<string, string>();
   const seededDoorLevels = new Set<string>();
@@ -772,6 +808,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let targetingRuneId: string | null = null;
   const seededEnemyLevels = new Set<string>();
   const props = new Map<string, SliceProp>();
+  const propSpawnCatalog = new Map<
+    string,
+    { level: string; spawn: PropSpawnData; index: number }
+  >();
   const collidablePropTilesByLevel = new Map<string, Set<string>>();
   const seededPropLevels = new Set<string>();
   let mapDataCache: SliceMapData | null = null;
@@ -800,7 +840,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const TOPDOWN_CHUNK_BUILD_BUDGET_PER_TICK = 2;
   const FIRST_PERSON_CHUNK_BUILD_BUDGET_PER_TICK = 3;
   const CHUNK_UNLOAD_BUDGET_PER_TICK = 8; // max chunks to unload each update tick
+  const PROP_STREAM_RADIUS_UNITS =
+    CHUNK_SIZE * (TOPDOWN_DRAW_RADIUS_CHUNKS + 0.75);
+  const PROP_DESPAWN_RADIUS_UNITS = PROP_STREAM_RADIUS_UNITS + 10;
+  const PROP_STREAM_SYNC_INTERVAL = 0.35;
+  const NAV_WINDOW_RADIUS = 40;
+  const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
+  const ENEMY_AI_RADIUS_UNITS = 18;
+  /** Only instantiate enemy meshes (and anim observers) within this radius. */
+  const ENEMY_STREAM_RADIUS_UNITS =
+    CHUNK_SIZE * (TOPDOWN_DRAW_RADIUS_CHUNKS + 1);
+  const ENEMY_DESPAWN_RADIUS_UNITS = ENEMY_STREAM_RADIUS_UNITS + 12;
+  const ENEMY_STREAM_SYNC_INTERVAL = 0.35;
+  const WALL_REVEAL_TARGET_RADIUS_UNITS = 22;
   let isFirstPerson = false;
+  let fpCombatCameraState = createFirstPersonCombatCameraState();
   let gameplayPaused = playerState.isGameplayPaused();
   let fpCaptureSuspendedForMenu = false;
   let topDownCaptureSuspendedForMenu = false;
@@ -1247,53 +1301,56 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     () => Array(navigationGridSize).fill(0),
   );
 
-  const hasLineOfSight = (from: Vector3, to: Vector3): boolean => {
-    const x0 = worldToGrid(from.x, navigationGridOrigin);
-    const y0 = worldToGrid(from.z, navigationGridOrigin);
-    const x1 = worldToGrid(to.x, navigationGridOrigin);
-    const y1 = worldToGrid(to.z, navigationGridOrigin);
+  const projectileGridContext: Projectile3DGridContext = {
+    grid: navigationGrid,
+    gridSize: navigationGridSize,
+    gridOrigin: navigationGridOrigin,
+    worldToGrid,
+  };
+  const projectileSystem = new Projectile3DSystem(scene, projectileGridContext);
 
+  const isTileBlockedForGameplay = (tileX: number, tileY: number): boolean => {
+    const mapData = mapDataCache;
+    if (!mapData?.width || !mapData?.height) {
+      return false;
+    }
     if (
-      x0 < 0 ||
-      y0 < 0 ||
-      x1 < 0 ||
-      y1 < 0 ||
-      x0 >= navigationGridSize ||
-      y0 >= navigationGridSize ||
-      x1 >= navigationGridSize ||
-      y1 >= navigationGridSize
+      tileX < 0 ||
+      tileY < 0 ||
+      tileX >= mapData.width ||
+      tileY >= mapData.height
     ) {
       return true;
     }
 
-    let currentX = x0;
-    let currentY = y0;
-    const deltaX = Math.abs(x1 - x0);
-    const deltaY = Math.abs(y1 - y0);
-    const stepX = x0 < x1 ? 1 : -1;
-    const stepY = y0 < y1 ? 1 : -1;
-    let error = deltaX - deltaY;
-
-    while (currentX !== x1 || currentY !== y1) {
-      if (
-        !(currentX === x0 && currentY === y0) &&
-        navigationGrid[currentY]?.[currentX] === 1
-      ) {
-        return false;
-      }
-
-      const doubledError = error * 2;
-      if (doubledError > -deltaY) {
-        error -= deltaY;
-        currentX += stepX;
-      }
-      if (doubledError < deltaX) {
-        error += deltaX;
-        currentY += stepY;
-      }
+    const symbol = getMapTileAt(activeLevel, tileX, tileY);
+    const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
+    if (
+      isBlockingTile(symbol, tileDef, {
+        level: activeLevel,
+        tileX,
+        tileY,
+      })
+    ) {
+      return true;
     }
+    return isCollidablePropAtTile(activeLevel, tileX, tileY);
+  };
 
-    return true;
+  projectileGridContext.isTileBlocked = (tileX, tileY) =>
+    isTileBlockedForGameplay(tileX, tileY);
+
+  const hasLineOfSight = (from: Vector3, to: Vector3): boolean => {
+    return (
+      findFirstBlockingTileOnWorldLine(
+        from.x,
+        from.z,
+        to.x,
+        to.z,
+        isTileBlockedForGameplay,
+        { skipStart: true },
+      ) === null
+    );
   };
 
   const safeTileColor = (hexColor: string | undefined, fallback: string) => {
@@ -1745,7 +1802,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
   };
 
-  const applyActiveLevelChange = (newLevel: string) => {
+  const applyActiveLevelChange = (
+    newLevel: string,
+    transition?: {
+      tileX: number;
+      tileZ: number;
+      landingLocalZ: number;
+      guardMs?: number;
+    },
+  ) => {
     if (newLevel === activeLevel) {
       return;
     }
@@ -1753,12 +1818,30 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     activeLevel = newLevel;
     activeLevelNumber = parseLevelNumber(newLevel);
     playerState.setCurrentLevel(newLevel);
+
+    if (transition) {
+      player.position.z = transition.tileZ + transition.landingLocalZ;
+      player.position.x = Math.min(
+        mapMaxX,
+        Math.max(mapMinX + 0.5, transition.tileX + 0.5),
+      );
+      verticalTransitionGuard = {
+        untilMs: performance.now() + (transition.guardMs ?? 2800),
+        tileX: transition.tileX,
+        tileZ: transition.tileZ,
+        fromLevel: previousLevel,
+        toLevel: newLevel,
+      };
+    }
+
+    clearAllChunks();
+    chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
     snapPlayerFootToActiveLevel();
     const mapData = mapDataCache;
     if (mapData) {
       void loadLevelBinary(newLevel, mapData).then(() => {
         snapPlayerFootToActiveLevel();
-        chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
+        updateChunks();
       });
     }
     void ensureMapLevelReady(newLevel);
@@ -1766,6 +1849,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     void ensureLevelEnemiesSeeded(newLevel);
     void ensureLevelItemsSeeded(newLevel);
     void ensureLevelPropsSeeded(newLevel);
+    syncEnemyStream(true);
+    syncPropStream(true);
     pushLogEvent("level.change", {
       from: previousLevel,
       to: newLevel,
@@ -1964,29 +2049,65 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     chunkLodByKey.clear();
   };
 
-  const rebuildNavigationGrid = (level: string) => {
+  let navigationGridLevel: string | null = null;
+  let lastChunkRenderLevel: string | null = null;
+  let navWindowMinTileX = 0;
+  let navWindowMinTileY = 0;
+
+  const rebuildNavigationWindow = (level: string, force = false) => {
     const mapData = mapDataCache;
-    if (!mapData || !mapData.width || !mapData.height) {
+    if (!mapData?.width || !mapData.height) {
       return;
     }
 
-    navigationGridSize = Math.max(mapData.width, mapData.height);
-    navigationGridOrigin = 0;
-    navigationGrid = Array.from({ length: navigationGridSize }, () =>
-      Array(navigationGridSize).fill(0),
+    const centerX = Math.floor(player.position.x);
+    const centerZ = Math.floor(player.position.z);
+    const winSize = NAV_WINDOW_RADIUS * 2;
+
+    if (
+      !force &&
+      navigationGridLevel === level &&
+      Math.abs(centerX - (navWindowMinTileX + NAV_WINDOW_RADIUS)) < 18 &&
+      Math.abs(centerZ - (navWindowMinTileY + NAV_WINDOW_RADIUS)) < 18
+    ) {
+      return;
+    }
+
+    navWindowMinTileX = Math.max(
+      0,
+      Math.min(centerX - NAV_WINDOW_RADIUS, mapData.width - winSize),
+    );
+    navWindowMinTileY = Math.max(
+      0,
+      Math.min(centerZ - NAV_WINDOW_RADIUS, mapData.height - winSize),
     );
 
-    for (let y = 0; y < mapData.height; y++) {
-      for (let x = 0; x < mapData.width; x++) {
-        const symbol = getMapTileAt(level, x, y);
-        const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
-        if (isBlockingTile(symbol, tileDef, { level, tileX: x, tileY: y })) {
-          navigationGrid[y][x] = 1;
+    navigationGridLevel = level;
+    navigationGridSize = winSize;
+    navigationGridOrigin = -navWindowMinTileX;
+
+    navigationGrid = Array.from({ length: winSize }, () =>
+      Array(winSize).fill(0),
+    );
+
+    for (let ly = 0; ly < winSize; ly += 1) {
+      for (let lx = 0; lx < winSize; lx += 1) {
+        const tileX = navWindowMinTileX + lx;
+        const tileY = navWindowMinTileY + ly;
+        if (isTileBlockedForGameplay(tileX, tileY)) {
+          navigationGrid[ly][lx] = 1;
         }
       }
     }
 
     pathfindingManager.updateGrid(navigationGrid);
+    projectileGridContext.grid = navigationGrid;
+    projectileGridContext.gridSize = navigationGridSize;
+    projectileGridContext.gridOrigin = navigationGridOrigin;
+  };
+
+  const rebuildNavigationGrid = (level: string) => {
+    rebuildNavigationWindow(level, true);
   };
 
   const renderMapLevel = async (level: string) => {
@@ -2008,6 +2129,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     mapMaxZ = Math.max(0.5, currentMapHeight - 0.5);
 
     rebuildNavigationGrid(level);
+    if (lastChunkRenderLevel !== level) {
+      clearAllChunks();
+      lastChunkRenderLevel = level;
+    }
 
     // Tiles are rendered lazily via chunk streaming (updateChunks in the render loop)
     // Trigger an immediate first chunk load so the player doesn't see empty map on spawn
@@ -2196,6 +2321,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return [activeLevel];
     }
 
+    // Underground: mesh the active floor; in first-person also load one level up as ceiling.
+    if (activeLevelNumber < 0) {
+      const levels = [activeLevel];
+      if (isFirstPerson) {
+        const ceilingLevel = String(activeLevelNumber + 1);
+        if (mapData.levels[ceilingLevel]) {
+          levels.push(ceilingLevel);
+        }
+      }
+      return levels;
+    }
+
     return resolveVerticalVisibleLevels(
       activeLevel,
       Math.floor(player.position.x),
@@ -2214,7 +2351,28 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const occlusionStartLevel = findUpperOcclusionLevel();
     const lerpFactor = Math.min(1, deltaSeconds * 8);
 
-    if (!isFirstPerson && levelMeshes.size > 0) {
+    if (isFirstPerson && levelMeshes.size > 0) {
+      const ceilingLevelNum = activeLevelNumber + 1;
+      levelMeshes.forEach((meshes, levelKey) => {
+        const levelNum = parseLevelNumber(levelKey);
+        const inVerticalColumn = verticallyVisible.has(levelKey);
+
+        meshes.forEach((mesh) => {
+          if (!mesh || mesh.isDisposed()) {
+            return;
+          }
+
+          if (!inVerticalColumn || levelNum > ceilingLevelNum) {
+            mesh.visibility = 0;
+            mesh.setEnabled(false);
+            return;
+          }
+
+          mesh.visibility = 1;
+          mesh.setEnabled(true);
+        });
+      });
+    } else if (!isFirstPerson && levelMeshes.size > 0) {
       levelMeshes.forEach((meshes, levelKey) => {
         const levelNum = parseLevelNumber(levelKey);
         const inVerticalColumn = verticallyVisible.has(levelKey);
@@ -2257,6 +2415,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       activeLevel,
       visibleLevels: Array.from(verticallyVisible),
       occludedFromLevel: occlusionStartLevel,
+      firstPersonCeilingLevel:
+        isFirstPerson && activeLevelNumber < 0
+          ? String(activeLevelNumber + 1)
+          : null,
       totalLevels: mapData?.levels ? Object.keys(mapData.levels).length : 1,
       columnRadius: DEFAULT_VERTICAL_COLUMN_RADIUS,
       playerTile: {
@@ -3497,8 +3659,41 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       prop.meshRoot.dispose();
     });
     props.clear();
+    propSpawnCatalog.clear();
     collidablePropTilesByLevel.clear();
     seededPropLevels.clear();
+  };
+
+  const getPropCatalogKey = (level: string, spawn: PropSpawnData) =>
+    `${level}_${spawn.propId}_${spawn.tileX}_${spawn.tileY}`;
+
+  const despawnProp = (uid: string) => {
+    const prop = props.get(uid);
+    if (!prop) {
+      return;
+    }
+    const observer = (prop.meshRoot as any)._propAnimObserver;
+    if (observer) {
+      scene.onBeforeRenderObservable.remove(observer);
+    }
+    prop.meshRoot.dispose();
+    props.delete(uid);
+  };
+
+  const applyPropAnimLod = (prop: SliceProp, distance: number) => {
+    const setter = (prop.meshRoot as any)._setAnimIntervalScale as
+      | ((scale: number) => void)
+      | undefined;
+    if (typeof setter !== "function") {
+      return;
+    }
+    if (distance <= 18) {
+      setter(1);
+    } else if (distance <= 36) {
+      setter(0.55);
+    } else {
+      setter(0.3);
+    }
   };
 
   const spawnProp = (spawn: PropSpawnData, index: number, level: string) => {
@@ -3522,7 +3717,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     applyActorAquaticY(worldPos, level);
     meshRoot.parent = mapRoot;
     meshRoot.position = worldPos;
-    meshRoot.setEnabled(level === activeLevel);
+    meshRoot.setEnabled(false);
 
     props.set(uid, {
       uid,
@@ -3532,42 +3727,178 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       tileY: spawn.tileY,
       meshRoot,
     });
+  };
 
-    if (spawn.isCollidable) {
-      const tileSet =
-        collidablePropTilesByLevel.get(level) ?? new Set<string>();
-      tileSet.add(getPropTileKey(spawn.tileX, spawn.tileY));
-      collidablePropTilesByLevel.set(level, tileSet);
+  const syncPropStream = (force = false) => {
+    if (!force) {
+      const now = performance.now();
+      const prev = (syncPropStream as any)._lastSyncAt as number | undefined;
+      if (prev !== undefined && now - prev < PROP_STREAM_SYNC_INTERVAL * 1000) {
+        return;
+      }
+      (syncPropStream as any)._lastSyncAt = now;
     }
+
+    const px = player.position.x;
+    const pz = player.position.z;
+    const streamRadius = isFirstPerson
+      ? CHUNK_SIZE * (FIRST_PERSON_DRAW_RADIUS_CHUNKS + 0.5)
+      : PROP_STREAM_RADIUS_UNITS;
+    const streamRadiusSq = streamRadius * streamRadius;
+    const despawnRadiusSq = PROP_DESPAWN_RADIUS_UNITS * PROP_DESPAWN_RADIUS_UNITS;
+
+    props.forEach((prop, uid) => {
+      if (prop.level !== activeLevel) {
+        despawnProp(uid);
+        return;
+      }
+      const dx = prop.meshRoot.position.x - px;
+      const dz = prop.meshRoot.position.z - pz;
+      const distSq = dx * dx + dz * dz;
+      if (distSq <= despawnRadiusSq) {
+        if (prop.meshRoot.isEnabled()) {
+          applyPropAnimLod(prop, Math.hypot(dx, dz));
+        }
+        return;
+      }
+      despawnProp(uid);
+    });
+
+    propSpawnCatalog.forEach((entry, uid) => {
+      if (entry.level !== activeLevel || props.has(uid)) {
+        return;
+      }
+
+      const spawnX = entry.spawn.tileX + 0.5;
+      const spawnZ = entry.spawn.tileY + 0.5;
+      const dx = spawnX - px;
+      const dz = spawnZ - pz;
+      if (dx * dx + dz * dz > streamRadiusSq) {
+        return;
+      }
+
+      spawnProp(entry.spawn, entry.index, entry.level);
+      const spawned = props.get(uid);
+      if (!spawned) {
+        return;
+      }
+      const dist = Math.hypot(dx, dz);
+      const footY = getGroundFootY(spawnX, spawnZ, entry.level);
+      spawned.meshRoot.position.y = footY;
+      spawned.meshRoot.setEnabled(true);
+      applyPropAnimLod(spawned, dist);
+    });
   };
 
   const ensureLevelPropsSeeded = async (level: string) => {
     if (seededPropLevels.has(level)) {
+      syncPropStream(true);
       return;
     }
 
     const spawns = await getPropSpawnsForLevel(level);
     spawns.forEach((spawn, index) => {
-      spawnProp(spawn, index, level);
+      const key = getPropCatalogKey(level, spawn);
+      propSpawnCatalog.set(key, { level, spawn, index });
+      if (spawn.isCollidable) {
+        const tileSet =
+          collidablePropTilesByLevel.get(level) ?? new Set<string>();
+        tileSet.add(getPropTileKey(spawn.tileX, spawn.tileY));
+        collidablePropTilesByLevel.set(level, tileSet);
+      }
     });
     seededPropLevels.add(level);
 
     if (level === activeLevel) {
-      rebuildNavigationGrid(level);
+      rebuildNavigationWindow(level, true);
     }
 
     (window as any).__slice3dProps = {
       level,
-      count: props.size,
-      onLevel: Array.from(props.values()).filter((p) => p.level === level)
-        .length,
+      streamed: props.size,
+      cataloged: propSpawnCatalog.size,
     };
+    syncPropStream(true);
   };
 
   const clearEnemies = () => {
     enemies.forEach((enemy) => enemy.meshRoot.dispose());
     enemies.clear();
+    enemySpawnCatalog.clear();
+    pendingEnemyRespawns.clear();
+    seededEnemyLevels.clear();
     selectedEnemyUid = null;
+  };
+
+  const isSpawnKeyInstantiated = (spawnKey: string) => {
+    let found = false;
+    enemies.forEach((enemy) => {
+      if (enemy.spawnKey === spawnKey) {
+        found = true;
+      }
+    });
+    return found;
+  };
+
+  const syncEnemyStream = (force = false) => {
+    if (!force) {
+      const now = performance.now();
+      const prev = (syncEnemyStream as any)._lastSyncAt as number | undefined;
+      if (prev !== undefined && now - prev < ENEMY_STREAM_SYNC_INTERVAL * 1000) {
+        return;
+      }
+      (syncEnemyStream as any)._lastSyncAt = now;
+    }
+
+    const px = player.position.x;
+    const pz = player.position.z;
+    const streamRadiusSq = ENEMY_STREAM_RADIUS_UNITS * ENEMY_STREAM_RADIUS_UNITS;
+    const despawnRadiusSq =
+      ENEMY_DESPAWN_RADIUS_UNITS * ENEMY_DESPAWN_RADIUS_UNITS;
+
+    enemies.forEach((enemy, uid) => {
+      if (enemy.level !== activeLevel) {
+        if (selectedEnemyUid === uid) {
+          setSelectedEnemy(null);
+        }
+        enemy.meshRoot.dispose();
+        enemies.delete(uid);
+        return;
+      }
+
+      const dx = enemy.worldPos.x - px;
+      const dz = enemy.worldPos.z - pz;
+      if (dx * dx + dz * dz <= despawnRadiusSq) {
+        return;
+      }
+      if (selectedEnemyUid === uid) {
+        setSelectedEnemy(null);
+      }
+      enemy.meshRoot.dispose();
+      enemies.delete(uid);
+    });
+
+    enemySpawnCatalog.forEach((entry, spawnKey) => {
+      if (entry.level !== activeLevel) {
+        return;
+      }
+      if (pendingEnemyRespawns.has(spawnKey)) {
+        return;
+      }
+      if (isSpawnKeyInstantiated(spawnKey)) {
+        return;
+      }
+
+      const spawnX = worldToSliceCoord(entry.spawn.x);
+      const spawnZ = worldToSliceCoord(entry.spawn.y);
+      const dx = spawnX - px;
+      const dz = spawnZ - pz;
+      if (dx * dx + dz * dz > streamRadiusSq) {
+        return;
+      }
+
+      spawnEnemy(entry.spawn, entry.index, spawnKey, entry.level);
+    });
   };
 
   const setSelectedEnemy = (enemyUid: string | null) => {
@@ -3622,14 +3953,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     index: number,
     spawnKey: string,
     level: string,
+    options?: { withRespawnVfx?: boolean },
   ) => {
     const definition = EnemyRegistry.getEnemyDefinition(spawn.enemyType);
     if (!definition) {
       return;
     }
 
-    // Skip enemies already killed in a previous visit to this level
-    if (playerState.isEnemy3dDead(level, spawnKey)) {
+    // Skip enemies waiting on respawn timer
+    if (pendingEnemyRespawns.has(spawnKey)) {
       return;
     }
 
@@ -3674,21 +4006,33 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     setEnemyAnimState(instance, "idle");
 
-    meshRoot.setEnabled(level === activeLevel);
+    const showOnActiveLevel = () => {
+      meshRoot.setEnabled(level === activeLevel);
+    };
+
+    if (options?.withRespawnVfx) {
+      meshRoot.setEnabled(false);
+      playRespawnGlowAt(scene, worldPos, level, activeLevel, showOnActiveLevel);
+    } else {
+      showOnActiveLevel();
+    }
+
     enemies.set(uid, instance);
   };
 
   const ensureLevelEnemiesSeeded = async (level: string) => {
     if (seededEnemyLevels.has(level)) {
+      syncEnemyStream(true);
       return;
     }
 
     const spawns = await getEnemySpawnsForLevel(level);
     spawns.forEach((spawn, index) => {
       const spawnKey = `${level}_${spawn.enemyType}_${index}`;
-      spawnEnemy(spawn, index, spawnKey, level);
+      enemySpawnCatalog.set(spawnKey, { level, spawn, index });
     });
     seededEnemyLevels.add(level);
+    syncEnemyStream(true);
   };
 
   const grantEnemyLoot = (enemy: SliceEnemy) => {
@@ -3817,8 +4161,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       enemies.delete(enemy.uid);
     }, deathMs);
 
-    // Persist this kill so the enemy won't respawn on re-entry
-    playerState.markEnemy3dDead(activeLevel, enemy.spawnKey);
+    const catalogEntry = enemySpawnCatalog.get(enemy.spawnKey);
+    if (catalogEntry) {
+      pendingEnemyRespawns.set(enemy.spawnKey, {
+        level: catalogEntry.level,
+        spawn: catalogEntry.spawn,
+        index: catalogEntry.index,
+        elapsedMs: 0,
+        respawnTimeMs: ENEMY_RESPAWN_MS,
+      });
+    }
 
     if (selectedEnemyUid === enemy.uid) {
       setSelectedEnemy(null);
@@ -4350,6 +4702,51 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return Math.max(0, equippedWeapon?.cooldown ?? 1000);
   };
 
+  const firePlayerWeaponProjectile = (aimEnemy: SliceEnemy): boolean => {
+    const equippedWeapon = playerState.getEquippedWeapon();
+    if (!equippedWeapon || equippedWeapon.type !== ItemType.DISTANCE) {
+      return false;
+    }
+
+    const origin = player.position.clone();
+    origin.y += 0.52;
+
+    const targetPos = aimEnemy.worldPos.clone();
+    targetPos.y = origin.y;
+    const direction = targetPos.subtract(origin);
+    if (direction.lengthSquared() < 0.0001) {
+      return false;
+    }
+
+    const enemyTargets: ProjectileEnemyTarget[] = [];
+    enemies.forEach((enemy) => {
+      if (enemy.isDead) {
+        return;
+      }
+      enemyTargets.push({
+        uid: enemy.uid,
+        worldPos: enemy.worldPos.clone(),
+        isDead: enemy.isDead,
+      });
+    });
+
+    audioManager.playRangedWeaponShot(equippedWeapon.id);
+
+    return projectileSystem.fire({
+      origin,
+      direction,
+      maxRange: getPlayerAttackRangeUnits(),
+      profile: resolveProjectile3DProfile(equippedWeapon.id),
+      enemies: enemyTargets,
+      onEnemyHit: (hit) => {
+        const enemy = enemies.get(hit.uid);
+        if (enemy && !enemy.isDead) {
+          applyPlayerAttackToEnemy(enemy);
+        }
+      },
+    });
+  };
+
   const tryAutoPlayerAttack = (now: number) => {
     if (!selectedEnemyUid) {
       return;
@@ -4378,6 +4775,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     lastPlayerAttackAt = now;
     setHeroAnimState("attack", 320);
+
+    const equippedWeapon = playerState.getEquippedWeapon();
+    if (equippedWeapon?.type === ItemType.DISTANCE) {
+      firePlayerWeaponProjectile(enemy);
+      return;
+    }
+
     triggerPlayerAttackSlashEffect(enemy);
     applyPlayerAttackToEnemy(enemy);
   };
@@ -4389,10 +4793,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const pathRequestStartedAt = performance.now();
     pathMetrics.requests += 1;
     pathMetrics.inFlight += 1;
-    const startX = worldToGrid(enemy.worldPos.x, navigationGridOrigin);
-    const startY = worldToGrid(enemy.worldPos.z, navigationGridOrigin);
-    const endX = worldToGrid(targetPosition.x, navigationGridOrigin);
-    const endY = worldToGrid(targetPosition.z, navigationGridOrigin);
+    rebuildNavigationWindow(enemy.level);
+    const startX = Math.floor(enemy.worldPos.x) - navWindowMinTileX;
+    const startY = Math.floor(enemy.worldPos.z) - navWindowMinTileY;
+    const endX = Math.floor(targetPosition.x) - navWindowMinTileX;
+    const endY = Math.floor(targetPosition.z) - navWindowMinTileY;
 
     if (
       startX < 0 ||
@@ -4474,9 +4879,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     const waypoint = enemy.currentPath[enemy.currentPathIndex];
     const target = new Vector3(
-      gridToWorld(waypoint.x, navigationGridOrigin),
+      waypoint.x + navWindowMinTileX + 0.5,
       enemy.worldPos.y, // preserve enemy's current level Y — fixes floating in underground levels
-      gridToWorld(waypoint.y, navigationGridOrigin),
+      waypoint.y + navWindowMinTileY + 0.5,
     );
 
     const toTarget = target.subtract(enemy.worldPos);
@@ -4535,20 +4940,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const updateEnemyAI = (deltaSeconds: number) => {
     const now = Date.now();
 
-    props.forEach((prop) => {
-      const onActiveLevel = prop.level === activeLevel;
-      prop.meshRoot.setEnabled(onActiveLevel);
-      if (!onActiveLevel) {
-        return;
-      }
-      const footY = getGroundFootY(
-        prop.meshRoot.position.x,
-        prop.meshRoot.position.z,
-        prop.level,
-      );
-      prop.meshRoot.position.y = footY;
-    });
-
     enemies.forEach((enemy) => {
       const onActiveLevel = enemy.level === activeLevel;
       if (!onActiveLevel) {
@@ -4582,6 +4973,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       );
       const enemyVisible = distanceToPlayer <= ENEMY_VISIBILITY_RADIUS_UNITS;
       enemy.meshRoot.setEnabled(enemyVisible);
+      applyEnemyAnimLod(enemy.meshRoot, distanceToPlayer, enemyVisible);
+
+      if (isFirstPerson && enemyVisible && !enemy.isDead) {
+        const fpScale = getFirstPersonEnemyProximityScale(distanceToPlayer);
+        enemy.meshRoot.scaling.set(fpScale, fpScale, fpScale);
+      } else if (enemy.meshRoot.scaling.x !== 1) {
+        enemy.meshRoot.scaling.set(1, 1, 1);
+      }
 
       if (!enemyVisible && selectedEnemyUid === enemy.uid) {
         setSelectedEnemy(null);
@@ -4807,6 +5206,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     enemies.forEach((enemy) => {
       if (enemy.isDead || enemy.level !== level) {
+        return;
+      }
+
+      const dx = enemy.worldPos.x - player.position.x;
+      const dz = enemy.worldPos.z - player.position.z;
+      if (dx * dx + dz * dz > WALL_REVEAL_TARGET_RADIUS_UNITS ** 2) {
         return;
       }
 
@@ -5053,11 +5458,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let lastGroundedFootY = player.position.y;
   let chunkUpdateTimer = 0;
   let levelTransitionCooldown = 0; // seconds until next floor change (ramp/stair)
+  let verticalTransitionGuard: {
+    untilMs: number;
+    tileX: number;
+    tileZ: number;
+    fromLevel: string;
+    toLevel: string;
+  } | null = null;
   const CHUNK_UPDATE_INTERVAL = 0.2;
   const PERF_PUBLISH_INTERVAL = 0.25;
-  const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
-  const ENEMY_AI_RADIUS_UNITS = 18;
   let dropSyncTimer = 0;
+  let enemyStreamTimer = 0;
+  let propStreamTimer = 0;
+  let navWindowTimer = 0;
   let perfPublishTimer = 0;
 
   const requestPointerLockIfPossible = () => {
@@ -5077,6 +5490,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     shouldRequestPointerLock = false,
   ) => {
     isFirstPerson = firstPerson;
+    projectileSystem.setFirstPersonMode(firstPerson);
+    if (!firstPerson) {
+      fpCombatCameraState = createFirstPersonCombatCameraState();
+      firstPersonCamera.fov = FP_CAMERA_FOV;
+      enemies.forEach((enemy) => {
+        enemy.meshRoot.scaling.set(1, 1, 1);
+      });
+    }
+
+    if (activeLevelNumber < 0) {
+      clearAllChunks();
+      chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
+    }
     // S7-FP1: notify React overlay (crosshair) of camera mode change
     document.dispatchEvent(
       new CustomEvent("slice3d:cameraModeChanged", { detail: { firstPerson } }),
@@ -5727,6 +6153,24 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       syncDroppedItems();
     }
 
+    enemyStreamTimer += deltaSeconds;
+    if (enemyStreamTimer >= ENEMY_STREAM_SYNC_INTERVAL) {
+      enemyStreamTimer = 0;
+      syncEnemyStream();
+    }
+
+    propStreamTimer += deltaSeconds;
+    if (propStreamTimer >= PROP_STREAM_SYNC_INTERVAL) {
+      propStreamTimer = 0;
+      syncPropStream();
+    }
+
+    navWindowTimer += deltaSeconds;
+    if (navWindowTimer >= 0.45) {
+      navWindowTimer = 0;
+      rebuildNavigationWindow(activeLevel);
+    }
+
     // Animate dropped items (floating bob & shadow scaling)
     droppedItemMeshes.forEach((container) => {
       if (!container.isEnabled()) return;
@@ -5934,11 +6378,28 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
+    const isVerticalTransitionGuarded = () => {
+      if (!verticalTransitionGuard) {
+        return false;
+      }
+      if (performance.now() > verticalTransitionGuard.untilMs) {
+        verticalTransitionGuard = null;
+        return false;
+      }
+      const tileX = Math.floor(player.position.x);
+      const tileZ = Math.floor(player.position.z);
+      return (
+        tileX === verticalTransitionGuard.tileX &&
+        tileZ === verticalTransitionGuard.tileZ
+      );
+    };
+
     const tryRampLevelTransition = () => {
       if (
         levelTransitionCooldown > 0 ||
         isVoidFallActive ||
-        !isGrounded
+        !isGrounded ||
+        isVerticalTransitionGuarded()
       ) {
         return;
       }
@@ -5960,15 +6421,22 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
 
-      levelTransitionCooldown = 1.2;
-      applyActiveLevelChange(probe.targetLevel);
+      const tileX = Math.floor(player.position.x);
+      const tileZ = Math.floor(player.position.z);
+      levelTransitionCooldown = 2.0;
+      applyActiveLevelChange(probe.targetLevel, {
+        tileX,
+        tileZ,
+        landingLocalZ: STAIR_LANDING_LOCAL_Z,
+      });
     };
 
     const tryStairLevelTransition = () => {
       if (
         levelTransitionCooldown > 0 ||
         isVoidFallActive ||
-        !isGrounded
+        !isGrounded ||
+        isVerticalTransitionGuarded()
       ) {
         return;
       }
@@ -5978,25 +6446,75 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         player.position.z,
         activeLevel,
         getMapTileAt,
-        (symbol) =>
+        (symbol: string | null) =>
           symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
         {
           parseLevelNumber,
-          hasLevel: (level) => Boolean(mapDataCache?.levels?.[level]),
+          hasLevel: (level: string) => Boolean(mapDataCache?.levels?.[level]),
         },
       );
       if (!probe) {
         return;
       }
 
-      levelTransitionCooldown = 1.2;
-      applyActiveLevelChange(probe.targetLevel);
+      levelTransitionCooldown = 2.0;
+      applyActiveLevelChange(probe.targetLevel, {
+        tileX: probe.tileX,
+        tileZ: probe.tileZ,
+        landingLocalZ: probe.landingLocalZ,
+      });
     };
 
-    if (isMoving) {
+    const tryHoleLevelTransition = () => {
+      if (
+        levelTransitionCooldown > 0 ||
+        isVoidFallActive ||
+        !isGrounded ||
+        isVerticalTransitionGuarded()
+      ) {
+        return;
+      }
+
+      const probe = probeHoleLevelTransition(
+        player.position.x,
+        player.position.z,
+        activeLevel,
+        getMapTileAt,
+        (symbol: string | null) =>
+          symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+        {
+          parseLevelNumber,
+          hasLevel: (level: string) => Boolean(mapDataCache?.levels?.[level]),
+        },
+      );
+      if (!probe) {
+        return;
+      }
+
+      levelTransitionCooldown = 2.0;
+      applyActiveLevelChange(probe.targetLevel, {
+        tileX: probe.tileX,
+        tileZ: probe.tileZ,
+        landingLocalZ: probe.landingLocalZ,
+      });
+    };
+
+    const tryVerticalLevelTransitions = () => {
+      if (!isGrounded || isVoidFallActive) {
+        return;
+      }
+      tryHoleLevelTransition();
+      if (levelTransitionCooldown > 0) {
+        return;
+      }
       tryRampLevelTransition();
+      if (levelTransitionCooldown > 0) {
+        return;
+      }
       tryStairLevelTransition();
-    }
+    };
+
+    tryVerticalLevelTransitions();
 
     const consumeFootstep = (heroSpriteMat as any)._consumeFootstepTick;
     if (typeof consumeFootstep === "function" && consumeFootstep()) {
@@ -6007,7 +6525,38 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       levelTransitionCooldown -= deltaSeconds;
     }
 
+    const respawnDeltaMs = deltaSeconds * 1000;
+    const px = player.position.x;
+    const pz = player.position.z;
+    const streamRadiusSq = ENEMY_STREAM_RADIUS_UNITS * ENEMY_STREAM_RADIUS_UNITS;
+    pendingEnemyRespawns.forEach((record, spawnKey) => {
+      record.elapsedMs += respawnDeltaMs;
+      if (record.elapsedMs < record.respawnTimeMs) {
+        return;
+      }
+      pendingEnemyRespawns.delete(spawnKey);
+
+      if (record.level !== activeLevel) {
+        return;
+      }
+
+      const spawnX = worldToSliceCoord(record.spawn.x);
+      const spawnZ = worldToSliceCoord(record.spawn.y);
+      const dx = spawnX - px;
+      const dz = spawnZ - pz;
+      if (dx * dx + dz * dz > streamRadiusSq) {
+        return;
+      }
+
+      spawnEnemy(record.spawn, record.index, spawnKey, record.level, {
+        withRespawnVfx: true,
+      });
+    });
+
     updateEnemyAI(deltaSeconds);
+    if (!gameplayPaused) {
+      projectileSystem.update(deltaSeconds);
+    }
     tryAutoPlayerAttack(Date.now());
 
     perfPublishTimer += deltaSeconds;
@@ -6074,6 +6623,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         pendingChunkCandidates: chunkStats.pendingCandidates || 0,
         pendingChunkUnloads: chunkStats.pendingUnloads || 0,
         streamedDroppedItems: droppedItemMeshes.size,
+        streamedEnemies: enemies.size,
+        catalogedEnemies: enemySpawnCatalog.size,
+        streamedProps: props.size,
+        catalogedProps: propSpawnCatalog.size,
+        navWindowTiles: navigationGridSize,
         activeLevel,
         ts: Date.now(),
       };
@@ -6310,7 +6864,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       } else {
         const pulse =
           (Math.sin(enemyHighlightPulseT * Math.PI * 1.8) * 0.5 + 0.5) * 0.22;
-        applyEnemyTargetVisual(selectedEnemy.meshRoot, pulse);
+        applyEnemyTargetVisual(selectedEnemy.meshRoot, pulse, {
+          current: selectedEnemy.health,
+          max: selectedEnemy.maxHealth,
+        });
 
         const nowMs = Date.now();
         if (nowMs - lastFocusedCombatHealthSyncAt >= 250) {
@@ -6392,7 +6949,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           isVoidFallActive = false;
 
           if (activeLevel !== voidFallTargetLevel) {
-            applyActiveLevelChange(voidFallTargetLevel);
+            applyActiveLevelChange(voidFallTargetLevel, {
+              tileX: Math.floor(player.position.x),
+              tileZ: Math.floor(player.position.z),
+              landingLocalZ: STAIR_LANDING_LOCAL_Z,
+            });
           }
           lastGroundedFootY = player.position.y;
           resolveVoidFall();
@@ -6465,11 +7026,26 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (isFirstPerson) {
       heroBillboard.setEnabled(false);
       heroShadow.setEnabled(false);
-      firstPersonCamera.position.set(
-        player.position.x,
-        player.position.y + FIRST_PERSON_EYE_ABOVE_FEET,
-        player.position.z,
+
+      let combatTargetPos: Vector3 | null = null;
+      if (selectedEnemyUid) {
+        const focused = enemies.get(selectedEnemyUid);
+        if (focused && !focused.isDead) {
+          combatTargetPos = focused.worldPos;
+        }
+      }
+      const fpCamera = updateFirstPersonCombatCamera(
+        firstPersonCamera.rotation.y,
+        player.position,
+        FIRST_PERSON_EYE_ABOVE_FEET,
+        combatTargetPos,
+        deltaSeconds,
+        fpCombatCameraState,
       );
+      fpCombatCameraState = fpCamera.state;
+      firstPersonCamera.position.copyFrom(fpCamera.position);
+      firstPersonCamera.fov = fpCamera.fov;
+
       playerState.exploreArea(
         activeLevel,
         Math.floor(player.position.x),
@@ -6663,6 +7239,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       doorByLevelTile.clear();
       clearProps();
       clearEnemies();
+      projectileSystem.disposeAll();
       // S7-FP4: torus marker removed — no dispose needed
       delete (window as any).__slice3dLogs;
       delete (window as any).__slice3dLogsData;

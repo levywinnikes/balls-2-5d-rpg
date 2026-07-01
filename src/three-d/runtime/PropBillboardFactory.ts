@@ -98,6 +98,7 @@ export function createPropBillboard(
 
   let frame = 0;
   let lastFrameAt = 0;
+  let animIntervalScale = 1;
   const frameIntervalMs = Math.max(16, Math.round(1000 / animDef.frameRate));
 
   const applyFrame = () => {
@@ -111,8 +112,12 @@ export function createPropBillboard(
   });
 
   const animObserver = scene.onBeforeRenderObservable.add(() => {
+    if (!root.isEnabled()) {
+      return;
+    }
     const now = Date.now();
-    if (now - lastFrameAt < frameIntervalMs) {
+    const interval = frameIntervalMs * animIntervalScale;
+    if (now - lastFrameAt < interval) {
       return;
     }
     lastFrameAt = now;
@@ -120,6 +125,9 @@ export function createPropBillboard(
     applyFrame();
   });
   (root as any)._propAnimObserver = animObserver;
+  (root as any)._setAnimIntervalScale = (scale: number) => {
+    animIntervalScale = Math.max(0.25, Math.min(4, scale));
+  };
 
   return root;
 }

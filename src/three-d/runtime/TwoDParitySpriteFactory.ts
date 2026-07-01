@@ -343,6 +343,8 @@ export function createGeneratedSpriteAnimatedMaterial(
   let deathPhase: "none" | "playing" | "hold" | "fade" = "none";
   let deathHoldStartedAt = 0;
   let deathFadeStartedAt = 0;
+  let animPaused = false;
+  let animIntervalScale = 1;
 
   const applyFrame = () => {
     const direction =
@@ -359,6 +361,10 @@ export function createGeneratedSpriteAnimatedMaterial(
   };
 
   const obs = scene.onBeforeRenderObservable.add(() => {
+    if (animPaused) {
+      return;
+    }
+
     const now = Date.now();
 
     if (currentState === "death" && deathPhase === "hold") {
@@ -381,7 +387,8 @@ export function createGeneratedSpriteAnimatedMaterial(
       return;
     }
 
-    const interval = GENERATED_FRAME_INTERVAL_MS[currentState];
+    const interval =
+      GENERATED_FRAME_INTERVAL_MS[currentState] * animIntervalScale;
     if (now - lastFrameAt < interval) {
       return;
     }
@@ -445,6 +452,14 @@ export function createGeneratedSpriteAnimatedMaterial(
       lastFrameAt = 0;
       applyFrame();
     }
+  };
+
+  (mat as any)._setAnimPaused = (paused: boolean) => {
+    animPaused = paused;
+  };
+
+  (mat as any)._setAnimIntervalScale = (scale: number) => {
+    animIntervalScale = Math.max(0.25, Math.min(4, scale));
   };
 
   mat.onDisposeObservable.add(() => {

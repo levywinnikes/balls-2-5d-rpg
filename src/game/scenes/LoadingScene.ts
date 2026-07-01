@@ -63,7 +63,8 @@ export default class LoadingScene extends Phaser.Scene {
     });
 
     // 3. Trigger BMS Metadata Download
-    const mapName = this.targetData?.mapName || "city_3d_multi";
+    const mapName =
+      this.targetData?.map || this.targetData?.mapName || "city_3d_multi";
     this.load.json("map_raw_data", `maps/${mapName}.json`);
 
     // (Optional) Add dummy load if cache is hot to show bar briefly
@@ -73,7 +74,8 @@ export default class LoadingScene extends Phaser.Scene {
   async create() {
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
-    const mapName = this.targetData?.mapName || "city_3d_multi";
+    const mapName =
+      this.targetData?.map || this.targetData?.mapName || "city_3d_multi";
 
     // 1. BMS Loading Initializer
     this.statusText.setText(t_game("loading_downloading_world_data"));

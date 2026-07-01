@@ -32,6 +32,7 @@ import { AutoSaveSystem } from "../systems/AutoSaveSystem";
 import { SaveSystem } from "../systems/SaveSystem";
 import { DialogueManager } from "../systems/DialogueManager";
 import { QuestManager } from "../systems/QuestManager";
+import { ArrowProjectileGraphic } from "../graphics/projectiles/ArrowProjectileGraphic";
 import { BenchmarkRunner, BenchmarkConfig } from "../systems/BenchmarkRunner";
 // // import { MultiLevelMapData } from "../maps/MapTypes"; // Removed unused // Removed unused
 
@@ -190,6 +191,7 @@ export default class GameScene extends Phaser.Scene {
     EnemyRegistry.preloadAll(this);
     registerDefaultMagics();
     WeaponRegistry.preloadAll(this);
+    ArrowProjectileGraphic.preload(this);
     this.load.json("npcs_data", "data/npcs.json");
     this.load.json("enemies_data", "data/enemies.json");
     this.load.json("dialogues_data", "data/dialogues.json");

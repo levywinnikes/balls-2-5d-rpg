@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "id": "respawn_glow",
+  "name": "Respawn Glow",
+  "category": "vfx",
+  "canvas": {
+    "width": 48,
+    "height": 48
+  },
+  "output": {
+    "dir": "public/assets/sprites/generated/respawn_glow"
+  },
+  "production_prompts": {
+    "base_description": "magical blue respawn summoning glow, bright cyan and azure light burst, soft pixel sparkles and radial shine, low top-down RPG effect, centered on ground, transparent background, 48x48, no character",
+    "negative_prompt": "character, humanoid, monster, sword, tree, house, text, watermark, solid background, realistic photo, red fire, green poison"
+  },
+  "style": {
+    "outline": "lineless",
+    "shading": "basic shading",
+    "detail": "medium detail",
+    "view": "low top-down"
+  },
+  "pipeline": {
+    "method": "create-image-pixflux + animate-with-text-v3",
+    "no_background": true,
+    "direction": "south"
+  },
+  "animations": [
+    {
+      "name": "respawn_burst",
+      "frame_count": 8,
+      "frame_rate": 12,
+      "action": "blue magical respawn summoning burst, cyan sparkles swirl inward then flash bright and fade out, one-shot appearance effect, not looping"
+    }
+  ]
+}

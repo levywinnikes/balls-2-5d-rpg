@@ -1,5 +1,10 @@
 import Player from "../entities/Player";
+import Phaser from "phaser";
 import { ItemType } from "../../config/ItemConstants";
+import {
+  WeaponProjectile,
+  resolveWeaponProjectileVisual,
+} from "../entities/projectiles/WeaponProjectile";
 
 import { PlayerState } from "../entities/Player/PlayerState";
 import { FloatingText } from "../effects/FloatingText";
@@ -323,6 +328,67 @@ export default class BattleSystem {
   }
 
   private handlePlayerAttack(player: Player, enemy: Enemy): void {
+    const weapon = player.getEquippedWeapon();
+    if (weapon?.type === ItemType.DISTANCE) {
+      this.fireWeaponProjectile(player, enemy);
+      return;
+    }
+    this.executePlayerAttackDamage(player, enemy);
+  }
+
+  private fireWeaponProjectile(player: Player, targetEnemy: Enemy): void {
+    const weapon = player.getEquippedWeapon();
+    if (!weapon) {
+      return;
+    }
+
+    const visual = resolveWeaponProjectileVisual(weapon.id);
+    const speed = weapon.id === "throwing_star" ? 520 : 640;
+    const gameScene = this.scene as GameScene;
+    const activeEnemies = gameScene.getActiveEnemies();
+
+    AudioManager.getInstance().playRangedWeaponShot(weapon.id);
+
+    const projectile = new WeaponProjectile(
+      this.scene,
+      player.sprite.x,
+      player.sprite.y - 8,
+      targetEnemy.sprite.x,
+      targetEnemy.sprite.y,
+      visual,
+      speed,
+      weapon.range,
+      (hitEnemy) => {
+        if (hitEnemy && !hitEnemy.isDefeated()) {
+          this.executePlayerAttackDamage(player, hitEnemy);
+        }
+      },
+    );
+
+    const activeSprites = activeEnemies
+      .filter((enemy) => !enemy.isDefeated())
+      .map((enemy) => enemy.sprite)
+      .filter((sprite) => sprite && sprite.active);
+
+    this.scene.physics.add.overlap(
+      projectile,
+      activeSprites,
+      (obj1, obj2) => {
+        const proj = obj1 as WeaponProjectile;
+        const enemySprite = obj2 as Phaser.Physics.Arcade.Sprite;
+        const enemy = activeEnemies.find((e) => e.sprite === enemySprite);
+        if (enemy && proj.active) {
+          proj.tryHitEnemy(enemy);
+        }
+      },
+    );
+
+    if (gameScene.projectiles) {
+      gameScene.projectiles.add(projectile);
+    }
+  }
+
+  private executePlayerAttackDamage(player: Player, enemy: Enemy): void {
     const weapon = player.getEquippedWeapon();
     const isFire = weapon?.element === "fire";
 

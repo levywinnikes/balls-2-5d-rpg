@@ -140,7 +140,7 @@ const TILE_DEFS = {
     color: "#a8a29e",
     height: 3.8,
     renderAs: "block",
-    block: true,
+    block: false,
   },
   pil: {
     id: "pillar",
@@ -154,7 +154,7 @@ const TILE_DEFS = {
     color: "#38bdf8",
     height: 0.9,
     renderAs: "block",
-    block: true,
+    block: false,
   },
   tre: {
     id: "tree",
@@ -358,12 +358,12 @@ function buildLevel0(rng) {
   // Pântano/Floresta divider
   fillCol(g, BIOME_EW, FOREST_Y0 + 4, FOREST_Y1, "pat");
 
-  // ── Floresta: árvores densas (NW) ─────────────────────────────────────────
+  // ── Floresta (NW): grama + oak_tree props (scatterFieldLife) — sem tile `tre`
+  // (tile tre = bloco 3D alto; no slice 3D vira "paredes" verdes, não sprite)
   for (let ty = FOREST_Y0 + 5; ty <= FOREST_Y1 - 2; ty++) {
     for (let tx = ISLAND_X0 + 5; tx <= BIOME_EW - 2; tx++) {
-      // ~50% densidade
-      if (rng() < 0.5 && sym(g, tx, ty) === "grs") {
-        set(g, tx, ty, "tre");
+      if (rng() < 0.04 && sym(g, tx, ty) === "grs") {
+        set(g, tx, ty, "rok");
       }
     }
   }
@@ -439,17 +439,24 @@ function buildCity(g, rng) {
   fill(g, CITY_X0, cy - 2, CITY_X1, cy + 2, "cob"); // horizontal
   fill(g, cx - 2, CITY_Y0, cx + 2, CITY_Y1, "cob"); // vertical
 
-  // Praça central
+  // Praça central (spawn livre no centro)
   fill(g, cx - 5, cy - 5, cx + 5, cy + 5, "stn");
-  set(g, cx, cy, "fnt"); // fonte
+  set(g, cx, cy, "stn");
+  set(g, cx + 3, cy - 2, "fnt");
 
-  // Portões nas 4 direções (remove wal, coloca arc)
+  // Portões passáveis (cob na muralha)
   for (let d = -1; d <= 1; d++) {
-    set(g, cx + d, CITY_Y0, "arc"); // norte
-    set(g, cx + d, CITY_Y1, "arc"); // sul
-    set(g, CITY_X0, cy + d, "arc"); // oeste
-    set(g, CITY_X1, cy + d, "arc"); // leste
+    set(g, cx + d, CITY_Y0, "cob");
+    set(g, cx + d, CITY_Y1, "cob");
+    set(g, CITY_X0, cy + d, "cob");
+    set(g, CITY_X1, cy + d, "cob");
   }
+
+  // Caminhos dos portões até a cruz de avenidas
+  fill(g, cx - 1, CITY_Y0 + 1, cx + 1, cy - 6, "cob");
+  fill(g, cx - 1, cy + 6, cx + 1, CITY_Y1 - 1, "cob");
+  fill(g, CITY_X0 + 1, cy - 1, cx - 6, cy + 1, "cob");
+  fill(g, cx + 6, cy - 1, CITY_X1 - 1, cy + 1, "cob");
 
   // Casas nos 4 quadrantes
   const houses = [
@@ -487,32 +494,30 @@ function buildCaveEntrance(g, cx, cy) {
         sym(g, cx + dx, cy + dy) !== "wat"
       )
         set(g, cx + dx, cy + dy, "rok");
-  // Cave walls forming entrance
+  // Cave mouth — open north approach
   set(g, cx - 1, cy, "cwl");
   set(g, cx + 1, cy, "cwl");
-  set(g, cx, cy - 1, "cwl");
   set(g, cx - 1, cy - 1, "rok");
   set(g, cx + 1, cy - 1, "rok");
-  // std inside — voluntary descent
-  set(g, cx, cy, "std");
+  fill(g, cx - 1, cy - 2, cx + 1, cy - 1, "pat");
+  // std on approach (walk north to descend)
+  set(g, cx, cy - 1, "std");
 }
 
 // ─── Dungeon entrance (level 0) ───────────────────────────────────────────────
 function buildDungeonEntrance(g, cx, cy) {
   // Approach: clear sand
   fill(g, cx - 3, cy - 3, cx + 3, cy + 3, "snd");
-  // Flanking pillars
-  set(g, cx - 1, cy - 1, "pil");
-  set(g, cx + 1, cy - 1, "pil");
-  // Archway
-  set(g, cx, cy - 1, "arc");
-  // Short side walls
+  // Flanking pillars (passable sides)
+  set(g, cx - 2, cy - 1, "pil");
+  set(g, cx + 2, cy - 1, "pil");
+  // Arch opening (passable cob, not blocking arc)
+  fill(g, cx - 1, cy - 2, cx + 1, cy - 1, "cob");
+  // Short side walls — leave center open for descent
   set(g, cx - 2, cy, "dwl");
   set(g, cx + 2, cy, "dwl");
-  set(g, cx - 2, cy - 1, "dwl");
-  set(g, cx + 2, cy - 1, "dwl");
-  // std just inside arch (player presses W while facing north → walks through arch → descends)
-  set(g, cx, cy, "std");
+  // std on approach tile (2 tiles north of anchor — walk north to descend)
+  set(g, cx, cy - 1, "std");
 }
 
 // ─── Level 1 (upper floors — 2nd floor of houses + tower) ────────────────────
@@ -637,9 +642,9 @@ function buildLevelMinus1(rng) {
   const g = makeGrid("cwl"); // default = cave wall
 
   // ── Cave interior (below floresta NW) ──────────────────────────────────────
-  // Center roughly below caveEntrance at 70,55
+  // Center roughly below caveEntrance std at 70,54
   const caveCX = 70,
-    caveCY = 55;
+    caveCY = 54;
   // Main room
   room(g, caveCX - 8, caveCY - 8, caveCX + 8, caveCY + 8, "cwl", "cfl");
   // stu back up (same X/Z as std on level 0)
@@ -655,9 +660,9 @@ function buildLevelMinus1(rng) {
   // Passagem para -2
   set(g, caveCX + 23, caveCY - 3, "std");
 
-  // ── Dungeon interior (below deserto SW, near 60,190) ──────────────────────
+  // ── Dungeon interior (below deserto SW, std at 60,189) ─────────────────────
   const dCX = 60,
-    dCY = 190;
+    dCY = 189;
   // stu back up
   set(g, dCX, dCY, "stu");
   // Entry corridor going north
@@ -686,6 +691,23 @@ function buildLevelMinus1(rng) {
   // Sewer rooms
   room(g, 104, 100, 112, 108, "swl", "sfl");
   room(g, 144, 100, 152, 108, "swl", "sfl");
+
+  // ── Extra dungeon wings (procedural grid east of main dungeon) ────────────
+  for (let wing = 0; wing < 4; wing += 1) {
+    const wx = 78 + wing * 14;
+    const wy = 168 - wing * 6;
+    room(g, wx - 5, wy - 5, wx + 5, wy + 5, "dwl", "dfn");
+    fill(g, wx - 1, wy + 6, wx + 1, wy + 8, "dfn");
+    if (wing === 0) {
+      fill(g, 70, wy + 7, wx - 2, wy + 8, "dfn");
+    }
+  }
+
+  // ── Caverna extra sul da floresta ─────────────────────────────────────────
+  room(g, 48, 72, 62, 86, "cwl", "cfl");
+  set(g, 55, 86, "std");
+  fill(g, 54, 87, 56, 90, "cfl");
+  room(g, 50, 91, 60, 100, "cwl", "cfl");
 
   // ── Scattered rocks (underground atmosphere) ──────────────────────────────
   for (let i = 0; i < 40; i++) {
@@ -786,7 +808,287 @@ const ENTITY_TEMPLATES = {
   gla: { type: "enemy", id: "goblin_lanceiro" },
   orc: { type: "enemy", id: "orc" },
   rat: { type: "enemy", id: "rat" },
+  skl: { type: "enemy", id: "skeleton" },
+  pr00: { type: "decoration", id: "oak_tree", isCollidable: true },
+  pr01: { type: "decoration", id: "wild_flower", isCollidable: false },
 };
+
+const CAMPO_MINI_BURROWS = [
+  { x: 92, y: 118 },
+  { x: 168, y: 112 },
+  { x: 86, y: 152 },
+  { x: 175, y: 148 },
+];
+
+function isTooClose(positions, x, y, minDist) {
+  const minDistSq = minDist * minDist;
+  return positions.some((p) => {
+    const dx = p.x - x;
+    const dy = p.y - y;
+    return dx * dx + dy * dy < minDistSq;
+  });
+}
+
+function isInsideCity(x, y, padding = 0) {
+  return (
+    x >= CITY_X0 - padding &&
+    x <= CITY_X1 + padding &&
+    y >= CITY_Y0 - padding &&
+    y <= CITY_Y1 + padding
+  );
+}
+
+/** PixelLab oak trees + wild flowers on open grass (campo, trilhas, floresta). */
+function scatterFieldLife(surface, rng, outEntities) {
+  const treePositions = [];
+  const flowerPositions = [];
+  const walkable = new Set(["grs", "pat"]);
+  const MAX_TREES = 150;
+  const MAX_FLOWERS = 200;
+  let treeCount = 0;
+  let flowerCount = 0;
+
+  const tryTree = (x, y) => {
+    if (treeCount >= MAX_TREES) {
+      return false;
+    }
+    if (isTooClose(treePositions, x, y, 3)) {
+      return false;
+    }
+    treePositions.push({ x, y });
+    outEntities.push({ symbol: "pr00", x, y });
+    treeCount += 1;
+    return true;
+  };
+
+  const tryFlower = (x, y) => {
+    if (flowerCount >= MAX_FLOWERS) {
+      return false;
+    }
+    if (isTooClose(flowerPositions, x, y, 2)) {
+      return false;
+    }
+    if (isTooClose(treePositions, x, y, 1)) {
+      return false;
+    }
+    flowerPositions.push({ x, y });
+    outEntities.push({ symbol: "pr01", x, y });
+    flowerCount += 1;
+    return true;
+  };
+
+  // Floresta NW — densidade maior de carvalhos sprite
+  for (let y = FOREST_Y0 + 5; y <= FOREST_Y1 - 2; y += 1) {
+    for (let x = ISLAND_X0 + 5; x <= BIOME_EW - 2; x += 1) {
+      if (sym(surface, x, y) !== "grs") {
+        continue;
+      }
+      if (rng() < 0.19) {
+        tryTree(x, y);
+      } else if (rng() < 0.05) {
+        tryFlower(x, y);
+      }
+    }
+  }
+
+  for (let y = ISLAND_Y0 + 8; y <= ISLAND_Y1 - 8; y += 1) {
+    for (let x = ISLAND_X0 + 8; x <= ISLAND_X1 - 8; x += 1) {
+      if (isInsideCity(x, y, 4)) {
+        continue;
+      }
+      if (y >= FOREST_Y0 + 5 && y <= FOREST_Y1 - 2 && x <= BIOME_EW - 2) {
+        continue;
+      }
+      const tile = sym(surface, x, y);
+      if (!walkable.has(tile)) {
+        continue;
+      }
+
+      if (rng() < 0.028) {
+        tryFlower(x, y);
+      }
+
+      const inOpenCampo =
+        y >= MID_Y0 && y <= MID_Y1 && (x < CITY_X0 - 6 || x > CITY_X1 + 6);
+      const treeChance = inOpenCampo ? 0.014 : 0.006;
+
+      if (rng() < treeChance) {
+        tryTree(x, y);
+      }
+    }
+  }
+}
+
+/** Small hole + underground room for quick critter hunts in the campo. */
+function buildMiniBurrow(surface, underground, cx, cy, rng, entitiesByLevel) {
+  const walkable = new Set(["grs", "pat"]);
+  if (!walkable.has(sym(surface, cx, cy))) {
+    return false;
+  }
+
+  set(surface, cx, cy, "hol");
+  set(surface, cx - 1, cy, "rok");
+  set(surface, cx + 1, cy, "rok");
+  set(surface, cx, cy - 1, "rok");
+
+  room(underground, cx - 4, cy - 4, cx + 4, cy + 4, "dwl", "dfn");
+  set(underground, cx, cy, "stu");
+
+  const enemyPool = ["rat", "rat", "gob", "skl"];
+  const count = 2 + Math.floor(rng() * 2);
+  for (let i = 0; i < count; i += 1) {
+    const ex = cx - 3 + Math.floor(rng() * 7);
+    const ey = cy - 3 + Math.floor(rng() * 7);
+    if (sym(underground, ex, ey) === "dfn") {
+      entitiesByLevel["-1"].push({
+        symbol: enemyPool[Math.floor(rng() * enemyPool.length)],
+        x: ex,
+        y: ey,
+      });
+    }
+  }
+
+  for (let i = 0; i < 2; i += 1) {
+    const sx = cx + (rng() < 0.5 ? -2 : 2);
+    const sy = cy + (rng() < 0.5 ? -1 : 1);
+    if (walkable.has(sym(surface, sx, sy))) {
+      entitiesByLevel["0"].push({
+        symbol: rng() < 0.7 ? "rat" : "gob",
+        x: sx,
+        y: sy,
+      });
+    }
+  }
+
+  return true;
+}
+
+function scatterWorldEnemies(surface, rng) {
+  const out = [];
+  const positions = [];
+  const pickEnemy = (tile) => {
+    const pools = {
+      grs: ["rat", "gob", "gob", "orc", "skl"],
+      pat: ["rat", "gob", "gla", "skl"],
+      snd: ["orc", "gob", "rat", "gob"],
+      mud: ["rat", "rat", "gob", "rat"],
+    };
+    const pool = pools[tile] || pools.grs;
+    return pool[Math.floor(rng() * pool.length)];
+  };
+
+  for (let y = ISLAND_Y0 + 8; y <= ISLAND_Y1 - 8; y += 1) {
+    for (let x = ISLAND_X0 + 8; x <= ISLAND_X1 - 8; x += 1) {
+      if (isInsideCity(x, y, 3)) {
+        continue;
+      }
+      const tile = sym(surface, x, y);
+      if (tile !== "grs" && tile !== "pat" && tile !== "snd" && tile !== "mud") {
+        continue;
+      }
+
+      let chance = 0.012;
+      if (y >= FOREST_Y0 && y <= FOREST_Y1 && x <= BIOME_EW) {
+        chance = 0.022;
+      } else if (y >= SWAMP_Y0 && x > BIOME_EW) {
+        chance = 0.018;
+      } else if (y >= SOUTH_Y0 && x <= BIOME_EW) {
+        chance = 0.016;
+      } else if (x >= COAST_X0) {
+        chance = 0.014;
+      }
+
+      if (rng() > chance) {
+        continue;
+      }
+      if (isTooClose(positions, x, y, 5)) {
+        continue;
+      }
+      positions.push({ x, y });
+      out.push({ symbol: pickEnemy(tile), x, y });
+    }
+  }
+  return out;
+}
+
+function scatterUndergroundHoles(surface, underground, deep, rng, entities) {
+  const walkable = new Set(["grs", "pat", "snd", "mud"]);
+  const placed = [];
+  const targetCount = 12;
+  let attempts = 0;
+  const enemyPool = ["rat", "rat", "gob", "skl", "orc"];
+
+  while (placed.length < targetCount && attempts < targetCount * 60) {
+    attempts += 1;
+    const x = Math.floor(
+      ISLAND_X0 + 14 + rng() * (ISLAND_X1 - ISLAND_X0 - 28),
+    );
+    const y = Math.floor(
+      ISLAND_Y0 + 14 + rng() * (ISLAND_Y1 - ISLAND_Y0 - 28),
+    );
+    if (isInsideCity(x, y, 10)) {
+      continue;
+    }
+    if (!walkable.has(sym(surface, x, y))) {
+      continue;
+    }
+    if (isTooClose(placed, x, y, 14)) {
+      continue;
+    }
+    if (isTooClose(CAMPO_MINI_BURROWS, x, y, 8)) {
+      continue;
+    }
+
+    const size = 4 + Math.floor(rng() * 4);
+    room(underground, x - size, y - size, x + size, y + size, "dwl", "dfn");
+    set(surface, x, y, "hol");
+    set(underground, x, y, "stu");
+
+    const mobCount = 2 + Math.floor(rng() * 4);
+    for (let i = 0; i < mobCount; i += 1) {
+      const ex = x - size + 1 + Math.floor(rng() * (size * 2 - 1));
+      const ey = y - size + 1 + Math.floor(rng() * (size * 2 - 1));
+      if (sym(underground, ex, ey) === "dfn") {
+        entities["-1"].push({
+          symbol: enemyPool[Math.floor(rng() * enemyPool.length)],
+          x: ex,
+          y: ey,
+        });
+      }
+    }
+
+    if (rng() < 0.45) {
+      const sx = x + Math.floor(rng() * 3) - 1;
+      const sy = y - size + 1;
+      set(underground, sx, sy, "std");
+      room(deep, sx - 6, sy - 10, sx + 6, sy - 2, "dwl", "dfn");
+      set(deep, sx, sy, "stu");
+      for (let i = 0; i < 2 + Math.floor(rng() * 2); i += 1) {
+        const ex = sx - 4 + Math.floor(rng() * 9);
+        const ey = sy - 8 + Math.floor(rng() * 6);
+        if (sym(deep, ex, ey) === "dfn") {
+          entities["-2"].push({
+            symbol: enemyPool[Math.floor(rng() * enemyPool.length)],
+            x: ex,
+            y: ey,
+          });
+        }
+      }
+    }
+
+    placed.push({ x, y });
+  }
+
+  return placed.length;
+}
+
+function mergeEntities(base, extra) {
+  const merged = { ...base };
+  for (const [level, list] of Object.entries(extra)) {
+    merged[level] = [...(merged[level] ?? []), ...list];
+  }
+  return merged;
+}
 
 function buildEntities() {
   return {
@@ -795,11 +1097,14 @@ function buildEntities() {
       { symbol: "orc", x: 50, y: 170 },
     ],
     "-1": [
-      { symbol: "rat", x: 72, y: 55 },
-      { symbol: "rat", x: 78, y: 60 },
-      { symbol: "gob", x: 62, y: 188 },
-      { symbol: "orc", x: 55, y: 178 },
+      { symbol: "rat", x: 72, y: 54 },
+      { symbol: "rat", x: 78, y: 58 },
+      { symbol: "skl", x: 68, y: 56 },
+      { symbol: "gob", x: 62, y: 187 },
+      { symbol: "orc", x: 55, y: 177 },
       { symbol: "rat", x: 128, y: 107 },
+      { symbol: "skl", x: 108, y: 104 },
+      { symbol: "rat", x: 148, y: 104 },
     ],
     0: [
       { symbol: "gob", x: 115, y: 92 },
@@ -810,9 +1115,15 @@ function buildEntities() {
       // Floresta
       { symbol: "gob", x: 65, y: 50 },
       { symbol: "gob", x: 75, y: 65 },
+      { symbol: "rat", x: 58, y: 72 },
+      { symbol: "skl", x: 82, y: 48 },
       // Deserto
       { symbol: "orc", x: 60, y: 200 },
       { symbol: "gob", x: 50, y: 210 },
+      { symbol: "rat", x: 72, y: 205 },
+      // Pântano
+      { symbol: "rat", x: 190, y: 55 },
+      { symbol: "gob", x: 205, y: 68 },
     ],
     1: [],
     2: [],
@@ -820,8 +1131,8 @@ function buildEntities() {
 }
 
 // ─── Write files ───────────────────────────────────────────────────────────────
-function writeMap(levels) {
-  const entities = buildEntities();
+function writeMap(levels, extraEntities = {}) {
+  const entities = mergeEntities(buildEntities(), extraEntities);
 
   const mapJson = {
     mapName: MAP_NAME,
@@ -877,10 +1188,42 @@ function main() {
   const lm1 = buildLevelMinus1(rng);
   const lm2 = buildLevelMinus2(rng);
 
-  writeMap({ "-2": lm2, "-1": lm1, 0: l0, 1: l1, 2: l2, 3: l3 });
+  const extraEntities = {
+    0: [],
+    "-1": [],
+    "-2": [],
+  };
+
+  scatterFieldLife(l0, rng, extraEntities["0"]);
+  extraEntities["0"].push(...scatterWorldEnemies(l0, rng));
+
+  let burrowsPlaced = 0;
+  for (const burrow of CAMPO_MINI_BURROWS) {
+    if (
+      buildMiniBurrow(l0, lm1, burrow.x, burrow.y, rng, extraEntities)
+    ) {
+      burrowsPlaced += 1;
+    }
+  }
+
+  const randomHoles = scatterUndergroundHoles(
+    l0,
+    lm1,
+    lm2,
+    rng,
+    extraEntities,
+  );
+
+  writeMap({ "-2": lm2, "-1": lm1, 0: l0, 1: l1, 2: l2, 3: l3 }, extraEntities);
 
   console.log(
     `\n[world-v1] Done. Spawn: tile 128,128 (world coords ${128 * 32},${128 * 32})`,
+  );
+  console.log(
+    `[world-v1] Field props: ${extraEntities["0"].filter((e) => e.symbol?.startsWith("pr")).length}, mini-burrows: ${burrowsPlaced}, random-holes: ${randomHoles}`,
+  );
+  console.log(
+    `[world-v1] Surface enemies: ${extraEntities["0"].filter((e) => !e.symbol?.startsWith("pr")).length}, underground: ${(extraEntities["-1"]?.length ?? 0) + (extraEntities["-2"]?.length ?? 0)}`,
   );
   console.log("[world-v1] Validation: npm run check:bms");
 }

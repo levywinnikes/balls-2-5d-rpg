@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "arrow",
+  "canvas": {
+    "width": 32,
+    "height": 32
+  },
+  "direction": "east",
+  "animations": {
+    "feather_sway_gentle": {
+      "frame_count": 5,
+      "frame_rate": 10
+    },
+    "feather_sway": {
+      "frame_count": 5,
+      "frame_rate": 12
+    },
+    "fly_loop": {
+      "frame_count": 5,
+      "frame_rate": 14
+    }
+  },
+  "generated_at": "2026-07-01T00:58:34.822Z",
+  "source_spec": "docs/sprites/projectiles/arrow.spec.json"
+}

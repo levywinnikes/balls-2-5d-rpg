@@ -16,6 +16,11 @@ import {
 } from "./TwoDParitySpriteFactory";
 import { attachAquaticShaderTint } from "./AquaticSpriteShader";
 import {
+  resolveAnimLodIntervalScale,
+  setSpriteAnimIntervalScale,
+  setSpriteAnimPaused,
+} from "./SpriteAnimLod";
+import {
   configureBillboardSpriteMaterial,
   configureBillboardSpriteMesh,
 } from "./BillboardDepthConfig";
@@ -119,11 +124,103 @@ export function getEnemyVisualProfile(enemyId: string): EnemyVisualProfile {
   return PROFILE_BY_ENEMY_ID[enemyId] || DEFAULT_PROFILE;
 }
 
+const TARGET_MARKER_CANVAS = 64;
+
+const TARGET_MARKER_TRIANGLE = {
+  leftX: TARGET_MARKER_CANVAS * 0.12,
+  rightX: TARGET_MARKER_CANVAS * 0.88,
+  topY: TARGET_MARKER_CANVAS * 0.28,
+  bottomY: TARGET_MARKER_CANVAS * 0.78,
+  centerX: TARGET_MARKER_CANVAS * 0.5,
+};
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function mixChannel(a: number, b: number, t: number): number {
+  return Math.round(a + (b - a) * t);
+}
+
+function mixHexColor(from: string, to: string, t: number): string {
+  const parse = (hex: string) => {
+    const value = hex.replace("#", "");
+    return [
+      parseInt(value.slice(0, 2), 16),
+      parseInt(value.slice(2, 4), 16),
+      parseInt(value.slice(4, 6), 16),
+    ];
+  };
+  const [r1, g1, b1] = parse(from);
+  const [r2, g2, b2] = parse(to);
+  const u = clamp01(t);
+  const r = mixChannel(r1, r2, u);
+  const g = mixChannel(g1, g2, u);
+  const b = mixChannel(b1, b2, u);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Full HP = green, mid = yellow, critical = red. */
+export function targetMarkerHealthFillColor(ratio: number): string {
+  const t = clamp01(ratio);
+  if (t >= 0.55) {
+    return mixHexColor("#eab308", "#22c55e", (t - 0.55) / 0.45);
+  }
+  if (t >= 0.25) {
+    return mixHexColor("#ef4444", "#eab308", (t - 0.25) / 0.3);
+  }
+  return "#ef4444";
+}
+
+function traceTargetMarkerTriangle(ctx: CanvasRenderingContext2D): void {
+  const { leftX, rightX, topY, bottomY, centerX } = TARGET_MARKER_TRIANGLE;
+  ctx.beginPath();
+  ctx.moveTo(leftX, topY);
+  ctx.lineTo(centerX, bottomY);
+  ctx.lineTo(rightX, topY);
+  ctx.closePath();
+}
+
+function drawTargetMarkerTexture(
+  ctx: CanvasRenderingContext2D,
+  healthRatio: number,
+): void {
+  const size = TARGET_MARKER_CANVAS;
+  const { topY, bottomY } = TARGET_MARKER_TRIANGLE;
+  const ratio = clamp01(healthRatio);
+
+  ctx.clearRect(0, 0, size, size);
+
+  traceTargetMarkerTriangle(ctx);
+  ctx.fillStyle = "rgba(24, 16, 10, 0.72)";
+  ctx.fill();
+
+  if (ratio > 0.001) {
+    ctx.save();
+    traceTargetMarkerTriangle(ctx);
+    ctx.clip();
+    const fillTop = bottomY - (bottomY - topY) * ratio;
+    ctx.fillStyle = targetMarkerHealthFillColor(ratio);
+    ctx.fillRect(0, fillTop, size, bottomY - fillTop + 1);
+    ctx.restore();
+  }
+
+  traceTargetMarkerTriangle(ctx);
+  ctx.strokeStyle = "#78350f";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  traceTargetMarkerTriangle(ctx);
+  ctx.strokeStyle = "rgba(251, 191, 36, 0.85)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
 function createTargetHeadMarkerMaterial(
   scene: Scene,
   key: string,
 ): StandardMaterial {
-  const canvasSize = 64;
+  const canvasSize = TARGET_MARKER_CANVAS;
   const texture = new DynamicTexture(
     `${key}-target-marker-tex`,
     canvasSize,
@@ -131,17 +228,7 @@ function createTargetHeadMarkerMaterial(
     false,
   );
   const ctx = texture.getContext() as CanvasRenderingContext2D;
-  ctx.clearRect(0, 0, canvasSize, canvasSize);
-  ctx.fillStyle = "#fbbf24";
-  ctx.strokeStyle = "#78350f";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(canvasSize * 0.12, canvasSize * 0.28);
-  ctx.lineTo(canvasSize * 0.5, canvasSize * 0.78);
-  ctx.lineTo(canvasSize * 0.88, canvasSize * 0.28);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  drawTargetMarkerTexture(ctx, 1);
   texture.update();
 
   const material = new StandardMaterial(`${key}-target-marker-mat`, scene);
@@ -153,6 +240,20 @@ function createTargetHeadMarkerMaterial(
   material.disableLighting = true;
   material.disableDepthWrite = true;
   configureBillboardSpriteMaterial(material);
+
+  (material as any)._markerTexture = texture;
+  (material as any)._markerLastRatio = 1;
+  (material as any)._updateMarkerHealth = (ratio: number) => {
+    const clamped = clamp01(ratio);
+    const last = (material as any)._markerLastRatio as number;
+    if (Math.abs(last - clamped) < 0.004) {
+      return;
+    }
+    (material as any)._markerLastRatio = clamped;
+    drawTargetMarkerTexture(ctx, clamped);
+    texture.update();
+  };
+
   return material;
 }
 
@@ -340,14 +441,26 @@ export function restoreEnemyTargetVisual(enemyRoot: TransformNode): void {
     const markerMat = marker.material as StandardMaterial | undefined;
     if (markerMat) {
       markerMat.emissiveColor = Color3.White();
+      const updater = (markerMat as any)._updateMarkerHealth as
+        | ((ratio: number) => void)
+        | undefined;
+      if (typeof updater === "function") {
+        updater(1);
+      }
     }
   }
 }
 
-/** Target highlight: warm sprite tint + amber floor spot + chevron above head. */
+export type EnemyTargetHealth = {
+  current: number;
+  max: number;
+};
+
+/** Target highlight: warm sprite tint + amber floor spot + HP chevron above head. */
 export function applyEnemyTargetVisual(
   enemyRoot: TransformNode,
   pulse: number,
+  health?: EnemyTargetHealth,
 ): void {
   const spriteMat = getEnemySpriteMaterial(enemyRoot);
   if (spriteMat) {
@@ -380,11 +493,15 @@ export function applyEnemyTargetVisual(
     marker.scaling.set(scale, scale, scale);
     const markerMat = marker.material as StandardMaterial | undefined;
     if (markerMat) {
-      markerMat.emissiveColor = new Color3(
-        1,
-        0.82 + pulse * 0.18,
-        0.28 + pulse * 0.25,
-      );
+      markerMat.emissiveColor = Color3.White();
+      const updater = (markerMat as any)._updateMarkerHealth as
+        | ((ratio: number) => void)
+        | undefined;
+      if (typeof updater === "function") {
+        const max = Math.max(1, health?.max ?? 1);
+        const current = Math.max(0, health?.current ?? max);
+        updater(current / max);
+      }
     }
   }
 }
@@ -408,4 +525,22 @@ export function setEnemyVisualDirection(
   if (typeof setter === "function") {
     setter(direction);
   }
+}
+
+export function applyEnemyAnimLod(
+  enemyRoot: TransformNode,
+  distanceUnits: number,
+  visible: boolean,
+  nearRadius = 14,
+  midRadius = 22,
+): void {
+  const mat = getEnemySpriteMaterial(enemyRoot);
+  setSpriteAnimPaused(mat, !visible);
+  if (!visible) {
+    return;
+  }
+  setSpriteAnimIntervalScale(
+    mat,
+    resolveAnimLodIntervalScale(distanceUnits, nearRadius, midRadius),
+  );
 }
