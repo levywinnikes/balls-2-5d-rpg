@@ -304,6 +304,7 @@ type SliceMapData = {
   tileSize?: number;
   config?: {
     debugSandbox?: boolean;
+    startLevel?: string;
   };
   tileAtlas?: string[];
   tileDefinitions?: Record<string, SliceTileDefinition>;
@@ -535,6 +536,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let heroAnimState: HeroAnimState = "idle";
   let heroDirection: HeroBmsDirection = "south";
   let heroAnimLockedUntil = 0;
+  const PLAYER_DEATH_SEQUENCE_MS = 2000;
 
   const setHeroAnimState = (state: HeroAnimState, lockMs = 0) => {
     heroAnimState = state;
@@ -3898,6 +3900,55 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     selectedEnemyUid = null;
   };
 
+  /** 2D parity: on player death, living enemies reset to spawn/full HP; killed ones keep respawn timers. */
+  const resetLivingEnemiesForPlayerRespawn = () => {
+    enemies.forEach((enemy) => {
+      if (!enemy.meshRoot.isDisposed()) {
+        enemy.meshRoot.dispose();
+      }
+    });
+    enemies.clear();
+    setSelectedEnemy(null);
+    syncEnemyStream(true);
+  };
+
+  const hydratePendingEnemyRespawnsFromPersistedDead = () => {
+    enemySpawnCatalog.forEach((entry, spawnKey) => {
+      if (!playerState.isEnemy3dDead(entry.level, spawnKey)) {
+        return;
+      }
+      if (pendingEnemyRespawns.has(spawnKey)) {
+        return;
+      }
+      pendingEnemyRespawns.set(spawnKey, {
+        level: entry.level,
+        spawn: entry.spawn,
+        index: entry.index,
+        elapsedMs: 0,
+        respawnTimeMs: ENEMY_RESPAWN_MS,
+      });
+    });
+  };
+
+  const clearEnemy3dDeadPersistence = (level: string, spawnKey: string) => {
+    const unmark = playerState.unmarkEnemy3dDead;
+    if (typeof unmark === "function") {
+      unmark.call(playerState, level, spawnKey);
+      return;
+    }
+    if (!playerState.isEnemy3dDead(level, spawnKey)) {
+      return;
+    }
+    const snapshot = playerState.getDeadEnemies3dSnapshot();
+    const remaining = snapshot[level]?.filter((key) => key !== spawnKey) ?? [];
+    if (remaining.length > 0) {
+      snapshot[level] = remaining;
+    } else {
+      delete snapshot[level];
+    }
+    playerState.loadDeadEnemies3d(snapshot);
+  };
+
   const isSpawnKeyInstantiated = (spawnKey: string) => {
     let found = false;
     enemies.forEach((enemy) => {
@@ -4090,6 +4141,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const ensureLevelEnemiesSeeded = async (level: string) => {
     if (seededEnemyLevels.has(level)) {
+      hydratePendingEnemyRespawnsFromPersistedDead();
       syncEnemyStream(true);
       return;
     }
@@ -4100,6 +4152,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       enemySpawnCatalog.set(spawnKey, { level, spawn, index });
     });
     seededEnemyLevels.add(level);
+    hydratePendingEnemyRespawnsFromPersistedDead();
     syncEnemyStream(true);
   };
 
@@ -4239,6 +4292,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         respawnTimeMs: ENEMY_RESPAWN_MS,
       });
     }
+    playerState.markEnemy3dDead(enemy.level, enemy.spawnKey);
 
     if (selectedEnemyUid === enemy.uid) {
       setSelectedEnemy(null);
@@ -4678,7 +4732,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     audioManager.playAttack();
 
     if (playerDied) {
-      playerState.log("msg_willpower_lost", {}, "#ef4444");
+      triggerPlayerDeathSequence();
     }
   };
 
@@ -4764,7 +4818,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       audioManager.playFireHit();
 
       if (playerDied) {
-        playerState.log("msg_willpower_lost", {}, "#ef4444");
+        triggerPlayerDeathSequence();
       }
 
       return true;
@@ -5543,6 +5597,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let lastGroundedFootY = player.position.y;
   let chunkUpdateTimer = 0;
   let levelTransitionCooldown = 0; // seconds until next floor change (ramp/stair)
+  let isPlayerDeathSequenceActive = false;
+  let playerDeathTimeoutId: number | null = null;
   let verticalTransitionGuard: {
     untilMs: number;
     tileX: number;
@@ -5733,6 +5789,105 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return Math.min(0.9, perFloor + speedBonus);
   };
 
+  const resolveRespawnSpawn = (): { level: string; x: number; z: number } => {
+    const mapData = mapDataCache;
+    const fallback = { level: "0", x: 6.5, z: 6.5 };
+    if (!mapData?.levels) {
+      return fallback;
+    }
+
+    const levels = mapData.levels;
+    const preferredLevel =
+      mapData.config?.startLevel && levels[mapData.config.startLevel]
+        ? mapData.config.startLevel
+        : levels["0"]
+          ? "0"
+          : Object.keys(levels).find((level) => levels[level]?.playerPos) ??
+            activeLevel;
+
+    const playerPos = levels[preferredLevel]?.playerPos;
+    if (!playerPos) {
+      return fallback;
+    }
+
+    return {
+      level: preferredLevel,
+      x: worldToSliceCoord(playerPos.x),
+      z: worldToSliceCoord(playerPos.y),
+    };
+  };
+
+  const completePlayerRespawn = async () => {
+    const respawn = resolveRespawnSpawn();
+
+    playerState.respawn();
+    pressedKeys.clear();
+    setSelectedEnemy(null);
+    projectileSystem.disposeAll();
+    isVoidFallActive = false;
+    voidFallFloors = 0;
+    voidFallImpactSpeed = 0;
+    verticalVelocity = 0;
+    isGrounded = true;
+    levelTransitionCooldown = 0;
+    verticalTransitionGuard = null;
+
+    if (respawn.level !== activeLevel) {
+      applyActiveLevelChange(respawn.level, {
+        tileX: Math.floor(respawn.x),
+        tileZ: Math.floor(respawn.z),
+        landingLocalZ: respawn.z - Math.floor(respawn.z),
+        guardMs: 0,
+      });
+      await ensureMapLevelReady(respawn.level);
+    }
+
+    activeLevel = respawn.level;
+    activeLevelNumber = parseLevelNumber(respawn.level);
+    playerState.setCurrentLevel(respawn.level);
+    WorldMapService.ensureLevelBuffer(respawn.level);
+    player.position.x = respawn.x;
+    player.position.z = respawn.z;
+    snapPlayerFootToActiveLevel();
+    lastSafePlayerX = player.position.x;
+    lastSafePlayerZ = player.position.z;
+    lastGroundedFootY = player.position.y;
+    playerState.recordPlayerPosition(
+      respawn.level,
+      player.position.x * 32,
+      player.position.z * 32,
+    );
+    resetLivingEnemiesForPlayerRespawn();
+    setHeroAnimState("idle");
+    heroAnimLockedUntil = 0;
+    isPlayerDeathSequenceActive = false;
+    playerDeathTimeoutId = null;
+  };
+
+  const triggerPlayerDeathSequence = () => {
+    if (isPlayerDeathSequenceActive) {
+      return;
+    }
+
+    isPlayerDeathSequenceActive = true;
+    pressedKeys.clear();
+    setSelectedEnemy(null);
+    if (isFirstPerson) {
+      setCameraMode(false, false);
+    }
+    heroBillboard.setEnabled(true);
+    heroShadow.setEnabled(true);
+    audioManager.playHeroDeath();
+    setHeroAnimState("death", PLAYER_DEATH_SEQUENCE_MS);
+
+    if (playerDeathTimeoutId !== null) {
+      window.clearTimeout(playerDeathTimeoutId);
+    }
+    playerDeathTimeoutId = window.setTimeout(() => {
+      void completePlayerRespawn();
+    }, PLAYER_DEATH_SEQUENCE_MS);
+  };
+
   const resolveVoidFall = () => {
     if (voidFallFloors <= 0) {
       return;
@@ -5781,7 +5936,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
 
     if (playerDied) {
-      playerState.log("msg_willpower_lost", {}, "#ef4444");
+      triggerPlayerDeathSequence();
     }
 
     voidFallFloors = 0;
@@ -6049,7 +6204,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (gameplayPaused) {
+    if (gameplayPaused || isPlayerDeathSequenceActive) {
       return;
     }
     void ensureAudioReady();
@@ -6161,7 +6316,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   canvas.addEventListener("contextmenu", onCanvasContextMenu);
 
   const onCanvasPointerDown = () => {
-    if (gameplayPaused) {
+    if (gameplayPaused || isPlayerDeathSequenceActive) {
       return;
     }
     requestPointerLockIfPossible();
@@ -6169,7 +6324,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   canvas.addEventListener("pointerdown", onCanvasPointerDown);
 
   const pointerObserver = scene.onPointerObservable.add((pointerInfo) => {
-    if (gameplayPaused) {
+    if (gameplayPaused || isPlayerDeathSequenceActive) {
       return;
     }
     if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) {
@@ -6242,6 +6397,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   scene.onBeforeRenderObservable.add(() => {
     if (gameplayPaused) {
+      return;
+    }
+    if (isPlayerDeathSequenceActive) {
       return;
     }
     const tFrameStart = performance.now();
@@ -6662,6 +6820,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
 
+      clearEnemy3dDeadPersistence(record.level, spawnKey);
       spawnEnemy(record.spawn, record.index, spawnKey, record.level, {
         withRespawnVfx: true,
       });
@@ -7354,6 +7513,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       playerState.off("displaySettingsChanged", handleDisplaySettings);
       playerState.off("doorStatesChanged", handleDoorStatesChanged);
       playerState.off("gameplayPauseChanged", handleGameplayPauseChanged);
+      if (playerDeathTimeoutId !== null) {
+        window.clearTimeout(playerDeathTimeoutId);
+        playerDeathTimeoutId = null;
+      }
       canvas.removeEventListener("contextmenu", onCanvasContextMenu);
       canvas.removeEventListener("pointerdown", onCanvasPointerDown);
       scene.onPointerObservable.remove(pointerObserver);

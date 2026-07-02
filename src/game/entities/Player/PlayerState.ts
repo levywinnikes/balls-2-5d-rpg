@@ -3041,6 +3041,10 @@ export class PlayerState extends EventEmitter {
     set.add(spawnKey);
   }
 
+  public unmarkEnemy3dDead(level: string, spawnKey: string): void {
+    this.deadEnemies3d.get(level)?.delete(spawnKey);
+  }
+
   public isEnemy3dDead(level: string, spawnKey: string): boolean {
     return this.deadEnemies3d.get(level)?.has(spawnKey) ?? false;
   }
