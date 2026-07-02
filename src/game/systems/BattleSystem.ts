@@ -160,6 +160,9 @@ export default class BattleSystem {
 
     // Se o roll de defesa for maior ou igual ao de ataque
     if (defenseRoll >= attackRoll) {
+      const totalReflexXp = 100 + attackRoll;
+      player.gainReflexExperience(totalReflexXp);
+
       if (isFire) {
         // Dano de fogo: Usa a eficiência de bloqueio do escudo equipado
         const shield = player.getEquippedShield();
@@ -186,11 +189,6 @@ export default class BattleSystem {
           return;
         }
       } else {
-        // Ganha experiência de defesa (Bloqueio Total)
-        const defenseExp = enemy.getDefenseExp();
-        const totalReflexXp = defenseExp + attackRoll;
-        player.gainReflexExperience(totalReflexXp);
-
         new FloatingText(
           this.scene,
           player.sprite.x,
@@ -207,6 +205,8 @@ export default class BattleSystem {
         AudioManager.getInstance().playBlock();
         return;
       }
+    } else {
+      player.gainReflexExperience(10);
     }
 
     // Calcular dano base
@@ -424,6 +424,7 @@ export default class BattleSystem {
         );
 
         if (damageMitigation >= 1) {
+          this.gainCombatExperience(player, 0);
           AudioManager.getInstance().playBlock();
           return;
         }
@@ -442,6 +443,7 @@ export default class BattleSystem {
           { target: enemy.enemyType },
           "#aaaaaa",
         );
+        this.gainCombatExperience(player, 0);
         AudioManager.getInstance().playBlock();
         return;
       }
@@ -639,16 +641,7 @@ export default class BattleSystem {
 
   private gainCombatExperience(player: Player, damageDealt: number = 0): void {
     const weapon = player.getEquippedWeapon();
-    const weaponBaseXp = weapon ? weapon.exp_skill : 100;
-
-    // New Scaling Logic
-    const flatBonus = player.getExpPerHit(); // Flat XP per hit (e.g. +5)
-    const damagePercent = player.getExpDamagePercent(); // Percent (e.g. 15 = 15%)
-
-    // Formula: Base + Flat + (Damage * (1 + Percent/100))
-    const damageXp = damageDealt * (1 + damagePercent / 100);
-
-    const totalXp = Math.floor(weaponBaseXp + flatBonus + damageXp);
+    const totalXp = damageDealt > 0 ? (100 + damageDealt) : 10;
 
     console.log("[Combat XP Debug]", {
       weapon: weapon?.id || "none",
@@ -656,9 +649,6 @@ export default class BattleSystem {
       weaponElement: weapon?.element,
       damageDealt,
       totalXp,
-      weaponBaseXp,
-      flatBonus,
-      damagePercent,
     });
 
     if (weapon?.element === "fire") {
@@ -1009,8 +999,14 @@ export default class BattleSystem {
       ); // Explosion
     }
 
-    if (targets.length === 0 && !groundPos) {
-      // Missed everything?
+    if (targets.length === 0) {
+      // Failed magic attack attempt - gain 10 Intelligence XP
+      this.player.gainIntelligenceExperience(10);
+      this.logBattle(
+        "combat_gained_skill_xp",
+        { skill: "Intelligence", amount: 10 },
+        "#34d399",
+      );
     }
 
     // Apply Damage to Targets
@@ -1085,7 +1081,7 @@ export default class BattleSystem {
 
       // XP
       const actualDamageDealt = Math.min(finalDamage, initialHp);
-      const xpGain = 100 + actualDamageDealt;
+      const xpGain = actualDamageDealt > 0 ? (100 + actualDamageDealt) : 10;
       this.player.gainIntelligenceExperience(xpGain);
 
       if (wasDead) {
