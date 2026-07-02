@@ -11,6 +11,10 @@ import {
 } from "./CharacterVisualProfile";
 import { configureBillboardSpriteMaterial } from "./BillboardDepthConfig";
 import { shouldSwapGeneratedEastWestAssets } from "./GeneratedSpriteDirectionMeta";
+import {
+  acquirePooledSpriteTexture,
+  releasePooledSpriteTextures,
+} from "./SpriteTexturePool";
 
 // Entities that have pre-generated PNG sprites under public/assets/sprites/generated/{id}/
 const GENERATED_SPRITE_ENTITIES = new Set<string>([
@@ -298,19 +302,11 @@ export function createGeneratedSpriteAnimatedMaterial(
     GENERATED_ANIM_DEFS[entityId] ?? GENERATED_ANIM_DEFS["goblin_lanceiro"];
 
   const textureMap = new Map<string, Texture[]>();
+  const pooledUrls: string[] = [];
   for (const def of animDefs) {
     const urls = buildGeneratedFrameUrls(entityId, def);
-    const textures = urls.map((url) => {
-      const texture = new Texture(
-        url,
-        scene,
-        false,
-        true,
-        Texture.NEAREST_NEAREST,
-      );
-      texture.hasAlpha = true;
-      return texture;
-    });
+    pooledUrls.push(...urls);
+    const textures = urls.map((url) => acquirePooledSpriteTexture(scene, url));
     textureMap.set(`${def.state}:${def.direction}`, textures);
   }
 
@@ -464,7 +460,7 @@ export function createGeneratedSpriteAnimatedMaterial(
 
   mat.onDisposeObservable.add(() => {
     scene.onBeforeRenderObservable.remove(obs);
-    textureMap.forEach((frames) => frames.forEach((texture) => texture.dispose()));
+    releasePooledSpriteTextures(scene, pooledUrls);
   });
 
   return mat;
@@ -477,17 +473,15 @@ function createGeneratedRotationSpriteMaterial(
   entityId: string,
 ): StandardMaterial {
   const textureByDirection = new Map<GeneratedSpriteDirection, Texture>();
+  const pooledUrls: string[] = [];
   for (const direction of GENERATED_DIRECTIONS) {
     const assetDirection = resolveGeneratedAssetDirection(entityId, direction);
-    const texture = new Texture(
-      `/assets/sprites/generated/${entityId}/character_rotations/${assetDirection}.png`,
-      scene,
-      false,
-      true,
-      Texture.NEAREST_NEAREST,
+    const url = `/assets/sprites/generated/${entityId}/character_rotations/${assetDirection}.png`;
+    pooledUrls.push(url);
+    textureByDirection.set(
+      direction,
+      acquirePooledSpriteTexture(scene, url),
     );
-    texture.hasAlpha = true;
-    textureByDirection.set(direction, texture);
   }
 
   const defaultTexture = textureByDirection.get("south");
@@ -569,7 +563,7 @@ function createGeneratedRotationSpriteMaterial(
 
   mat.onDisposeObservable.add(() => {
     scene.onBeforeRenderObservable.remove(obs);
-    textureByDirection.forEach((texture) => texture.dispose());
+    releasePooledSpriteTextures(scene, pooledUrls);
   });
 
   return mat;

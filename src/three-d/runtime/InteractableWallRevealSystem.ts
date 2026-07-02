@@ -9,7 +9,6 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
-import { hasClearGridLineOfSight } from "./WallRevealLos";
 
 export type InteractableRevealKind = "enemy" | "door";
 
@@ -28,8 +27,14 @@ export type InteractableRevealTarget = {
 type InteractableWallRevealOptions = {
   revealRadiusTiles?: number;
   floorRingRadius?: number;
-  gridOrigin?: number;
 };
+
+export type WorldLineOfSightCheck = (
+  fromWorldX: number,
+  fromWorldZ: number,
+  toWorldX: number,
+  toWorldZ: number,
+) => boolean;
 
 /** Draw over walls — floor ring only, never a vertical sprite on the wall face. */
 const DEPTH_ALWAYS = 519;
@@ -38,10 +43,6 @@ const RING_TINT: Record<InteractableRevealKind, Color3> = {
   enemy: Color3.FromHexString("#f59e0b"),
   door: Color3.FromHexString("#60a5fa"),
 };
-
-function worldToGrid(value: number, gridOrigin: number): number {
-  return Math.floor(value + gridOrigin);
-}
 
 function createFloorRingMaterial(
   scene: Scene,
@@ -113,8 +114,6 @@ export class InteractableWallRevealSystem {
 
   private readonly floorRingRadius: number;
 
-  private readonly gridOrigin: number;
-
   private readonly ringMaterials = new Map<InteractableRevealKind, StandardMaterial>();
 
   private readonly activeProxies = new Map<string, ProxyRecord>();
@@ -132,7 +131,6 @@ export class InteractableWallRevealSystem {
   ) {
     this.revealRadiusTiles = options?.revealRadiusTiles ?? 20;
     this.floorRingRadius = options?.floorRingRadius ?? 0.42;
-    this.gridOrigin = options?.gridOrigin ?? 0;
   }
 
   update(
@@ -140,8 +138,7 @@ export class InteractableWallRevealSystem {
     observer: Vector3,
     activeLevel: string,
     targets: InteractableRevealTarget[],
-    navigationGrid: number[][],
-    navigationGridSize: number,
+    hasWorldLineOfSight: WorldLineOfSightCheck,
     deltaSeconds: number,
     floorSurfaceOffset: number,
   ): void {
@@ -154,8 +151,8 @@ export class InteractableWallRevealSystem {
     this.pulseT += deltaSeconds;
     const pulse = (Math.sin(this.pulseT * Math.PI * 1.2) * 0.5 + 0.5) * 0.1;
 
-    const observerTileX = worldToGrid(observer.x, this.gridOrigin);
-    const observerTileY = worldToGrid(observer.z, this.gridOrigin);
+    const observerTileX = Math.floor(observer.x);
+    const observerTileY = Math.floor(observer.z);
     const radiusSq = this.revealRadiusTiles * this.revealRadiusTiles;
 
     const nextIds = new Set<string>();
@@ -166,8 +163,8 @@ export class InteractableWallRevealSystem {
         continue;
       }
 
-      const targetTileX = worldToGrid(target.position.x, this.gridOrigin);
-      const targetTileY = worldToGrid(target.position.z, this.gridOrigin);
+      const targetTileX = Math.floor(target.position.x);
+      const targetTileY = Math.floor(target.position.z);
       const dx = targetTileX - observerTileX;
       const dy = targetTileY - observerTileY;
       if (dx * dx + dy * dy > radiusSq) {
@@ -175,13 +172,11 @@ export class InteractableWallRevealSystem {
       }
 
       if (
-        hasClearGridLineOfSight(
-          navigationGrid,
-          navigationGridSize,
-          observerTileX,
-          observerTileY,
-          targetTileX,
-          targetTileY,
+        hasWorldLineOfSight(
+          observer.x,
+          observer.z,
+          target.position.x,
+          target.position.z,
         )
       ) {
         continue;

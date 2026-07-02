@@ -48,19 +48,23 @@ function pass(msg) {
 function readRuntimeGuards() {
   const src = fs.readFileSync(runtimePath, "utf8");
   const required = [
-    "ENEMY_STREAM_RADIUS_UNITS",
-    "ENEMY_DESPAWN_RADIUS_UNITS",
+    "enemyStreamRadiusUnits",
+    "enemyDespawnRadiusUnits",
     "syncEnemyStream",
     "syncPropStream",
-    "PROP_DESPAWN_RADIUS_UNITS",
+    "propDespawnRadiusUnits",
     "NAV_WINDOW_RADIUS",
     "STAIR_LANDING_LOCAL_Z",
-    "verticalTransitionGuard",
+    "DEFAULT_OCCLUSION_SCAN_RADIUS",
+    "resolveUpperOcclusionLevel",
     "applyEnemyAnimLod",
     "findFirstBlockingTileOnWorldLine",
     "clearAllChunks",
     "getRenderableLevels",
     "activeLevelNumber < 0",
+    "applyQualityStreamConfig",
+    "resolveQualityStreamConfig",
+    "__slice3dPerf",
   ];
   required.forEach((token) => {
     if (!src.includes(token)) {
@@ -70,6 +74,32 @@ function readRuntimeGuards() {
     }
   });
 
+  const poolPath = path.join(
+    repoRoot,
+    "src",
+    "three-d",
+    "runtime",
+    "SpriteTexturePool.ts",
+  );
+  if (!fs.existsSync(poolPath)) {
+    fail("SpriteTexturePool.ts missing");
+  } else {
+    pass("SpriteTexturePool.ts present");
+  }
+
+  const qualityPath = path.join(
+    repoRoot,
+    "src",
+    "three-d",
+    "runtime",
+    "SliceQualityRuntime.ts",
+  );
+  if (!fs.existsSync(qualityPath)) {
+    fail("SliceQualityRuntime.ts missing");
+  } else {
+    pass("SliceQualityRuntime.ts present");
+  }
+
   const stairSrc = fs.readFileSync(stairPath, "utf8");
   ["STAIR_LANDING_LOCAL_Z", "HOLE_DESCEND_EDGE_Z", "landingLocalZ"].forEach(
     (token) => {
@@ -77,6 +107,24 @@ function readRuntimeGuards() {
         fail(`StairConfig3D missing: ${token}`);
       } else {
         pass(`StairConfig3D defines ${token}`);
+      }
+    },
+  );
+
+  const verticalPath = path.join(
+    repoRoot,
+    "src",
+    "three-d",
+    "runtime",
+    "VerticalLevelVisibility3D.ts",
+  );
+  const verticalSrc = fs.readFileSync(verticalPath, "utf8");
+  ["resolveUpperOcclusionLevel", "DEFAULT_OCCLUSION_SCAN_RADIUS"].forEach(
+    (token) => {
+      if (!verticalSrc.includes(token)) {
+        fail(`VerticalLevelVisibility3D missing: ${token}`);
+      } else {
+        pass(`VerticalLevelVisibility3D defines ${token}`);
       }
     },
   );

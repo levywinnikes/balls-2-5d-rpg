@@ -4,7 +4,6 @@ import {
   MeshBuilder,
   Scene,
   StandardMaterial,
-  Texture,
   TransformNode,
 } from "@babylonjs/core";
 import {
@@ -16,6 +15,10 @@ import {
   configureBillboardSpriteMaterial,
   configureBillboardSpriteMesh,
 } from "./BillboardDepthConfig";
+import {
+  acquirePooledSpriteTexture,
+  releasePooledSpriteTextures,
+} from "./SpriteTexturePool";
 
 const KNOWN_PROP_IDS = new Set<string>(["oak_tree", "wild_flower"]);
 
@@ -58,13 +61,9 @@ export function createPropBillboard(
     propFramePath(propId, animationName, def.direction, index),
   );
 
-  const textures = frameUrls.map(
-    (url) =>
-      new Texture(url, scene, false, true, Texture.NEAREST_NEAREST),
+  const textures = frameUrls.map((url) =>
+    acquirePooledSpriteTexture(scene, url),
   );
-  textures.forEach((texture) => {
-    texture.hasAlpha = true;
-  });
 
   if (textures.length === 0) {
     return null;
@@ -128,6 +127,11 @@ export function createPropBillboard(
   (root as any)._setAnimIntervalScale = (scale: number) => {
     animIntervalScale = Math.max(0.25, Math.min(4, scale));
   };
+
+  mat.onDisposeObservable.add(() => {
+    scene.onBeforeRenderObservable.remove(animObserver);
+    releasePooledSpriteTextures(scene, frameUrls);
+  });
 
   return root;
 }

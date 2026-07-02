@@ -16,6 +16,7 @@ import {
   Vector3,
   VertexData,
   Texture,
+  SceneInstrumentation,
 } from "@babylonjs/core";
 import {
   DroppedItemData,
@@ -102,7 +103,9 @@ import {
   shouldStartLedgeFall,
 } from "./VerticalTransition3D";
 import {
+  DEFAULT_OCCLUSION_SCAN_RADIUS,
   DEFAULT_VERTICAL_COLUMN_RADIUS,
+  resolveUpperOcclusionLevel,
   resolveVerticalVisibleLevels,
 } from "./VerticalLevelVisibility3D";
 import { findFirstBlockingTileOnWorldLine } from "./WallRevealLos";
@@ -116,6 +119,11 @@ import {
   createPropBillboard,
   isKnownPropId,
 } from "./PropBillboardFactory";
+import {
+  computeStreamRadiiUnits,
+  resolveQualityStreamConfig,
+} from "./SliceQualityRuntime";
+import { disposeAllPooledSpriteTexturesForScene } from "./SpriteTexturePool";
 import type { SliceTileDefinition } from "./SliceTileTypes";
 import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
 import { RuneRegistry } from "../../game/magic/RuneRegistry";
@@ -385,6 +393,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     stencil: true,
   });
   const scene = new Scene(engine);
+  const sceneInstrumentation = new SceneInstrumentation(scene);
+  (sceneInstrumentation as any).captureDrawCalls = true;
   scene.clearColor.set(0.67, 0.8, 0.96, 1);
   preloadRespawnGlowTextures(scene);
   const playerState = PlayerState.getInstance();
@@ -832,35 +842,61 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   });
   // Chunk streaming constants (visual profile depends on camera mode; gameplay state remains global)
   const CHUNK_SIZE = 16; // tiles per chunk side
-  const TOPDOWN_DRAW_RADIUS_CHUNKS = 3;
-  const FIRST_PERSON_DRAW_RADIUS_CHUNKS = 4;
-  // Build 2 chunks per tick in top-down and 3 in first-person.
-  // Lower values distribute geometry work across more frames, reducing stalls
-  // from ~1600ms to ≤300ms per tick (tested 2026-05-01 via runtime logs).
-  const TOPDOWN_CHUNK_BUILD_BUDGET_PER_TICK = 2;
-  const FIRST_PERSON_CHUNK_BUILD_BUDGET_PER_TICK = 3;
   const CHUNK_UNLOAD_BUDGET_PER_TICK = 8; // max chunks to unload each update tick
-  const PROP_STREAM_RADIUS_UNITS =
-    CHUNK_SIZE * (TOPDOWN_DRAW_RADIUS_CHUNKS + 0.75);
-  const PROP_DESPAWN_RADIUS_UNITS = PROP_STREAM_RADIUS_UNITS + 10;
   const PROP_STREAM_SYNC_INTERVAL = 0.35;
   const NAV_WINDOW_RADIUS = 40;
   const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
   const ENEMY_AI_RADIUS_UNITS = 18;
-  /** Only instantiate enemy meshes (and anim observers) within this radius. */
-  const ENEMY_STREAM_RADIUS_UNITS =
-    CHUNK_SIZE * (TOPDOWN_DRAW_RADIUS_CHUNKS + 1);
-  const ENEMY_DESPAWN_RADIUS_UNITS = ENEMY_STREAM_RADIUS_UNITS + 12;
   const ENEMY_STREAM_SYNC_INTERVAL = 0.35;
   const WALL_REVEAL_TARGET_RADIUS_UNITS = 22;
+  const DROP_SYNC_INTERVAL = 0.2;
+
+  let qualityStreamConfig = resolveQualityStreamConfig(
+    playerState.getDisplaySettings().qualityPreset,
+  );
+  let streamRadiiUnits = computeStreamRadiiUnits(CHUNK_SIZE, qualityStreamConfig);
+  let topDownDrawRadiusChunks = qualityStreamConfig.topDownDrawRadiusChunks;
+  let firstPersonDrawRadiusChunks =
+    qualityStreamConfig.firstPersonDrawRadiusChunks;
+  let topDownChunkBuildBudgetPerTick =
+    qualityStreamConfig.topDownChunkBuildBudgetPerTick;
+  let firstPersonChunkBuildBudgetPerTick =
+    qualityStreamConfig.firstPersonChunkBuildBudgetPerTick;
+  let propStreamRadiusUnits = streamRadiiUnits.propStreamRadiusUnits;
+  let propStreamRadiusUnitsFirstPerson =
+    streamRadiiUnits.propStreamRadiusUnitsFirstPerson;
+  let propDespawnRadiusUnits = streamRadiiUnits.propDespawnRadiusUnits;
+  let enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
+  let enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
+  let droppedItemStreamRadiusUnits =
+    streamRadiiUnits.droppedItemStreamRadiusUnits;
+
+  const applyQualityStreamConfig = (
+    preset: ReturnType<typeof playerState.getDisplaySettings>["qualityPreset"],
+  ) => {
+    qualityStreamConfig = resolveQualityStreamConfig(preset);
+    streamRadiiUnits = computeStreamRadiiUnits(CHUNK_SIZE, qualityStreamConfig);
+    topDownDrawRadiusChunks = qualityStreamConfig.topDownDrawRadiusChunks;
+    firstPersonDrawRadiusChunks =
+      qualityStreamConfig.firstPersonDrawRadiusChunks;
+    topDownChunkBuildBudgetPerTick =
+      qualityStreamConfig.topDownChunkBuildBudgetPerTick;
+    firstPersonChunkBuildBudgetPerTick =
+      qualityStreamConfig.firstPersonChunkBuildBudgetPerTick;
+    propStreamRadiusUnits = streamRadiiUnits.propStreamRadiusUnits;
+    propStreamRadiusUnitsFirstPerson =
+      streamRadiiUnits.propStreamRadiusUnitsFirstPerson;
+    propDespawnRadiusUnits = streamRadiiUnits.propDespawnRadiusUnits;
+    enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
+    enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
+    droppedItemStreamRadiusUnits =
+      streamRadiiUnits.droppedItemStreamRadiusUnits;
+  };
   let isFirstPerson = false;
   let fpCombatCameraState = createFirstPersonCombatCameraState();
   let gameplayPaused = playerState.isGameplayPaused();
   let fpCaptureSuspendedForMenu = false;
   let topDownCaptureSuspendedForMenu = false;
-  const DROP_SYNC_INTERVAL = 0.2;
-  const DROPPED_ITEM_STREAM_RADIUS_UNITS =
-    CHUNK_SIZE * (TOPDOWN_DRAW_RADIUS_CHUNKS + 2);
   const chunkMeshes = new Map<string, Mesh[]>();
   const chunkLodByKey = new Map<string, 0 | 1 | 2>();
   const chunkLoading = new Set<string>();
@@ -1835,6 +1871,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     clearAllChunks();
+    invalidateVerticalVisibilityCache();
     chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
     snapPlayerFootToActiveLevel();
     const mapData = mapDataCache;
@@ -2315,10 +2352,43 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   // Build (or skip) one 16×16-tile chunk at chunk-grid position (cx, cy).
   // lod 0 = full detail, 1 = walls-only, 2 = ground-only
+  // Caching variables for visible levels and occlusion checks
+  let cachedRenderableLevels: string[] = [];
+  let lastCachedTileX = -9999;
+  let lastCachedTileZ = -9999;
+  let lastCachedActiveLevel = "";
+  let lastCachedIsFirstPerson = false;
+
+  const invalidateVerticalVisibilityCache = () => {
+    lastCachedTileX = -9999;
+    lastCachedTileZ = -9999;
+    lastCachedActiveLevel = "";
+    cachedRenderableLevels = [];
+  };
+
   const getRenderableLevels = (): string[] => {
+    const tileX = Math.floor(player.position.x);
+    const tileZ = Math.floor(player.position.z);
+
+    if (
+      tileX === lastCachedTileX &&
+      tileZ === lastCachedTileZ &&
+      activeLevel === lastCachedActiveLevel &&
+      isFirstPerson === lastCachedIsFirstPerson &&
+      cachedRenderableLevels.length > 0
+    ) {
+      return cachedRenderableLevels;
+    }
+
+    lastCachedTileX = tileX;
+    lastCachedTileZ = tileZ;
+    lastCachedActiveLevel = activeLevel;
+    lastCachedIsFirstPerson = isFirstPerson;
+
     const mapData = mapDataCache;
     if (!mapData?.levels) {
-      return [activeLevel];
+      cachedRenderableLevels = [activeLevel];
+      return cachedRenderableLevels;
     }
 
     // Underground: mesh the active floor; in first-person also load one level up as ceiling.
@@ -2330,19 +2400,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           levels.push(ceilingLevel);
         }
       }
-      return levels;
+      cachedRenderableLevels = levels;
+      return cachedRenderableLevels;
     }
 
-    return resolveVerticalVisibleLevels(
+    cachedRenderableLevels = resolveVerticalVisibleLevels(
       activeLevel,
-      Math.floor(player.position.x),
-      Math.floor(player.position.z),
+      tileX,
+      tileZ,
       Object.keys(mapData.levels),
       getMapTileAt,
       (symbol) =>
         symbol ? mapData.tileDefinitions?.[symbol] : undefined,
       { parseLevelNumber, columnRadius: DEFAULT_VERTICAL_COLUMN_RADIUS },
     );
+    return cachedRenderableLevels;
   };
 
   const syncVerticalLevelVisibility = (deltaSeconds: number) => {
@@ -2363,13 +2435,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           }
 
           if (!inVerticalColumn || levelNum > ceilingLevelNum) {
-            mesh.visibility = 0;
-            mesh.setEnabled(false);
+            if (mesh.visibility !== 0) {
+              mesh.visibility = 0;
+            }
+            if (mesh.isEnabled()) {
+              mesh.setEnabled(false);
+            }
             return;
           }
 
-          mesh.visibility = 1;
-          mesh.setEnabled(true);
+          if (mesh.visibility !== 1) {
+            mesh.visibility = 1;
+          }
+          if (!mesh.isEnabled()) {
+            mesh.setEnabled(true);
+          }
         });
       });
     } else if (!isFirstPerson && levelMeshes.size > 0) {
@@ -2385,26 +2465,41 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           }
 
           if (!inVerticalColumn) {
-            mesh.visibility = 0;
-            mesh.setEnabled(false);
+            if (mesh.visibility !== 0) {
+              mesh.visibility = 0;
+            }
+            if (mesh.isEnabled()) {
+              mesh.setEnabled(false);
+            }
             return;
           }
 
           if (occluded) {
-            const next =
-              mesh.visibility + (0 - mesh.visibility) * lerpFactor;
-            mesh.visibility = next;
-            if (next <= 0.01) {
+            // R1: hide upper floors immediately when the hero is under cover.
+            if (mesh.visibility !== 0) {
               mesh.visibility = 0;
+            }
+            if (mesh.isEnabled()) {
               mesh.setEnabled(false);
-            } else {
+            }
+            return;
+          }
+
+          if (mesh.visibility !== 1) {
+            const next = mesh.visibility + (1 - mesh.visibility) * lerpFactor;
+            const targetVisibility = next >= 0.99 ? 1 : next;
+            if (mesh.visibility !== targetVisibility) {
+              mesh.visibility = targetVisibility;
+            }
+            if (!mesh.isEnabled() && targetVisibility > 0.01) {
               mesh.setEnabled(true);
             }
             return;
           }
 
-          mesh.visibility = 1;
-          mesh.setEnabled(true);
+          if (!mesh.isEnabled()) {
+            mesh.setEnabled(true);
+          }
         });
       });
     }
@@ -2415,6 +2510,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       activeLevel,
       visibleLevels: Array.from(verticallyVisible),
       occludedFromLevel: occlusionStartLevel,
+      occlusionScanRadius: DEFAULT_OCCLUSION_SCAN_RADIUS,
       firstPersonCeilingLevel:
         isFirstPerson && activeLevelNumber < 0
           ? String(activeLevelNumber + 1)
@@ -2445,46 +2541,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return null;
     }
 
-    const currentNum = parseLevelNumber(activeLevel);
-    const playerTileX = Math.floor(player.position.x);
-    const playerTileY = Math.floor(player.position.z);
-    const localX = player.position.x - playerTileX;
-    const localZ = player.position.z - playerTileY;
-
-    const sampleColumns: Array<[number, number]> = [
-      [playerTileX, playerTileY],
-      [playerTileX, playerTileY - 1],
-      [playerTileX, playerTileY + 1],
-      [playerTileX - 1, playerTileY],
-      [playerTileX + 1, playerTileY],
-    ];
-    if (localX < 0.32) {
-      sampleColumns.push([playerTileX - 1, playerTileY]);
-    }
-    if (localX > 0.68) {
-      sampleColumns.push([playerTileX + 1, playerTileY]);
-    }
-    if (localZ < 0.32) {
-      sampleColumns.push([playerTileX, playerTileY - 1]);
-    }
-    if (localZ > 0.68) {
-      sampleColumns.push([playerTileX, playerTileY + 1]);
-    }
-
-    const upperLevels = Object.keys(mapData.levels)
-      .filter((levelKey) => parseLevelNumber(levelKey) > currentNum)
-      .sort((a, b) => parseLevelNumber(a) - parseLevelNumber(b));
-
-    for (const levelKey of upperLevels) {
-      for (const [colX, colY] of sampleColumns) {
-        const symbol = getMapTileAt(levelKey, colX, colY);
-        if (symbol && symbol !== "...") {
-          return parseLevelNumber(levelKey);
-        }
-      }
-    }
-
-    return null;
+    return resolveUpperOcclusionLevel(
+      activeLevel,
+      Math.floor(player.position.x),
+      Math.floor(player.position.z),
+      Object.keys(mapData.levels),
+      getMapTileAt,
+      {
+        parseLevelNumber,
+        scanRadius: DEFAULT_OCCLUSION_SCAN_RADIUS,
+      },
+    );
   };
 
   /** @deprecated Use syncVerticalLevelVisibility — kept as alias for chunk register. */
@@ -2765,11 +2832,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     const drawRadiusChunks = isFirstPerson
-      ? FIRST_PERSON_DRAW_RADIUS_CHUNKS
-      : TOPDOWN_DRAW_RADIUS_CHUNKS;
+      ? firstPersonDrawRadiusChunks
+      : topDownDrawRadiusChunks;
     const chunkBuildBudgetPerTick = isFirstPerson
-      ? FIRST_PERSON_CHUNK_BUILD_BUDGET_PER_TICK
-      : TOPDOWN_CHUNK_BUILD_BUDGET_PER_TICK;
+      ? firstPersonChunkBuildBudgetPerTick
+      : topDownChunkBuildBudgetPerTick;
 
     const playerCX = Math.floor(player.position.x / CHUNK_SIZE);
     const playerCY = Math.floor(player.position.z / CHUNK_SIZE);
@@ -3742,10 +3809,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const px = player.position.x;
     const pz = player.position.z;
     const streamRadius = isFirstPerson
-      ? CHUNK_SIZE * (FIRST_PERSON_DRAW_RADIUS_CHUNKS + 0.5)
-      : PROP_STREAM_RADIUS_UNITS;
+      ? propStreamRadiusUnitsFirstPerson
+      : propStreamRadiusUnits;
     const streamRadiusSq = streamRadius * streamRadius;
-    const despawnRadiusSq = PROP_DESPAWN_RADIUS_UNITS * PROP_DESPAWN_RADIUS_UNITS;
+    const despawnRadiusSq = propDespawnRadiusUnits * propDespawnRadiusUnits;
 
     props.forEach((prop, uid) => {
       if (prop.level !== activeLevel) {
@@ -3852,9 +3919,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     const px = player.position.x;
     const pz = player.position.z;
-    const streamRadiusSq = ENEMY_STREAM_RADIUS_UNITS * ENEMY_STREAM_RADIUS_UNITS;
+    const streamRadiusSq = enemyStreamRadiusUnits * enemyStreamRadiusUnits;
     const despawnRadiusSq =
-      ENEMY_DESPAWN_RADIUS_UNITS * ENEMY_DESPAWN_RADIUS_UNITS;
+      enemyDespawnRadiusUnits * enemyDespawnRadiusUnits;
 
     enemies.forEach((enemy, uid) => {
       if (enemy.level !== activeLevel) {
@@ -4209,6 +4276,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
+    const rune = RuneRegistry.getRune(runeId);
+    const element = rune?.damage.element;
+    const initialHp = enemy.health;
+
     enemy.health = Math.max(0, enemy.health - damage);
     enemy.isProvoked = true;
 
@@ -4228,9 +4299,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     emitCombatEnemyHit(enemy, damage);
 
+    // Apply Intelligence XP
+    const actualDamageDealt = Math.min(damage, initialHp);
+    const xpGain = actualDamageDealt > 0 ? (100 + actualDamageDealt) : 10;
+    playerState.gainIntelligenceExperience(xpGain);
+    playerState.log(
+      "combat_gained_skill_xp",
+      { skill: "Intelligence", amount: xpGain },
+      "#34d399",
+    );
+
     if (enemy.health <= 0) {
-      const isFireKill =
-        RuneRegistry.getRune(runeId)?.damage.element === "fire";
+      const isFireKill = element === "fire";
       destroyEnemy(enemy, { finishingDamage: damage, isFireKill });
     }
   };
@@ -4305,10 +4385,50 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
   };
 
+  const gainCombatExperience3d = (damageDealt: number = 0): void => {
+    const totalXp = damageDealt > 0 ? (100 + damageDealt) : 10;
+    const isFireAttack = playerState.getEquippedWeapon()?.element === "fire";
+    const equippedWeapon = playerState.getEquippedWeapon();
+
+    if (isFireAttack) {
+      playerState.gainIntelligenceExperience(totalXp);
+      playerState.log(
+        "combat_gained_skill_xp",
+        { skill: "Intelligence", amount: totalXp },
+        "#34d399",
+      );
+    } else if (
+      !equippedWeapon ||
+      equippedWeapon.type === ItemType.SWORD ||
+      equippedWeapon.type === ItemType.AXE ||
+      equippedWeapon.type === ItemType.CLUB
+    ) {
+      playerState.gainStrengthExperience(totalXp);
+      playerState.log(
+        "combat_gained_skill_xp",
+        { skill: "Strength", amount: totalXp },
+        "#34d399",
+      );
+    } else if (equippedWeapon.type === ItemType.DISTANCE) {
+      playerState.gainDexterityExperience(totalXp);
+      playerState.log(
+        "combat_gained_skill_xp",
+        { skill: "Dexterity", amount: totalXp },
+        "#34d399",
+      );
+    } else {
+      playerState.gainStrengthExperience(totalXp);
+      playerState.log(
+        "combat_gained_skill_xp",
+        { skill: "Strength", amount: totalXp },
+        "#34d399",
+      );
+    }
+  };
+
   const applyPlayerAttackToEnemy = (enemy: SliceEnemy) => {
     const equippedWeapon = playerState.getEquippedWeapon();
     const isFireAttack = equippedWeapon?.element === "fire";
-    // S10-T4: Unarmed (no weapon) → base roll 1..5, range slightly less than wooden sword.
     const maxAttack = equippedWeapon
       ? Math.max(1, Math.floor(playerState.getTotalAttack()))
       : 5;
@@ -4316,14 +4436,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const enemyDefense = Math.max(1, enemy.definition.defense || 1);
     const defenseRoll = randomInt(1, enemyDefense);
 
-    // S10-T2: parity with 2D — fire has partial block, normal has full block
     let damageMitigation = 0;
     if (attackRoll <= defenseRoll) {
       if (isFireAttack) {
-        damageMitigation = Math.max(
-          0,
-          Math.min(1, enemy.definition.defenseResistances?.fire ?? 0),
-        );
+        damageMitigation = 0.5; // partial block
         playerState.emit("floatingText", {
           x: enemy.worldPos.x,
           y: enemy.worldPos.y,
@@ -4338,6 +4454,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         );
         if (damageMitigation >= 1) {
           audioManager.playBlock();
+          gainCombatExperience3d(0);
           return;
         }
       } else {
@@ -4354,18 +4471,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           "#aaaaaa",
         );
         audioManager.playBlock();
+        gainCombatExperience3d(0);
         return;
       }
     }
 
-    // S10-T2: parity with 2D — base damage is a fresh roll, not attackRoll - defenseRoll/2
     const initialDamage = randomInt(1, maxAttack);
     const armor = Math.max(0, enemy.definition.armor || 0);
     const minReduction = armor > 0 ? Math.max(1, Math.ceil(armor * 0.1)) : 0;
     const armorReduction =
       armor > 0 ? randomInt(minReduction, Math.max(minReduction, armor)) : 0;
 
-    // S10-T2: apply fire partial-block mitigation (parity with 2D)
     let damage = Math.max(0, Math.floor(initialDamage - armorReduction));
     if (damageMitigation > 0) {
       damage = Math.max(1, Math.round(damage * (1 - damageMitigation)));
@@ -4385,10 +4501,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         "#aaaaaa",
       );
       audioManager.playBlock();
+      gainCombatExperience3d(0);
       return;
     }
 
-    // S10-T2: parity with 2D — fire elemental resistance applied after base damage
     if (isFireAttack) {
       const fireRes = Math.max(
         -0.95,
@@ -4400,7 +4516,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const critChance = playerState.getCriticalChance();
     const isCritical = Math.random() * 100 <= critChance;
     if (isCritical) {
-      // S10-T2: crit parity with 2D — min=maxAttack, max=maxAttack*(1+critMult)
       const critMult = Math.max(0, playerState.getCriticalDamageMultiplier());
       const minCrit = maxAttack;
       const maxCrit = Math.max(minCrit, Math.floor(maxAttack * (1 + critMult)));
@@ -4413,10 +4528,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       audioManager.playAttack();
     }
 
+    const initialEnemyHp = enemy.health;
     enemy.health = Math.max(0, enemy.health - damage);
     enemy.isProvoked = true;
 
-    // Emit damage popup
     playerState.emit("floatingText", {
       x: enemy.worldPos.x,
       y: enemy.worldPos.y,
@@ -4433,56 +4548,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     emitCombatEnemyHit(enemy, damage);
 
+    const effectiveDamage = Math.max(0, Math.min(damage, initialEnemyHp));
+    gainCombatExperience3d(effectiveDamage);
+
     if (enemy.health <= 0) {
       destroyEnemy(enemy, {
         finishingDamage: damage,
         isFireKill: isFireAttack,
       });
       return;
-    }
-
-    const weaponBaseXp = Math.max(0, equippedWeapon?.exp_skill || 100);
-    const flatBonusXp = Math.max(0, playerState.getExpPerHit());
-    const damagePercent = Math.max(0, playerState.getExpDamagePercent());
-    const totalCombatXp = Math.floor(
-      weaponBaseXp + flatBonusXp + damage * (1 + damagePercent / 100),
-    );
-
-    if (totalCombatXp > 0) {
-      if (isFireAttack) {
-        playerState.gainIntelligenceExperience(totalCombatXp);
-        playerState.log(
-          "combat_gained_skill_xp",
-          { skill: "Intelligence", amount: totalCombatXp },
-          "#34d399",
-        );
-      } else if (
-        !equippedWeapon ||
-        equippedWeapon.type === ItemType.SWORD ||
-        equippedWeapon.type === ItemType.AXE ||
-        equippedWeapon.type === ItemType.CLUB
-      ) {
-        playerState.gainStrengthExperience(totalCombatXp);
-        playerState.log(
-          "combat_gained_skill_xp",
-          { skill: "Strength", amount: totalCombatXp },
-          "#34d399",
-        );
-      } else if (equippedWeapon.type === ItemType.DISTANCE) {
-        playerState.gainDexterityExperience(totalCombatXp);
-        playerState.log(
-          "combat_gained_skill_xp",
-          { skill: "Dexterity", amount: totalCombatXp },
-          "#34d399",
-        );
-      } else {
-        playerState.gainStrengthExperience(totalCombatXp);
-        playerState.log(
-          "combat_gained_skill_xp",
-          { skill: "Strength", amount: totalCombatXp },
-          "#34d399",
-        );
-      }
     }
   };
 
@@ -4510,7 +4584,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const defenseRoll = randomInt(1, defenseRollMax);
     let damageMitigation = 0;
 
+    const totalReflexXp = 100 + attackRoll;
+
     if (defenseRoll >= attackRoll) {
+      playerState.gainReflexExperience(totalReflexXp);
+
       if (isFireAttack) {
         damageMitigation =
           playerState.getEquippedShield()?.defenseResistances?.fire || 0;
@@ -4521,20 +4599,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           message: "🛡️",
           customColor: "#00FFFF",
         });
+        playerState.log(
+          "combat_blocked_player",
+          { target: enemy.enemyType, xp: totalReflexXp },
+          "#aaaaff",
+        );
         if (damageMitigation >= 1) {
-          playerState.log(
-            "combat_blocked_player",
-            { target: enemy.enemyType },
-            "#aaaaff",
-          );
           audioManager.playBlock();
           return;
         }
       } else {
-        // S12-BUG4: gain reflex XP on full block (parity with 2D BattleSystem)
-        const defenseExp = Math.max(1, enemy.definition.defense || 1);
-        const totalReflexXp = defenseExp + attackRoll;
-        playerState.gainReflexExperience(totalReflexXp);
         playerState.emit("floatingText", {
           x: player.position.x,
           y: player.position.y,
@@ -4550,6 +4624,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         audioManager.playBlock();
         return;
       }
+    } else {
+      playerState.gainReflexExperience(10);
+      playerState.log(
+        "combat_gained_skill_xp",
+        { skill: "Reflex", amount: 10 },
+        "#34d399",
+      );
     }
 
     // Keep 2D parity: physical attack is always a roll in [1..maxAttack].
@@ -4950,20 +5031,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
 
-      applyActorAquaticY(enemy.worldPos, enemy.level);
-      enemy.meshRoot.position = enemy.worldPos;
-      const enemyAquatic = getAquaticSampleAt(
-        enemy.worldPos.x,
-        enemy.worldPos.z,
-        enemy.level,
-      );
-      const enemyAquaticTint = (enemy.meshRoot as any)._aquaticTint as
-        | { update: (sample: AquaticSample) => void }
-        | undefined;
-      enemyAquaticTint?.update(enemyAquatic);
-
       if (enemy.isDead) {
         enemy.meshRoot.setEnabled(true);
+        enemy.meshRoot.position = enemy.worldPos;
         return;
       }
 
@@ -4975,7 +5045,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       enemy.meshRoot.setEnabled(enemyVisible);
       applyEnemyAnimLod(enemy.meshRoot, distanceToPlayer, enemyVisible);
 
-      if (isFirstPerson && enemyVisible && !enemy.isDead) {
+      if (isFirstPerson && enemyVisible) {
         const fpScale = getFirstPersonEnemyProximityScale(distanceToPlayer);
         enemy.meshRoot.scaling.set(fpScale, fpScale, fpScale);
       } else if (enemy.meshRoot.scaling.x !== 1) {
@@ -4989,8 +5059,22 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       if (distanceToPlayer > ENEMY_AI_RADIUS_UNITS) {
         setEnemyAnimState(enemy, "idle");
         enemy.currentPath = [];
+        enemy.meshRoot.position = enemy.worldPos; // Ensure base position is applied
         return;
       }
+
+      // Perform resource-heavy operations only when within AI range (active AI)
+      applyActorAquaticY(enemy.worldPos, enemy.level);
+      enemy.meshRoot.position = enemy.worldPos;
+      const enemyAquatic = getAquaticSampleAt(
+        enemy.worldPos.x,
+        enemy.worldPos.z,
+        enemy.level,
+      );
+      const enemyAquaticTint = (enemy.meshRoot as any)._aquaticTint as
+        | { update: (sample: AquaticSample) => void }
+        | undefined;
+      enemyAquaticTint?.update(enemyAquatic);
 
       const attackRangeUnits = Math.max(1, enemy.definition.attackRange / 32);
       const aggroRangeUnits = Math.max(2, enemy.definition.aggroRange);
@@ -5118,7 +5202,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const playerX = player.position.x;
     const playerZ = player.position.z;
     const maxDistSq =
-      DROPPED_ITEM_STREAM_RADIUS_UNITS * DROPPED_ITEM_STREAM_RADIUS_UNITS;
+      droppedItemStreamRadiusUnits * droppedItemStreamRadiusUnits;
 
     const streamedItems = persistentItems.filter((item) => {
       const ix = worldToSliceCoord(item.x);
@@ -5501,6 +5585,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     if (activeLevelNumber < 0) {
       clearAllChunks();
+      invalidateVerticalVisibilityCache();
       chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
     }
     // S7-FP1: notify React overlay (crosshair) of camera mode change
@@ -5780,6 +5865,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           proj.dispose();
           projMat.dispose();
           scene.onBeforeRenderObservable.remove(removeObs);
+          playerState.gainIntelligenceExperience(10);
+          playerState.log(
+            "combat_gained_skill_xp",
+            { skill: "Intelligence", amount: 10 },
+            "#34d399",
+          );
           return;
         }
 
@@ -5885,6 +5976,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           proj.dispose();
           projMat.dispose();
           scene.onBeforeRenderObservable.remove(removeObs);
+          playerState.gainIntelligenceExperience(10);
+          playerState.log(
+            "combat_gained_skill_xp",
+            { skill: "Intelligence", amount: 10 },
+            "#34d399",
+          );
           return;
         }
 
@@ -6146,19 +6243,31 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (gameplayPaused) {
       return;
     }
+    const tFrameStart = performance.now();
+    let mapTimeAccum = 0;
+    let enemyTimeAccum = 0;
+    let physicsTimeAccum = 0;
+
+    let tStart = tFrameStart;
     const deltaSeconds = engine.getDeltaTime() / 1000;
+
+    tStart = performance.now();
     dropSyncTimer += deltaSeconds;
     if (dropSyncTimer >= DROP_SYNC_INTERVAL) {
       dropSyncTimer = 0;
       syncDroppedItems();
     }
+    mapTimeAccum += performance.now() - tStart;
 
+    tStart = performance.now();
     enemyStreamTimer += deltaSeconds;
     if (enemyStreamTimer >= ENEMY_STREAM_SYNC_INTERVAL) {
       enemyStreamTimer = 0;
       syncEnemyStream();
     }
+    enemyTimeAccum += performance.now() - tStart;
 
+    tStart = performance.now();
     propStreamTimer += deltaSeconds;
     if (propStreamTimer >= PROP_STREAM_SYNC_INTERVAL) {
       propStreamTimer = 0;
@@ -6170,7 +6279,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       navWindowTimer = 0;
       rebuildNavigationWindow(activeLevel);
     }
+    mapTimeAccum += performance.now() - tStart;
 
+    tStart = performance.now();
     // Animate dropped items (floating bob & shadow scaling)
     droppedItemMeshes.forEach((container) => {
       if (!container.isEnabled()) return;
@@ -6235,20 +6346,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
-    // Hide upper floors when the hero walks underneath (occlusion wins over column cull).
-    syncVerticalLevelVisibility(deltaSeconds);
+    mapTimeAccum += performance.now() - tStart;
 
-    wallRevealSystem.update(
-      !isFirstPerson,
-      player.position,
-      activeLevel,
-      collectInteractableRevealTargets(),
-      navigationGrid,
-      navigationGridSize,
-      deltaSeconds,
-      FLOOR_SURFACE_Y + 0.025,
-    );
-
+    tStart = performance.now();
     const aquaticSample = getAquaticSampleAt(
       player.position.x,
       player.position.z,
@@ -6348,23 +6448,34 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         }
 
         movement.normalize().scaleInPlace(speed * deltaSeconds);
-        const nextX = player.position.x + movement.x;
-        const nextZ = player.position.z + movement.z;
 
-        if (
-          !isWorldPositionBlocked(nextX, player.position.z, 0.32, {
-            blockVoidForPlayer: true,
-          })
-        ) {
-          player.position.x = nextX;
-        }
+        // Substepping to prevent tunneling through walls during lag spikes
+        const totalDistance = movement.length();
+        if (totalDistance > 0) {
+          const maxStepSize = 0.1; // safe step size (player radius is 0.32)
+          const numSteps = Math.ceil(totalDistance / maxStepSize);
+          const stepMovement = movement.scale(1 / numSteps);
 
-        if (
-          !isWorldPositionBlocked(player.position.x, nextZ, 0.32, {
-            blockVoidForPlayer: true,
-          })
-        ) {
-          player.position.z = nextZ;
+          for (let i = 0; i < numSteps; i++) {
+            const nextX = player.position.x + stepMovement.x;
+            const nextZ = player.position.z + stepMovement.z;
+
+            if (
+              !isWorldPositionBlocked(nextX, player.position.z, 0.32, {
+                blockVoidForPlayer: true,
+              })
+            ) {
+              player.position.x = nextX;
+            }
+
+            if (
+              !isWorldPositionBlocked(player.position.x, nextZ, 0.32, {
+                blockVoidForPlayer: true,
+              })
+            ) {
+              player.position.z = nextZ;
+            }
+          }
         }
 
         player.position.x = Math.min(
@@ -6377,7 +6488,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         );
       }
     }
+    physicsTimeAccum += performance.now() - tStart;
 
+    tStart = performance.now();
     const isVerticalTransitionGuarded = () => {
       if (!verticalTransitionGuard) {
         return false;
@@ -6528,7 +6641,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const respawnDeltaMs = deltaSeconds * 1000;
     const px = player.position.x;
     const pz = player.position.z;
-    const streamRadiusSq = ENEMY_STREAM_RADIUS_UNITS * ENEMY_STREAM_RADIUS_UNITS;
+    const streamRadiusSq = enemyStreamRadiusUnits * enemyStreamRadiusUnits;
     pendingEnemyRespawns.forEach((record, spawnKey) => {
       record.elapsedMs += respawnDeltaMs;
       if (record.elapsedMs < record.respawnTimeMs) {
@@ -6552,24 +6665,24 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         withRespawnVfx: true,
       });
     });
+    physicsTimeAccum += performance.now() - tStart;
 
+    tStart = performance.now();
     updateEnemyAI(deltaSeconds);
+    enemyTimeAccum += performance.now() - tStart;
+
+    tStart = performance.now();
     if (!gameplayPaused) {
       projectileSystem.update(deltaSeconds);
     }
     tryAutoPlayerAttack(Date.now());
+    physicsTimeAccum += performance.now() - tStart;
 
     perfPublishTimer += deltaSeconds;
     if (perfPublishTimer >= PERF_PUBLISH_INTERVAL) {
       perfPublishTimer = 0;
 
-      const rawDrawCallsTotal =
-        (engine as any).drawCalls ??
-        (engine as any).drawCallsCounter?.current ??
-        (engine as any)._drawCalls?.current ??
-        0;
-      const drawCalls = Math.max(0, rawDrawCallsTotal - prevDrawCallsTotal);
-      prevDrawCallsTotal = rawDrawCallsTotal;
+      const drawCalls = sceneInstrumentation.drawCallsCounter.current;
       const activeMeshes = scene.getActiveMeshes().length;
       const totalMeshes = scene.meshes.length;
       const totalMaterials = scene.materials.length;
@@ -6588,9 +6701,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       playerState.updatePerfMetrics({
         fps: Math.round(engine.getFps()),
-        totalUpdateTime: Math.round(engine.getDeltaTime() * 10) / 10,
+        totalUpdateTime: Math.round((mapTimeAccum + enemyTimeAccum + physicsTimeAccum) * 10) / 10,
+        mapTime: Math.round(mapTimeAccum * 10) / 10,
+        enemyTime: Math.round(enemyTimeAccum * 10) / 10,
+        physicsTime: Math.round(physicsTimeAccum * 10) / 10,
         activeEnemies: Array.from(enemies.values()).filter(
-          (e) => !e.isDead && e.level === activeLevel,
+          (e) => !e.isDead && e.level === activeLevel && Vector3.Distance(e.worldPos, player.position) <= ENEMY_AI_RADIUS_UNITS,
         ).length,
         renderedTiles: chunkMeshes.size * CHUNK_SIZE * CHUNK_SIZE,
         totalObjects: activeMeshes,
@@ -6629,8 +6745,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         catalogedProps: propSpawnCatalog.size,
         navWindowTiles: navigationGridSize,
         activeLevel,
+        qualityPreset: playerState.getDisplaySettings().qualityPreset,
+        topDownDrawRadiusChunks,
+        enemyStreamRadiusUnits,
+        propStreamRadiusUnits,
         ts: Date.now(),
       };
+      (window as any).__slice3dPerf = (window as any).__slice3dPerfDiagnostics;
     }
 
     telemetryLogTimer += deltaSeconds;
@@ -6652,22 +6773,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           : undefined;
       previousHeapUsedMb = usedHeapMb;
 
-      const rawDCTotal2 =
-        (engine as any).drawCalls ??
-        (engine as any).drawCallsCounter?.current ??
-        (engine as any)._drawCalls?.current ??
-        0;
-      // Use the same prevDrawCallsTotal already updated in the perf-publish block above.
-      // If the telemetry fires in the same tick, delta is 0; that is acceptable.
-      const drawCalls = Math.max(0, rawDCTotal2 - prevDrawCallsTotal);
+      const drawCalls = sceneInstrumentation.drawCallsCounter.current;
 
       let activeEnemies = 0;
       let visibleEnemies = 0;
       let aiActiveEnemies = 0;
       enemies.forEach((enemy) => {
         if (enemy.isDead || enemy.level !== activeLevel) return;
-        activeEnemies += 1;
         const distance = Vector3.Distance(enemy.worldPos, player.position);
+        if (distance <= ENEMY_AI_RADIUS_UNITS) {
+          activeEnemies += 1;
+        }
         if (distance <= ENEMY_VISIBILITY_RADIUS_UNITS) {
           visibleEnemies += 1;
         }
@@ -7023,6 +7139,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       ? 0.32 * aquaticPreset.shadowScale
       : 0.32;
 
+    // R1/R2: after movement — hide upper floors covering the hero.
+    syncVerticalLevelVisibility(deltaSeconds);
+
     if (isFirstPerson) {
       heroBillboard.setEnabled(false);
       heroShadow.setEnabled(false);
@@ -7061,6 +7180,24 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       );
       return;
     }
+
+    wallRevealSystem.update(
+      true,
+      player.position,
+      activeLevel,
+      collectInteractableRevealTargets(),
+      (fromWorldX, fromWorldZ, toWorldX, toWorldZ) =>
+        findFirstBlockingTileOnWorldLine(
+          fromWorldX,
+          fromWorldZ,
+          toWorldX,
+          toWorldZ,
+          isTileBlockedForGameplay,
+          { skipStart: true },
+        ) === null,
+      deltaSeconds,
+      FLOOR_SURFACE_Y + 0.025,
+    );
 
     heroBillboard.setEnabled(true);
     heroShadow.setEnabled(true);
@@ -7127,15 +7264,23 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       },
     });
 
+  let fpsTargetMinFrameMs = 0;
+  let lastRenderAt = 0;
+
   engine.runRenderLoop(() => {
+    if (fpsTargetMinFrameMs > 0) {
+      const now = performance.now();
+      if (now - lastRenderAt < fpsTargetMinFrameMs) {
+        return;
+      }
+      lastRenderAt = now;
+    }
     scene.render();
   });
 
   // ─── Display Settings bridge (PlayerState → Babylon engine) ─────────────
   // Render scale: setHardwareScalingLevel(1/scale) lowers internal resolution
-  // without touching camera FOV, draw radius, or any gameplay distance.
-  // Quality preset: tunes hemiLight intensity + reverb-style scene knobs.
-  // FPS target: clamps render loop frequency. 0 = uncapped.
+  // without touching camera FOV. Quality preset also tunes chunk/enemy/prop radii.
   const applyDisplaySettings = (
     settings: ReturnType<typeof playerState.getDisplaySettings>,
   ) => {
@@ -7147,8 +7292,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       console.warn("[3D] Failed to apply renderScale", err);
     }
 
-    // Quality preset → light + scene tuning. We never touch chunk draw radius
-    // or camera, so the player's view distance stays identical across presets.
+    applyQualityStreamConfig(settings.qualityPreset);
+
+    // Quality preset → light + scene tuning + streaming radii (see SliceQualityRuntime).
     switch (settings.qualityPreset) {
       case "low":
         hemiLight.intensity = 0.85;
@@ -7168,13 +7314,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         break;
     }
 
-    // FPS target: 0 = no limit, otherwise enforce loop frequency.
-    if (settings.fpsTarget && settings.fpsTarget > 0) {
-      // Babylon doesn't expose a direct setter — we cap by stopping/restarting
-      // the render loop with a manual interval.
-      // (Implementation kept simple: relies on browser RAF; explicit cap can
-      // be added later if needed.)
-    }
+    fpsTargetMinFrameMs =
+      settings.fpsTarget && settings.fpsTarget > 0
+        ? 1000 / settings.fpsTarget
+        : 0;
   };
   applyDisplaySettings(playerState.getDisplaySettings());
   const handleDisplaySettings = (
@@ -7240,9 +7383,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       clearProps();
       clearEnemies();
       projectileSystem.disposeAll();
+      disposeAllPooledSpriteTexturesForScene(scene);
       // S7-FP4: torus marker removed — no dispose needed
       delete (window as any).__slice3dLogs;
       delete (window as any).__slice3dLogsData;
+      delete (window as any).__slice3dPerf;
+      delete (window as any).__slice3dPerfDiagnostics;
       geometryWorker.terminate();
       scene.dispose();
       engine.dispose();

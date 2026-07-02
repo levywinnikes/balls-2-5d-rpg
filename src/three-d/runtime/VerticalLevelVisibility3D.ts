@@ -3,6 +3,66 @@ import type { SliceTileDefinition } from "./SliceTileTypes";
 /** Tiles around the player scanned for vertical columns (world units ≈ tiles). */
 export const DEFAULT_VERTICAL_COLUMN_RADIUS = 12;
 
+/** How far we scan for upper-level tiles that should occlude the hero (R1). */
+export const DEFAULT_OCCLUSION_SCAN_RADIUS = 8;
+
+/**
+ * Lowest upper BMS level that should hide when the hero is under/near cover.
+ * Checks the player's column first, then a disk — the old 1-tile cross missed
+ * balconies and roof edges that still block the camera.
+ */
+export function resolveUpperOcclusionLevel(
+  activeLevel: string,
+  playerTileX: number,
+  playerTileY: number,
+  levelKeys: string[],
+  getTile: VerticalVisibilityTileLookup,
+  options?: {
+    parseLevelNumber?: (level: string) => number;
+    scanRadius?: number;
+  },
+): number | null {
+  if (levelKeys.length === 0) {
+    return null;
+  }
+
+  const parseLevel =
+    options?.parseLevelNumber ??
+    ((level: string) => Number.parseInt(level, 10) || 0);
+  const radius = options?.scanRadius ?? DEFAULT_OCCLUSION_SCAN_RADIUS;
+  const radiusSq = radius * radius;
+  const currentNum = parseLevel(activeLevel);
+
+  const upperLevels = levelKeys
+    .filter((levelKey) => parseLevel(levelKey) > currentNum)
+    .sort((a, b) => parseLevel(a) - parseLevel(b));
+
+  for (const levelKey of upperLevels) {
+    const levelNum = parseLevel(levelKey);
+
+    if (!isVoidMapSymbol(getTile(levelKey, playerTileX, playerTileY))) {
+      return levelNum;
+    }
+
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        if (dx === 0 && dy === 0) {
+          continue;
+        }
+        if (dx * dx + dy * dy > radiusSq) {
+          continue;
+        }
+        const sym = getTile(levelKey, playerTileX + dx, playerTileY + dy);
+        if (!isVoidMapSymbol(sym)) {
+          return levelNum;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 export type VerticalVisibilityTileLookup = (
   level: string,
   tileX: number,
