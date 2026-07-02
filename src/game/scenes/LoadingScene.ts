@@ -102,9 +102,17 @@ export default class LoadingScene extends Phaser.Scene {
       pathfindingGrids[lvl] = []; // BMS-ready stub (Dynamic calculation recommended for 1024x1024)
     }
 
-    // 4. World Map Buffers (Binary-powered)
+    // 4. World Map Buffers — lazy: priority floor only, rest in background
     this.statusText.setText(t_game("loading_rendering_minimaps"));
-    WorldMapService.preRenderAll(mapMetadata, this.mapLoader.getBinaryLevels());
+    const startLevel =
+      this.targetData?.spawnInfo?.level ||
+      mapMetadata.config?.startLevel ||
+      "0";
+    WorldMapService.bootstrapMinimap(
+      mapMetadata,
+      this.mapLoader.getBinaryLevels(),
+      String(startLevel),
+    );
     await this.yieldToBrowser();
 
     this.statusText.setText(t_game("loading_entering_world"));

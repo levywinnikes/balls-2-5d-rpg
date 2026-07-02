@@ -26,9 +26,7 @@ import {
 import { WorldMapService } from "../../services/WorldMapService";
 import {
   bmsGridXToVisualGridX,
-  bufferToCanvasScale,
   clampToMapBounds,
-  gridToBufferPx,
   worldToGridPoint,
   gridToWorldPoint,
 } from "../utils/MapCoordinateUtils";
@@ -123,15 +121,22 @@ export const ExpandedMapContent: React.FC = () => {
 
     WorldMapService.emitter.on("mapDataUpdated", onData);
     WorldMapService.emitter.on("buffersReady", onBuffers);
+    WorldMapService.emitter.on("levelBufferReady", onBuffers);
 
     return () => {
       WorldMapService.emitter.off("mapDataUpdated", onData);
       WorldMapService.emitter.off("buffersReady", onBuffers);
+      WorldMapService.emitter.off("levelBufferReady", onBuffers);
     };
   }, [playerState]);
 
+  useEffect(() => {
+    WorldMapService.ensureLevelBuffer(viewLevel);
+  }, [viewLevel]);
+
   const handleLevelChange = (newLevel: string) => {
     if (newLevel === viewLevel) return;
+    WorldMapService.ensureLevelBuffer(newLevel);
     prevLevelRef.current = viewLevel;
     fadeStartRef.current = performance.now();
     setViewLevel(newLevel);
@@ -441,29 +446,29 @@ export const ExpandedMapContent: React.FC = () => {
       const pPos = playerState.getPosition();
       const mapW = mapData?.width || 1;
 
-      if (pPos.level === viewLevel) {
+      if (String(pPos.level) === String(viewLevel)) {
         const tileSize = mapData?.tileSize || 32;
         const playerGrid = worldToGridPoint(pPos.x, pPos.y, tileSize);
         const visualX = bmsGridXToVisualGridX(playerGrid.x, mapW);
-        const drawX = gridToBufferPx(visualX);
-        const drawY = gridToBufferPx(playerGrid.y);
+        // Buffer canvas is 1 px per tile; CSS scales it to 4 px per tile.
+        const drawX = visualX + 0.5;
+        const drawY = playerGrid.y + 0.5;
 
-        // Marker scales inversely with zoom so it stays ~6px visually.
-        const visualSize = Math.max(2, Math.ceil(6 / Math.max(zoom, 0.1)));
-        const half = visualSize / 2;
+        const markerSize = Math.max(1, 2 / Math.max(zoom, 0.1));
+        const half = markerSize / 2;
 
         ctx.fillStyle = "#000";
         ctx.fillRect(
-          drawX - half - 1,
-          drawY - half - 1,
-          visualSize + 2,
-          visualSize + 2,
+          drawX - half - 0.5,
+          drawY - half - 0.5,
+          markerSize + 1,
+          markerSize + 1,
         );
 
         ctx.fillStyle = "#FFF";
-        ctx.fillRect(drawX - half, drawY - half, visualSize, visualSize);
+        ctx.fillRect(drawX - half, drawY - half, markerSize, markerSize);
         ctx.fillStyle = "#F00";
-        const innerSize = Math.max(1, Math.floor(visualSize / 3));
+        const innerSize = Math.max(0.5, markerSize / 3);
         ctx.fillRect(
           drawX - innerSize / 2,
           drawY - innerSize / 2,
@@ -473,11 +478,11 @@ export const ExpandedMapContent: React.FC = () => {
       }
 
       playerState.getMarkers().forEach((m) => {
-        if (m.level === viewLevel) {
+        if (String(m.level) === String(viewLevel)) {
           const markerGrid = worldToGridPoint(m.x, m.y, 32);
           const visualMX = bmsGridXToVisualGridX(markerGrid.x, mapW);
-          const mx = gridToBufferPx(visualMX);
-          const my = gridToBufferPx(markerGrid.y);
+          const mx = visualMX + 0.5;
+          const my = markerGrid.y + 0.5;
           const pulse = Math.sin(time / 200) * 0.5 + 0.5;
           ctx.fillStyle = m.color || "#ff0000";
           ctx.beginPath();
@@ -500,8 +505,8 @@ export const ExpandedMapContent: React.FC = () => {
 
       if (menu) {
         const visualMenuX = bmsGridXToVisualGridX(menu.gridX, mapW);
-        const cx = gridToBufferPx(visualMenuX) + 2;
-        const cy = gridToBufferPx(menu.gridY) + 2;
+        const cx = visualMenuX + 0.5;
+        const cy = menu.gridY + 0.5;
         ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
         ctx.lineWidth = 0.5;
         ctx.beginPath();

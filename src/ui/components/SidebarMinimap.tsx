@@ -57,15 +57,21 @@ export const SidebarMinimap: React.FC = () => {
       const freshData = WorldMapService.getMapData();
       if (freshData) setMapData({ ...freshData });
     };
+    const onLevelBuffer = () => {
+      onBuffers();
+    };
 
+    WorldMapService.ensureLevelBuffer(viewLevel);
     WorldMapService.emitter.on("mapDataUpdated", onData);
     WorldMapService.emitter.on("buffersReady", onBuffers);
+    WorldMapService.emitter.on("levelBufferReady", onLevelBuffer);
 
     return () => {
       WorldMapService.emitter.off("mapDataUpdated", onData);
       WorldMapService.emitter.off("buffersReady", onBuffers);
+      WorldMapService.emitter.off("levelBufferReady", onLevelBuffer);
     };
-  }, []);
+  }, [viewLevel]);
 
   const handleLevelUp = () =>
     mapData?.levels[(parseInt(viewLevel) + 1).toString()] &&
@@ -160,7 +166,7 @@ export const SidebarMinimap: React.FC = () => {
         }
 
         // Player marker — fixed at canvas center.
-        if (pPos.level === viewLevel) {
+        if (String(pPos.level) === String(viewLevel)) {
           ctx.fillStyle = "#FFFFFF";
           const crossSize = 2 * zoom;
           const length = 8 * zoom;

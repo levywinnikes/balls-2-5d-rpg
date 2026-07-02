@@ -1854,6 +1854,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     activeLevel = newLevel;
     activeLevelNumber = parseLevelNumber(newLevel);
     playerState.setCurrentLevel(newLevel);
+    WorldMapService.ensureLevelBuffer(newLevel);
 
     if (transition) {
       player.position.z = transition.tileZ + transition.landingLocalZ;
@@ -3501,7 +3502,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }),
     );
 
-    WorldMapService.preRenderAll(mapData, binaryLevels);
+    WorldMapService.bootstrapMinimap(mapData, binaryLevels, activeLevel);
     worldMapReady = true;
   };
 

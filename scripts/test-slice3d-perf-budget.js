@@ -65,6 +65,8 @@ function readRuntimeGuards() {
     "applyQualityStreamConfig",
     "resolveQualityStreamConfig",
     "__slice3dPerf",
+    "bootstrapMinimap",
+    "ensureLevelBuffer",
   ];
   required.forEach((token) => {
     if (!src.includes(token)) {
@@ -99,6 +101,18 @@ function readRuntimeGuards() {
   } else {
     pass("SliceQualityRuntime.ts present");
   }
+
+  const worldMapPath = path.join(repoRoot, "src", "services", "WorldMapService.ts");
+  const worldMapSrc = fs.readFileSync(worldMapPath, "utf8");
+  ["bootstrapMinimap", "ensureLevelBuffer", "levelBufferReady"].forEach(
+    (token) => {
+      if (!worldMapSrc.includes(token)) {
+        fail(`WorldMapService missing: ${token}`);
+      } else {
+        pass(`WorldMapService defines ${token}`);
+      }
+    },
+  );
 
   const stairSrc = fs.readFileSync(stairPath, "utf8");
   ["STAIR_LANDING_LOCAL_Z", "HOLE_DESCEND_EDGE_Z", "landingLocalZ"].forEach(

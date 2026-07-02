@@ -869,10 +869,14 @@ export default class GameScene extends Phaser.Scene {
       );
       this.enemySelectionIndicator = new EnemySelectionIndicator(this);
 
-      // PRE-RENDER WORLD MAP (Now handled with BMS binary data)
+      // Lazy minimap bootstrap when LoadingScene did not pre-process buffers.
       if (!this.processedData) {
         const { WorldMapService } = require("../../services/WorldMapService");
-        WorldMapService.preRenderAll(mapData, this.mapLoader.getBinaryLevels());
+        WorldMapService.bootstrapMinimap(
+          mapData,
+          this.mapLoader.getBinaryLevels(),
+          this.currentLevel,
+        );
       }
 
       await this.loadEnemies(mapData);

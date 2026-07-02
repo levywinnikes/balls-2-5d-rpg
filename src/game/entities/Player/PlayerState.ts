@@ -2340,7 +2340,14 @@ export class PlayerState extends EventEmitter {
     return this._currentPosition;
   }
   public recordPlayerPosition(level: string, x: number, y: number) {
+    const changed =
+      this._currentPosition.x !== x ||
+      this._currentPosition.y !== y ||
+      this._currentPosition.level !== level;
     this._currentPosition = { x, y, level };
+    if (changed) {
+      this.emit("minimapUpdated", level);
+    }
   }
 
   public getCurrentLevel() {
