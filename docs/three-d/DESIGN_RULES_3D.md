@@ -30,12 +30,27 @@ Visão resumida: [PRODUCT_3D_VISION.md](./PRODUCT_3D_VISION.md)
 
 | Item | Onde |
 |------|------|
-| Detecção | `findUpperOcclusionLevel()` — coluna do herói |
+| Detecção | `findUpperOcclusionLevel()` — coluna do herói (tile acima do herói em cada andar superior) |
 | Aplicação | `syncVerticalLevelVisibility()` — **única** função que define `mesh.visibility` / `setEnabled` por andar |
-| Escopo | **Top-down only** — esconde andares `>= occludedFromLevel` só no **chunk do herói** (16×16). FP debug mostra geometria completa. |
+| Escopo | **Top-down only** — esconde **todos os chunks** dos andares `>= occludedFromLevel`. A oclusão não é mais limitada ao chunk do herói. |
 | Debug | `window.__slice3dVerticalVisibility.occludedFromLevel` |
 
-**Teste manual:** `debug_sandbox` ou `debug_vertical` — ande sob torre/ponte no andar `0`; andar `+1` some.
+**Teste manual:** `debug_sandbox` ou `debug_vertical` — ande sob torre/ponte no andar `0`; andar `+1` some completamente (não só o chunk do herói).
+
+> **Por que ocultar o nível inteiro e não só o chunk?**  
+> Oclusão parcial (só o chunk do herói) fazia o andar superior parecer "comido" — partes visíveis e invisíveis no mesmo nível, criando artefatos visuais estranhos. Oculta o nível inteiro garante consistência visual.
+
+### R1a — Primeira pessoa: sem oclusão vertical
+
+**No modo primeira pessoa, a oclusão R1 não se aplica.** Todos os andares do mapa são renderizados simultaneamente, limitados apenas pelo `camera.maxZ` (far clipping plane). A pilha vertical (`verticallyVisible`, escadas, buracos) é irrelevante — o jogador vê a estrutura completa independente de conexões entre andares.
+
+| Item | Onde |
+|------|------|
+| Regra | `syncVerticalLevelVisibility()` usa `Object.keys(mapData.levels)` como `showLevels` quando `isFirstPerson === true` |
+| Far plane | `firstPersonCamera.maxZ = 120` |
+| Motivo | Qualquer filtragem de andar em primeira pessoa produce visibilidade quebrada (estruturas "cortadas") |
+
+**Teste manual:** `?slice3d=1&map=debug_sandbox&fp=1` — olhe para cima em uma torre; todos os andares devem estar visíveis.
 
 ---
 
@@ -175,6 +190,7 @@ Copie mentalmente antes de cada PR/tarefa 3D:
 | 2026-06 | Mapas `debug_sandbox` + `debug_vertical` | Sandbox = conteúdo; vertical = stress de andares |
 | 2026-07 | Oclusão R1 top-down = chunk do herói only; FP sem R1 | Remendos globais quebravam torre e FP — ver ENGINE_3D_STATE_AND_HARDENING |
 | 2026-07 | Pés = topo do slab 0.32 (`floorSlabThickness`) | JSON height ≠ mesh 3D |
+| 2026-07 | Oclusão R1 mudou de chunk-only → nível inteiro | Oclusão parcial (só chunk) deixava andar "comido"; esconder o nível inteiro dá consistência visual |
 
 ---
 

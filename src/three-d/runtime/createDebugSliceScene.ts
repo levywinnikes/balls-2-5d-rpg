@@ -503,7 +503,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     scene,
   );
   firstPersonCamera.minZ = 0.05;
-  firstPersonCamera.maxZ = 30;
+  firstPersonCamera.maxZ = 120;
   firstPersonCamera.fov = FP_CAMERA_FOV;
   firstPersonCamera.inertia = 0.05;
   firstPersonCamera.angularSensibility = 800; // ~CS:GO/Valorant default feel
@@ -2648,16 +2648,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const lerpFactor = Math.min(1, deltaSeconds * 8);
 
     if (isFirstPerson && levelMeshes.size > 0) {
-      const showLevels = new Set<string>([activeLevel]);
-      const n = parseLevelNumber(activeLevel);
-      const above = String(n + 1);
-      const below = String(n - 1);
-      if (verticallyVisible.has(above)) {
-        showLevels.add(above);
-      }
-      if (verticallyVisible.has(below)) {
-        showLevels.add(below);
-      }
+      const showLevels = mapData?.levels
+        ? new Set(Object.keys(mapData.levels))
+        : new Set([activeLevel]);
       if (holeFallLandingLevel) {
         showLevels.add(holeFallLandingLevel);
       }
@@ -2686,9 +2679,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         });
       });
     } else if (!isFirstPerson && levelMeshes.size > 0) {
-      const playerChunkX = Math.floor(player.position.x / CHUNK_SIZE);
-      const playerChunkZ = Math.floor(player.position.z / CHUNK_SIZE);
-
       levelMeshes.forEach((meshes, levelKey) => {
         const levelNum = parseLevelNumber(levelKey);
         const inVerticalColumn = verticallyVisible.has(levelKey);
@@ -2708,17 +2698,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             return;
           }
 
-          const chunkMeta = mesh.metadata as
-            | { chunkCx?: number; chunkCy?: number }
-            | undefined;
-          const inPlayerChunk =
-            chunkMeta?.chunkCx === playerChunkX &&
-            chunkMeta?.chunkCy === playerChunkZ;
-          // R1: peel roof only above the hero's chunk (top-down legibility).
+          // R1: hide entire occluded levels (all chunks) — partial occlusion
+          // produces a "bitten" look where only the hero's chunk disappears.
           const occluded =
             occlusionStartLevel !== null &&
-            levelNum >= occlusionStartLevel &&
-            inPlayerChunk;
+            levelNum >= occlusionStartLevel;
 
           if (occluded) {
             if (mesh.visibility !== 0) {

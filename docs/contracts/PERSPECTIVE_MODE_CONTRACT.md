@@ -68,6 +68,7 @@ Product-facing 3D slice rules (top-down is canonical):
 3. **Alternate view:** First-person camera is debug-only (`V` toggle). It must not drive map authoring, UI axis conventions, or minimap semantics.
 4. **Axis / minimap parity:** World position published to `PlayerState` uses `(player.x * 32, player.z * 32)` with `+X = east`, `+Y = south`; see `docs/MAP_UI_MECHANICS.md`. Do not mirror axes in UI to compensate for camera bugs.
 5. **Hero presentation:** Modular billboard (`hero_base` + `equippedHairId` hair layer) is the player-facing avatar in top-down; grounding uses `HERO_BILLBOARD_LAYOUT.anchorY` from measured feet row in generated PNGs.
+6. **First-person rendering:** No modo primeira pessoa, **todos os andares do mapa são renderizados** sem oclusão vertical. A única limitação é o far clipping plane (`camera.maxZ = 120`). A pilha vertical (`verticallyVisible`) e conexões entre andares (escadas/buracos) são ignoradas — o jogador vê a estrutura completa. Ver `DESIGN_RULES_3D.md` R1a.
 
 Implementation reference: `src/three-d/runtime/createDebugSliceScene.ts`, `src/three-d/runtime/TwoDParitySpriteFactory.ts`, `docs/sprites/MODULAR_SPRITE_AND_NPC_GENERATION_GUIDE.md` §4.2.
 
@@ -77,7 +78,7 @@ Implementation reference: `src/three-d/runtime/createDebugSliceScene.ts`, `src/t
 
 - Renderer keeps current level as main context and can render lower and upper levels within culling boundaries.
 - Transparency and under-tile logic (`under: "..."`) are part of vertical readability.
-- **3D slice (canonical):** when the hero stands under upper-level geometry, those levels **must hide** so the hero stays visible. Implementation and anti-regression rules: **`docs/three-d/DESIGN_RULES_3D.md`** § R1–R2 (`syncVerticalLevelVisibility`, `findUpperOcclusionLevel`). Do not add parallel mesh-visibility passes.
+- **3D slice (canonical):** when the hero stands under upper-level geometry, those levels **must hide entirely** (every chunk) so the hero stays visible. Partial occlusion (hiding only the hero's chunk) produces visual artifacts — the upper level looks "bitten". Implementation and anti-regression rules: **`docs/three-d/DESIGN_RULES_3D.md`** § R1–R2 (`syncVerticalLevelVisibility`, `findUpperOcclusionLevel`). Do not add parallel mesh-visibility passes.
 
 ### 3.2 Transition System
 
