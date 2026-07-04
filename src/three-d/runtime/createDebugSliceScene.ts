@@ -106,6 +106,7 @@ import {
 } from "./TileSurfaceResolver";
 import {
   isGradedWalkTile,
+  isFloorLevelRamp,
   probeRampLevelTransition,
 } from "./VerticalTransition3D";
 import {
@@ -113,7 +114,7 @@ import {
   resolveVerticalVisibleLevels,
 } from "./VerticalLevelVisibility3D";
 import { findFirstBlockingTileOnWorldLine } from "./WallRevealLos";
-import { resolveVerticalLevelAfterMove } from "./StairTraversal3D";
+import { inferLevelFromFootY } from "./NaturalFloorLevel3D";
 import {
   probeHoleLevelTransition,
   STAIR_LANDING_LOCAL_Z,
@@ -1995,14 +1996,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const stairLevelSyncOptions = () => ({
-    parseLevelNumber,
-    hasLevel: (level: string) => Boolean(mapDataCache?.levels?.[level]),
-    levelToWorldY,
-    floorSurfaceY: FLOOR_SURFACE_Y,
-    levelHeightUnits: LEVEL_HEIGHT_UNITS,
-  });
-
   /**
    * Map layer follows stair exit + foot height (Quake-style walk, no Z snap).
    *
@@ -2043,26 +2036,37 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
-    const inferred = resolveVerticalLevelAfterMove({
-      footY: player.position.y,
-      worldX: player.position.x,
-      worldZ: player.position.z,
-      moveStartX,
-      moveStartZ,
-      didMove,
-      activeLevel,
-      levelKeys: Object.keys(mapData.levels),
-      getTile: getMapTileAt,
-      getTileDef: (symbol) =>
-        symbol ? mapData.tileDefinitions?.[symbol] : undefined,
-      options: stairLevelSyncOptions(),
-    });
+    // Guard: graded walk tiles (ramp/stairs) prevent foot-height from changing level.
+    // The ramp/hole transition system (tryVerticalLevelTransitions) handles level
+    // changes on these tiles via explicit edge detection.
+    const tileX = Math.floor(player.position.x);
+    const tileZ = Math.floor(player.position.z);
+    const symbol = getMapTileAt(activeLevel, tileX, tileZ);
+    const tileDef = symbol
+      ? mapData.tileDefinitions?.[symbol]
+      : undefined;
+    if (isGradedWalkTile(tileDef, LEVEL_HEIGHT_UNITS)) {
+      return;
+    }
+
+    if (!symbol || symbol === "...") {
+      return;
+    }
+
+    const inferred = inferLevelFromFootY(
+      player.position.y,
+      Object.keys(mapData.levels),
+      {
+        levelToWorldY,
+        parseLevelNumber,
+        levelHeightUnits: LEVEL_HEIGHT_UNITS,
+        floorSurfaceY: FLOOR_SURFACE_Y,
+      },
+    );
 
     if (inferred !== activeLevel) {
       applyActiveLevelChange(inferred, undefined, { natural: true });
       snapFootToGradedSurface(inferred);
-      // Set cooldown so the new level cannot be immediately re-transitioned from
-      // the same stair tile position (root fix for the cascading floors bug).
       levelTransitionCooldown = 0.35;
     }
   };
@@ -2113,9 +2117,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       tileDef.id === "hole"
     );
   };
-
-  const isStairTileDef = (tileDef?: SliceTileDefinition | null) =>
-    tileDef?.stairDir !== undefined || tileDef?.geometryProfile === "stair";
 
   const getTileDefAt = (level: string, tileX: number, tileZ: number) => {
     const symbol = getMapTileAt(level, tileX, tileZ);
@@ -3092,6 +3093,27 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
               pitWallMask,
             });
             continue;
+          }
+
+          // Skip floor tiles that sit directly above a ramp on the level below.
+          // The ramp geometry already fills that vertical space; a floor mesh at
+          // the same XY would block the player's view and cause z-fighting.
+          if (
+            !blocking &&
+            tileDef?.renderAs !== "block" &&
+            renderLevel !== undefined
+          ) {
+            const levelNum = parseLevelNumber(renderLevel);
+            const belowLevel = String(levelNum - 1);
+            if (mapData.levels?.[belowLevel]) {
+              const belowSymbol = getMapTileAt(belowLevel, x, y);
+              if (belowSymbol && belowSymbol !== "...") {
+                const belowDef = mapData.tileDefinitions?.[belowSymbol];
+                if (belowDef?.geometryProfile?.startsWith("ramp-") && isFloorLevelRamp(belowDef, LEVEL_HEIGHT_UNITS)) {
+                  continue;
+                }
+              }
+            }
           }
 
           const inferredStair = tileDef?.stairDir !== undefined;
@@ -7391,7 +7413,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const tileDef = symbol
         ? mapDataCache?.tileDefinitions?.[symbol]
         : undefined;
-      if (isStairTileDef(tileDef) && Math.abs(verticalVelocity) < 3.0) {
+      if (isGradedWalkTile(tileDef, LEVEL_HEIGHT_UNITS) && Math.abs(verticalVelocity) < 3.0) {
         return true;
       }
       return false;
@@ -7419,15 +7441,20 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
 
-      const tileX = Math.floor(player.position.x);
-      const tileZ = Math.floor(player.position.z);
       levelTransitionCooldown = 0.65;
-      applyActiveLevelChange(probe.targetLevel, {
-        tileX,
-        tileZ,
-        landingLocalZ: STAIR_LANDING_LOCAL_Z,
-        guardMs: 1200,
-      });
+      const fromLevelNum = activeLevelNumber;
+      applyActiveLevelChange(probe.targetLevel, undefined, { natural: true });
+
+      const toLevelNum = parseLevelNumber(probe.targetLevel);
+      if (toLevelNum > fromLevelNum) {
+        player.position.y =
+          levelToWorldY(probe.targetLevel) + FLOOR_SURFACE_Y + FEET_CLEARANCE;
+        verticalVelocity = 0;
+        isGrounded = true;
+        lastGroundedFootY = player.position.y;
+      } else {
+        snapFootToGradedSurface(probe.targetLevel);
+      }
     };
 
     const tryHoleLevelTransition = () => {

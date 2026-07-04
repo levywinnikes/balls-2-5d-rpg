@@ -218,16 +218,20 @@
     "stu": {
       "id": "stairs-up",
       "color": "#e2c87d",
-      "height": 0.12,
+      "height": 2.32,
       "renderAs": "floor",
-      "stairDir": "up"
+      "geometryProfile": "ramp-s",
+      "levelTransition": "up",
+      "rampRise": 2.32
     },
     "std": {
       "id": "stairs-down",
       "color": "#a07040",
-      "height": 0.12,
+      "height": 2.32,
       "renderAs": "floor",
-      "stairDir": "down"
+      "geometryProfile": "ramp-s",
+      "levelTransition": "down",
+      "rampRise": 2.32
     },
     "hol": {
       "id": "hole",

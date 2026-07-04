@@ -160,17 +160,21 @@
     },
     "stu": {
       "color": 13152320,
-      "height": 0.5,
+      "height": 2.32,
       "renderAs": "floor",
       "block": false,
-      "stairDir": "up"
+      "geometryProfile": "ramp-s",
+      "levelTransition": "up",
+      "rampRise": 2.32
     },
     "std": {
       "color": 13144128,
-      "height": 0.5,
+      "height": 2.32,
       "renderAs": "floor",
       "block": false,
-      "stairDir": "down"
+      "geometryProfile": "ramp-s",
+      "levelTransition": "down",
+      "rampRise": 2.32
     },
     "swl": {
       "color": 5263456,

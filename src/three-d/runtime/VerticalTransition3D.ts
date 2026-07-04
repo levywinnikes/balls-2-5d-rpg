@@ -25,69 +25,37 @@ export function isFloorLevelRamp(
   tileDef?: SliceTileDefinition | null,
   levelHeightUnits = DEFAULT_LEVEL_HEIGHT_UNITS,
 ): boolean {
-  if (!tileDef?.levelTransition) {
-    return false;
-  }
-  const profile = tileDef.geometryProfile;
-  if (
-    profile !== "ramp-n" &&
-    profile !== "ramp-s" &&
-    profile !== "ramp-e" &&
-    profile !== "ramp-w"
-  ) {
+  const profile = tileDef?.geometryProfile;
+  if (!profile?.startsWith("ramp-")) {
     return false;
   }
   return resolveTileRampRise(tileDef) >= levelHeightUnits - 0.08;
 }
 
-export function isAtRampTransitionEdge(
+function isRampEdge(
   worldX: number,
   worldZ: number,
-  tileDef?: SliceTileDefinition | null,
+  tileDef: SliceTileDefinition,
+  edge: "up" | "down",
 ): boolean {
-  const profile = tileDef?.geometryProfile;
-  const transition = tileDef?.levelTransition;
-  if (!profile?.startsWith("ramp-") || !transition) {
-    return false;
-  }
-
+  const profile = tileDef.geometryProfile;
   const lx = worldX - Math.floor(worldX);
   const lz = worldZ - Math.floor(worldZ);
   const t = RAMP_EDGE_THRESHOLD;
 
-  if (transition === "up") {
-    if (profile === "ramp-n") {
-      return lz >= t;
-    }
-    if (profile === "ramp-s") {
-      return lz <= 1 - t;
-    }
-    if (profile === "ramp-e") {
-      return lx >= t;
-    }
-    return lx <= 1 - t;
-  }
-
   if (profile === "ramp-n") {
-    return lz <= 1 - t;
+    return edge === "up" ? lz >= t : lz <= 1 - t;
   }
   if (profile === "ramp-s") {
-    return lz >= t;
+    return edge === "up" ? lz <= 1 - t : lz >= t;
   }
   if (profile === "ramp-e") {
-    return lx <= 1 - t;
+    return edge === "up" ? lx >= t : lx <= 1 - t;
   }
-  return lx >= t;
-}
-
-export function resolveRampTransitionTargetLevel(
-  activeLevel: string,
-  tileDef: SliceTileDefinition,
-  parseLevelNumber: (level: string) => number,
-): string {
-  const current = parseLevelNumber(activeLevel);
-  const delta = tileDef.levelTransition === "up" ? 1 : -1;
-  return String(current + delta);
+  if (profile === "ramp-w") {
+    return edge === "up" ? lx <= 1 - t : lx >= t;
+  }
+  return false;
 }
 
 export function shouldStartLedgeFall(
@@ -134,26 +102,32 @@ export function probeRampLevelTransition(
 ): RampTransitionProbe | null {
   const tileX = Math.floor(worldX);
   const tileZ = Math.floor(worldZ);
+  const levelNum = options.parseLevelNumber(activeLevel);
+
+  // 1. Player on the same level as a ramp → going UP
   const symbol = getTile(activeLevel, tileX, tileZ);
   const tileDef = getTileDef(symbol);
-  if (!tileDef?.levelTransition) {
-    return null;
-  }
-  if (!isFloorLevelRamp(tileDef, options.levelHeightUnits)) {
-    return null;
-  }
-  if (!isAtRampTransitionEdge(worldX, worldZ, tileDef)) {
-    return null;
-  }
-
-  const targetLevel = resolveRampTransitionTargetLevel(
-    activeLevel,
-    tileDef,
-    options.parseLevelNumber,
-  );
-  if (!options.hasLevel(targetLevel)) {
-    return null;
+  if (tileDef && isFloorLevelRamp(tileDef, options.levelHeightUnits)) {
+    if (isRampEdge(worldX, worldZ, tileDef, "up")) {
+      const targetLevel = String(levelNum + 1);
+      if (options.hasLevel(targetLevel)) {
+        return { targetLevel, tileDef };
+      }
+    }
   }
 
-  return { targetLevel, tileDef };
+  // 2. Player above a ramp (level below has a ramp) → going DOWN
+  const belowLevel = String(levelNum - 1);
+  const belowSymbol = getTile(belowLevel, tileX, tileZ);
+  const belowDef = getTileDef(belowSymbol);
+  if (belowDef && isFloorLevelRamp(belowDef, options.levelHeightUnits)) {
+    if (isRampEdge(worldX, worldZ, belowDef, "down")) {
+      const targetLevel = String(levelNum - 1);
+      if (options.hasLevel(targetLevel)) {
+        return { targetLevel, tileDef: belowDef };
+      }
+    }
+  }
+
+  return null;
 }

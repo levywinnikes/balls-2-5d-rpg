@@ -186,7 +186,41 @@ export function sampleTileSurface(
   const kind = resolveTileKind(symbol, tileDef);
   const geometryProfile = tileDef?.geometryProfile ?? null;
 
+  // Helper: check the level below for a ramp that this tile sits above.
+  // Returns a ramp surface sample if found, otherwise null.
+  const tryProjectedRamp = (): TileSurfaceSample | null => {
+    const levelNum = Number.parseInt(level, 10);
+    if (Number.isNaN(levelNum)) return null;
+    const belowLevel = String(levelNum - 1);
+    const belowSymbol = ctx?.getTile?.(belowLevel, tileX, tileZ);
+    if (!belowSymbol || belowSymbol === "...") return null;
+    const belowDef = ctx?.getTileDef?.(belowSymbol);
+    const belowProfile = belowDef?.geometryProfile;
+    if (
+      belowProfile !== "ramp-n" && belowProfile !== "ramp-s" &&
+      belowProfile !== "ramp-e" && belowProfile !== "ramp-w"
+    ) return null;
+    const rampRise = resolveRampRise(belowDef);
+    if (rampRise < levelHeight - 0.08) return null;
+    const belowBaseY = ctx?.levelToWorldY?.(belowLevel) ?? levelBaseY;
+    const dir = belowProfile.split("-")[1] as "n" | "s" | "e" | "w";
+    const surfaceY = sampleRampSurfaceY(belowBaseY, localX, localZ, dir, rampRise);
+    return {
+      symbol: belowSymbol,
+      tileId: (belowDef?.id || belowSymbol || "").toLowerCase(),
+      kind: "ramp" as const,
+      geometryProfile: belowProfile,
+      surfaceY,
+      footY: surfaceY + clearance,
+      rimY: surfaceY,
+      poolBottomY: null,
+      isWater: false,
+    };
+  };
+
   if (kind === "void") {
+    const projected = tryProjectedRamp();
+    if (projected) return projected;
     const y = levelBaseY + floorRim;
     return {
       symbol,
@@ -263,6 +297,11 @@ export function sampleTileSurface(
       isWater: false,
     };
   }
+
+  // Floor/slab tiles above a ramp on the level below should follow the ramp
+  // surface instead of staying flat — the ramp mesh fills that vertical space.
+  const projected = tryProjectedRamp();
+  if (projected) return projected;
 
   const topOffset =
     kind === "slab"
