@@ -2,7 +2,11 @@
 
 ## 1. Purpose
 
-`SaveSystem.ts` is the persistence coordinator for the game. It owns the save payload, the load entry points, and the browser fallback behavior.
+There are two parallel `SaveSystem` implementations:
+- **`src/core/systems/SaveSystem.ts`** — Phaser-free. Constructor takes no arguments. Used by the 3D Babylon slice via `saveGameDirect()`.
+- **`src/game/systems/SaveSystem.ts`** — Phaser-aware. Constructor takes a `Phaser.Scene` for reading registry state. Used by the 2D `GameScene`.
+
+Both share the same save payload schema and Electron/browser persistence modes.
 
 ## 2. Persistence Modes
 

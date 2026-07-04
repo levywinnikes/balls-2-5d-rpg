@@ -2,14 +2,15 @@
 
 ## Core Architecture
 
-This project is built using a hybrid **React + Phaser 3** architecture.
+This project is built using a layered architecture with a **Phaser-free core layer** providing framework-agnostic game data and logic.
 
-| Layer            | Responsibility                                | Technology                             |
-| :--------------- | :-------------------------------------------- | :------------------------------------- |
-| **View/UI**      | HUD, Windows (Inventory, Stats), Menus        | React (Tailwind/CSS)                   |
-| **Logic/Engine** | Physics, Rendering, Pathfinding, AI           | Phaser 3                               |
-| **State**        | Global single source of truth for player data | `PlayerState` (Singleton/EventEmitter) |
-| **Data**         | Map definitions, Item stats, Dialogue         | JSON + Binary (BMS)                    |
+| Layer            | Responsibility                                | Technology                                   |
+| :--------------- | :-------------------------------------------- | :------------------------------------------- |
+| **View/UI**      | HUD, Windows (Inventory, Stats), Menus        | React (Tailwind/CSS)                         |
+| **Logic/Engine** | Physics, Rendering, Pathfinding, AI           | Phaser 3 / Babylon.js (3D)                   |
+| **State**        | Global single source of truth for player data | `PlayerState` (Singleton/EventEmitter)       |
+| **Core**         | Framework-agnostic registries, systems, types | `src/core/` — pure TypeScript, no Phaser     |
+| **Data**         | Map definitions, Item stats, Dialogue         | JSON + Binary (BMS)                          |
 
 ## Scene Management (`src/game/scenes/`)
 
@@ -54,7 +55,9 @@ Communication between the Phaser Engine and React UI is handled strictly via the
 
 ## Persistence System
 
-Persistence is handled in `src/game/systems/SaveSystem.ts`:
+Persistence is handled by two parallel `SaveSystem` implementations:
+- **`src/game/systems/SaveSystem.ts`** — Phaser-aware, used by 2D `GameScene`. Receives a `Phaser.Scene` reference for reading registry state.
+- **`src/core/systems/SaveSystem.ts`** — Framework-agnostic, used by 3D Babylon slice. The caller provides context (`map`, `currentLevel`, `playerPos`) explicitly. Constructor takes no arguments.
 
 - **Primary Mode (Supported)**: Electron local persistence via `window.electronAPI`.
 - **Browser Mode**: Ephemeral fallback only (in-memory session), not reliable disk persistence.
@@ -84,6 +87,8 @@ Persistence is handled in `src/game/systems/SaveSystem.ts`:
 
 ## Key Services
 
+- **`src/core/`** — Phaser-free layer with pure TypeScript registries (`WeaponRegistry`, `ItemRegistry`, `ContainerRegistry`, `EnemyRegistry`, `ShieldRegistry`), systems (`SaveSystem`, `StatManager`, `QuestManager`), magic (`RuneRegistry`), cosmetics (`HeroSkinRegistry`), and types (`gameTypes.ts`).
+- **`src/game/`** — Phaser-bound layer for scenes, graphics, physics, and 2D-specific logic. The game registries now delegate data to `src/core/` equivalents.
 - **`MapLoader`**: Safe interface for binary map access.
 - **`WorldMapService`**: Pre-renders whole world segments for UI map components.
 - **`NavigationService`**: High-level API for multi-floor pathfinding using web workers.
@@ -97,4 +102,4 @@ Benchmark and autoplay flows rely on `RuntimeErrorMonitor` to detect silent fail
 ---
 
 _For technical details on the map engine, see [SYSTEM_BMS.md](./SYSTEM_BMS.md)_.
-_Reference File: src/game/entities/Player/PlayerState.ts_
+_Reference Files: `src/game/entities/Player/PlayerState.ts` (delegates to `src/core/`) — `src/core/systems/SaveSystem.ts` (Phaser-free persistence) — `src/core/types/gameTypes.ts` (shared type definitions)_

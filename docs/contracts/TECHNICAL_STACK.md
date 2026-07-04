@@ -8,7 +8,9 @@
 - **Styling:** Tailwind CSS + Vanilla CSS (for glassmorphism and specific animations).
 
 ## 2. Directory Structure Conventions
-- `src/game`: All Phaser-related code (Scenes, Systems, Physics).
+- `src/core`: **Phaser-free** core layer — framework-agnostic game types, registries, XP tables, stat/save/quest systems. Zero imports from Phaser. Used by both 2D (`PlayerState`, game registries) and 3D (Babylon slice runtime).
+- `src/game`: All Phaser-related code (Scenes, Systems, Physics, Graphics). Game registries now delegate data to `src/core/` equivalents.
+- `src/three-d`: Babylon.js 3D slice runtime. Imports from `src/core/` (never from `src/game/` for data).
 - `src/ui`: All React-related code (Components, Contexts, Hooks).
 - `src/editor`: Legacy or internal tools for map/asset management.
 - `public/data`: JSON data files (maps, NPCs, quests, dialogues). **No PNG assets.**

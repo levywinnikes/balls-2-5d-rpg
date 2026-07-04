@@ -18,7 +18,7 @@ export const HeroOverview: React.FC = () => {
     const ps = PlayerState.getInstance();
 
     // Lifting State for Inventory
-    const items = usePlayerState("inventoryUpdated", () => ps.getInventoryItems(), []);
+    const items = usePlayerState("inventoryUpdated", () => ps.getInventoryItems(), []) as any;
     const balance = usePlayerState("balanceChanged", () => ps.getBalance(), 0);
 
     return (

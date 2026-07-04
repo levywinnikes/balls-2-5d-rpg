@@ -295,11 +295,11 @@ export default class Player {
   // Removed local getSpeedPenaltyMultiplier, relying on PlayerState if needed or calculating locally using state
 
   public getEquippedWeapon(): WeaponDefinition | null {
-    return this.state.getEquippedWeapon();
+    return this.state.getEquippedWeapon() as any;
   }
 
   public getEquippedShield(): WeaponDefinition | null {
-    return this.state.getEquippedShield();
+    return this.state.getEquippedShield() as any;
   }
 
   // Métodos de Lógica de Jogo

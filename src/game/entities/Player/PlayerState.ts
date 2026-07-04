@@ -6,26 +6,26 @@
  */
 import { ItemType } from "../../../config/ItemConstants";
 import { EventEmitter } from "events";
-import { WeaponDefinition, WeaponRegistry } from "../weapons/WeaponRegistry";
+import { WeaponDefinition, WeaponRegistry } from "../../../core/registries/WeaponRegistry";
 import {
   getHeroSkinDefinition,
   heroSkinsUnlockedByName,
   isHeroSkinId,
   type HeroSkinId,
-} from "../../cosmetics/HeroSkinRegistry";
-import { ReflexXpTable } from "../../data/ReflexXpTable";
-import { StrengthXpTable } from "../../data/StrengthXpTable";
-import { DexterityXpTable } from "../../data/DexterityXpTable";
-import { IntelligenceXpTable } from "../../data/IntelligenceXpTable";
-import { XPTable } from "../../data/XPTable";
-import { StatManager } from "../../systems/StatManager";
-import { ShieldDefinition, ShieldRegistry } from "../Shields/ShieldRegistry";
-import { RuneRegistry } from "../../magic/RuneRegistry";
-import { QuestManager } from "../../systems/QuestManager";
-import { PlayerSnapshot } from "../../types/PlayerSnapshot";
+} from "../../../core/cosmetics/HeroSkinRegistry";
+import { ReflexXpTable } from "../../../core/data/ReflexXpTable";
+import { StrengthXpTable } from "../../../core/data/StrengthXpTable";
+import { DexterityXpTable } from "../../../core/data/DexterityXpTable";
+import { IntelligenceXpTable } from "../../../core/data/IntelligenceXpTable";
+import { XPTable } from "../../../core/data/XPTable";
+import { StatManager } from "../../../core/systems/StatManager";
+import { ShieldDefinition, ShieldRegistry } from "../../../core/registries/ShieldRegistry";
+import { RuneRegistry } from "../../../core/magic/RuneRegistry";
+import { QuestManager } from "../../../core/systems/QuestManager";
+import { PlayerSnapshot } from "../../../core/types/gameTypes";
 
 import { t_game } from "../../i18n/translations";
-import { ConsumableManager } from "../../managers/ConsumableManager";
+import { ConsumableManager } from "../../../core/managers/ConsumableManager";
 
 export type NotificationType =
   | "success"
@@ -58,7 +58,7 @@ export interface GroundDragData {
     stars?: number;
     attributes?: any[];
   };
-  sprite: Phaser.GameObjects.GameObject;
+  sprite: any;
 }
 
 export interface DroppedItemData {
@@ -1536,11 +1536,9 @@ export class PlayerState extends EventEmitter {
     if (!this.dragOrigin) return true; // No drag active or no origin tracked
     if (level !== this.dragOrigin.level) return false;
 
-    const dist = Phaser.Math.Distance.Between(
-      playerX,
-      playerY,
-      this.dragOrigin.x,
-      this.dragOrigin.y,
+    const dist = Math.hypot(
+      playerX - this.dragOrigin.x,
+      playerY - this.dragOrigin.y,
     );
     return dist <= this.pickupRange * 1.5 + 32; // Allow slightly more than pickup range (buffer)
     // Standard pickup range is ~150. Buffer prevents flickering if right on edge.

@@ -24,20 +24,20 @@ import {
 } from "../../game/entities/Player/PlayerState";
 import { t_game } from "../../game/i18n/translations";
 import { ItemType } from "../../config/ItemConstants";
-import { ItemRegistry } from "../../game/entities/items/ItemRegistry";
 import { AudioManager } from "../../game/systems/AudioManager";
-import { WeaponRegistry } from "../../game/entities/weapons/WeaponRegistry";
-import { ContainerRegistry } from "../../game/entities/containers/ContainerRegistry";
-import {
-  EnemyRegistry,
-  EnemyDefinition,
-} from "../../game/entities/EnemyRegistry";
+import { PathfindingManager } from "../../game/systems/PathfindingManager";
+import { WorldMapService } from "../../services/WorldMapService";
 import {
   EnemyMagicRegistry,
   registerDefaultMagics,
 } from "../../game/entities/EnemyMagicRegistry";
-import { PathfindingManager } from "../../game/systems/PathfindingManager";
-import { WorldMapService } from "../../services/WorldMapService";
+import { ItemRegistry } from "../../core/registries/ItemRegistry";
+import { WeaponRegistry } from "../../core/registries/WeaponRegistry";
+import { ContainerRegistry } from "../../core/registries/ContainerRegistry";
+import {
+  EnemyRegistry,
+  EnemyDefinition,
+} from "../../core/registries/EnemyRegistry";
 import {
   applyEnemyTargetVisual,
   applyEnemyAnimLod,
@@ -131,8 +131,8 @@ import {
 import { disposeAllPooledSpriteTexturesForScene } from "./SpriteTexturePool";
 import type { SliceTileDefinition } from "./SliceTileTypes";
 import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
-import { RuneRegistry } from "../../game/magic/RuneRegistry";
-import { SaveSystem } from "../../game/systems/SaveSystem";
+import { RuneRegistry } from "../../core/magic/RuneRegistry";
+import { SaveSystem } from "../../core/systems/SaveSystem";
 import type {
   GeometryWorkerRequest,
   GeometryWorkerResponse,
@@ -7913,10 +7913,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   });
 
   // ── Fase 2 (2.2): SaveSystem instance for 3D save/load ─────────────────────
-  // SaveSystem constructor still requires a Phaser.Scene for legacy 2D flows.
-  // For 3D we use saveGameDirect() which bypasses the Phaser dependency.
-  // We pass a minimal stub so the constructor doesn't crash.
-  const saveSystem = new SaveSystem({} as any);
+  const saveSystem = new SaveSystem();
   let autoSaveTimer = 0;
   const AUTO_SAVE_INTERVAL = 60; // seconds
 

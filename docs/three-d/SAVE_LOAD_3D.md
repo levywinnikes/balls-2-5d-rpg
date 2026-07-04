@@ -16,7 +16,7 @@ Related: [SLICE_RUNTIME.md §19](./SLICE_RUNTIME.md#19-save--load), [COMPATIBILI
 | **Electron** | `window.electronAPI.saveGame(name, data)` | ✅ Yes |
 | **Browser dev** | `SaveSystem.memorySaveData` in RAM | ❌ Session only |
 
-3D does **not** use `GameScene` or `SaveSystem.saveGame()`. It uses **`saveGameDirect()`** with a Phaser scene stub `{} as any`.
+3D does **not** use `GameScene` or `SaveSystem.saveGame()`. It uses **`saveGameDirect()`** on the Phaser-free `src/core/systems/SaveSystem.ts`. The core constructor takes no arguments.
 
 ---
 
@@ -33,7 +33,7 @@ Built in `SaveSystem.saveGameDirect`:
 | `deadEnemies` | `[]` (default) | **2D scene field** — not populated by 3D save today |
 | `activeEnemies` | `[]` (default) | **2D scene field** — not populated by 3D save today |
 | `timestamp` | `Date.now()` | |
-| `version` | `SaveSystem.SAVE_VERSION` | **`2.3.0`** — must match `PlayerSnapshot` comment |
+| `version` | `SaveSystem.SAVE_VERSION` (core) | **`2.3.0`** — must match `PlayerSnapshot` comment |
 
 ### When save runs
 
