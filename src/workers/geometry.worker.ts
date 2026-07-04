@@ -50,6 +50,7 @@ export interface GeometryWorkerRequest {
 
 export interface GeometryGroupBuffer {
   materialKey: string;
+  tileKey?: string; // "tx_ty" for per-tile meshes (blocking/wall tiles)
   positions: Float32Array;
   indices: Uint32Array;
   normals: Float32Array;
@@ -649,7 +650,8 @@ function computeNormals(positions: number[], indices: number[]): number[] {
 self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
   const { requestId, tiles } = evt.data;
 
-  // Group tiles by materialKey
+  // Group tiles: blocking tiles get per-tile keys (one mesh per tile),
+  // non-blocking tiles merge by materialKey as before.
   const accums = new Map<string, GeomAccum>();
 
   const getAccum = (key: string): GeomAccum => {
@@ -662,6 +664,11 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
   };
 
   for (const tile of tiles) {
+    // For blocking (wall) tiles use a per-tile key so each tile becomes its own mesh.
+    // This allows per-tile visibility control for the wall-occlusion system.
+    const perTileSuffix = tile.isBlocking ? `@@${tile.x}_${tile.y}` : "";
+    const accumKey = `${tile.materialKey}${perTileSuffix}`;
+    const accum = getAccum(accumKey);
     const {
       x,
       y,
@@ -669,7 +676,6 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
       isStair,
       height,
       levelOffsetY,
-      materialKey,
     } = tile;
 
     const profile = (geometryProfile || (isStair ? "stair" : "box")) as
@@ -698,7 +704,7 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
         stairBaseY,
         stairDir,
       );
-      mergeInto(getAccum(materialKey), positions, indices, uvs);
+      mergeInto(accum, positions, indices, uvs);
       // No solid wedge fill — it duplicated a ramp under the treads (FP looked like
       // two stacked stairs). Tread side faces close the mesh; void below is culled top-down.
       continue;
@@ -710,7 +716,7 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
         y,
         levelOffsetY + tileHeight,
       );
-      mergeInto(getAccum(materialKey), positions, indices, uvs);
+      mergeInto(accum, positions, indices, uvs);
       continue;
     }
 
@@ -724,7 +730,7 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
         tile.pitWallMask ?? 0,
         0.06,
       );
-      mergeInto(getAccum(materialKey), positions, indices, uvs);
+      mergeInto(accum, positions, indices, uvs);
       continue;
     }
 
@@ -742,7 +748,7 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
         tileHeight,
         dir,
       );
-      mergeInto(getAccum(materialKey), positions, indices, uvs);
+      mergeInto(accum, positions, indices, uvs);
       continue;
     }
 
@@ -752,15 +758,23 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
       tileHeight,
       levelOffsetY,
     );
-    mergeInto(getAccum(materialKey), positions, indices, uvs);
+    mergeInto(accum, positions, indices, uvs);
   }
 
-  // Build response groups with transferable buffers
+  // Remove the old materialKey variable reference — we now use accumKey directly.
+
+  // Build response groups with transferable buffers.
+  // Per-tile blocking tiles encode the tile coords after "@@"; parse it back out.
   const groups: GeometryGroupBuffer[] = [];
   const transferables: ArrayBuffer[] = [];
 
-  accums.forEach((accum, materialKey) => {
+  accums.forEach((accum, accumKey) => {
     if (accum.positions.length === 0) return;
+
+    // Split accumKey on "@@" to recover materialKey and optional tileKey
+    const sepIdx = accumKey.lastIndexOf("@@");
+    const materialKey = sepIdx < 0 ? accumKey : accumKey.substring(0, sepIdx);
+    const tileKey = sepIdx < 0 ? undefined : accumKey.substring(sepIdx + 2);
 
     const normals = computeNormals(accum.positions, accum.indices);
 
@@ -771,6 +785,7 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
 
     groups.push({
       materialKey,
+      tileKey,
       positions,
       indices,
       normals: normalsF,
