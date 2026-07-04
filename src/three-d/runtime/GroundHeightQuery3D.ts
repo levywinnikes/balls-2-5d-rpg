@@ -16,7 +16,12 @@ function toContext(
   levelToWorldY: GroundHeightLevelY,
   getTile: GroundHeightTileLookup,
   getTileDef: GroundHeightTileDefLookup,
-  options?: { levelHeightUnits?: number; feetClearance?: number },
+  options?: {
+    levelHeightUnits?: number;
+    feetClearance?: number;
+    floorRimOffset?: number;
+    floorSlabThickness?: number;
+  },
 ): TileSurfaceContext {
   return {
     levelToWorldY,
@@ -24,6 +29,8 @@ function toContext(
     getTileDef,
     levelHeightUnits: options?.levelHeightUnits,
     feetClearance: options?.feetClearance,
+    floorRimOffset: options?.floorRimOffset,
+    floorSlabThickness: options?.floorSlabThickness,
   };
 }
 
@@ -34,7 +41,12 @@ export function sampleGroundSurfaceY(
   levelToWorldY: GroundHeightLevelY,
   getTile: GroundHeightTileLookup,
   getTileDef: GroundHeightTileDefLookup,
-  options?: { levelHeightUnits?: number },
+  options?: {
+    levelHeightUnits?: number;
+    feetClearance?: number;
+    floorRimOffset?: number;
+    floorSlabThickness?: number;
+  },
 ): number {
   return sampleTileSurface(
     worldX,
@@ -51,7 +63,12 @@ export function sampleGroundFootY(
   levelToWorldY: GroundHeightLevelY,
   getTile: GroundHeightTileLookup,
   getTileDef: GroundHeightTileDefLookup,
-  options?: { levelHeightUnits?: number; feetClearance?: number },
+  options?: {
+    levelHeightUnits?: number;
+    feetClearance?: number;
+    floorRimOffset?: number;
+    floorSlabThickness?: number;
+  },
 ): number {
   return sampleActorFootY(
     worldX,

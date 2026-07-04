@@ -23,6 +23,8 @@ export function ThreeDSliceView() {
     null,
   );
   const [isInGame, setIsInGame] = useState(false);
+  const [worldLoading, setWorldLoading] = useState(false);
+  const [worldLoadError, setWorldLoadError] = useState<string | null>(null);
   const [runtimeBridge, setRuntimeBridge] = React.useState<{
     engine: any;
     scene: any;
@@ -73,6 +75,8 @@ export function ThreeDSliceView() {
     }
 
     setIsInGame(true);
+    setWorldLoading(true);
+    setWorldLoadError(null);
   }, []);
 
   // ── 1.4: Return to menu ────────────────────────────────────────────────────
@@ -83,6 +87,8 @@ export function ThreeDSliceView() {
     }
     setRuntimeBridge(null);
     setIsInGame(false);
+    setWorldLoading(false);
+    setWorldLoadError(null);
     // Clean up map params so next session starts fresh
     const url = new URL(window.location.href);
     url.searchParams.delete("map");
@@ -110,6 +116,30 @@ export function ThreeDSliceView() {
       charName: params.get("charName") || "Debug",
     });
   }, [handleThreeDStart]);
+
+  // Hide HUD until spawn chunk + foot snap are ready (prevents limbo fall on debug start).
+  useEffect(() => {
+    if (!isInGame) {
+      return;
+    }
+
+    const handleBootstrap = (event: Event) => {
+      const detail = (event as CustomEvent<{ ready: boolean; error?: string }>)
+        .detail;
+      if (detail.ready) {
+        setWorldLoading(false);
+        setWorldLoadError(null);
+        return;
+      }
+      setWorldLoading(false);
+      setWorldLoadError(detail.error ?? t_game("loading_bms_metadata_missing"));
+    };
+
+    document.addEventListener("slice3d:worldBootstrap", handleBootstrap);
+    return () => {
+      document.removeEventListener("slice3d:worldBootstrap", handleBootstrap);
+    };
+  }, [isInGame]);
 
   // ── 1.1: Only start Babylon when isInGame = true ──────────────────────────
   useEffect(() => {
@@ -331,6 +361,32 @@ export function ThreeDSliceView() {
             ref={canvasRef}
             className="w-full h-full block outline-none"
           />
+          {worldLoading && (
+            <div
+              className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-[#0b0f17]/85 pointer-events-auto"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <div className="h-10 w-10 rounded-full border-2 border-white/20 border-t-amber-400 animate-spin" />
+              <p className="mt-4 text-sm tracking-wide text-white/80">
+                {t_game("loading_initializing_world")}
+              </p>
+            </div>
+          )}
+          {worldLoadError && !worldLoading && (
+            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-[#0b0f17]/90 pointer-events-auto px-6 text-center">
+              <p className="text-sm text-red-300">{worldLoadError}</p>
+              <button
+                type="button"
+                className="mt-4 rounded border border-white/20 px-4 py-2 text-sm text-white/90 hover:bg-white/10"
+                onClick={handleReturnToMenu}
+              >
+                {t_game("menu_back")}
+              </button>
+            </div>
+          )}
+          {!worldLoading && (
+            <>
           {/* S9-T1: damage vignette flash — red radial border when player takes damage */}
           {vignetteActive && (
             <div
@@ -455,6 +511,8 @@ export function ThreeDSliceView() {
             scene={runtimeBridge?.scene}
           />
           <PerfMonitor />
+            </>
+          )}
         </>
       )}
     </div>

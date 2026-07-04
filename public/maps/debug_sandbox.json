@@ -1,8 +1,8 @@
 {
   "mapName": "debug_sandbox",
   "tileSize": 32,
-  "width": 34,
-  "height": 60,
+  "width": 40,
+  "height": 88,
   "config": {
     "startLevel": "0",
     "mapName": "Debug Sandbox",
@@ -127,15 +127,25 @@
         "cols": 8
       },
       "verticalDemo": {
-        "towerStairX": 29,
-        "towerStairY": 5,
-        "towerDownX": 29,
-        "towerDownY": 10,
-        "cellarStairX": 26,
-        "cellarStairY": 7,
-        "lake": {
-          "x": 27,
+        "towerRoom": {
+          "x": 22,
           "y": 3,
+          "w": 9,
+          "h": 7
+        },
+        "towerStairX": 26,
+        "towerStairY": 5,
+        "cellarRoom": {
+          "x": 3,
+          "y": 3,
+          "w": 9,
+          "h": 7
+        },
+        "cellarStairX": 7,
+        "cellarStairY": 5,
+        "lake": {
+          "x": 15,
+          "y": 4,
           "w": 4,
           "h": 3
         },
@@ -146,11 +156,27 @@
         "floorRamp": {
           "x": 27,
           "y": 4
-        },
-        "balconyFall": {
-          "x": 29,
-          "y": 13
         }
+      },
+      "stressVertical": {
+        "spire": {
+          "x": 26,
+          "y": 63,
+          "w": 10,
+          "h": 10,
+          "top": 6
+        },
+        "crater": {
+          "cx": 12,
+          "cy": 70,
+          "r": 5,
+          "depth": 5
+        },
+        "hall": {
+          "x": 13,
+          "y": 73
+        },
+        "annexOriginY": 60
       }
     }
   },
@@ -167,6 +193,13 @@
     "stu",
     "std",
     "rfu",
+    "hol",
+    "dfn",
+    "dwl",
+    "rof",
+    "stn",
+    "bal",
+    "arc",
     "en09",
     "en00",
     "en01",
@@ -297,6 +330,51 @@
       "levelTransition": "up",
       "renderAs": "floor",
       "geometryProfile": "ramp-n"
+    },
+    "hol": {
+      "id": "hole",
+      "color": "#111827",
+      "height": 0.02,
+      "renderAs": "floor",
+      "transition": "down"
+    },
+    "dfn": {
+      "id": "dungeon-floor",
+      "color": "#1e293b",
+      "height": 0.06,
+      "renderAs": "floor"
+    },
+    "dwl": {
+      "id": "dungeon-wall",
+      "block": true,
+      "color": "#374151",
+      "height": 2.8,
+      "renderAs": "block"
+    },
+    "rof": {
+      "id": "roof-tile",
+      "color": "#c2622d",
+      "height": 0.45,
+      "renderAs": "floor"
+    },
+    "stn": {
+      "id": "stone-plaza",
+      "color": "#94a3b8",
+      "height": 0.07,
+      "renderAs": "floor"
+    },
+    "bal": {
+      "id": "balcony",
+      "color": "#cbd5e1",
+      "height": 0.08,
+      "renderAs": "floor"
+    },
+    "arc": {
+      "id": "archway",
+      "block": true,
+      "color": "#a8a29e",
+      "height": 3.8,
+      "renderAs": "block"
     }
   },
   "entityTemplates": {
@@ -684,19 +762,109 @@
           "symbol": "it22"
         },
         {
-          "x": 27,
-          "y": 6,
+          "x": 15,
+          "y": 7,
           "symbol": "pr01"
         },
         {
-          "x": 28,
-          "y": 6,
+          "x": 16,
+          "y": 7,
           "symbol": "pr01"
+        },
+        {
+          "x": 27,
+          "y": 10,
+          "symbol": "pr00"
+        },
+        {
+          "x": 6,
+          "y": 10,
+          "symbol": "pr00"
         }
       ]
     },
     "1": {
       "binFile": "debug_sandbox_1.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "2": {
+      "binFile": "debug_sandbox_2.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "3": {
+      "binFile": "debug_sandbox_3.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "4": {
+      "binFile": "debug_sandbox_4.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "5": {
+      "binFile": "debug_sandbox_5.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "6": {
+      "binFile": "debug_sandbox_6.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "7": {
+      "binFile": "debug_sandbox_7.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "-5": {
+      "binFile": "debug_sandbox_-5.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "-4": {
+      "binFile": "debug_sandbox_-4.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "-3": {
+      "binFile": "debug_sandbox_-3.bin",
+      "playerPos": {
+        "x": 112,
+        "y": 176
+      },
+      "entities": []
+    },
+    "-2": {
+      "binFile": "debug_sandbox_-2.bin",
       "playerPos": {
         "x": 112,
         "y": 176

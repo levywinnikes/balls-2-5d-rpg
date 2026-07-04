@@ -21,7 +21,9 @@
     "doorTemplateId": "wooden_door",
     "alcoveWidth": 7,
     "alcoveHeight": 5,
-    "rowCorridorHeight": 2
+    "rowCorridorHeight": 2,
+    "stressZoneHeight": 28,
+    "stressZoneExtraWidth": 6
   },
   "excludeEnemies": [],
   "props": [
@@ -108,5 +110,5 @@
       "wild_flower": "pr01"
     }
   },
-  "generatedAt": "2026-06-28T23:08:27.225Z"
+  "generatedAt": "2026-07-04T01:43:10.447Z"
 }

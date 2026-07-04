@@ -63,6 +63,7 @@ import {
   resolveHeroBmsDirection,
   HERO_BILLBOARD_LAYOUT,
   getHeroFirstPersonEyeHeight,
+  getHeroVisibleBodyHeight,
   getGeneratedDeathDurationMs,
   getGeneratedAttackDurationMs,
   type HeroAnimState,
@@ -91,27 +92,31 @@ import {
 } from "./InteractableWallRevealSystem";
 import {
   computeWaterPitWallMask,
+  WATER_HOLE_RIM_OFFSET,
   waterHoleDepthForTileId,
 } from "./WaterHoleConfig";
-import { FEET_CLEARANCE, sampleGroundFootY } from "./GroundHeightQuery3D";
+import {
+  FEET_CLEARANCE,
+  sampleGroundFootY,
+  sampleGroundSurfaceY,
+} from "./GroundHeightQuery3D";
 import {
   sampleActorWorldY,
   type TileSurfaceContext,
 } from "./TileSurfaceResolver";
 import {
+  isGradedWalkTile,
   probeRampLevelTransition,
-  shouldStartLedgeFall,
 } from "./VerticalTransition3D";
 import {
   DEFAULT_OCCLUSION_SCAN_RADIUS,
-  DEFAULT_VERTICAL_COLUMN_RADIUS,
   resolveUpperOcclusionLevel,
   resolveVerticalVisibleLevels,
 } from "./VerticalLevelVisibility3D";
 import { findFirstBlockingTileOnWorldLine } from "./WallRevealLos";
+import { resolveVerticalLevelAfterMove } from "./StairTraversal3D";
 import {
   probeHoleLevelTransition,
-  probeStairLevelTransition,
   STAIR_LANDING_LOCAL_Z,
 } from "./StairConfig3D";
 import { playRespawnGlowAt, preloadRespawnGlowTextures } from "./VfxBillboardFactory";
@@ -140,6 +145,7 @@ type SliceRuntime = {
   engine: Engine;
   scene: Scene;
   save: () => Promise<boolean>;
+  whenWorldReady: () => Promise<void>;
   dispose: () => void;
 };
 
@@ -409,12 +415,25 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     "debug_sandbox";
   // Match standard wall height to remove visible seams between stacked floors.
   const LEVEL_HEIGHT_UNITS = 2.0;
-  // Floor mesh top for default tiles (see tileDefinitions.height, e.g. cob 0.06).
-  const FLOOR_SURFACE_Y = 0.06;
+  const FLOOR_SLAB_THICKNESS = 0.32;
+  // Walk surface = top of 3D floor slab (must match geometry.worker box height).
+  const FLOOR_SURFACE_Y = FLOOR_SLAB_THICKNESS;
+  /** Door panel fits inside standard wall extrusion (level 0 → wall top). */
+  const DOOR_PANEL_HEIGHT = Math.max(
+    1.35,
+    LEVEL_HEIGHT_UNITS - FLOOR_SURFACE_Y - 0.08,
+  );
   // Player root = feet on floor (hero billboard anchorY targets local y=0).
   const PLAYER_GROUND_OFFSET = FLOOR_SURFACE_Y;
+  /** Props / dropped loot sit on walkable surface (not actor foot clearance). */
+  const WORLD_ANCHOR_REST_OFFSET = 0.012;
+  const DROPPED_ITEM_REST_OFFSET = 0.02;
   // Eye line ~58% of hero body height — chest-level FP view (see HERO_FIRST_PERSON_EYE_BODY_RATIO).
   const FIRST_PERSON_EYE_ABOVE_FEET = getHeroFirstPersonEyeHeight();
+  const HERO_BODY_HEIGHT = getHeroVisibleBodyHeight();
+  const CEILING_BODY_CLEARANCE = 0.14;
+  /** Headroom (world units) for a full jump when under a solid ceiling tile. */
+  const JUMP_FULL_HEADROOM = 0.85;
 
   // ── S12-T1/T4: Layer Semantics & Ownership (canonical, top-down is the product mode) ───────────
   // Layer conventions:
@@ -619,9 +638,30 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   heroBall.parent = player;
   heroBall.position = new Vector3(0, 0, 0);
   heroBall.isPickable = false;
+  heroBall.setEnabled(false);
 
+  /** Hidden until map binary + spawn chunk + foot snap are ready (avoids limbo fall). */
+  let worldBootstrapReady = false;
+  let resolveWorldReady: (() => void) | null = null;
+  const worldReadyPromise = new Promise<void>((resolve) => {
+    resolveWorldReady = resolve;
+  });
+
+  const setPlayerAvatarVisible = (visible: boolean) => {
+    player.setEnabled(visible);
+    heroShadow.setEnabled(visible);
+    if (!visible) {
+      heroBillboard.setEnabled(false);
+      heroBall.setEnabled(false);
+      return;
+    }
+    heroBillboard.setEnabled(!isFirstPerson);
+  };
+  setPlayerAvatarVisible(false);
   (heroSpriteMat as any)._onReady = () => {
-    heroBall.setEnabled(false);
+    if (worldBootstrapReady) {
+      heroBall.setEnabled(false);
+    }
   };
 
   // Fallback pickup kept only for empty-state debugging while 3D begins consuming
@@ -1813,7 +1853,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     getTileDef: (symbol) =>
       symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
     levelHeightUnits: LEVEL_HEIGHT_UNITS,
-    floorRimOffset: FLOOR_SURFACE_Y,
+    floorRimOffset: WATER_HOLE_RIM_OFFSET,
+    floorSlabThickness: FLOOR_SLAB_THICKNESS,
     feetClearance: FEET_CLEARANCE,
   });
 
@@ -1826,8 +1867,41 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       getMapTileAt,
       (symbol) =>
         symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-      { levelHeightUnits: LEVEL_HEIGHT_UNITS, feetClearance: FEET_CLEARANCE },
+      { levelHeightUnits: LEVEL_HEIGHT_UNITS, feetClearance: FEET_CLEARANCE, floorSlabThickness: FLOOR_SLAB_THICKNESS, floorRimOffset: WATER_HOLE_RIM_OFFSET },
     );
+
+  const getGroundSurfaceY = (worldX: number, worldZ: number, level: string) => {
+    if (!levelBinaryCache.has(level)) {
+      return levelToWorldY(level) + FLOOR_SURFACE_Y;
+    }
+    return sampleGroundSurfaceY(
+      worldX,
+      worldZ,
+      level,
+      levelToWorldY,
+      getMapTileAt,
+      (symbol) =>
+        symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+      {
+        levelHeightUnits: LEVEL_HEIGHT_UNITS,
+        floorSlabThickness: FLOOR_SLAB_THICKNESS,
+        floorRimOffset: WATER_HOLE_RIM_OFFSET,
+      },
+    );
+  };
+
+  /** Surface Y for billboards / loot (feet row at root origin). Includes water sink. */
+  const resolveWorldAnchorY = (
+    worldX: number,
+    worldZ: number,
+    level: string,
+    restOffset = WORLD_ANCHOR_REST_OFFSET,
+  ) => {
+    const surfaceY = getGroundSurfaceY(worldX, worldZ, level);
+    const aquatic = getAquaticSampleAt(worldX, worldZ, level);
+    const sink = aquatic.mode === "dry" ? 0 : aquatic.sinkOffset;
+    return surfaceY + sink + restOffset;
+  };
 
   const applyActorAquaticY = (worldPos: Vector3, level: string) => {
     const sample = getAquaticSampleAt(worldPos.x, worldPos.z, level);
@@ -1848,11 +1922,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       landingLocalZ: number;
       guardMs?: number;
     },
+    options?: { natural?: boolean },
   ) => {
     if (newLevel === activeLevel) {
       return;
     }
     const previousLevel = activeLevel;
+    const natural = options?.natural === true;
     activeLevel = newLevel;
     activeLevelNumber = parseLevelNumber(newLevel);
     playerState.setCurrentLevel(newLevel);
@@ -1873,18 +1949,32 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       };
     }
 
-    clearAllChunks();
-    invalidateVerticalVisibilityCache();
-    chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
-    snapPlayerFootToActiveLevel();
+    if (natural) {
+      invalidateVerticalVisibilityCache();
+      chunkUpdateTimer = 0;
+    } else {
+      clearAllChunks();
+      invalidateVerticalVisibilityCache();
+      chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
+      snapPlayerFootToActiveLevel();
+    }
     const mapData = mapDataCache;
     if (mapData) {
       void loadLevelBinary(newLevel, mapData).then(() => {
-        snapPlayerFootToActiveLevel();
+        if (!natural) {
+          snapPlayerFootToActiveLevel();
+        }
+        reanchorWorldContentOnLevel(newLevel);
         updateChunks();
       });
     }
-    void ensureMapLevelReady(newLevel);
+    // Escada/rampa natural: andares ±1 já estão nos chunks (vertical stack).
+    // ensureMapLevelReady → renderMapLevel apagava tudo e reconstruía do zero.
+    if (!natural) {
+      void ensureMapLevelReady(newLevel);
+    } else {
+      rebuildNavigationWindow(newLevel);
+    }
     void ensureLevelDoorsSeeded(newLevel);
     void ensureLevelEnemiesSeeded(newLevel);
     void ensureLevelItemsSeeded(newLevel);
@@ -1897,6 +1987,78 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       playerX: Math.round(player.position.x * 100) / 100,
       playerZ: Math.round(player.position.z * 100) / 100,
     });
+  };
+
+  const stairLevelSyncOptions = () => ({
+    parseLevelNumber,
+    hasLevel: (level: string) => Boolean(mapDataCache?.levels?.[level]),
+    levelToWorldY,
+    floorSurfaceY: FLOOR_SURFACE_Y,
+    levelHeightUnits: LEVEL_HEIGHT_UNITS,
+  });
+
+  /**
+   * Map layer follows stair exit + foot height (Quake-style walk, no Z snap).
+   *
+   * FIX: Added levelTransitionCooldown guard so stair-triggered level changes
+   * cannot fire again for 0.35 s, preventing floor-cascade on stacked stair tiles.
+   */
+  const syncVerticalLevelFromMovement = (didMove: boolean, moveStartX: number, moveStartZ: number) => {
+    if (!worldBootstrapReady) {
+      return;
+    }
+    const mapData = mapDataCache;
+    if (!mapData?.levels) {
+      return;
+    }
+    if (verticalTransitionGuard) {
+      if (performance.now() <= verticalTransitionGuard.untilMs) {
+        const tileX = Math.floor(player.position.x);
+        const tileZ = Math.floor(player.position.z);
+        if (
+          tileX === verticalTransitionGuard.tileX &&
+          tileZ === verticalTransitionGuard.tileZ
+        ) {
+          return;
+        }
+      } else {
+        verticalTransitionGuard = null;
+      }
+    }
+
+    // Stair-based level changes share the same cooldown as ramp/hole transitions.
+    // This prevents rapid re-triggering when the player is still inside the exit
+    // zone after a level change (the floor-cascade bug on stacked stair columns).
+    if (levelTransitionCooldown > 0) {
+      return;
+    }
+
+    if (holeFallLandingLevel || isPlayerOverVoidAtLevel(activeLevel)) {
+      return;
+    }
+
+    const inferred = resolveVerticalLevelAfterMove({
+      footY: player.position.y,
+      worldX: player.position.x,
+      worldZ: player.position.z,
+      moveStartX,
+      moveStartZ,
+      didMove,
+      activeLevel,
+      levelKeys: Object.keys(mapData.levels),
+      getTile: getMapTileAt,
+      getTileDef: (symbol) =>
+        symbol ? mapData.tileDefinitions?.[symbol] : undefined,
+      options: stairLevelSyncOptions(),
+    });
+
+    if (inferred !== activeLevel) {
+      applyActiveLevelChange(inferred, undefined, { natural: true });
+      snapFootToGradedSurface(inferred);
+      // Set cooldown so the new level cannot be immediately re-transitioned from
+      // the same stair tile position (root fix for the cascading floors bug).
+      levelTransitionCooldown = 0.35;
+    }
   };
 
   const snapPlayerFootToActiveLevel = () => {
@@ -1924,6 +2086,45 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const isVoidSymbol = (symbol: string | null) => !symbol || symbol === "...";
+
+  const isPlayerOverVoidAtLevel = (level: string) => {
+    const tileX = Math.floor(player.position.x);
+    const tileZ = Math.floor(player.position.z);
+    return isVoidSymbol(getMapTileAt(level, tileX, tileZ));
+  };
+
+  const isDownHoleTile = (tileDef?: SliceTileDefinition | null) => {
+    if (!tileDef) {
+      return false;
+    }
+    const legacy = tileDef as SliceTileDefinition & {
+      transition?: "up" | "down" | "dwn";
+    };
+    return (
+      tileDef.levelTransition === "down" ||
+      legacy.transition === "down" ||
+      legacy.transition === "dwn" ||
+      tileDef.id === "hole"
+    );
+  };
+
+  const isStairTileDef = (tileDef?: SliceTileDefinition | null) =>
+    tileDef?.stairDir !== undefined || tileDef?.geometryProfile === "stair";
+
+  const getTileDefAt = (level: string, tileX: number, tileZ: number) => {
+    const symbol = getMapTileAt(level, tileX, tileZ);
+    return symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined;
+  };
+
+  const isGradedWalkAt = (worldX: number, worldZ: number, level: string) =>
+    isGradedWalkTile(
+      getTileDefAt(level, Math.floor(worldX), Math.floor(worldZ)),
+      LEVEL_HEIGHT_UNITS,
+    );
+
+  const snapFootToGradedSurface = (level: string) => {
+    applyActorAquaticY(player.position, level);
+  };
 
   const getPropTileKey = (tileX: number, tileY: number) =>
     `${tileX},${tileY}`;
@@ -1999,7 +2200,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     worldX: number,
     worldZ: number,
     radius = 0.32,
-    options?: { blockVoidForPlayer?: boolean },
+    options?: { blockVoidForPlayer?: boolean; footY?: number },
   ) => {
     const mapData = mapDataCache;
     if (!mapData || !mapData.width || !mapData.height) {
@@ -2008,6 +2209,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     const blockVoidForPlayer =
       Boolean(options?.blockVoidForPlayer) && playerState.isFallSafetyEnabled();
+    const footY = options?.footY ?? player.position.y;
 
     const samplePoints: Array<[number, number]> = [
       [worldX, worldZ],
@@ -2019,6 +2221,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     for (const [sx, sz] of samplePoints) {
       if (sx < 0 || sz < 0 || sx >= mapData.width || sz >= mapData.height) {
+        return true;
+      }
+
+      if (isBlockedByUpperFloorSlabAt(sx, sz, footY)) {
         return true;
       }
 
@@ -2169,10 +2375,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     mapMaxZ = Math.max(0.5, currentMapHeight - 0.5);
 
     rebuildNavigationGrid(level);
-    if (lastChunkRenderLevel !== level) {
+    // Chunks are multi-level (vertical stack). Only wipe on first map draw.
+    if (lastChunkRenderLevel === null) {
       clearAllChunks();
-      lastChunkRenderLevel = level;
     }
+    lastChunkRenderLevel = level;
 
     // Tiles are rendered lazily via chunk streaming (updateChunks in the render loop)
     // Trigger an immediate first chunk load so the player doesn't see empty map on spawn
@@ -2252,7 +2459,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   // Build an 8-step staircase mesh for a single 1×1-tile footprint (fallback path).
-  // Steps run south→north (low at +Z, high at -Z). Keep in sync with geometry.worker.ts.
+  // South (+Z) = entry, north (−Z) = exit. Keep in sync with geometry.worker.ts.
   const buildStairMesh = (
     name: string,
     tx: number,
@@ -2272,8 +2479,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const x1 = tx + 1;
       const z0 = tz + (STEP_COUNT - 1 - i) * stepDepth;
       const z1 = tz + (STEP_COUNT - i) * stepDepth;
-      const y0 = baseY + i * stepRise;
-      const y1 = baseY + (i + 1) * stepRise;
+      const y1 = baseY + FLOOR_SURFACE_Y + (i + 1) * stepRise;
+      const y0 = y1 - stepRise;
 
       const base = allPositions.length / 3;
       // 8 vertices — shared per step (ComputeNormals averages them; fine for steps)
@@ -2361,23 +2568,35 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let lastCachedTileZ = -9999;
   let lastCachedActiveLevel = "";
   let lastCachedIsFirstPerson = false;
+  let lastCachedVerticalStackRadius = -1;
 
   const invalidateVerticalVisibilityCache = () => {
     lastCachedTileX = -9999;
     lastCachedTileZ = -9999;
     lastCachedActiveLevel = "";
+    lastCachedVerticalStackRadius = -1;
     cachedRenderableLevels = [];
+  };
+
+  const resolveVerticalStackRadiusTiles = () => {
+    const drawRadiusChunks = isFirstPerson
+      ? firstPersonDrawRadiusChunks
+      : topDownDrawRadiusChunks;
+    // Align vertical stack with chunk streaming (Chebyshev + unload margin).
+    return CHUNK_SIZE * (drawRadiusChunks + 1);
   };
 
   const getRenderableLevels = (): string[] => {
     const tileX = Math.floor(player.position.x);
     const tileZ = Math.floor(player.position.z);
+    const verticalStackRadius = resolveVerticalStackRadiusTiles();
 
     if (
       tileX === lastCachedTileX &&
       tileZ === lastCachedTileZ &&
       activeLevel === lastCachedActiveLevel &&
       isFirstPerson === lastCachedIsFirstPerson &&
+      verticalStackRadius === lastCachedVerticalStackRadius &&
       cachedRenderableLevels.length > 0
     ) {
       return cachedRenderableLevels;
@@ -2387,6 +2606,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     lastCachedTileZ = tileZ;
     lastCachedActiveLevel = activeLevel;
     lastCachedIsFirstPerson = isFirstPerson;
+    lastCachedVerticalStackRadius = verticalStackRadius;
 
     const mapData = mapDataCache;
     if (!mapData?.levels) {
@@ -2394,20 +2614,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return cachedRenderableLevels;
     }
 
-    // Underground: mesh the active floor; in first-person also load one level up as ceiling.
-    if (activeLevelNumber < 0) {
-      const levels = [activeLevel];
-      if (isFirstPerson) {
-        const ceilingLevel = String(activeLevelNumber + 1);
-        if (mapData.levels[ceilingLevel]) {
-          levels.push(ceilingLevel);
-        }
-      }
-      cachedRenderableLevels = levels;
-      return cachedRenderableLevels;
-    }
-
-    cachedRenderableLevels = resolveVerticalVisibleLevels(
+    const stack = resolveVerticalVisibleLevels(
       activeLevel,
       tileX,
       tileZ,
@@ -2415,8 +2622,22 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       getMapTileAt,
       (symbol) =>
         symbol ? mapData.tileDefinitions?.[symbol] : undefined,
-      { parseLevelNumber, columnRadius: DEFAULT_VERTICAL_COLUMN_RADIUS },
+      { parseLevelNumber, columnRadius: verticalStackRadius },
     );
+    const merged = new Set<string>(stack);
+    merged.add(activeLevel);
+    const n = parseLevelNumber(activeLevel);
+    const below = String(n - 1);
+    const above = String(n + 1);
+    if (mapData.levels[below]) {
+      merged.add(below);
+    }
+    if (mapData.levels[above]) {
+      merged.add(above);
+    }
+    cachedRenderableLevels = Object.keys(mapData.levels)
+      .filter((key) => merged.has(key))
+      .sort((a, b) => parseLevelNumber(a) - parseLevelNumber(b));
     return cachedRenderableLevels;
   };
 
@@ -2427,17 +2648,27 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const lerpFactor = Math.min(1, deltaSeconds * 8);
 
     if (isFirstPerson && levelMeshes.size > 0) {
-      const ceilingLevelNum = activeLevelNumber + 1;
-      levelMeshes.forEach((meshes, levelKey) => {
-        const levelNum = parseLevelNumber(levelKey);
-        const inVerticalColumn = verticallyVisible.has(levelKey);
+      const showLevels = new Set<string>([activeLevel]);
+      const n = parseLevelNumber(activeLevel);
+      const above = String(n + 1);
+      const below = String(n - 1);
+      if (verticallyVisible.has(above)) {
+        showLevels.add(above);
+      }
+      if (verticallyVisible.has(below)) {
+        showLevels.add(below);
+      }
+      if (holeFallLandingLevel) {
+        showLevels.add(holeFallLandingLevel);
+      }
 
+      levelMeshes.forEach((meshes, levelKey) => {
+        const showLevel = showLevels.has(levelKey);
         meshes.forEach((mesh) => {
           if (!mesh || mesh.isDisposed()) {
             return;
           }
-
-          if (!inVerticalColumn || levelNum > ceilingLevelNum) {
+          if (!showLevel) {
             if (mesh.visibility !== 0) {
               mesh.visibility = 0;
             }
@@ -2446,7 +2677,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             }
             return;
           }
-
           if (mesh.visibility !== 1) {
             mesh.visibility = 1;
           }
@@ -2456,11 +2686,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         });
       });
     } else if (!isFirstPerson && levelMeshes.size > 0) {
+      const playerChunkX = Math.floor(player.position.x / CHUNK_SIZE);
+      const playerChunkZ = Math.floor(player.position.z / CHUNK_SIZE);
+
       levelMeshes.forEach((meshes, levelKey) => {
         const levelNum = parseLevelNumber(levelKey);
         const inVerticalColumn = verticallyVisible.has(levelKey);
-        const occluded =
-          occlusionStartLevel !== null && levelNum >= occlusionStartLevel;
 
         meshes.forEach((mesh) => {
           if (!mesh || mesh.isDisposed()) {
@@ -2477,8 +2708,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             return;
           }
 
+          const chunkMeta = mesh.metadata as
+            | { chunkCx?: number; chunkCy?: number }
+            | undefined;
+          const inPlayerChunk =
+            chunkMeta?.chunkCx === playerChunkX &&
+            chunkMeta?.chunkCy === playerChunkZ;
+          // R1: peel roof only above the hero's chunk (top-down legibility).
+          const occluded =
+            occlusionStartLevel !== null &&
+            levelNum >= occlusionStartLevel &&
+            inPlayerChunk;
+
           if (occluded) {
-            // R1: hide upper floors immediately when the hero is under cover.
             if (mesh.visibility !== 0) {
               mesh.visibility = 0;
             }
@@ -2514,12 +2756,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       visibleLevels: Array.from(verticallyVisible),
       occludedFromLevel: occlusionStartLevel,
       occlusionScanRadius: DEFAULT_OCCLUSION_SCAN_RADIUS,
-      firstPersonCeilingLevel:
-        isFirstPerson && activeLevelNumber < 0
-          ? String(activeLevelNumber + 1)
-          : null,
+      verticalStackRadiusTiles: resolveVerticalStackRadiusTiles(),
+      firstPersonCeilingLevel: null,
       totalLevels: mapData?.levels ? Object.keys(mapData.levels).length : 1,
-      columnRadius: DEFAULT_VERTICAL_COLUMN_RADIUS,
+      columnRadius: resolveVerticalStackRadiusTiles(),
       playerTile: {
         x: Math.floor(player.position.x),
         y: Math.floor(player.position.z),
@@ -2544,10 +2784,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return null;
     }
 
-    return resolveUpperOcclusionLevel(
+    const tileX = Math.floor(player.position.x);
+    const tileZ = Math.floor(player.position.z);
+
+    if (isGradedWalkAt(player.position.x, player.position.z, activeLevel)) {
+      return null;
+    }
+
+    const raw = resolveUpperOcclusionLevel(
       activeLevel,
-      Math.floor(player.position.x),
-      Math.floor(player.position.z),
+      tileX,
+      tileZ,
       Object.keys(mapData.levels),
       getMapTileAt,
       {
@@ -2555,6 +2802,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         scanRadius: DEFAULT_OCCLUSION_SCAN_RADIUS,
       },
     );
+    if (raw == null) {
+      return null;
+    }
+
+    const upperFloorY = levelToWorldY(raw) + FLOOR_SURFACE_Y;
+    const headY = player.position.y + HERO_BODY_HEIGHT * 0.92;
+    if (headY >= upperFloorY - 0.15) {
+      return null;
+    }
+
+    return raw;
   };
 
   /** @deprecated Use syncVerticalLevelVisibility — kept as alias for chunk register. */
@@ -2696,6 +2954,29 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             continue;
           }
 
+          if (isDownHoleTile(tileDef)) {
+            const pitDepth = Math.max(0.45, LEVEL_HEIGHT_UNITS * 0.82);
+            const pitWallMask = 0x0f;
+            const holeMat = getTileMaterial(symbol, tileDef, "#111827");
+            const materialKey = `${renderLevel}::${holeMat.name}`;
+
+            tiles.push({
+              x,
+              y,
+              symbol,
+              tileId,
+              isBlocking: false,
+              geometryProfile: "water-hole",
+              isStair: false,
+              height: 0,
+              levelOffsetY,
+              materialKey,
+              pitDepth,
+              pitWallMask,
+            });
+            continue;
+          }
+
           const inferredStair = tileDef?.stairDir !== undefined;
           const geometryProfile =
             tileDef?.geometryProfile ?? (inferredStair ? "stair" : "box");
@@ -2713,7 +2994,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
                 Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H),
                 DEFAULT_WALL_H,
               )
-            : Math.max(0.03, tileDef?.height ?? 0.08);
+            : Math.max(
+                FLOOR_SLAB_THICKNESS,
+                tileDef?.height ?? FLOOR_SLAB_THICKNESS,
+              );
 
           // Resolve material key on main thread (getTileMaterial caches anyway)
           const fallbackHex =
@@ -2799,19 +3083,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         vd.applyToMesh(mesh);
 
         mesh.material = entry.mat;
+        mesh.metadata = { chunkCx: cx, chunkCy: cy };
         registerMeshForLevel(entry.levelKey, mesh);
-
-        // If this level is currently occluded, start the mesh hidden so it
-        // doesn't flash visible for one frame before updateUpperLevelVisibility runs.
-        const meshLevelNum = parseLevelNumber(entry.levelKey);
-        const occlusionAtRegister = findUpperOcclusionLevel();
-        if (
-          occlusionAtRegister !== null &&
-          meshLevelNum >= occlusionAtRegister
-        ) {
-          mesh.visibility = 0;
-          mesh.setEnabled(false);
-        }
 
         meshes.push(mesh);
       }
@@ -2871,6 +3144,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       dist: number;
       lod: 0 | 1 | 2;
     }> = [];
+
+    const resolveDesiredChunkLod = (dist: number): 0 | 1 | 2 => {
+      if (isFirstPerson) {
+        // FP: full detail up close; walls-only silhouette at distance (never lod 2 hole).
+        if (dist <= 1) {
+          return 0;
+        }
+        return 1;
+      }
+      return dist <= 2 ? 0 : dist <= 4 ? 1 : 2;
+    };
+
     for (let dy = -drawRadiusChunks; dy <= drawRadiusChunks; dy++) {
       for (let dx = -drawRadiusChunks; dx <= drawRadiusChunks; dx++) {
         const cx = playerCX + dx;
@@ -2880,7 +3165,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         }
 
         const dist = Math.max(Math.abs(dx), Math.abs(dy));
-        const desiredLod: 0 | 1 | 2 = dist <= 2 ? 0 : dist <= 4 ? 1 : 2;
+        const desiredLod = resolveDesiredChunkLod(dist);
         const key = `${cx}_${cy}`;
 
         // If the chunk is already loaded with a coarser LOD, force rebuild
@@ -2921,6 +3206,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       builtThisTick,
       drawRadiusChunks,
       chunkBuildBudgetPerTick,
+      firstPersonLod: isFirstPerson,
       pendingCandidates: Math.max(0, chunkCandidates.length - builtThisTick),
       unloadedThisTick,
       pendingUnloads,
@@ -3092,8 +3378,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const state = playerState.getDoorState(door.uuid);
     const isOpen = !!state?.open;
     const levelWorldY = levelToWorldY(door.level);
-    const floorTop = levelWorldY + 0.06;
-    const doorHeight = 1.9;
+    const floorTop = levelWorldY + FLOOR_SURFACE_Y;
+    const doorHeight = DOOR_PANEL_HEIGHT;
     const centerY = floorTop + doorHeight / 2;
     const tileCenterX = door.tileX + 0.5;
     const tileCenterZ = door.tileY + 0.5;
@@ -3426,7 +3712,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         entity.y,
         mapData,
       );
-      const doorHeight = 1.9;
+      const doorHeight = DOOR_PANEL_HEIGHT;
 
       const doorMesh = MeshBuilder.CreateBox(
         `slice-door-${uuid}`,
@@ -3645,6 +3931,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       currentMapHeight,
     );
 
+    snapPlayerFootToActiveLevel();
+
     return resolvedLevel;
   };
 
@@ -3779,14 +4067,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     const uid = `${level}_${spawn.propId}_${spawn.tileX}_${spawn.tileY}`;
-    const worldPos = new Vector3(
-      spawn.tileX + 0.5,
-      levelToWorldY(level),
-      spawn.tileY + 0.5,
-    );
-    applyActorAquaticY(worldPos, level);
+    const worldX = spawn.tileX + 0.5;
+    const worldZ = spawn.tileY + 0.5;
     meshRoot.parent = mapRoot;
-    meshRoot.position = worldPos;
+    meshRoot.position.set(
+      worldX,
+      resolveWorldAnchorY(worldX, worldZ, level),
+      worldZ,
+    );
     meshRoot.setEnabled(false);
 
     props.set(uid, {
@@ -3827,6 +4115,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const distSq = dx * dx + dz * dz;
       if (distSq <= despawnRadiusSq) {
         if (prop.meshRoot.isEnabled()) {
+          prop.meshRoot.position.y = resolveWorldAnchorY(
+            prop.meshRoot.position.x,
+            prop.meshRoot.position.z,
+            prop.level,
+          );
           applyPropAnimLod(prop, Math.hypot(dx, dz));
         }
         return;
@@ -3853,8 +4146,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
       const dist = Math.hypot(dx, dz);
-      const footY = getGroundFootY(spawnX, spawnZ, entry.level);
-      spawned.meshRoot.position.y = footY;
+      spawned.meshRoot.position.y = resolveWorldAnchorY(spawnX, spawnZ, entry.level);
       spawned.meshRoot.setEnabled(true);
       applyPropAnimLod(spawned, dist);
     });
@@ -5322,12 +5614,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         droppedItemMeshes.set(meshKey, container);
       }
 
-      const levelWorldY = levelToWorldY(currentLevel);
-      container.position.set(
-        worldToSliceCoord(item.x),
-        levelWorldY + 0.01,
-        worldToSliceCoord(item.y),
+      const ix = worldToSliceCoord(item.x);
+      const iz = worldToSliceCoord(item.y);
+      const anchorY = resolveWorldAnchorY(
+        ix,
+        iz,
+        currentLevel,
+        DROPPED_ITEM_REST_OFFSET,
       );
+      container.position.set(ix, anchorY, iz);
       container.metadata = {
         ...item,
         level: currentLevel,
@@ -5336,7 +5631,29 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
 
     hasRealDroppedItems = persistentItems.length > 0;
-    pickupOrb.setEnabled(!hasRealDroppedItems && !fallbackPickupConsumed);
+    const showFallbackPickup = !hasRealDroppedItems && !fallbackPickupConsumed;
+    if (showFallbackPickup) {
+      pickupOrb.position.y = resolveWorldAnchorY(
+        pickupOrb.position.x,
+        pickupOrb.position.z,
+        currentLevel,
+        0.3,
+      );
+    }
+    pickupOrb.setEnabled(showFallbackPickup);
+  };
+
+  /** Re-snap props/loot after floor slab height or tile binary becomes available. */
+  const reanchorWorldContentOnLevel = (level: string) => {
+    props.forEach((prop) => {
+      if (prop.level !== level) {
+        return;
+      }
+      const x = prop.meshRoot.position.x;
+      const z = prop.meshRoot.position.z;
+      prop.meshRoot.position.y = resolveWorldAnchorY(x, z, level);
+    });
+    syncDroppedItems(true);
   };
 
   const collectInteractableRevealTargets = (): InteractableRevealTarget[] => {
@@ -5383,7 +5700,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
 
       const feetY = levelToWorldY(door.level);
-      const doorHeight = 1.9;
+      const doorHeight = DOOR_PANEL_HEIGHT;
       targets.push({
         id: door.uuid,
         kind: "door",
@@ -5572,7 +5889,89 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     tryPickupPersistentItem(item, payload.count);
   };
 
-  void ensureMapLevelReady(activeLevel);
+  const waitForSpawnChunkReady = (timeoutMs = 12000): Promise<boolean> =>
+    new Promise((resolve) => {
+      const cx = Math.floor(player.position.x / CHUNK_SIZE);
+      const cy = Math.floor(player.position.z / CHUNK_SIZE);
+      const key = `${cx}_${cy}`;
+      const deadline = performance.now() + timeoutMs;
+
+      const poll = () => {
+        if (chunkMeshes.has(key)) {
+          resolve(true);
+          return;
+        }
+        if (performance.now() >= deadline) {
+          console.warn("[3D Slice] Spawn chunk timed out", key);
+          resolve(false);
+          return;
+        }
+        if (!chunkMeshes.has(key) && !chunkLoading.has(key)) {
+          buildChunk(cx, cy, 0);
+        }
+        requestAnimationFrame(poll);
+      };
+
+      updateChunks();
+      poll();
+    });
+
+  const bootstrapWorldSession = async () => {
+    pushLogEvent("world.bootstrap.start", { map: sliceMapName, level: activeLevel });
+    try {
+      await ensureMapLevelReady(activeLevel);
+      snapPlayerFootToActiveLevel();
+      await waitForSpawnChunkReady();
+      snapPlayerFootToActiveLevel();
+
+      const tileX = Math.floor(player.position.x);
+      const tileZ = Math.floor(player.position.z);
+      const supportSymbol = getMapTileAt(activeLevel, tileX, tileZ);
+      if (isVoidSymbol(supportSymbol)) {
+        throw new Error(
+          `[3D Slice] Invalid spawn tile (${tileX},${tileZ}) on level ${activeLevel}`,
+        );
+      }
+
+      lastGroundedFootY = player.position.y;
+      fallOriginFootY = player.position.y;
+      isGrounded = true;
+      holeFallLandingLevel = null;
+      holeFallFloorCount = 0;
+      verticalVelocity = 0;
+
+      reanchorWorldContentOnLevel(activeLevel);
+      syncPropStream(true);
+
+      worldBootstrapReady = true;
+      setPlayerAvatarVisible(true);
+      camera.setTarget(
+        new Vector3(player.position.x, player.position.y, player.position.z),
+      );
+
+      resolveWorldReady?.();
+      document.dispatchEvent(
+        new CustomEvent("slice3d:worldBootstrap", {
+          detail: { ready: true, map: sliceMapName, level: activeLevel },
+        }),
+      );
+      pushLogEvent("world.bootstrap.ready", {
+        x: Math.round(player.position.x * 100) / 100,
+        y: Math.round(player.position.y * 100) / 100,
+        z: Math.round(player.position.z * 100) / 100,
+      });
+    } catch (error) {
+      console.error("[3D Slice] World bootstrap failed", error);
+      document.dispatchEvent(
+        new CustomEvent("slice3d:worldBootstrap", {
+          detail: { ready: false, map: sliceMapName, error: String(error) },
+        }),
+      );
+      pushLogEvent("world.bootstrap.failed", { error: String(error) });
+    }
+  };
+
+  void bootstrapWorldSession();
   void ensureLevelItemsSeeded(activeLevel);
   void ensureLevelEnemiesSeeded(activeLevel);
   void ensureLevelPropsSeeded(activeLevel);
@@ -5583,14 +5982,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let verticalVelocity = 0;
   const gravity = -18;
   const fallGravity = -32;
-  const fallTerminalVelocity = -28;
   const jumpImpulse = 7.2;
+  /** Quake-style: normal jump landings stay below this; hard falls exceed it. */
+  const FALL_DAMAGE_MIN_IMPACT_SPEED = 9.5;
   let isGrounded = true;
-  let isVoidFallActive = false;
-  let voidFallTargetLevel = activeLevel;
-  let voidFallTargetY = player.position.y;
-  let voidFallFloors = 0;
-  let voidFallImpactSpeed = 0;
+  /** Set when stepping into a void tile; gravity runs until landing level ground. */
+  let holeFallLandingLevel: string | null = null;
+  let holeFallFloorCount = 0;
+  let fallOriginFootY = player.position.y;
   let wasOnVoidWithSafety = false;
   let lastSafePlayerX = player.position.x;
   let lastSafePlayerZ = player.position.z;
@@ -5777,6 +6176,29 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return null;
   };
 
+  const beginGravityHoleFall = (
+    landingLevel: string,
+    floors: number,
+  ) => {
+    if (holeFallLandingLevel) {
+      return;
+    }
+    fallOriginFootY = player.position.y;
+    isGrounded = false;
+    verticalVelocity = Math.min(verticalVelocity, 0);
+    holeFallLandingLevel = landingLevel;
+    holeFallFloorCount = floors;
+
+    const mapData = mapDataCache;
+    if (mapData) {
+      void loadLevelBinary(landingLevel, mapData);
+    }
+    void ensureLevelDoorsSeeded(landingLevel);
+    void ensureLevelEnemiesSeeded(landingLevel);
+    void ensureLevelItemsSeeded(landingLevel);
+    void ensureLevelPropsSeeded(landingLevel);
+  };
+
   const calculateFallDamagePercent = (
     floors: number,
     impactSpeed: number,
@@ -5787,6 +6209,196 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       Math.max(0, Math.abs(impactSpeed) - 9) * 0.012,
     );
     return Math.min(0.9, perFloor + speedBonus);
+  };
+
+  const isSolidCeilingTileAt = (
+    level: string,
+    tileX: number,
+    tileZ: number,
+  ) => {
+    const symbol = getMapTileAt(level, tileX, tileZ);
+    if (isVoidSymbol(symbol)) {
+      return false;
+    }
+    const tileDef = symbol
+      ? mapDataCache?.tileDefinitions?.[symbol]
+      : undefined;
+    return !isDownHoleTile(tileDef);
+  };
+
+  /**
+   * Upper-floor slab side / underside — blocks movement when the hero body
+   * intersects the 0.32u floor thickness band from below (pit edge, jump into lip).
+   */
+  const isBlockedByUpperFloorSlabAt = (
+    worldX: number,
+    worldZ: number,
+    footY: number,
+  ): boolean => {
+    const upperLevel = String(activeLevelNumber + 1);
+    if (!mapDataCache?.levels?.[upperLevel]) {
+      return false;
+    }
+
+    // Stairs/ramps climb through the slab band — never treat as a pit lip.
+    if (isGradedWalkAt(worldX, worldZ, activeLevel)) {
+      return false;
+    }
+
+    const tileX = Math.floor(worldX);
+    const tileZ = Math.floor(worldZ);
+    const upperSymbol = getMapTileAt(upperLevel, tileX, tileZ);
+    if (
+      isGradedWalkTile(
+        upperSymbol ? mapDataCache?.tileDefinitions?.[upperSymbol] : undefined,
+        LEVEL_HEIGHT_UNITS,
+      )
+    ) {
+      return false;
+    }
+
+    const slabBottomY = levelToWorldY(upperLevel);
+    const slabTopY = slabBottomY + FLOOR_SURFACE_Y;
+    const headY = footY + HERO_BODY_HEIGHT;
+    if (headY <= slabBottomY + 0.02) {
+      return false;
+    }
+    if (footY >= slabTopY - 0.08) {
+      return false;
+    }
+
+    return isSolidCeilingTileAt(upperLevel, tileX, tileZ);
+  };
+
+  /** Feet Y cap when standing under solid geometry on the level above (column-only). */
+  const resolveUpperLevelCeilingFeetCap = (): number | null => {
+    const upperLevel = String(activeLevelNumber + 1);
+    if (!mapDataCache?.levels?.[upperLevel]) {
+      return null;
+    }
+    const tileX = Math.floor(player.position.x);
+    const tileZ = Math.floor(player.position.z);
+    if (isGradedWalkAt(player.position.x, player.position.z, activeLevel)) {
+      return null;
+    }
+    if (!isSolidCeilingTileAt(upperLevel, tileX, tileZ)) {
+      return null;
+    }
+    const slabBottomY = levelToWorldY(upperLevel);
+    const headY = player.position.y + HERO_BODY_HEIGHT;
+    // Only cap when the head reaches the underside — not when beside the slab in a pit column.
+    if (headY < slabBottomY - 0.04) {
+      return null;
+    }
+    return (
+      slabBottomY -
+      CEILING_BODY_CLEARANCE -
+      HERO_BODY_HEIGHT
+    );
+  };
+
+  const resolveJumpImpulseForHeadroom = (): number => {
+    const feetCap = resolveUpperLevelCeilingFeetCap();
+    if (feetCap == null) {
+      return jumpImpulse;
+    }
+    const headRoom = feetCap - player.position.y;
+    if (headRoom < 0.35) {
+      return 0;
+    }
+    if (headRoom < JUMP_FULL_HEADROOM) {
+      return jumpImpulse * (headRoom / JUMP_FULL_HEADROOM);
+    }
+    return jumpImpulse;
+  };
+
+  const applyCeilingCollisionToVerticalMotion = () => {
+    const feetCap = resolveUpperLevelCeilingFeetCap();
+    if (feetCap == null) {
+      return;
+    }
+    if (player.position.y > feetCap) {
+      player.position.y = feetCap;
+      if (verticalVelocity > 0) {
+        verticalVelocity = 0;
+      }
+    }
+  };
+
+  const applyFallImpactDamage = (
+    impactSpeed: number,
+    floors: number,
+    landingLevel: string,
+  ) => {
+    if (floors <= 0 && impactSpeed < FALL_DAMAGE_MIN_IMPACT_SPEED) {
+      return;
+    }
+
+    const maxHealth = Math.max(1, playerState.getMaxHealth());
+    let damagePercent = calculateFallDamagePercent(floors, impactSpeed);
+    const landingAquatic = getAquaticSampleAt(
+      player.position.x,
+      player.position.z,
+      landingLevel,
+    );
+    damagePercent *= computeFallDamageMultiplier(landingAquatic);
+    const damage = Math.max(
+      landingAquatic.mode === "swimming" ? 0 : 1,
+      Math.floor(maxHealth * damagePercent),
+    );
+
+    const playerDied = playerState.takeDamage(damage);
+    emitPlayerDamagePopup(
+      `fall:${landingLevel}:${floors}`,
+      damage,
+      "⚠",
+      "#ff5d5d",
+    );
+
+    const percentText = Math.round(damagePercent * 100).toString();
+    playerState.log(
+      "msg_fall_impact",
+      {
+        floors,
+        damage,
+        percent: percentText,
+      },
+      "#ff5d5d",
+    );
+    playerState.emit("uiNotification", {
+      type: "danger",
+      message: t_game("msg_fall_impact")
+        .replace("{floors}", floors.toString())
+        .replace("{damage}", damage.toString())
+        .replace("{percent}", percentText),
+    });
+
+    if (playerDied) {
+      triggerPlayerDeathSequence();
+    }
+  };
+
+  const finishAirborneLanding = (
+    landingLevel: string,
+    landingFootY: number,
+    impactSpeed: number,
+    explicitFloors = 0,
+  ) => {
+    const dropDistance = Math.max(0, fallOriginFootY - landingFootY);
+    const floorsFromDrop = Math.floor(
+      dropDistance / LEVEL_HEIGHT_UNITS + 0.12,
+    );
+    const floors = Math.max(explicitFloors, floorsFromDrop);
+    if (
+      floors <= 0 &&
+      impactSpeed < FALL_DAMAGE_MIN_IMPACT_SPEED &&
+      dropDistance < 0.55
+    ) {
+      fallOriginFootY = landingFootY;
+      return;
+    }
+    applyFallImpactDamage(impactSpeed, floors, landingLevel);
+    fallOriginFootY = landingFootY;
   };
 
   const resolveRespawnSpawn = (): { level: string; x: number; z: number } => {
@@ -5824,9 +6436,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     pressedKeys.clear();
     setSelectedEnemy(null);
     projectileSystem.disposeAll();
-    isVoidFallActive = false;
-    voidFallFloors = 0;
-    voidFallImpactSpeed = 0;
+    holeFallLandingLevel = null;
+    holeFallFloorCount = 0;
     verticalVelocity = 0;
     isGrounded = true;
     levelTransitionCooldown = 0;
@@ -5886,61 +6497,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerDeathTimeoutId = window.setTimeout(() => {
       void completePlayerRespawn();
     }, PLAYER_DEATH_SEQUENCE_MS);
-  };
-
-  const resolveVoidFall = () => {
-    if (voidFallFloors <= 0) {
-      return;
-    }
-
-    const maxHealth = Math.max(1, playerState.getMaxHealth());
-    let damagePercent = calculateFallDamagePercent(
-      voidFallFloors,
-      voidFallImpactSpeed,
-    );
-    const landingAquatic = getAquaticSampleAt(
-      player.position.x,
-      player.position.z,
-      voidFallTargetLevel,
-    );
-    damagePercent *= computeFallDamageMultiplier(landingAquatic);
-    const damage = Math.max(
-      landingAquatic.mode === "swimming" ? 0 : 1,
-      Math.floor(maxHealth * damagePercent),
-    );
-
-    const playerDied = playerState.takeDamage(damage);
-    emitPlayerDamagePopup(
-      `fall:${voidFallTargetLevel}:${voidFallFloors}`,
-      damage,
-      "⚠",
-      "#ff5d5d",
-    );
-
-    const percentText = Math.round(damagePercent * 100).toString();
-    playerState.log(
-      "msg_fall_impact",
-      {
-        floors: voidFallFloors,
-        damage,
-        percent: percentText,
-      },
-      "#ff5d5d",
-    );
-    playerState.emit("uiNotification", {
-      type: "danger",
-      message: t_game("msg_fall_impact")
-        .replace("{floors}", voidFallFloors.toString())
-        .replace("{damage}", damage.toString())
-        .replace("{percent}", percentText),
-    });
-
-    if (playerDied) {
-      triggerPlayerDeathSequence();
-    }
-
-    voidFallFloors = 0;
-    voidFallImpactSpeed = 0;
   };
 
   // Activate first-person mode if URL contains ?fp=1
@@ -6214,9 +6770,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     if (event.code === "Space") {
       if (isGrounded) {
-        verticalVelocity = jumpImpulse;
-        isGrounded = false;
-        audioManager.playJump();
+        const impulse = resolveJumpImpulseForHeadroom();
+        if (impulse > 0) {
+          fallOriginFootY = player.position.y;
+          verticalVelocity = impulse;
+          isGrounded = false;
+          audioManager.playJump();
+        }
       }
       event.preventDefault();
     }
@@ -6402,13 +6962,24 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (isPlayerDeathSequenceActive) {
       return;
     }
+
+    const deltaSeconds = engine.getDeltaTime() / 1000;
+
+    if (!worldBootstrapReady) {
+      chunkUpdateTimer += deltaSeconds;
+      if (chunkUpdateTimer >= CHUNK_UPDATE_INTERVAL) {
+        chunkUpdateTimer = 0;
+        updateChunks();
+      }
+      return;
+    }
+
     const tFrameStart = performance.now();
     let mapTimeAccum = 0;
     let enemyTimeAccum = 0;
     let physicsTimeAccum = 0;
 
     let tStart = tFrameStart;
-    const deltaSeconds = engine.getDeltaTime() / 1000;
 
     tStart = performance.now();
     dropSyncTimer += deltaSeconds;
@@ -6451,11 +7022,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         const item = container.metadata as SliceDroppedItem | undefined;
         const phase = item ? getDeterministicRotation(item.itemId) * 10 : 0;
         
-        // Bob height fluctuates between 0.05 and 0.11 above the container
-        itemPlane.position.y = 0.08 + Math.sin(time + phase) * 0.03;
+        // Bob height fluctuates above the grounded container anchor
+        itemPlane.position.y = 0.06 + Math.sin(time + phase) * 0.03;
 
         if (shadowDisc) {
-          const ratio = (itemPlane.position.y - 0.05) / 0.06; // 0 to 1
+          const ratio = (itemPlane.position.y - 0.03) / 0.06;
           shadowDisc.visibility = 0.28 - ratio * 0.12; // fade shadow slightly as it rises
           const scale = 1.0 - ratio * 0.15; // shrink shadow slightly as it rises
           shadowDisc.scaling.set(scale, scale, scale);
@@ -6523,6 +7094,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (pressedKeys.has("d") || pressedKeys.has("arrowright")) moveRight += 1;
 
     const isMoving = moveForward !== 0 || moveRight !== 0;
+    const movementStartX = player.position.x;
+    const movementStartZ = player.position.z;
     const nowMs = Date.now();
     if (nowMs >= heroAnimLockedUntil) {
       if (isMoving) {
@@ -6536,7 +7109,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (isMoving) {
-      if (!isVoidFallActive) {
         let movement = Vector3.Zero();
 
         if (isFirstPerson) {
@@ -6622,6 +7194,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             if (
               !isWorldPositionBlocked(nextX, player.position.z, 0.32, {
                 blockVoidForPlayer: true,
+                footY: player.position.y,
               })
             ) {
               player.position.x = nextX;
@@ -6630,9 +7203,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             if (
               !isWorldPositionBlocked(player.position.x, nextZ, 0.32, {
                 blockVoidForPlayer: true,
+                footY: player.position.y,
               })
             ) {
               player.position.z = nextZ;
+            }
+
+            if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
+              snapFootToGradedSurface(activeLevel);
             }
           }
         }
@@ -6645,7 +7223,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           mapMaxZ,
           Math.max(mapMinZ + 0.5, player.position.z),
         );
-      }
+
+        if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
+          syncVerticalLevelFromMovement(
+            isMoving,
+            movementStartX,
+            movementStartZ,
+          );
+        }
     }
     physicsTimeAccum += performance.now() - tStart;
 
@@ -6666,13 +7251,30 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       );
     };
 
+    const canAttemptVerticalTransition = () => {
+      if (levelTransitionCooldown > 0 || holeFallLandingLevel) {
+        return false;
+      }
+      if (isVerticalTransitionGuarded()) {
+        return false;
+      }
+      if (isGrounded) {
+        return true;
+      }
+      const tileX = Math.floor(player.position.x);
+      const tileZ = Math.floor(player.position.z);
+      const symbol = getMapTileAt(activeLevel, tileX, tileZ);
+      const tileDef = symbol
+        ? mapDataCache?.tileDefinitions?.[symbol]
+        : undefined;
+      if (isStairTileDef(tileDef) && Math.abs(verticalVelocity) < 3.0) {
+        return true;
+      }
+      return false;
+    };
+
     const tryRampLevelTransition = () => {
-      if (
-        levelTransitionCooldown > 0 ||
-        isVoidFallActive ||
-        !isGrounded ||
-        isVerticalTransitionGuarded()
-      ) {
+      if (!canAttemptVerticalTransition()) {
         return;
       }
 
@@ -6695,55 +7297,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       const tileX = Math.floor(player.position.x);
       const tileZ = Math.floor(player.position.z);
-      levelTransitionCooldown = 2.0;
+      levelTransitionCooldown = 0.65;
       applyActiveLevelChange(probe.targetLevel, {
         tileX,
         tileZ,
         landingLocalZ: STAIR_LANDING_LOCAL_Z,
-      });
-    };
-
-    const tryStairLevelTransition = () => {
-      if (
-        levelTransitionCooldown > 0 ||
-        isVoidFallActive ||
-        !isGrounded ||
-        isVerticalTransitionGuarded()
-      ) {
-        return;
-      }
-
-      const probe = probeStairLevelTransition(
-        player.position.x,
-        player.position.z,
-        activeLevel,
-        getMapTileAt,
-        (symbol: string | null) =>
-          symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-        {
-          parseLevelNumber,
-          hasLevel: (level: string) => Boolean(mapDataCache?.levels?.[level]),
-        },
-      );
-      if (!probe) {
-        return;
-      }
-
-      levelTransitionCooldown = 2.0;
-      applyActiveLevelChange(probe.targetLevel, {
-        tileX: probe.tileX,
-        tileZ: probe.tileZ,
-        landingLocalZ: probe.landingLocalZ,
+        guardMs: 1200,
       });
     };
 
     const tryHoleLevelTransition = () => {
-      if (
-        levelTransitionCooldown > 0 ||
-        isVoidFallActive ||
-        !isGrounded ||
-        isVerticalTransitionGuarded()
-      ) {
+      if (!canAttemptVerticalTransition()) {
         return;
       }
 
@@ -6763,16 +7327,23 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
 
-      levelTransitionCooldown = 2.0;
+      if (!playerState.isFallSafetyEnabled()) {
+        beginGravityHoleFall(probe.targetLevel, 1);
+        levelTransitionCooldown = 0.35;
+        return;
+      }
+
+      levelTransitionCooldown = 0.65;
       applyActiveLevelChange(probe.targetLevel, {
         tileX: probe.tileX,
         tileZ: probe.tileZ,
         landingLocalZ: probe.landingLocalZ,
+        guardMs: 1200,
       });
     };
 
     const tryVerticalLevelTransitions = () => {
-      if (!isGrounded || isVoidFallActive) {
+      if (holeFallLandingLevel) {
         return;
       }
       tryHoleLevelTransition();
@@ -6780,10 +7351,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
       tryRampLevelTransition();
-      if (levelTransitionCooldown > 0) {
-        return;
-      }
-      tryStairLevelTransition();
     };
 
     tryVerticalLevelTransitions();
@@ -7170,7 +7737,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         wasOnVoidWithSafety = false;
       }
 
-      if (!isVoidFallActive && isGrounded && onVoidTile) {
+      if (isGrounded && onVoidTile && !holeFallLandingLevel) {
         if (playerState.isFallSafetyEnabled()) {
           if (!wasOnVoidWithSafety) {
             wasOnVoidWithSafety = true;
@@ -7187,98 +7754,53 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         } else {
           const landing = findVoidFallLanding(activeLevel, tileX, tileZ);
           if (landing) {
-            isVoidFallActive = true;
-            isGrounded = false;
-            verticalVelocity = Math.min(verticalVelocity, 0);
-            voidFallTargetLevel = landing.landingLevel;
-            voidFallTargetY = getGroundFootY(
-              player.position.x,
-              player.position.z,
-              landing.landingLevel,
-            );
-            voidFallFloors = landing.floors;
-
-            void ensureMapLevelReady(landing.landingLevel);
-            void ensureLevelDoorsSeeded(landing.landingLevel);
-            void ensureLevelEnemiesSeeded(landing.landingLevel);
-            void ensureLevelItemsSeeded(landing.landingLevel);
-            void ensureLevelPropsSeeded(landing.landingLevel);
+            beginGravityHoleFall(landing.landingLevel, landing.floors);
           }
         }
       }
 
-      if (isVoidFallActive) {
-        verticalVelocity += fallGravity * deltaSeconds;
-        verticalVelocity = Math.max(verticalVelocity, fallTerminalVelocity);
-      } else {
-        verticalVelocity += gravity * deltaSeconds;
-      }
+      if (!isGrounded) {
+        verticalVelocity += (holeFallLandingLevel ? fallGravity : gravity) * deltaSeconds;
+        player.position.y += verticalVelocity * deltaSeconds;
 
-      player.position.y += verticalVelocity * deltaSeconds;
-
-      if (isVoidFallActive) {
-        if (player.position.y <= voidFallTargetY) {
-          voidFallImpactSpeed = Math.abs(verticalVelocity);
-          player.position.y = voidFallTargetY;
-          verticalVelocity = 0;
-          isGrounded = true;
-          isVoidFallActive = false;
-
-          if (activeLevel !== voidFallTargetLevel) {
-            applyActiveLevelChange(voidFallTargetLevel, {
-              tileX: Math.floor(player.position.x),
-              tileZ: Math.floor(player.position.z),
-              landingLocalZ: STAIR_LANDING_LOCAL_Z,
-            });
-          }
-          lastGroundedFootY = player.position.y;
-          resolveVoidFall();
-        }
-      } else {
+        const landingLevel = holeFallLandingLevel ?? activeLevel;
         const levelGroundY = getGroundFootY(
           player.position.x,
           player.position.z,
-          activeLevel,
+          landingLevel,
         );
         if (player.position.y <= levelGroundY) {
+          const impactSpeed = Math.abs(verticalVelocity);
           player.position.y = levelGroundY;
           verticalVelocity = 0;
           isGrounded = true;
-        } else if (
-          player.position.y - levelGroundY < 0.65 &&
-          verticalVelocity <= 0.05
-        ) {
-          // Stair / level transition — snap down instead of hovering above floor.
-          player.position.y = levelGroundY;
-          verticalVelocity = 0;
-          isGrounded = true;
-        } else if (player.position.y > levelGroundY + 0.08) {
-          isGrounded = false;
+
+          if (landingLevel !== activeLevel) {
+            applyActiveLevelChange(landingLevel, undefined, { natural: true });
+          }
+          lastGroundedFootY = player.position.y;
+          finishAirborneLanding(
+            landingLevel,
+            levelGroundY,
+            impactSpeed,
+            holeFallFloorCount,
+          );
+          holeFallLandingLevel = null;
+          holeFallFloorCount = 0;
         }
       }
+
+      applyCeilingCollisionToVerticalMotion();
     }
 
-    if (
-      isGrounded &&
-      !isVoidFallActive &&
-      !isFirstPerson
-    ) {
-      const targetFootY = getGroundFootY(
-        player.position.x,
-        player.position.z,
-        activeLevel,
+    if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
+      applyActorAquaticY(player.position, activeLevel);
+      syncVerticalLevelFromMovement(
+        isMoving,
+        movementStartX,
+        movementStartZ,
       );
-      if (shouldStartLedgeFall(lastGroundedFootY, targetFootY)) {
-        isVoidFallActive = true;
-        isGrounded = false;
-        verticalVelocity = 0;
-        voidFallTargetLevel = activeLevel;
-        voidFallTargetY = targetFootY;
-        voidFallFloors = 0;
-      } else {
-        applyActorAquaticY(player.position, activeLevel);
-        lastGroundedFootY = player.position.y;
-      }
+      lastGroundedFootY = player.position.y;
     }
 
     const playerAquatic = getAquaticSampleAt(
@@ -7363,7 +7885,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     heroShadow.setEnabled(true);
     heroShadow.position.set(
       player.position.x,
-      levelToWorldY(activeLevelNumber) + FLOOR_SURFACE_Y + 0.01,
+      getGroundSurfaceY(player.position.x, player.position.z, activeLevel) +
+        0.01,
       player.position.z,
     );
 
@@ -7496,6 +8019,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     engine,
     scene,
     save,
+    whenWorldReady: () => worldReadyPromise,
     dispose: () => {
       pushLogEvent("session.dispose", {
         activeLevel,

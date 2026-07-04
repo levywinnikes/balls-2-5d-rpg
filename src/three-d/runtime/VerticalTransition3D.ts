@@ -98,6 +98,23 @@ export function shouldStartLedgeFall(
   return currentFootY - targetFootY > threshold;
 }
 
+/** Stairs and ramps change foot Y gradually — never treat as a void ledge. */
+export function isGradedWalkTile(
+  tileDef?: SliceTileDefinition | null,
+  levelHeightUnits = DEFAULT_LEVEL_HEIGHT_UNITS,
+): boolean {
+  if (!tileDef) {
+    return false;
+  }
+  if (tileDef.stairDir || tileDef.geometryProfile === "stair") {
+    return true;
+  }
+  if (isFloorLevelRamp(tileDef, levelHeightUnits)) {
+    return true;
+  }
+  return Boolean(tileDef.geometryProfile?.startsWith("ramp-"));
+}
+
 export type RampTransitionProbe = {
   targetLevel: string;
   tileDef: SliceTileDefinition;

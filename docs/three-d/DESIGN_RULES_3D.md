@@ -30,8 +30,9 @@ Visão resumida: [PRODUCT_3D_VISION.md](./PRODUCT_3D_VISION.md)
 
 | Item | Onde |
 |------|------|
-| Detecção | `findUpperOcclusionLevel()` |
+| Detecção | `findUpperOcclusionLevel()` — coluna do herói |
 | Aplicação | `syncVerticalLevelVisibility()` — **única** função que define `mesh.visibility` / `setEnabled` por andar |
+| Escopo | **Top-down only** — esconde andares `>= occludedFromLevel` só no **chunk do herói** (16×16). FP debug mostra geometria completa. |
 | Debug | `window.__slice3dVerticalVisibility.occludedFromLevel` |
 
 **Teste manual:** `debug_sandbox` ou `debug_vertical` — ande sob torre/ponte no andar `0`; andar `+1` some.
@@ -94,32 +95,24 @@ Regenerar: `npm run generate:debug-sandbox` / `npm run generate:debug-vertical`
 
 ---
 
-### R7 — Escadas = geometria caminhável (estilo Doom)
+### R7 — Escadas = geometria caminhável (natural)
 
-Escadas normais (`stu`/`std`, `geometryProfile: "stair"`) são **degraus físicos** — o herói sobe/desce caminhando, como em qualquer FPS clássico.
+Escadas (`stu`/`std`) são **degraus 3D**. O herói sobe/desce **andando**; o andar BMS segue a **altura dos pés** — sem teleporte na borda do tile.
 
 | Certo | Errado |
 |-------|--------|
-| 8 degraus por tile; altura cumulativa no worker + `TileSurfaceResolver` | Blocos empilhados / rampa invisível |
-| Troca de andar ao **caminhar para o norte** — subir (`stu`) e descer (`std`) usam o mesmo eixo | Descer indo ao sul / subir indo ao norte |
-| `std` = mesh espelhado (sul = patamar do andar atual, norte = desce) | Mesma mesh de `stu` no andar de cima |
-| `probeStairLevelTransition()` + `applyActiveLevelChange()` | `pendingStairInteract`, `isStairAnimActive` |
+| 8 degraus; mesh + `TileSurfaceResolver` alinhados | Blocos empilhados / rampa invisível |
+| `inferLevelFromFootY` quando footY cruza o patamar | `probeStairLevelTransition` + snap de Z |
+| Mapa: piso no desembarque do andar de cima (M2) | `std` no mesmo XZ do `stu` de baixo |
 
-**Interação por clique** só para escadas de encosto (corda/escada de mão) — **não implementado ainda**; não reutilizar o fluxo de escada normal.
+**Interação por clique** só para escada de corda — **não implementado**.
 
 | Item | Onde |
 |------|------|
 | Geometria | `geometry.worker.ts` `buildStairVerts` |
 | Altura dos pés | `StairConfig3D.sampleStairFootY` → `TileSurfaceResolver` |
-| Troca de andar | `probeStairLevelTransition` em `createDebugSliceScene` |
-
-**Arquitetura de mapa (escadas):**
-
-| Regra | Motivo |
-|-------|--------|
-| Patamar (`cob`/`flr`) no tile onde `stu` de baixo desemboca | Nunca `std` empilhado no mesmo XZ do `stu` do andar inferior |
-| Mínimo **4 tiles** entre `stu` e `std` no mesmo andar | Evita “subir para descer” |
-| Torre e porão = **eixos separados** (ex.: torre leste, porão oeste) | Dois shafts no mesmo corredor confundem o jogador |
+| Troca de andar | `NaturalFloorLevel3D.inferLevelFromFootY` |
+| Layout mínimo | [`STAIR_MAP_RULES.md`](./STAIR_MAP_RULES.md) |
 
 ---
 
@@ -180,7 +173,8 @@ Copie mentalmente antes de cada PR/tarefa 3D:
 | 2026-06 | `TileSurfaceResolver` central | Bugs de altura espalhados em 4 arquivos |
 | 2026-06 | Culling por coluna + oclusão unificados | Performance sem matar legibilidade |
 | 2026-06 | Mapas `debug_sandbox` + `debug_vertical` | Sandbox = conteúdo; vertical = stress de andares |
-| 2026-06 | Escadas = degraus caminháveis, sem teleporte | Usuário rejeitou clique + “elevador” |
+| 2026-07 | Oclusão R1 top-down = chunk do herói only; FP sem R1 | Remendos globais quebravam torre e FP — ver ENGINE_3D_STATE_AND_HARDENING |
+| 2026-07 | Pés = topo do slab 0.32 (`floorSlabThickness`) | JSON height ≠ mesh 3D |
 
 ---
 
@@ -208,6 +202,8 @@ Novos subsistemas: **extrair** de `createDebugSliceScene.ts`, não empilhar.
 | [CHUNK_STREAMING_3D.md](./CHUNK_STREAMING_3D.md) | Chunks + culling |
 | [WATER_SYSTEM_3D.md](./WATER_SYSTEM_3D.md) | Água |
 | [ELEVATION_AND_TRANSITION_PLAN.md](./ELEVATION_AND_TRANSITION_PLAN.md) | Rampas, escadas |
+| [ENGINE_3D_STATE_AND_HARDENING.md](./ENGINE_3D_STATE_AND_HARDENING.md) | **Estado, invariantes, plano de consolidação** |
+| [STAIR_MAP_RULES.md](./STAIR_MAP_RULES.md) | Layout de escadas em mapas |
 | [DEBUG_VERTICAL_MAP.md](../debug/DEBUG_VERTICAL_MAP.md) | Mapa stress vertical |
 | [PERSPECTIVE_MODE_CONTRACT.md](../contracts/PERSPECTIVE_MODE_CONTRACT.md) | Câmera e eixos |
 

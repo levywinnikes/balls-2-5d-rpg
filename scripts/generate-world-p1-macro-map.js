@@ -134,6 +134,122 @@ function room(grid, width, height, x0, y0, x1, y1, wallSym, floorSym) {
   border(grid, width, height, x0, y0, x1, y1, wallSym);
 }
 
+/**
+ * House with door south, climb north (stu), descend south on upper floor (std).
+ * Keeps stu/std separated per 3D stair shaft rules.
+ */
+function buildHouse(levels, width, height, x, y, w, h, floors = 1) {
+  const l0 = levels["0"];
+  const l1 = levels["1"];
+  const l2 = levels["2"];
+  const l3 = levels["3"];
+  const x1 = x + w - 1;
+  const y1 = y + h - 1;
+  const cx = x + Math.floor(w / 2);
+
+  border(l0, width, height, x, y, x1, y1, "bwl");
+  fill(l0, width, height, x + 1, y + 1, x1 - 1, y1 - 1, "flr");
+  set(l0, width, height, cx, y1, "cob");
+
+  if (floors === 1) {
+    fill(l1, width, height, x, y, x1, y1, "rof");
+    return;
+  }
+
+  set(l0, width, height, cx, y + 1, "stu");
+  border(l1, width, height, x, y, x1, y1, "bwl");
+  fill(l1, width, height, x + 1, y + 1, x1 - 1, y1 - 1, "flr");
+  set(l1, width, height, cx, y1 - 1, "std");
+
+  if (floors === 2) {
+    fill(l2, width, height, x, y, x1, y1, "rof");
+    return;
+  }
+
+  set(l1, width, height, cx, y + 1, "stu");
+  border(l2, width, height, x, y, x1, y1, "bwl");
+  fill(l2, width, height, x + 1, y + 1, x1 - 1, y1 - 1, "flr");
+  set(l2, width, height, cx, y1 - 1, "std");
+  fill(l3, width, height, x, y, x1, y1, "rof");
+}
+
+/** Compact tower with stacked floors and roof on level `floors`. */
+function buildTower(levels, width, height, x, y, w, h, floors) {
+  const cx = x + Math.floor(w / 2);
+  const x1 = x + w - 1;
+  const y1 = y + h - 1;
+
+  for (let f = 0; f < floors; f += 1) {
+    const grid = levels[String(f)];
+    if (!grid) continue;
+    border(grid, width, height, x, y, x1, y1, "bwl");
+    fill(grid, width, height, x + 1, y + 1, x1 - 1, y1 - 1, "flr");
+    if (f === 0) {
+      set(grid, width, height, cx, y1, "cob");
+      set(grid, width, height, cx, y + 1, "stu");
+    } else {
+      set(grid, width, height, cx, y1 - 1, "std");
+      if (f < floors - 1) {
+        set(grid, width, height, cx, y + 1, "stu");
+      }
+    }
+  }
+
+  const roofGrid = levels[String(floors)];
+  if (roofGrid) {
+    fill(roofGrid, width, height, x, y, x1, y1, "rof");
+  }
+}
+
+/**
+ * Surface dungeon: path → arch entrance → descent, main hall (-1), linked wing (-2).
+ */
+function buildLinkedDungeon(levels, width, height, from, entrance, config) {
+  const {
+    wallSym,
+    floorSym,
+    surfaceSym = "grs",
+    hallHalfW = 10,
+    hallHalfH = 8,
+    useHole = false,
+  } = config;
+  const l0 = levels["0"];
+  const lm1 = levels["-1"];
+  const lm2 = levels["-2"];
+  const ex = entrance.x;
+  const ey = entrance.y;
+
+  paintRoute(l0, width, height, from, entrance, "pat");
+  fill(l0, width, height, ex - 2, ey - 2, ex + 2, ey + 2, surfaceSym);
+  border(l0, width, height, ex - 4, ey - 4, ex + 4, ey + 4, wallSym);
+  set(l0, width, height, ex, ey - 4, "arc");
+  if (useHole) {
+    set(l0, width, height, ex, ey, "hol");
+  } else {
+    set(l0, width, height, ex, ey + 1, "std");
+  }
+
+  room(
+    lm1,
+    width,
+    height,
+    ex - hallHalfW,
+    ey - hallHalfH,
+    ex + hallHalfW,
+    ey + hallHalfH,
+    wallSym,
+    floorSym,
+  );
+  set(lm1, width, height, ex, ey, "stu");
+  fill(lm1, width, height, ex - 1, ey - hallHalfH - 9, ex + 1, ey - hallHalfH, floorSym);
+
+  const wingY0 = ey - hallHalfH - 8;
+  const wingY1 = ey - hallHalfH - 16;
+  room(lm2, width, height, ex - 8, wingY1, ex + 8, wingY0, wallSym, floorSym);
+  set(lm1, width, height, ex, ey - hallHalfH, "std");
+  set(lm2, width, height, ex, wingY0 + 1, "stu");
+}
+
 function paintRoute(grid, width, height, from, to, sym) {
   let x = from.x;
   let y = from.y;
@@ -369,8 +485,6 @@ function buildPoiAnchors(blueprint) {
 function addP1Structures(levels, blueprint) {
   const l0 = levels["0"];
   const l1 = levels["1"];
-  const l2 = levels["2"];
-  const l3 = levels["3"];
   const lm1 = levels["-1"];
   const lm2 = levels["-2"];
   const width = blueprint.mapSize.width;
@@ -378,7 +492,7 @@ function addP1Structures(levels, blueprint) {
 
   const p = buildPoiAnchors(blueprint);
 
-  // Urban core: wall, plaza, houses and one 3-floor tower.
+  // Urban core: wall, plaza, complete houses and one 3-floor tower.
   {
     const cx = p.urban.x;
     const cy = p.urban.y;
@@ -392,54 +506,38 @@ function addP1Structures(levels, blueprint) {
     set(l0, width, height, cx - 30, cy, "arc");
     set(l0, width, height, cx + 30, cy, "arc");
 
-    const houses = [
-      { x: cx - 18, y: cy - 16, w: 7, h: 7, floors: 2 },
-      { x: cx + 12, y: cy - 16, w: 7, h: 7, floors: 2 },
-      { x: cx - 18, y: cy + 9, w: 7, h: 7, floors: 1 },
-      { x: cx + 12, y: cy + 9, w: 7, h: 7, floors: 1 },
-    ];
-    for (const h of houses) {
-      const x1 = h.x + h.w - 1;
-      const y1 = h.y + h.h - 1;
-      border(l0, width, height, h.x, h.y, x1, y1, "bwl");
-      fill(l0, width, height, h.x + 1, h.y + 1, x1 - 1, y1 - 1, "flr");
-      const sx = h.x + Math.floor(h.w / 2);
-      const sy = y1 - 2;
-      set(l0, width, height, sx, y1, "cob");
-      if (h.floors > 1) {
-        set(l0, width, height, sx, sy, "stu");
-        border(l1, width, height, h.x, h.y, x1, y1, "bwl");
-        fill(l1, width, height, h.x + 1, h.y + 1, x1 - 1, y1 - 1, "flr");
-        set(l1, width, height, sx, sy, "std");
-        fill(l2, width, height, h.x, h.y, x1, y1, "rof");
-      } else {
-        fill(l1, width, height, h.x, h.y, x1, y1, "rof");
-      }
-    }
+    buildHouse(levels, width, height, cx - 18, cy - 16, 7, 7, 2);
+    buildHouse(levels, width, height, cx + 12, cy - 16, 7, 7, 2);
+    buildHouse(levels, width, height, cx - 18, cy + 9, 7, 7, 1);
+    buildHouse(levels, width, height, cx + 12, cy + 9, 7, 7, 1);
+    buildTower(levels, width, height, cx + 20, cy - 2, 6, 6, 3);
 
-    const tx = cx + 20;
-    const ty = cy - 2;
-    const tx1 = tx + 5;
-    const ty1 = ty + 5;
-    border(l0, width, height, tx, ty, tx1, ty1, "bwl");
-    fill(l0, width, height, tx + 1, ty + 1, tx1 - 1, ty1 - 1, "flr");
-    set(l0, width, height, tx + 2, ty1, "cob");
-    set(l0, width, height, tx + 2, ty1 - 1, "stu");
-    border(l1, width, height, tx, ty, tx1, ty1, "bwl");
-    fill(l1, width, height, tx + 1, ty + 1, tx1 - 1, ty1 - 1, "flr");
-    set(l1, width, height, tx + 2, ty + 1, "stu");
-    set(l1, width, height, tx + 2, ty1 - 1, "std");
-    border(l2, width, height, tx, ty, tx1, ty1, "bwl");
-    fill(l2, width, height, tx + 1, ty + 1, tx1 - 1, ty1 - 1, "flr");
-    set(l2, width, height, tx + 2, ty + 1, "std");
-    fill(l3, width, height, tx, ty, tx1, ty1, "rof");
+    const urbanBlocks = [
+      { x0: cx - 46, y0: cy - 12, x1: cx - 38, y1: cy - 4, floors: 1 },
+      { x0: cx + 36, y0: cy - 12, x1: cx + 44, y1: cy - 4, floors: 1 },
+      { x0: cx - 46, y0: cy + 4, x1: cx - 38, y1: cy + 12, floors: 2 },
+      { x0: cx + 36, y0: cy + 4, x1: cx + 44, y1: cy + 12, floors: 2 },
+    ];
+    for (const b of urbanBlocks) {
+      buildHouse(
+        levels,
+        width,
+        height,
+        b.x0,
+        b.y0,
+        b.x1 - b.x0 + 1,
+        b.y1 - b.y0 + 1,
+        b.floors,
+      );
+    }
   }
 
-  // Forest: natural cave entry and connected underground cave.
+  // Forest: cave with entrance path and two linked underground halls.
   {
     const x = p.forest.x;
     const y = p.forest.y;
     fill(l0, width, height, x - 2, y - 2, x + 2, y + 2, "rok");
+    paintRoute(l0, width, height, p.forest, { x, y }, "pat");
     set(l0, width, height, x, y, "std");
     room(lm1, width, height, x - 10, y - 8, x + 10, y + 8, "cwl", "cfl");
     set(lm1, width, height, x, y, "stu");
@@ -450,148 +548,88 @@ function addP1Structures(levels, blueprint) {
     set(lm2, width, height, x + 26, y, "stu");
   }
 
-  // Swamp: ruined stone circle and hidden drop.
-  {
-    const x = p.swamp.x;
-    const y = p.swamp.y;
-    border(l0, width, height, x - 8, y - 6, x + 8, y + 6, "dwl");
-    fill(l0, width, height, x - 7, y - 5, x + 7, y + 5, "mud");
-    set(l0, width, height, x, y, "hol");
-    room(lm1, width, height, x - 9, y - 7, x + 9, y + 7, "swl", "sfl");
-    set(lm1, width, height, x, y, "stu");
-  }
+  // Swamp: ruin with hole drop and linked sewer wing.
+  buildLinkedDungeon(
+    levels,
+    width,
+    height,
+    p.swamp,
+    { x: p.swamp.x, y: p.swamp.y },
+    { wallSym: "dwl", floorSym: "sfl", surfaceSym: "mud", useHole: true, hallHalfW: 8, hallHalfH: 6 },
+  );
 
-  // Desert: necropolis entrance and deep dungeon chain.
+  // Desert: necropolis with arch entrance and two-floor dungeon chain.
+  buildLinkedDungeon(
+    levels,
+    width,
+    height,
+    p.desert,
+    { x: p.desert.x, y: p.desert.y },
+    { wallSym: "dwl", floorSym: "dfn", surfaceSym: "snd", hallHalfW: 12, hallHalfH: 10 },
+  );
   {
     const x = p.desert.x;
     const y = p.desert.y;
-    border(l0, width, height, x - 9, y - 9, x + 9, y + 9, "dwl");
     set(l0, width, height, x - 2, y - 2, "pil");
     set(l0, width, height, x + 2, y - 2, "pil");
-    set(l0, width, height, x, y - 2, "arc");
-    set(l0, width, height, x, y, "std");
-    room(lm1, width, height, x - 14, y - 12, x + 14, y + 12, "dwl", "dfn");
-    set(lm1, width, height, x, y, "stu");
-    set(lm1, width, height, x, y - 8, "std");
-    room(lm2, width, height, x - 10, y - 20, x + 10, y - 4, "dwl", "dfn");
-    set(lm2, width, height, x, y - 8, "stu");
   }
 
-  // Coast: port district and pier.
+  // Desert outpost dungeon — visible path and south arch (was walled with no entry).
+  buildLinkedDungeon(
+    levels,
+    width,
+    height,
+    p.desert,
+    { x: p.desert.x + 22, y: p.desert.y + 16 },
+    { wallSym: "dwl", floorSym: "dfn", surfaceSym: "snd", hallHalfW: 8, hallHalfH: 6 },
+  );
+
+  // Coast: port district, pier, and lighthouse tower.
   {
     const x = p.coast.x;
     const y = p.coast.y;
     fill(l0, width, height, x - 14, y - 6, x + 8, y + 6, "pav");
-    room(l0, width, height, x - 12, y - 5, x - 2, y + 3, "bwl", "flr");
-    set(l0, width, height, x - 7, y + 3, "cob");
+    buildHouse(levels, width, height, x - 12, y - 5, 11, 9, 1);
     for (let i = 0; i < 18; i += 1) {
       set(l0, width, height, x + i, y, "bal");
       if (i % 4 === 0) set(l0, width, height, x + i, y - 1, "pil");
     }
+    buildTower(levels, width, height, x + 24, y - 10, 5, 5, 3);
+    fill(l0, width, height, x - 14, y + 10, x + 8, y + 12, "pav");
   }
 
-  // Highlands outpost with watch walls.
+  // Highlands outpost + watchtower + mine shaft.
   {
     const x = p.high.x;
     const y = p.high.y;
     border(l0, width, height, x - 10, y - 8, x + 10, y + 8, "wal");
     fill(l0, width, height, x - 9, y - 7, x + 9, y + 7, "grs");
-    room(l0, width, height, x - 4, y - 3, x + 4, y + 3, "bwl", "flr");
-    set(l0, width, height, x, y + 3, "cob");
+    buildHouse(levels, width, height, x - 4, y - 3, 9, 7, 1);
+    buildTower(levels, width, height, x + 14, y - 10, 7, 7, 2);
+    paintRoute(l0, width, height, { x, y }, { x: x - 12, y: y + 10 }, "pat");
+    set(l0, width, height, x - 12, y + 10, "std");
+    room(lm1, width, height, x - 19, y + 5, x - 5, y + 15, "cwl", "cfl");
+    set(lm1, width, height, x - 12, y + 10, "stu");
   }
 
-  // Secondary POIs: increase density without changing macro biome layout.
-  {
-    const cx = p.urban.x;
-    const cy = p.urban.y;
-    const urbanBlocks = [
-      { x0: cx - 46, y0: cy - 12, x1: cx - 38, y1: cy - 4, floors: 1 },
-      { x0: cx + 36, y0: cy - 12, x1: cx + 44, y1: cy - 4, floors: 1 },
-      { x0: cx - 46, y0: cy + 4, x1: cx - 38, y1: cy + 12, floors: 2 },
-      { x0: cx + 36, y0: cy + 4, x1: cx + 44, y1: cy + 12, floors: 2 },
-    ];
-    for (const b of urbanBlocks) {
-      room(l0, width, height, b.x0, b.y0, b.x1, b.y1, "bwl", "flr");
-      const sx = Math.floor((b.x0 + b.x1) / 2);
-      set(l0, width, height, sx, b.y1, "cob");
-      if (b.floors === 2) {
-        set(l0, width, height, sx, b.y1 - 2, "stu");
-        room(l1, width, height, b.x0, b.y0, b.x1, b.y1, "bwl", "flr");
-        set(l1, width, height, sx, b.y1 - 2, "std");
-        fill(l2, width, height, b.x0, b.y0, b.x1, b.y1, "rof");
-      } else {
-        fill(l1, width, height, b.x0, b.y0, b.x1, b.y1, "rof");
-      }
-    }
-  }
-
+  // Forest grove chapel (2 floors).
   {
     const x = p.forest.x - 18;
     const y = p.forest.y + 14;
-    room(l0, width, height, x - 4, y - 4, x + 4, y + 4, "bwl", "flr");
-    set(l0, width, height, x, y + 4, "pat");
-    set(l0, width, height, x, y + 2, "stu");
-    room(l1, width, height, x - 4, y - 4, x + 4, y + 4, "bwl", "flr");
-    set(l1, width, height, x, y + 2, "std");
-    fill(l2, width, height, x - 4, y - 4, x + 4, y + 4, "rof");
-    fill(l0, width, height, x + 8, y - 1, x + 16, y + 1, "pat");
+    paintRoute(l0, width, height, p.forest, { x, y: y + 4 }, "pat");
+    buildHouse(levels, width, height, x - 4, y - 4, 9, 9, 2);
   }
 
+  // Swamp boardwalk shack with basement.
   {
     const x = p.swamp.x + 14;
     const y = p.swamp.y - 10;
     fill(l0, width, height, x - 8, y, x + 8, y, "bal");
     fill(l0, width, height, x, y - 6, x, y + 6, "bal");
-    room(l0, width, height, x - 4, y - 4, x + 2, y + 2, "swl", "sfl");
-    set(l0, width, height, x - 1, y + 2, "bal");
+    buildHouse(levels, width, height, x - 4, y - 4, 7, 7, 1);
     set(l0, width, height, x + 4, y - 4, "hol");
-    room(lm1, width, height, x - 6, y - 8, x + 8, y + 6, "swl", "sfl");
+    room(lm1, width, height, x - 2, y - 8, x + 8, y + 2, "swl", "sfl");
     set(lm1, width, height, x + 4, y - 4, "stu");
-  }
-
-  {
-    const x = p.desert.x + 22;
-    const y = p.desert.y + 16;
-    room(l0, width, height, x - 8, y - 6, x + 8, y + 6, "dwl", "dfn");
-    set(l0, width, height, x, y + 6, "snd");
-    set(l0, width, height, x, y + 2, "std");
-    room(lm1, width, height, x - 10, y - 8, x + 10, y + 8, "dwl", "dfn");
-    set(lm1, width, height, x, y + 2, "stu");
-    fill(l0, width, height, x - 22, y - 2, x - 14, y + 2, "wtr");
-    set(l0, width, height, x - 18, y - 4, "pil");
-    set(l0, width, height, x - 16, y + 4, "pil");
-  }
-
-  {
-    const x = p.coast.x + 24;
-    const y = p.coast.y - 10;
-    room(l0, width, height, x - 2, y - 2, x + 2, y + 2, "bwl", "flr");
-    set(l0, width, height, x, y + 2, "bal");
-    set(l0, width, height, x, y + 1, "stu");
-    room(l1, width, height, x - 2, y - 2, x + 2, y + 2, "bwl", "flr");
-    set(l1, width, height, x, y + 1, "std");
-    set(l1, width, height, x, y - 1, "stu");
-    room(l2, width, height, x - 2, y - 2, x + 2, y + 2, "bwl", "flr");
-    set(l2, width, height, x, y - 1, "std");
-    fill(l3, width, height, x - 2, y - 2, x + 2, y + 2, "rof");
-    fill(l0, width, height, x - 14, y + 10, x + 8, y + 12, "pav");
-  }
-
-  {
-    const x = p.high.x + 14;
-    const y = p.high.y - 10;
-    room(l0, width, height, x - 3, y - 3, x + 3, y + 3, "sdw", "flr");
-    set(l0, width, height, x, y + 3, "pat");
-    set(l0, width, height, x, y + 1, "stu");
-    room(l1, width, height, x - 3, y - 3, x + 3, y + 3, "sdw", "flr");
-    set(l1, width, height, x, y + 1, "std");
-    fill(l2, width, height, x - 3, y - 3, x + 3, y + 3, "rof");
-
-    const bx = p.high.x - 12;
-    const by = p.high.y + 10;
-    set(l0, width, height, bx, by, "std");
-    room(lm1, width, height, bx - 7, by - 5, bx + 7, by + 5, "cwl", "cfl");
-    set(lm1, width, height, bx, by, "stu");
   }
 
   return p;

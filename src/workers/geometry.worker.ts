@@ -68,6 +68,8 @@ export interface GeometryWorkerResponse {
 // ---------------------------------------------------------------------------
 
 const LEVEL_HEIGHT_UNITS = 2.0;
+/** Keep in sync with runtime `FLOOR_SLAB_THICKNESS`. */
+const FLOOR_SLAB_THICKNESS = 0.32;
 /** Keep in sync with `StairConfig3D.ts` STAIR_STEP_COUNT. */
 const STEP_COUNT = 8;
 
@@ -231,14 +233,16 @@ function buildStairVerts(
 
     let y0: number;
     let y1: number;
+    // South (+Z / high localZ) = entry; north (−Z) = exit — must match StairConfig3D + solid fill.
     if (stairDir === "up") {
-      y0 = baseY + i * stepRise;
-      y1 = baseY + (i + 1) * stepRise;
+      const risenSteps = i + 1;
+      y1 = baseY + FLOOR_SLAB_THICKNESS + risenSteps * stepRise;
+      y0 = y1 - stepRise;
     } else {
-      // South (+Z) meets current floor; north (-Z) drops toward the level below.
-      const heightStep = STEP_COUNT - 1 - i;
-      y0 = baseY + heightStep * stepRise;
-      y1 = baseY + (heightStep + 1) * stepRise;
+      const treadTop =
+        baseY + LEVEL_HEIGHT_UNITS + FLOOR_SLAB_THICKNESS - i * stepRise;
+      y1 = treadTop;
+      y0 = y1 - stepRise;
     }
 
     const base = allPositions.length / 3;
@@ -312,6 +316,55 @@ function buildStairVerts(
   }
 
   return { positions: allPositions, indices: allIndices, uvs: allUvs };
+}
+
+/** Solid backing under treads — closes the void below walkable stairs. */
+function buildStairSolidFillVerts(
+  x: number,
+  y: number,
+  baseY: number,
+  stairDir: "up" | "down" = "up",
+): { positions: number[]; indices: number[]; uvs: number[] } {
+  const x0 = x;
+  const x1 = x + 1;
+  const z0 = y;
+  const z1 = y + 1;
+  const fillDepth = 0.28;
+  const yBot = baseY - fillDepth;
+
+  let yNorth: number;
+  let ySouth: number;
+  if (stairDir === "up") {
+    ySouth = baseY;
+    yNorth = baseY + LEVEL_HEIGHT_UNITS;
+  } else {
+    ySouth = baseY + LEVEL_HEIGHT_UNITS;
+    yNorth = baseY;
+  }
+
+  const positions = [
+    x0, yBot, z1,
+    x1, yBot, z1,
+    x1, yBot, z0,
+    x0, yBot, z0,
+    x0, ySouth, z1,
+    x1, ySouth, z1,
+    x1, yNorth, z0,
+    x0, yNorth, z0,
+  ];
+  const indices = [
+    0, 1, 2, 0, 2, 3,
+    4, 7, 6, 4, 6, 5,
+    0, 4, 5, 0, 5, 1,
+    1, 5, 6, 1, 6, 2,
+    2, 6, 7, 2, 7, 3,
+    3, 7, 4, 3, 4, 0,
+  ];
+  const uvs = [
+    0, 0, 1, 0, 1, 1, 0, 1,
+    0, 0, 1, 0, 1, 1, 0, 1,
+  ];
+  return { positions, indices, uvs };
 }
 
 // ---------------------------------------------------------------------------
@@ -632,10 +685,13 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
 
     if (profile === "stair") {
       const stairDir = tile.stairDir === "down" ? "down" : "up";
-      const stairBaseY =
-        stairDir === "down"
-          ? levelOffsetY - LEVEL_HEIGHT_UNITS
-          : levelOffsetY;
+      if (stairDir === "down") {
+        // Down stairs do not need to render steps geometry because the up-stair tile on the level below
+        // already renders the full staircase. We just continue here so no floor slab is generated,
+        // leaving the hole open.
+        continue;
+      }
+      const stairBaseY = levelOffsetY;
       const { positions, indices, uvs } = buildStairVerts(
         x,
         y,
@@ -643,6 +699,8 @@ self.onmessage = (evt: MessageEvent<GeometryWorkerRequest>) => {
         stairDir,
       );
       mergeInto(getAccum(materialKey), positions, indices, uvs);
+      // No solid wedge fill — it duplicated a ramp under the treads (FP looked like
+      // two stacked stairs). Tread side faces close the mesh; void below is culled top-down.
       continue;
     }
 

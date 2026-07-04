@@ -1,7 +1,7 @@
 # 3D Systems Inventory
 
 **Purpose:** factual inventory of the Babylon slice runtime as implemented today.  
-**Last reviewed:** 2026-06-17 (code: `src/three-d/**`, `geometry.worker.ts`)
+**Last reviewed:** 2026-07-03 (code: `src/three-d/**`, `geometry.worker.ts`)
 
 For compatibility with contracts and gaps, see [COMPATIBILITY_AUDIT.md](./COMPATIBILITY_AUDIT.md).
 
@@ -41,7 +41,7 @@ Runtime created once per session; `dispose()` on return to menu.
 
 ## 2. Core runtime (`createDebugSliceScene.ts`)
 
-Single factory: `createDebugSliceScene(canvas) → SliceRuntime`.
+Single factory: `createDebugSliceScene(canvas) → SliceRuntime` (~7700 lines — ver [ENGINE_3D_STATE_AND_HARDENING.md](./ENGINE_3D_STATE_AND_HARDENING.md) para plano de extração).
 
 **Returns:** `{ engine, scene, save, dispose }`
 
@@ -56,7 +56,7 @@ Single factory: `createDebugSliceScene(canvas) → SliceRuntime`.
 | Map X → world X | Entity spawn: `entity.x * tileSize + tileSize/2` → world X |
 | Map Y → world Z | Same for Z axis |
 | Level → world Y | `levelNumber * 2.0` (`LEVEL_HEIGHT_UNITS`) |
-| Player ground offset | `0.8` above level floor |
+| Player ground offset | `FLOOR_SURFACE_Y` (0.32) — topo do slab; ver `TileSurfaceResolver` |
 | Active level | `PlayerState.getCurrentLevel()`; synced on stairs/void |
 
 **Layer semantics (S12):**

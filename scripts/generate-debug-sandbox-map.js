@@ -173,8 +173,38 @@ function carveAlignedRoom(
 }
 
 /**
- * Level +1: tower room above the up-stair landing.
- * Level -1: cellar below the west down-stair (separate shaft from tower).
+ * Shaft geometry helpers — one climb tile per floor; landing = floor (never stu/std).
+ * See docs/three-d/STAIR_MAP_RULES.md (M1–M4).
+ */
+const SHAFT_MIN_ROOM_W = 5;
+const SHAFT_MIN_ROOM_H = 6;
+
+function shaftRoomMetrics(roomX, roomY, roomW, roomH) {
+  if (roomW < SHAFT_MIN_ROOM_W || roomH < SHAFT_MIN_ROOM_H) {
+    throw new Error(
+      `Shaft room ${roomW}x${roomH} too small — minimum ${SHAFT_MIN_ROOM_W}x${SHAFT_MIN_ROOM_H} (STAIR_MAP_RULES M4)`,
+    );
+  }
+  const cx = roomX + Math.floor(roomW / 2);
+  const y1 = roomY + roomH - 1;
+  return {
+    cx,
+    y1,
+    /** M4: open floor north of the stair tile (collision when walking north). */
+    clearNorthZ: roomY + 1,
+    /** stu L0 / landing patamar — same (cx, landingZ) on every shaft level. */
+    landingZ: roomY + 2,
+    /** Extra climb tile on multi-floor towers (south of landing; north neighbor = patamar). */
+    continueUpZ: roomY + 3,
+    /** std on L+1 — south of landing; walk north on tile to descend. */
+    downZ: roomY + roomH - 2,
+    /** South row — hub entry (floor, not wall). */
+    doorZ: y1,
+  };
+}
+
+/**
+ * Level +1: patamar + std. Level -1: patamar (not stu on the landing tile).
  */
 function buildVerticalLevelBuffers(
   width,
@@ -185,53 +215,388 @@ function buildVerticalLevelBuffers(
   wallIdx,
 ) {
   const voidIdx = indexOf("...");
-  const stuIdx = indexOf("stu");
   const stdIdx = indexOf("std");
 
   const {
+    towerRoom,
     towerStairX,
     towerStairY,
-    towerDownX,
-    towerDownY,
+    cellarRoom,
     cellarStairX,
     cellarStairY,
   } = verticalDemo;
 
   const levelUp = buildVoidLevelBuffer(width, height, voidIdx);
-  carveAlignedRoom(
-    levelUp,
-    width,
-    height,
-    towerStairX,
-    towerStairY,
-    9,
-    9,
-    floorIdx,
-    wallIdx,
-  );
-  // Landing at top of up-stair from level 0 — never stack std on the same tile.
-  setTile(levelUp, width, height, towerStairX, towerStairY, floorIdx);
-  setTile(levelUp, width, height, towerDownX, towerDownY, stdIdx);
-
-  const balconyY = towerDownY + 2;
-  setTile(levelUp, width, height, towerDownX, balconyY, floorIdx);
-  setTile(levelUp, width, height, towerDownX, balconyY + 1, voidIdx);
+  if (towerRoom) {
+    const { x, y, w, h } = towerRoom;
+    const shaft = shaftRoomMetrics(x, y, w, h);
+    carveShaftRoomOnBuffer(levelUp, width, height, x, y, w, h, indexOf);
+    setTile(levelUp, width, height, towerStairX, towerStairY, floorIdx);
+    setTile(levelUp, width, height, shaft.cx, shaft.downZ, stdIdx);
+  }
 
   const levelDown = buildVoidLevelBuffer(width, height, voidIdx);
-  carveAlignedRoom(
-    levelDown,
+  if (cellarRoom) {
+    const { x, y, w, h } = cellarRoom;
+    const shaft = shaftRoomMetrics(x, y, w, h);
+    const stuIdx = indexOf("stu");
+    carveShaftRoomOnBuffer(levelDown, width, height, x, y, w, h, indexOf);
+    setTile(levelDown, width, height, cellarStairX, cellarStairY, floorIdx);
+    // Return path: stu one row south of landing (L0 tile above must stay floor — M2).
+    setTile(levelDown, width, height, shaft.cx, shaft.continueUpZ, stuIdx);
+  }
+
+  return { levelUp, levelDown };
+}
+
+/**
+ * Shaft alcove: south/east/west walls, **north open** on the climb column (M5).
+ * A boxed room with a north wall blocks the stair mesh like a ceiling.
+ */
+function carveShaftRoomOnBuffer(
+  buffer,
+  width,
+  height,
+  roomX,
+  roomY,
+  roomW,
+  roomH,
+  indexOf,
+) {
+  const floorIdx = indexOf("cob");
+  const wallIdx = indexOf("wal");
+  const shaft = shaftRoomMetrics(roomX, roomY, roomW, roomH);
+
+  for (let dy = 0; dy < roomH; dy += 1) {
+    for (let dx = 0; dx < roomW; dx += 1) {
+      const tx = roomX + dx;
+      const ty = roomY + dy;
+      const onBorder =
+        dx === 0 || dx === roomW - 1 || dy === 0 || dy === roomH - 1;
+      const shaftColumn =
+        tx === shaft.cx && ty >= roomY && ty <= shaft.landingZ;
+      if (shaftColumn) {
+        setTile(buffer, width, height, tx, ty, floorIdx);
+        continue;
+      }
+      setTile(
+        buffer,
+        width,
+        height,
+        tx,
+        ty,
+        onBorder ? wallIdx : floorIdx,
+      );
+    }
+  }
+}
+
+/**
+ * Single-tile vertical shaft on one BMS level (see docs/three-d/STAIR_MAP_RULES.md).
+ * South row = door (floor). North interior row = stu (up) or std (down).
+ */
+function carveShaftTileOnBuffer(
+  buffer,
+  width,
+  height,
+  roomX,
+  roomY,
+  roomW,
+  roomH,
+  indexOf,
+  direction,
+) {
+  const floorIdx = indexOf("cob");
+  const stuIdx = indexOf("stu");
+  const stdIdx = indexOf("std");
+  const shaft = shaftRoomMetrics(roomX, roomY, roomW, roomH);
+
+  carveShaftRoomOnBuffer(
+    buffer,
     width,
     height,
-    cellarStairX,
-    cellarStairY,
-    8,
-    7,
+    roomX,
+    roomY,
+    roomW,
+    roomH,
+    indexOf,
+  );
+  setTile(buffer, width, height, shaft.cx, shaft.doorZ, floorIdx);
+  if (direction === "up") {
+    setTile(buffer, width, height, shaft.cx, shaft.landingZ, stuIdx);
+  } else {
+    setTile(buffer, width, height, shaft.cx, shaft.landingZ, stdIdx);
+  }
+  return { shaftX: shaft.cx, shaftZ: shaft.landingZ, shaft };
+}
+
+const STRESS_MIN_LEVEL = -5;
+const STRESS_MAX_LEVEL = 7;
+const STRESS_SPIRE_TOP = 6;
+const STRESS_CRATER_DEPTH = 5;
+
+function mergeNonVoidTiles(dest, src, width, height, voidIdx) {
+  for (let i = 0; i < width * height; i += 1) {
+    if (src[i] !== voidIdx) {
+      dest[i] = src[i];
+    }
+  }
+}
+
+function extendMapForStressAnnex(built, layout, indexOf) {
+  const stressH = layout.stressZoneHeight ?? 0;
+  if (stressH <= 0) {
+    return null;
+  }
+
+  const extraW = layout.stressZoneExtraWidth ?? 6;
+  const oldW = built.width;
+  const oldH = built.height;
+  const newW = Math.max(oldW, oldW + extraW);
+  const newH = oldH + stressH;
+  const voidIdx = indexOf("...");
+  const wallIdx = indexOf("wal");
+  const floorIdx = indexOf("cob");
+  const stnIdx = indexOf("stn");
+
+  const buffer = Buffer.alloc(newW * newH, voidIdx);
+  for (let y = 0; y < oldH; y += 1) {
+    for (let x = 0; x < oldW; x += 1) {
+      buffer[y * newW + x] = built.buffer[y * oldW + x];
+    }
+    for (let x = oldW; x < newW - 1; x += 1) {
+      buffer[y * newW + x] = floorIdx;
+    }
+    if (newW > oldW) {
+      buffer[y * newW + (newW - 1)] = wallIdx;
+    }
+  }
+
+  const stressY = oldH;
+  for (let y = stressY; y < newH; y += 1) {
+    for (let x = 0; x < newW; x += 1) {
+      const border = x === 0 || x === newW - 1 || y === newH - 1;
+      buffer[y * newW + x] = border ? wallIdx : floorIdx;
+    }
+  }
+
+  const margin = layout.margin ?? 2;
+  const spineW = layout.spineWidth ?? 3;
+  const spineX = margin;
+  const corridorX = spineX + Math.floor(spineW / 2);
+  fillRect(buffer, newW, newH, corridorX, oldH - 2, 1, stressH + 2, floorIdx);
+
+  const spireX = newW - margin - 12;
+  const spireY = stressY + 3;
+  const spireW = 10;
+  const spireH = 10;
+  const craterCx = margin + 10;
+  const craterCy = stressY + 10;
+  const craterR = 5;
+  const hallX = Math.floor(newW / 2) - 7;
+  const hallY = stressY + stressH - 15;
+
+  fillRect(buffer, newW, newH, spireX - 2, spireY + spireH, spireW + 4, 2, stnIdx);
+  setTile(buffer, newW, newH, hallX + 7, hallY - 1, indexOf("arc"));
+
+  built.width = newW;
+  built.height = newH;
+  built.buffer = buffer;
+
+  return {
+    spire: { x: spireX, y: spireY, w: spireW, h: spireH, top: STRESS_SPIRE_TOP },
+    crater: { cx: craterCx, cy: craterCy, r: craterR, depth: STRESS_CRATER_DEPTH },
+    hall: { x: hallX, y: hallY },
+    annexOriginY: stressY,
+  };
+}
+
+function buildStackedTowerOnBuffers(
+  buffers,
+  width,
+  height,
+  x,
+  y,
+  w,
+  h,
+  fromFloor,
+  toFloor,
+  indexOf,
+  opts = {},
+) {
+  const floorIdx = indexOf(opts.floorSym || "cob");
+  const wallIdx = indexOf(opts.wallSym || "wal");
+  const roofIdx = indexOf(opts.roofSym || "rof");
+  const stuIdx = indexOf("stu");
+  const stdIdx = indexOf("std");
+  const shaft = shaftRoomMetrics(x, y, w, h);
+
+  for (let n = fromFloor; n <= toFloor; n += 1) {
+    const key = String(n);
+    const buf = buffers[key];
+    if (!buf) {
+      continue;
+    }
+    carveShaftRoomOnBuffer(buf, width, height, x, y, w, h, indexOf);
+    if (n === fromFloor) {
+      setTile(buf, width, height, shaft.cx, shaft.doorZ, floorIdx);
+      setTile(buf, width, height, shaft.cx, shaft.landingZ, stuIdx);
+    } else {
+      setTile(buf, width, height, shaft.cx, shaft.landingZ, floorIdx);
+      setTile(buf, width, height, shaft.cx, shaft.downZ, stdIdx);
+      if (n < toFloor) {
+        const leg = n - fromFloor;
+        const climbZ =
+          leg % 2 === 1 ? shaft.continueUpZ : shaft.landingZ;
+        setTile(buf, width, height, shaft.cx, climbZ, stuIdx);
+      }
+    }
+  }
+
+  const roofKey = String(toFloor + 1);
+  if (buffers[roofKey]) {
+    fillRect(buffers[roofKey], width, height, x, y, w, h, roofIdx);
+  }
+}
+
+function buildCraterShaftOnBuffers(buffers, width, height, cx, cy, radius, depth, indexOf) {
+  const voidIdx = indexOf("...");
+  const holIdx = indexOf("hol");
+  const arcIdx = indexOf("arc");
+  const stuIdx = indexOf("stu");
+  const stdIdx = indexOf("std");
+  const dfnIdx = indexOf("dfn");
+  const dwlIdx = indexOf("dwl");
+  const floorIdx = indexOf("cob");
+  const l0 = buffers["0"];
+
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      if (dx * dx + dy * dy <= radius * radius) {
+        setTile(l0, width, height, cx + dx, cy + dy, voidIdx);
+      }
+    }
+  }
+  setTile(l0, width, height, cx, cy - radius + 1, arcIdx);
+  setTile(l0, width, height, cx, cy, holIdx);
+
+  const roomR = radius + 1;
+  const roomX = cx - roomR;
+  const roomY = cy - roomR;
+  const roomW = roomR * 2 + 1;
+  const roomH = roomR * 2 + 1;
+  const shaft = shaftRoomMetrics(roomX, roomY, roomW, roomH);
+  const dfnFloorIdx = indexOf("dfn");
+
+  for (let d = 1; d <= depth; d += 1) {
+    const key = String(-d);
+    const buf = buffers[key];
+    if (!buf) {
+      continue;
+    }
+    carveShaftRoomOnBuffer(
+      buf,
+      width,
+      height,
+      roomX,
+      roomY,
+      roomW,
+      roomH,
+      indexOf,
+    );
+    if (d === 1) {
+      setTile(buf, width, height, cx, cy, floorIdx);
+    }
+    setTile(buf, width, height, shaft.cx, shaft.landingZ, dfnFloorIdx);
+    if (d > 1) {
+      setTile(buf, width, height, shaft.cx, shaft.downZ, stdIdx);
+      setTile(buf, width, height, shaft.cx, shaft.landingZ, stuIdx);
+    }
+  }
+}
+
+function buildDungeonHallsOnBuffers(buffers, width, height, hallX, hallY, indexOf) {
+  const dfnIdx = indexOf("dfn");
+  const dwlIdx = indexOf("dwl");
+  const stdIdx = indexOf("std");
+  const floorIdx = indexOf("cob");
+  const hallW = 14;
+  const hallH = 8;
+  const shaft = shaftRoomMetrics(hallX, hallY, hallW, hallH);
+
+  carveRoom(buffers["0"], width, height, hallX, hallY, hallW, hallH, dfnIdx, dwlIdx);
+  setTile(buffers["0"], width, height, hallX + 7, hallY + 7, indexOf("arc"));
+  setTile(buffers["0"], width, height, shaft.cx, shaft.landingZ, stdIdx);
+
+  carveRoom(buffers["-1"], width, height, hallX, hallY, hallW, hallH, dfnIdx, dwlIdx);
+  setTile(buffers["-1"], width, height, shaft.cx, shaft.landingZ, floorIdx);
+
+  carveRoom(buffers["-2"], width, height, hallX + 2, hallY + 2, 10, 10, dfnIdx, dwlIdx);
+}
+
+function applyStressVerticalStructures(buffers, width, height, stressAnchors, indexOf) {
+  if (!stressAnchors) {
+    return;
+  }
+
+  const { spire, crater, hall } = stressAnchors;
+  buildStackedTowerOnBuffers(
+    buffers,
+    width,
+    height,
+    spire.x,
+    spire.y,
+    spire.w,
+    spire.h,
+    0,
+    spire.top,
+    indexOf,
+    { roofSym: "rof" },
+  );
+  buildCraterShaftOnBuffers(
+    buffers,
+    width,
+    height,
+    crater.cx,
+    crater.cy,
+    crater.r,
+    crater.depth,
+    indexOf,
+  );
+  buildDungeonHallsOnBuffers(buffers, width, height, hall.x, hall.y, indexOf);
+}
+
+function buildAllLevelBuffers(built, stressAnchors, indexOf) {
+  const { width, height } = built;
+  const voidIdx = indexOf("...");
+  const floorIdx = indexOf("cob");
+  const wallIdx = indexOf("wal");
+
+  const levelNums = [];
+  for (let n = STRESS_MIN_LEVEL; n <= STRESS_MAX_LEVEL; n += 1) {
+    levelNums.push(n);
+  }
+
+  const buffers = {};
+  for (const n of levelNums) {
+    buffers[String(n)] = buildVoidLevelBuffer(width, height, voidIdx);
+  }
+  buffers["0"] = Buffer.from(built.buffer);
+
+  const { levelUp, levelDown } = buildVerticalLevelBuffers(
+    width,
+    height,
+    built.verticalDemo,
+    indexOf,
     floorIdx,
     wallIdx,
   );
-  setTile(levelDown, width, height, cellarStairX, cellarStairY, stuIdx);
+  mergeNonVoidTiles(buffers["1"], levelUp, width, height, voidIdx);
+  mergeNonVoidTiles(buffers["-1"], levelDown, width, height, voidIdx);
 
-  return { levelUp, levelDown };
+  applyStressVerticalStructures(buffers, width, height, stressAnchors, indexOf);
+
+  return { buffers, levelNums };
 }
 
 /** U-shaped alcove — open on the south side onto a row corridor. */
@@ -402,12 +767,12 @@ function buildIsolatedChambersLayoutMap(
 
   const lakeW = 4;
   const lakeH = 3;
-  const lakeX = hubX + hubW - lakeW - 1;
-  const lakeY = hubY + 1;
+  const lakeX = hubX + Math.floor(hubW / 2) - 2;
+  const lakeY = hubY + 2;
   carveWaterLake(buffer, width, height, lakeX, lakeY, lakeW, lakeH, watIdx, wtrIdx);
 
   const rampRowY = hubY + 2;
-  let rampX = hubX + hubW - 7;
+  let rampX = hubX + 2;
   for (let i = 0; i < 3; i += 1) {
     setTile(buffer, width, height, rampX, rampRowY, rpnIdx);
     rampX += 1;
@@ -418,15 +783,43 @@ function buildIsolatedChambersLayoutMap(
   }
   setTile(buffer, width, height, rampX, rampRowY - 1, hlmIdx);
 
-  const towerStairX = hubX + hubW - 3;
-  const towerStairY = hubY + Math.floor(hubH / 2);
-  const towerDownX = towerStairX;
-  const towerDownY = towerStairY + 5;
-  const cellarStairX = hubX + hubW - 6;
-  const cellarStairY = hubY + hubH - 2;
-  setTile(buffer, width, height, towerStairX, towerStairY, stuIdx);
-  setTile(buffer, width, height, cellarStairX, cellarStairY, stdIdx);
-  setTile(buffer, width, height, hubX + hubW - 5, hubY + 2, rfuIdx);
+  // West = cellar (down). East = tower (up). Open-north alcoves (M5), not boxed pits.
+  const towerRoomW = 9;
+  const towerRoomH = 7;
+  const towerRoomX = hubX + hubW - towerRoomW - 1;
+  const towerRoomY = hubY + 1;
+  const towerShaft = carveShaftTileOnBuffer(
+    buffer,
+    width,
+    height,
+    towerRoomX,
+    towerRoomY,
+    towerRoomW,
+    towerRoomH,
+    indexOf,
+    "up",
+  );
+  const towerStairX = towerShaft.shaftX;
+  const towerStairY = towerShaft.shaftZ;
+
+  const cellarRoomW = 9;
+  const cellarRoomH = 7;
+  const cellarRoomX = hubX + 1;
+  const cellarRoomY = hubY + 1;
+  const cellarShaft = carveShaftTileOnBuffer(
+    buffer,
+    width,
+    height,
+    cellarRoomX,
+    cellarRoomY,
+    cellarRoomW,
+    cellarRoomH,
+    indexOf,
+    "down",
+  );
+  const cellarStairX = cellarShaft.shaftX;
+  const cellarStairY = cellarShaft.shaftZ;
+  setTile(buffer, width, height, hubX + Math.floor(hubW / 2), hubY + 2, rfuIdx);
 
   const entities = [];
   const roomMeta = [];
@@ -548,6 +941,8 @@ function buildIsolatedChambersLayoutMap(
   const propPlacements = [
     { propId: "wild_flower", x: lakeX, y: lakeY + lakeH },
     { propId: "wild_flower", x: lakeX + 1, y: lakeY + lakeH },
+    { propId: "oak_tree", x: towerStairX + 1, y: towerRoomY + towerRoomH },
+    { propId: "oak_tree", x: cellarStairX - 1, y: cellarRoomY + cellarRoomH },
   ];
   propPlacements.forEach(({ propId, x, y }) => {
     if (!props.includes(propId)) {
@@ -587,16 +982,25 @@ function buildIsolatedChambersLayoutMap(
     roomCols,
     layoutMode: "isolated_chambers",
     verticalDemo: {
+      towerRoom: {
+        x: towerRoomX,
+        y: towerRoomY,
+        w: towerRoomW,
+        h: towerRoomH,
+      },
       towerStairX,
       towerStairY,
-      towerDownX,
-      towerDownY,
+      cellarRoom: {
+        x: cellarRoomX,
+        y: cellarRoomY,
+        w: cellarRoomW,
+        h: cellarRoomH,
+      },
       cellarStairX,
       cellarStairY,
       lake: { x: lakeX, y: lakeY, w: lakeW, h: lakeH },
       ramps: { x: hubX + hubW - 7, y: rampRowY },
       floorRamp: { x: hubX + hubW - 5, y: hubY + 2 },
-      balconyFall: { x: towerDownX, y: towerDownY + 3 },
     },
   };
 }
@@ -634,8 +1038,6 @@ function buildOpenGalleryLayoutMap(
   const rpnIdx = indexOf("rpn");
   const rpsIdx = indexOf("rps");
   const hlmIdx = indexOf("hlm");
-  const stuIdx = indexOf("stu");
-  const stdIdx = indexOf("std");
 
   const roomRows = Math.ceil(enemies.length / roomCols) || 1;
   const enemyBlockW = roomCols * alcoveW + (roomCols - 1) * roomGap;
@@ -702,14 +1104,43 @@ function buildOpenGalleryLayoutMap(
   }
   setTile(buffer, width, height, hubX + 1, rampRowY - 1, hlmIdx);
 
-  const towerStairX = hubX + hubW - 3;
-  const towerStairY = hubY + Math.floor(hubH / 2);
+  const towerRoomW = 9;
+  const towerRoomH = 7;
+  const towerRoomX = hubX + hubW - towerRoomW - 1;
+  const towerRoomY = hubY + 1;
+  const towerShaft = carveShaftTileOnBuffer(
+    buffer,
+    width,
+    height,
+    towerRoomX,
+    towerRoomY,
+    towerRoomW,
+    towerRoomH,
+    indexOf,
+    "up",
+  );
+  const towerStairX = towerShaft.shaftX;
+  const towerStairY = towerShaft.shaftZ;
+
+  const cellarRoomW = 9;
+  const cellarRoomH = 7;
+  const cellarRoomX = hubX + 1;
+  const cellarRoomY = hubY + 1;
+  const cellarShaft = carveShaftTileOnBuffer(
+    buffer,
+    width,
+    height,
+    cellarRoomX,
+    cellarRoomY,
+    cellarRoomW,
+    cellarRoomH,
+    indexOf,
+    "down",
+  );
+  const cellarStairX = cellarShaft.shaftX;
+  const cellarStairY = cellarShaft.shaftZ;
   const towerDownX = towerStairX;
-  const towerDownY = towerStairY + 5;
-  const cellarStairX = hubX + 1;
-  const cellarStairY = hubY + hubH - 2;
-  setTile(buffer, width, height, towerStairX, towerStairY, stuIdx);
-  setTile(buffer, width, height, cellarStairX, cellarStairY, stdIdx);
+  const towerDownY = towerStairY;
 
   const rfuIdx = indexOf("rfu");
   setTile(
@@ -860,12 +1291,24 @@ function buildOpenGalleryLayoutMap(
     roomCols,
     layoutMode: "open_gallery",
     verticalDemo: {
+      towerRoom: {
+        x: towerRoomX,
+        y: towerRoomY,
+        w: towerRoomW,
+        h: towerRoomH,
+      },
       towerStairX,
       towerStairY,
-      towerDownX,
-      towerDownY,
+      cellarRoom: {
+        x: cellarRoomX,
+        y: cellarRoomY,
+        w: cellarRoomW,
+        h: cellarRoomH,
+      },
       cellarStairX,
       cellarStairY,
+      towerDownX,
+      towerDownY,
       lake: { x: lakeX, y: lakeY, w: lakeW, h: lakeH },
       ramps: { x: hubX + 1, y: rampRowY },
       floorRamp: { x: hubX + Math.floor(hubW / 2), y: hubY + 2 },
@@ -954,17 +1397,44 @@ function buildRoomLayoutMap(enemies, items, layout, indexOf, props = [], propSym
   }
   setTile(buffer, width, height, hubX + 1, rampRowY - 1, hlmIdx);
 
-  // Vertical demo — tower (east) and cellar (west) are separate shafts.
-  const towerStairX = hubX + hubW - 3;
-  const towerStairY = hubY + Math.floor(hubH / 2);
+  // Vertical demo — tower (east) and cellar (west) with M4 shaft clearance.
+  const towerRoomW = 9;
+  const towerRoomH = 7;
+  const towerRoomX = hubX + hubW - towerRoomW - 1;
+  const towerRoomY = hubY + 1;
+  const towerShaft = carveShaftTileOnBuffer(
+    buffer,
+    width,
+    height,
+    towerRoomX,
+    towerRoomY,
+    towerRoomW,
+    towerRoomH,
+    indexOf,
+    "up",
+  );
+  const towerStairX = towerShaft.shaftX;
+  const towerStairY = towerShaft.shaftZ;
   const towerDownX = towerStairX;
-  const towerDownY = towerStairY + 5;
-  const cellarStairX = hubX + 2;
-  const cellarStairY = hubY + hubH - 2;
-  const stuIdx = indexOf("stu");
-  const stdIdx = indexOf("std");
-  setTile(buffer, width, height, towerStairX, towerStairY, stuIdx);
-  setTile(buffer, width, height, cellarStairX, cellarStairY, stdIdx);
+  const towerDownY = towerStairY;
+
+  const cellarRoomW = 9;
+  const cellarRoomH = 7;
+  const cellarRoomX = hubX + 1;
+  const cellarRoomY = hubY + 1;
+  const cellarShaft = carveShaftTileOnBuffer(
+    buffer,
+    width,
+    height,
+    cellarRoomX,
+    cellarRoomY,
+    cellarRoomW,
+    cellarRoomH,
+    indexOf,
+    "down",
+  );
+  const cellarStairX = cellarShaft.shaftX;
+  const cellarStairY = cellarShaft.shaftZ;
 
   const rfuIdx = indexOf("rfu");
   const rampFloorX = hubX + Math.floor(hubW / 2);
@@ -1193,7 +1663,27 @@ function main() {
   const itemSymbols = manifest.symbols?.items || {};
   const propSymbols = manifest.symbols?.props || {};
 
-  const tileAtlas = ["...", "cob", "wal", "flr", "wat", "wtr", "rpn", "rps", "hlm", "stu", "std", "rfu"];
+  const tileAtlas = [
+    "...",
+    "cob",
+    "wal",
+    "flr",
+    "wat",
+    "wtr",
+    "rpn",
+    "rps",
+    "hlm",
+    "stu",
+    "std",
+    "rfu",
+    "hol",
+    "dfn",
+    "dwl",
+    "rof",
+    "stn",
+    "bal",
+    "arc",
+  ];
   const indexOf = (symbol) => {
     const idx = tileAtlas.indexOf(symbol);
     if (idx < 0) throw new Error(`Unknown tile symbol: ${symbol}`);
@@ -1261,6 +1751,8 @@ function main() {
       props,
     );
   })();
+
+  const stressAnchors = extendMapForStressAnnex(built, layout, indexOf);
 
   const layoutModeResolved = built.layoutMode || layoutMode;
 
@@ -1344,6 +1836,7 @@ function main() {
           cols: layout.itemCols || 8,
         },
         verticalDemo: built.verticalDemo,
+        ...(stressAnchors ? { stressVertical: stressAnchors } : {}),
       },
     },
     tileAtlas,
@@ -1441,56 +1934,81 @@ function main() {
         renderAs: "floor",
         geometryProfile: "ramp-n",
       },
+      hol: {
+        id: "hole",
+        color: "#111827",
+        height: 0.02,
+        renderAs: "floor",
+        transition: "down",
+      },
+      dfn: {
+        id: "dungeon-floor",
+        color: "#1e293b",
+        height: 0.06,
+        renderAs: "floor",
+      },
+      dwl: {
+        id: "dungeon-wall",
+        block: true,
+        color: "#374151",
+        height: 2.8,
+        renderAs: "block",
+      },
+      rof: {
+        id: "roof-tile",
+        color: "#c2622d",
+        height: 0.45,
+        renderAs: "floor",
+      },
+      stn: {
+        id: "stone-plaza",
+        color: "#94a3b8",
+        height: 0.07,
+        renderAs: "floor",
+      },
+      bal: {
+        id: "balcony",
+        color: "#cbd5e1",
+        height: 0.08,
+        renderAs: "floor",
+      },
+      arc: {
+        id: "archway",
+        block: true,
+        color: "#a8a29e",
+        height: 3.8,
+        renderAs: "block",
+      },
     },
     entityTemplates,
-    levels: {
-      "-1": {
-        binFile: `${mapName}_-1.bin`,
-        playerPos,
-        entities: [],
-      },
-      "0": {
-        binFile: `${mapName}_0.bin`,
-        playerPos,
-        entities,
-      },
-      "1": {
-        binFile: `${mapName}_1.bin`,
-        playerPos,
-        entities: [],
-      },
-    },
+    levels: Object.fromEntries(
+      Array.from(
+        { length: STRESS_MAX_LEVEL - STRESS_MIN_LEVEL + 1 },
+        (_, i) => STRESS_MIN_LEVEL + i,
+      ).map((n) => [
+        String(n),
+        {
+          binFile: `${mapName}_${n}.bin`,
+          playerPos,
+          entities: n === 0 ? entities : [],
+        },
+      ]),
+    ),
   };
 
-  const voidIdx = indexOf("...");
-  const floorIdx = indexOf("cob");
-  const wallIdx = indexOf("wal");
-  const { levelUp, levelDown } = buildVerticalLevelBuffers(
-    built.width,
-    built.height,
-    built.verticalDemo,
-    indexOf,
-    floorIdx,
-    wallIdx,
-  );
+  const { buffers, levelNums } = buildAllLevelBuffers(built, stressAnchors, indexOf);
 
   fs.mkdirSync(MAPS_DIR, { recursive: true });
   fs.writeFileSync(
     path.join(MAPS_DIR, `${mapName}.json`),
     JSON.stringify(mapData, null, 2) + "\n",
   );
-  fs.writeFileSync(
-    path.join(MAPS_DIR, `${mapName}_0.bin`),
-    built.buffer,
-  );
-  fs.writeFileSync(
-    path.join(MAPS_DIR, `${mapName}_-1.bin`),
-    levelDown,
-  );
-  fs.writeFileSync(
-    path.join(MAPS_DIR, `${mapName}_1.bin`),
-    levelUp,
-  );
+  for (const n of levelNums) {
+    fs.writeFileSync(
+      path.join(MAPS_DIR, `${mapName}_${n}.bin`),
+      buffers[String(n)],
+    );
+  }
 
   console.log(
     `[debug-sandbox] map=${mapName} size=${built.width}x${built.height} layout=${layoutModeResolved}`,
@@ -1498,12 +2016,14 @@ function main() {
   console.log(
     `[debug-sandbox] enemies=${enemies.length} (${built.roomCols}x${built.roomRows} rooms) items=${items.length}`,
   );
-  console.log(`[debug-sandbox] levels=-1,0,1 (vertical demo: tower + cellar)`);
+  console.log(
+    `[debug-sandbox] levels=${STRESS_MIN_LEVEL}…${STRESS_MAX_LEVEL}${stressAnchors ? " (stress annex south)" : ""}`,
+  );
   console.log(`[debug-sandbox] wrote public/maps/${mapName}.json`);
-  console.log(`[debug-sandbox] wrote public/maps/${mapName}_0.bin`);
-  console.log(`[debug-sandbox] wrote public/maps/${mapName}_-1.bin`);
-  console.log(`[debug-sandbox] wrote public/maps/${mapName}_1.bin`);
-  console.log("[debug-sandbox] play: ?slice3d=1&map=debug_sandbox");
+  for (const n of levelNums) {
+    console.log(`[debug-sandbox] wrote public/maps/${mapName}_${n}.bin`);
+  }
+  console.log("[debug-sandbox] play: menu Debug or ?slice3d=1&map=debug_sandbox");
 }
 
 main();

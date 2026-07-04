@@ -37,6 +37,8 @@ export type TileSurfaceContext = {
   getTileDef: TileSurfaceTileDefLookup;
   levelHeightUnits?: number;
   floorRimOffset?: number;
+  /** Walkable top of default floor slabs (must match 3D mesh thickness). */
+  floorSlabThickness?: number;
   feetClearance?: number;
 };
 
@@ -64,8 +66,16 @@ export type TileSurfaceSample = {
   isWater: boolean;
 };
 
-function resolveFloorTopHeight(tileDef?: SliceTileDefinition | null): number {
-  return Math.max(0.03, tileDef?.height ?? 0.08);
+function resolveFloorTopHeight(
+  tileDef?: SliceTileDefinition | null,
+  ctx?: TileSurfaceContext,
+): number {
+  const authored = Math.max(0.03, tileDef?.height ?? 0.08);
+  const slab = ctx?.floorSlabThickness;
+  if (slab != null) {
+    return Math.max(authored, slab);
+  }
+  return authored;
 }
 
 function resolveRampRise(
@@ -163,6 +173,8 @@ export function sampleTileSurface(
   const floorRim = ctx.floorRimOffset ?? DEFAULT_FLOOR_RIM_OFFSET;
   const clearance = ctx.feetClearance ?? DEFAULT_FEET_CLEARANCE;
   const levelHeight = ctx.levelHeightUnits ?? DEFAULT_LEVEL_HEIGHT_UNITS;
+  const walkSurface =
+    ctx.floorSlabThickness ?? ctx.floorRimOffset ?? DEFAULT_FLOOR_RIM_OFFSET;
 
   const tileX = Math.floor(worldX);
   const tileZ = Math.floor(worldZ);
@@ -214,7 +226,7 @@ export function sampleTileSurface(
       levelHeight,
       STAIR_STEP_COUNT,
       stairDir,
-      floorRim,
+      walkSurface,
     );
     return {
       symbol,
@@ -254,8 +266,8 @@ export function sampleTileSurface(
 
   const topOffset =
     kind === "slab"
-      ? resolveFloorTopHeight(tileDef)
-      : resolveFloorTopHeight(tileDef);
+      ? resolveFloorTopHeight(tileDef, ctx)
+      : resolveFloorTopHeight(tileDef, ctx);
   const surfaceY = levelBaseY + topOffset;
 
   return {

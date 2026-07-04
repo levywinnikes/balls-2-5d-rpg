@@ -3,10 +3,13 @@ export const STAIR_STEP_COUNT = 8;
 
 export const STAIR_LEVEL_HEIGHT_UNITS = 2.0;
 
-/** North edge of tile — `localZ` near 0; climb up and descend both finish here. */
-export const STAIR_TOP_EDGE_Z = 0.14;
+/**
+ * @deprecated Stair level changes use foot height (`inferLevelFromFootY`), not edge probes.
+ * Kept for hole landing snap and legacy tests.
+ */
+export const STAIR_TOP_EDGE_Z = 0.32;
 
-/** South side of tile — safe landing after a vertical transition (avoids re-trigger loops). */
+/** @deprecated Used only for void/hole landings — not stair teleports. */
 export const STAIR_LANDING_LOCAL_Z = 0.72;
 
 /** Holes only pull the player down when they step into the north portion of the tile. */
@@ -28,19 +31,24 @@ export function sampleStairFootY(
   floorRim = 0.06,
 ): number {
   const lz = Math.max(0, Math.min(0.999, localZ));
-  const stepIndex = Math.min(
-    stepCount - 1,
-    Math.floor((1 - lz) * stepCount),
-  );
   const stepRise = levelHeightUnits / stepCount;
 
   if (stairDir === "up") {
-    // Top step aligns with next floor: levelBaseY + levelHeight + floorRim.
-    return levelBaseY + floorRim + (stepIndex + 1) * stepRise;
+    const progress = (1 - lz) * stepCount;
+    const risenSteps = Math.min(
+      stepCount,
+      Math.max(1, Math.ceil(progress - 1e-6)),
+    );
+    return levelBaseY + floorRim + risenSteps * stepRise;
   }
 
-  // Down: south = current floor; north approaches floor below after transition.
-  return levelBaseY + floorRim - stepIndex * stepRise;
+  // Down: physical slope is the same (low at south, high at north), but offset by -levelHeightUnits.
+  const progress = (1 - lz) * stepCount;
+  const risenSteps = Math.min(
+    stepCount,
+    Math.max(1, Math.ceil(progress - 1e-6)),
+  );
+  return levelBaseY - levelHeightUnits + floorRim + risenSteps * stepRise;
 }
 
 export type VerticalTransitionProbe = {
@@ -54,6 +62,10 @@ export type VerticalTransitionProbe = {
 /** @deprecated Use VerticalTransitionProbe */
 export type StairTransitionProbe = VerticalTransitionProbe;
 
+/**
+ * @deprecated Stairs change level via continuous foot height — see `inferLevelFromFootY`.
+ * Do not call from gameplay loop.
+ */
 export function probeStairLevelTransition(
   worldX: number,
   worldZ: number,
@@ -104,6 +116,39 @@ export function probeStairLevelTransition(
     }
   }
 
+  return null;
+}
+
+/** Sample the travel segment so fast movement cannot skip the narrow north-edge band. */
+export function probeStairLevelTransitionAlongSegment(
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  activeLevel: string,
+  getTile: (level: string, tileX: number, tileY: number) => string | null,
+  getTileDef: (symbol: string | null) => StairTileDef | null | undefined,
+  options: {
+    parseLevelNumber: (level: string) => number;
+    hasLevel: (level: string) => boolean;
+  },
+): VerticalTransitionProbe | null {
+  const travel = Math.hypot(x1 - x0, z1 - z0);
+  const steps = Math.max(1, Math.ceil(travel / 0.05));
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    const probe = probeStairLevelTransition(
+      x0 + (x1 - x0) * t,
+      z0 + (z1 - z0) * t,
+      activeLevel,
+      getTile,
+      getTileDef,
+      options,
+    );
+    if (probe) {
+      return probe;
+    }
+  }
   return null;
 }
 

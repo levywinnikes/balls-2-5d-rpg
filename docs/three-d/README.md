@@ -9,6 +9,7 @@ Canonical documentation for the **Babylon.js slice runtime** (`src/three-d/**`).
 ## Read order (agents and developers)
 
 0. **[DESIGN_RULES_3D.md](./DESIGN_RULES_3D.md)** — **MANDATORY** decisions, NEVER list, pre-flight checklist  
+0b. **[ENGINE_3D_STATE_AND_HARDENING.md](./ENGINE_3D_STATE_AND_HARDENING.md)** — **estado real, tensões, checklist, plano de consolidação** (ler antes de remendar)  
 1. [PRODUCT_3D_VISION.md](./PRODUCT_3D_VISION.md) — product north star (plain language)  
 2. [SYSTEMS_INVENTORY.md](./SYSTEMS_INVENTORY.md) — what exists in code today  
 3. [COMPATIBILITY_AUDIT.md](./COMPATIBILITY_AUDIT.md) — doc ↔ code ↔ contracts ↔ delivered mechanics  
@@ -27,7 +28,8 @@ Canonical documentation for the **Babylon.js slice runtime** (`src/three-d/**`).
 | [SAVE_LOAD_3D.md](./SAVE_LOAD_3D.md) | `saveGameDirect`, snapshot, load gaps |
 | [CHUNK_STREAMING_3D.md](./CHUNK_STREAMING_3D.md) | Worker protocol, chunk budgets |
 | [WATER_SYSTEM_3D.md](./WATER_SYSTEM_3D.md) | Aquatic tiles, shader tint, surfaces (3D only) |
-| [DESIGN_RULES_3D.md](./DESIGN_RULES_3D.md) | **Mandatory** design decisions + NEVER list + AI checklist |
+| [ENGINE_3D_STATE_AND_HARDENING.md](./ENGINE_3D_STATE_AND_HARDENING.md) | **Estado da engine, invariantes, plano de consolidação** |
+| [STAIR_MAP_RULES.md](./STAIR_MAP_RULES.md) | Layout de escadas nos geradores de mapa |
 | [PENDING_BACKLOG.json](./PENDING_BACKLOG.json) | **Active pending tasks** (water, elevation, enemies) |
 | [ELEVATION_AND_TRANSITION_PLAN.md](./ELEVATION_AND_TRANSITION_PLAN.md) | Ramps, stairs, hills — plan + Phase 1 status |
 | [PLAYER_STATE_EVENTS_3D.md](./PLAYER_STATE_EVENTS_3D.md) | emit/on + DOM bridges |
