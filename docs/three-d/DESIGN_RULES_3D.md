@@ -2,7 +2,7 @@
 
 **Status:** CANÔNICO · **Prioridade:** igual a contrato  
 **Audiência:** qualquer IA ou humano que edite `src/three-d/**`, `geometry.worker.ts`, ou mapas 3D de playtest  
-**Última revisão:** 2026-06-28
+**Última revisão:** 2026-07-04
 
 > Se você ignora este arquivo, o usuário terá que repetir as mesmas correções manualmente.  
 > **Leia antes de implementar.** Não é sugestão — é decisão de produto já tomada.
@@ -24,18 +24,20 @@ Visão resumida: [PRODUCT_3D_VISION.md](./PRODUCT_3D_VISION.md)
 
 ## 2. Regras obrigatórias (MUST)
 
-### R1 — Oclusão de andar superior
+### R1 — Oclusão de andar superior por raio de câmera
 
-**Quando o herói está embaixo de geometria de um andar superior, esse andar (e todos acima) devem ficar invisíveis** — o herói **nunca** pode ficar escondido atrás do “teto”.
+**Quando o herói está embaixo de geometria de um andar superior, esse andar (e todos acima) devem ficar invisíveis** — o herói **nunca** pode ficar escondido atrás do "teto".
+
+A detecção usa o **raio `câmera → herói`**: para cada andar superior, calcula o ponto de interseção do raio com o piso do andar. Se o tile nessa interseção for sólido (`isStaticTileBlocking`) e o piso estiver acima da cabeça do herói, aquele andar é o nível de oclusão. Isso substitui a abordagem antiga que checava apenas o tile acima do herói — agora a oclusão respeita o ângulo real da câmera.
 
 | Item | Onde |
 |------|------|
-| Detecção | `findUpperOcclusionLevel()` — coluna do herói (tile acima do herói em cada andar superior) |
+| Detecção | `findUpperOcclusionLevel()` — interseção do raio `câmera→herói` com o piso de cada andar superior |
 | Aplicação | `syncVerticalLevelVisibility()` — **única** função que define `mesh.visibility` / `setEnabled` por andar |
-| Escopo | **Top-down only** — esconde **todos os chunks** dos andares `>= occludedFromLevel`. A oclusão não é mais limitada ao chunk do herói. |
+| Escopo | **Top-down only** — esconde **todos os chunks** dos andares `>= occludedFromLevel`. |
 | Debug | `window.__slice3dVerticalVisibility.occludedFromLevel` |
 
-**Teste manual:** `debug_sandbox` ou `debug_vertical` — ande sob torre/ponte no andar `0`; andar `+1` some completamente (não só o chunk do herói).
+**Teste manual:** `debug_sandbox` ou `debug_vertical` — ande sob torre/ponte no andar `0`; andar `+1` some completamente.
 
 > **Por que ocultar o nível inteiro e não só o chunk?**  
 > Oclusão parcial (só o chunk do herói) fazia o andar superior parecer "comido" — partes visíveis e invisíveis no mesmo nível, criando artefatos visuais estranhos. Oculta o nível inteiro garante consistência visual.
@@ -51,6 +53,29 @@ Visão resumida: [PRODUCT_3D_VISION.md](./PRODUCT_3D_VISION.md)
 | Motivo | Qualquer filtragem de andar em primeira pessoa produce visibilidade quebrada (estruturas "cortadas") |
 
 **Teste manual:** `?slice3d=1&map=debug_sandbox&fp=1` — olhe para cima em uma torre; todos os andares devem estar visíveis.
+
+---
+
+### R1b — Ocultação cirúrgica de paredes no raio (top-down)
+
+**Paredes em andares visíveis (abaixo do nível de oclusão) que intersectam o raio `câmera → herói` devem ser ocultadas individualmente**, para que o herói nunca fique bloqueado por paredes de andares superiores que o usuário decidiu manter visíveis.
+
+A visão geral do sistema de oclusão vertical no modo top-down:
+
+1. **R1**: determina `occlusionStartLevel` — o primeiro andar (do mais baixo para o mais alto) cujo tile na interseção do raio com o piso é sólido. Esse andar e todos acima são ocultados por completo.
+2. **R1b**: nos andares restantes (visíveis, abaixo de `occlusionStartLevel`), caminha os tiles ao longo do segmento 2D do raio dentro do volume de cada andar (piso ao teto) usando **DDA** (Digital Differential Analyzer). Para cada tile que é parede, oculta o mesh específico daquele tile.
+
+| Item | Onde |
+|------|------|
+| Detecção | `hideWallsOnRay()` — 2D DDA do raio projetado no plano XZ de cada andar visível |
+| Aplicação | `hideWallsOnRay()` chamada logo após `syncVerticalLevelVisibility()` no frame loop |
+| Índice tile→mesh | `wallTileIndex: Map<"levelKey::tx_tz", Mesh>` — construído durante o carregamento dos chunks |
+| Restauração | Meshes fora do raio no frame seguinte são restaurados (`visibility = 1, setEnabled(true)`), exceto se o andar inteiro foi ocultado por R1 |
+| Escopo | **Top-down only** — primeira pessoa usa R1a (sem oclusão) |
+
+**Pré-requisito técnico:** tiles bloqueantes (`isBlocking = true`) geram **um mesh individual por tile** no `geometry.worker.ts` (sufixo `@@tx_ty` no accumKey), permitindo ocultar uma parede sem afetar as demais no mesmo chunk. Tiles não bloqueantes (pisos, água, etc.) continuam mesclados por material como antes.
+
+**Teste manual:** `?slice3d=1&map=debug_sandbox` — câmera em ângulo onde uma parede do andar `+2` fica entre a câmera e o herói no andar `0`. A parede deve desaparecer, mas o piso do andar `+2` continua visível.
 
 ---
 
@@ -140,9 +165,10 @@ Escadas (`stu`/`std`) são **degraus 3D**. O herói sobe/desce **andando**; o an
 | N3 | Chão plano de água por tile no worker | Parece Minecraft / grid |
 | N4 | Assumir `.map[]` em níveis BMS | Crash binário |
 | N5 | Escada/rampa sem testar `activeLevel` | Jogador em andar errado para colisão/água |
-| N6 | Feature 3D grande só dentro de `createDebugSliceScene.ts` sem plano de extração | Arquivo já ~6k linhas; cada feature fica mais cara |
-| N7 | Ignorar oclusão porque “é só otimização” | **É gameplay e legibilidade** — requisito do usuário |
+| N6 | Feature 3D grande só dentro de `createDebugSliceScene.ts` sem plano de extração | Arquivo já ~8k linhas; cada feature fica mais cara |
+| N7 | Ignorar oclusão porque “é só otimização” | **É gameplay e legibilidade** — R1 + R1b são requisitos do usuário |
 | N8 | Escada com clique, teleporte ou animação de elevador | Usuário quer degraus caminháveis estilo Doom |
+| N9 | Restaurar paredes ocultas por R1b entre `syncVerticalLevelVisibility` e `hideWallsOnRay` | `hideWallsOnRay` roda **depois** de `syncVerticalLevelVisibility`; restaurar no meio quebra a oclusão cirúrgica |
 
 ---
 
@@ -151,12 +177,13 @@ Escadas (`stu`/`std`) são **degraus 3D**. O herói sobe/desce **andando**; o an
 | Se você mexer em… | Verifique obrigatoriamente… |
 |-------------------|----------------------------|
 | `syncVerticalLevelVisibility` / oclusão | Andar de cima some embaixo da torre; `occludedFromLevel` no console |
+| `hideWallsOnRay` / `wallTileIndex` | Paredes no raio somem em top-down; não afetar primeira pessoa |
 | `VerticalLevelVisibility3D` | Não reativar andares ocultos; performance em `debug_vertical` longe do poço |
 | `TileSurfaceResolver` | Água, rampas, escadas, queda no sandbox |
 | `WaterEffectSystem` / `water-hole` | Buraco visível, superfície no rim, herói não atravessa fundo |
 | `VerticalTransition3D` | Rampa `rfu` e queda de borda |
 | `StairConfig3D` / escadas | Degraus caminháveis; sem clique/teleporte |
-| `geometry.worker.ts` | `tsc`, chunk load, z-fighting entre andares |
+| `geometry.worker.ts` | `tsc`, chunk load, z-fighting entre andares; per-tile meshes para blocking tiles |
 | `generate-debug-*.js` | Regenerar JSON+bin; F5 no browser |
 | `BillboardDepthConfig` | Sprite do herói **não** atrás da água nem do chão |
 
