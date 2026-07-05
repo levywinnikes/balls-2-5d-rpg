@@ -171,7 +171,12 @@ export class CollisionWorld {
       return;
     }
     const def = this.getTileDef(symbol);
-    if (!def) return;
+    if (!def) {
+      // Tiles without a definition entry still exist in the map — treat as a basic
+      // walkable floor (consistent with TileSurfaceResolver defaults).
+      this.buildFloorVolume(level, baseY, tx, tz, def);
+      return;
+    }
 
     // Water holes and water tiles
     if (isWaterTileId(def.id) || isWaterHoleTile(symbol, def)) {
