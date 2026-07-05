@@ -107,9 +107,10 @@ import {
   isGradedWalkTile,
   type TileSurfaceContext,
 } from "./TileSurfaceResolver";
+import { LEVEL_HEIGHT, WALL_HEIGHT, WALK_SURFACE } from "../../constants/World";
 import {
-  isFloorLevelRamp,
-  resolveTileHeight,
+   isFloorLevelRamp,
+   resolveTileHeight,
 } from "./TileWorldY";
 import {
   DEFAULT_OCCLUSION_SCAN_RADIUS,
@@ -415,18 +416,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     searchParams.get("map") ||
     searchParams.get("mapName") ||
     "debug_sandbox";
-  // Match standard wall height to remove visible seams between stacked floors.
-  const LEVEL_HEIGHT_UNITS = 2.0;
-  const FLOOR_SLAB_THICKNESS = 0.32;
-  // Walk surface = top of 3D floor slab (must match geometry.worker box height).
-  const FLOOR_SURFACE_Y = FLOOR_SLAB_THICKNESS;
   /** Door panel fits inside standard wall extrusion (level 0 → wall top). */
   const DOOR_PANEL_HEIGHT = Math.max(
     1.35,
-    LEVEL_HEIGHT_UNITS - FLOOR_SURFACE_Y - 0.08,
+    LEVEL_HEIGHT - WALK_SURFACE - 0.08,
   );
-  // Player root = feet on floor (hero billboard anchorY targets local y=0).
-  const PLAYER_GROUND_OFFSET = FLOOR_SURFACE_Y;
   /** Props / dropped loot sit on walkable surface (not actor foot clearance). */
   const WORLD_ANCHOR_REST_OFFSET = 0.012;
   const DROPPED_ITEM_REST_OFFSET = 0.02;
@@ -453,7 +447,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const levelToWorldY = (level: string | number) => {
     const levelNumber =
       typeof level === "number" ? level : parseLevelNumber(level);
-    return levelNumber * LEVEL_HEIGHT_UNITS;
+    return levelNumber * LEVEL_HEIGHT;
   };
   let activeLevel = playerState.getCurrentLevel();
   let activeLevelNumber = parseLevelNumber(activeLevel);
@@ -532,7 +526,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
   player.position = new Vector3(
     startingPosition.x !== 0 ? worldToSliceCoord(startingPosition.x) : 6,
-    levelToWorldY(activeLevelNumber) + PLAYER_GROUND_OFFSET,
+    levelToWorldY(activeLevelNumber) + WALK_SURFACE,
     startingPosition.y !== 0 ? worldToSliceCoord(startingPosition.y) : 6,
   );
   player.material = playerMaterial;
@@ -611,7 +605,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   heroShadow.material = heroShadowMat;
   heroShadow.position = new Vector3(
     player.position.x,
-    levelToWorldY(activeLevelNumber) + FLOOR_SURFACE_Y + 0.01,
+    levelToWorldY(activeLevelNumber) + WALK_SURFACE + 0.01,
     player.position.z,
   );
   heroShadow.rotation.x = Math.PI / 2;
@@ -880,7 +874,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let enemyHighlightPulseT = 0; // accumulator for sine pulse (seconds)
 
   const mapRoot = new TransformNode("slice-map-root", scene);
-  const waterEffectSystem = new WaterEffectSystem(scene, mapRoot, FLOOR_SURFACE_Y);
+  const waterEffectSystem = new WaterEffectSystem(scene, mapRoot, WALK_SURFACE);
   const wallRevealSystem = new InteractableWallRevealSystem(scene, mapRoot, {
     revealRadiusTiles: 20,
   });
@@ -1861,9 +1855,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     getTile: getMapTileAt,
     getTileDef: (symbol) =>
       symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-    levelHeightUnits: LEVEL_HEIGHT_UNITS,
+    levelHeightUnits: LEVEL_HEIGHT,
     floorRimOffset: WATER_HOLE_RIM_OFFSET,
-    floorSlabThickness: FLOOR_SLAB_THICKNESS,
+    floorSlabThickness: WALK_SURFACE,
     feetClearance: FEET_CLEARANCE,
   });
 
@@ -1876,7 +1870,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       getMapTileAt,
       (symbol) =>
         symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-      { levelHeightUnits: LEVEL_HEIGHT_UNITS, feetClearance: FEET_CLEARANCE, floorSlabThickness: FLOOR_SLAB_THICKNESS, floorRimOffset: WATER_HOLE_RIM_OFFSET },
+      { levelHeightUnits: LEVEL_HEIGHT, feetClearance: FEET_CLEARANCE, floorSlabThickness: WALK_SURFACE, floorRimOffset: WATER_HOLE_RIM_OFFSET },
     );
 
   const getHighestGroundBelow = (worldX: number, worldZ: number, currentY: number) =>
@@ -1889,7 +1883,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       getMapTileAt,
       (symbol) =>
         symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-      { levelHeightUnits: LEVEL_HEIGHT_UNITS, feetClearance: FEET_CLEARANCE, floorSlabThickness: FLOOR_SLAB_THICKNESS, floorRimOffset: WATER_HOLE_RIM_OFFSET },
+      { levelHeightUnits: LEVEL_HEIGHT, feetClearance: FEET_CLEARANCE, floorSlabThickness: WALK_SURFACE, floorRimOffset: WATER_HOLE_RIM_OFFSET },
     );
 
   const getHighestGroundWithinStepLimit = (worldX: number, worldZ: number, currentY: number) =>
@@ -1902,12 +1896,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       getMapTileAt,
       (symbol) =>
         symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-      { levelHeightUnits: LEVEL_HEIGHT_UNITS, feetClearance: FEET_CLEARANCE, floorSlabThickness: FLOOR_SLAB_THICKNESS, floorRimOffset: WATER_HOLE_RIM_OFFSET },
+      { levelHeightUnits: LEVEL_HEIGHT, feetClearance: FEET_CLEARANCE, floorSlabThickness: WALK_SURFACE, floorRimOffset: WATER_HOLE_RIM_OFFSET },
     );
 
   const getGroundSurfaceY = (worldX: number, worldZ: number, level: string) => {
     if (!levelBinaryCache.has(level)) {
-      return levelToWorldY(level) + FLOOR_SURFACE_Y;
+      return levelToWorldY(level) + WALK_SURFACE;
     }
     return sampleGroundSurfaceY(
       worldX,
@@ -1918,8 +1912,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       (symbol) =>
         symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
       {
-        levelHeightUnits: LEVEL_HEIGHT_UNITS,
-        floorSlabThickness: FLOOR_SLAB_THICKNESS,
+        levelHeightUnits: LEVEL_HEIGHT,
+        floorSlabThickness: WALK_SURFACE,
         floorRimOffset: WATER_HOLE_RIM_OFFSET,
       },
     );
@@ -2089,7 +2083,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const belowDef = belowSym && belowSym !== "..."
         ? mapData.tileDefinitions?.[belowSym]
         : undefined;
-      if (!(belowDef && isFloorLevelRamp(belowDef, LEVEL_HEIGHT_UNITS))) {
+      if (!(belowDef && isFloorLevelRamp(belowDef, LEVEL_HEIGHT))) {
         return;
       }
     }
@@ -2100,8 +2094,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       {
         levelToWorldY,
         parseLevelNumber,
-        levelHeightUnits: LEVEL_HEIGHT_UNITS,
-        floorSurfaceY: FLOOR_SURFACE_Y,
+        levelHeightUnits: LEVEL_HEIGHT,
+        floorSurfaceY: WALK_SURFACE,
       },
     );
 
@@ -2120,7 +2114,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           activeLevel,
         )
       : levelToWorldY(activeLevel) +
-        FLOOR_SURFACE_Y +
+        WALK_SURFACE +
         FEET_CLEARANCE;
     player.position.y = footY;
     verticalVelocity = 0;
@@ -2168,7 +2162,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const isGradedWalkAt = (worldX: number, worldZ: number, level: string) =>
     isGradedWalkTile(
       getTileDefAt(level, Math.floor(worldX), Math.floor(worldZ)),
-      LEVEL_HEIGHT_UNITS,
+      LEVEL_HEIGHT,
     );
 
   const snapFootToGradedSurface = (level: string, startX?: number, startZ?: number) => {
@@ -2322,7 +2316,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       const tileX = Math.floor(sx);
       const tileY = Math.floor(sz);
-      const levelNum = Math.floor(footY / LEVEL_HEIGHT_UNITS);
+      const levelNum = Math.floor(footY / LEVEL_HEIGHT);
       const checkLevel = String(levelNum);
 
       const symbol = mapData.levels?.[checkLevel]
@@ -2333,7 +2327,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       // Block entry if target ground Y is too high, except when transitioning within same ramp/stair incline
       const currentTileX = Math.floor(player.position.x);
       const currentTileZ = Math.floor(player.position.z);
-      const currentLevel = String(Math.floor(player.position.y / LEVEL_HEIGHT_UNITS));
+      const currentLevel = String(Math.floor(player.position.y / LEVEL_HEIGHT));
       const currentSymbol = getMapTileAt(currentLevel, currentTileX, currentTileZ);
       const currentDef = currentSymbol ? mapDataCache?.tileDefinitions?.[currentSymbol] : undefined;
 
@@ -2357,7 +2351,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         const belowDef = belowSym && belowSym !== "..."
           ? mapData.tileDefinitions?.[belowSym]
           : undefined;
-        if (!(belowDef && isGradedWalkTile(belowDef, LEVEL_HEIGHT_UNITS))) {
+        if (!(belowDef && isGradedWalkTile(belowDef, LEVEL_HEIGHT))) {
           return true;
         }
       }
@@ -2595,7 +2589,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const mesh = new Mesh(name, scene);
     const STEP_COUNT = 8;
     const stepDepth = 1.0 / STEP_COUNT;
-    const stepRise = LEVEL_HEIGHT_UNITS / STEP_COUNT;
+    const stepRise = LEVEL_HEIGHT / STEP_COUNT;
 
     const allPositions: number[] = [];
     const allIndices: number[] = [];
@@ -2605,7 +2599,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const x1 = tx + 1;
       const z0 = tz + (STEP_COUNT - 1 - i) * stepDepth;
       const z1 = tz + (STEP_COUNT - i) * stepDepth;
-      const y1 = baseY + FLOOR_SURFACE_Y + (i + 1) * stepRise;
+      const y1 = baseY + WALK_SURFACE + (i + 1) * stepRise;
       const y0 = y1 - stepRise;
 
       const base = allPositions.length / 3;
@@ -2958,8 +2952,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       if (levelNum <= currentNum) continue;
       if (occlusionStartLevel !== null && levelNum >= occlusionStartLevel) continue;
 
-      const floorY = levelToWorldY(levelNum) + FLOOR_SURFACE_Y;
-      const ceilingY = levelToWorldY(levelNum) + LEVEL_HEIGHT_UNITS;
+      const floorY = levelToWorldY(levelNum) + WALK_SURFACE;
+      const ceilingY = levelToWorldY(levelNum) + LEVEL_HEIGHT;
 
       const tFloor = (floorY - camPos.y) / dy;
       const tCeil = (ceilingY - camPos.y) / dy;
@@ -3031,7 +3025,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     for (const levelKey of upperLevels) {
       const levelNum = parseLevelNumber(levelKey);
-      const floorY = levelToWorldY(levelNum) + FLOOR_SURFACE_Y;
+      const floorY = levelToWorldY(levelNum) + WALK_SURFACE;
 
       // t along ray from camera (0) to hero (1) where Y = floorY
       const t = (floorY - camPos.y) / (heroPos.y - camPos.y);
@@ -3042,7 +3036,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       const sym = getMapTileAt(levelKey, tileX, tileZ);
       if (sym && sym !== "...") {
-        const upperFloorY = levelToWorldY(levelNum) + FLOOR_SURFACE_Y;
+        const upperFloorY = levelToWorldY(levelNum) + WALK_SURFACE;
         const headY = heroPos.y + HERO_BODY_HEIGHT * 0.92;
         if (headY >= upperFloorY - 0.15) return null;
         return levelNum;
@@ -3192,7 +3186,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           }
 
           if (isDownHoleTile(tileDef)) {
-            const pitDepth = Math.max(0.45, LEVEL_HEIGHT_UNITS * 0.82);
+            const pitDepth = Math.max(0.45, LEVEL_HEIGHT * 0.82);
             const pitWallMask = 0x0f;
             const holeMat = getTileMaterial(symbol, tileDef, "#111827");
             const materialKey = `${renderLevel}::${holeMat.name}`;
@@ -3228,7 +3222,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
               const belowSymbol = getMapTileAt(belowLevel, x, y);
               if (belowSymbol && belowSymbol !== "...") {
                 const belowDef = mapData.tileDefinitions?.[belowSymbol];
-                if (belowDef?.geometryProfile?.startsWith("ramp-") && isFloorLevelRamp(belowDef, LEVEL_HEIGHT_UNITS)) {
+                if (belowDef?.geometryProfile?.startsWith("ramp-") && isFloorLevelRamp(belowDef, LEVEL_HEIGHT)) {
                   continue;
                 }
               }
@@ -3239,22 +3233,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           const geometryProfile =
             tileDef?.geometryProfile ?? (inferredStair ? "stair" : "box");
 
-          // Use LEVEL_HEIGHT_UNITS - 0.001 as default wall height to leave a
-          // sub-millimetre gap between the top face of level N and the bottom
-          // face of level N+1. Without this gap the two faces are coplanar and
-          // the GPU alternates between them each frame (z-fighting / shimmer).
-          // Also CLAMP any explicit tileDef.height to this maximum: map heights
-          // were authored for the 2D renderer and can exceed 2.0 (e.g. "wal":4.5),
-          // causing level 0 tiles to visually invade level 1 in 3D.
-          const DEFAULT_WALL_H = LEVEL_HEIGHT_UNITS - 0.001;
+           // CLAMP any explicit tileDef.height to WALL_HEIGHT: map heights
+           // were authored for the 2D renderer and can exceed 2.0 (e.g. "wal":4.5),
+           // causing level 0 tiles to visually invade level 1 in 3D.
+           const DEFAULT_WALL_H = WALL_HEIGHT;
           const tileHeight = blocking
             ? Math.min(
                 Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H),
                 DEFAULT_WALL_H,
               )
             : Math.max(
-                FLOOR_SLAB_THICKNESS,
-                tileDef?.height ?? FLOOR_SLAB_THICKNESS,
+                WALK_SURFACE,
+                tileDef?.height ?? WALK_SURFACE,
               );
 
           // Resolve material key on main thread (getTileMaterial caches anyway)
@@ -3264,7 +3254,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           const materialKey = `${renderLevel}::${mat.name}`;
 
           const renderLevelNum = renderLevel !== undefined ? parseLevelNumber(renderLevel) : 0;
-          const resolved = resolveTileHeight(renderLevelNum, LEVEL_HEIGHT_UNITS, FLOOR_SURFACE_Y, tileDef, tileHeight);
+          const resolved = resolveTileHeight(renderLevelNum, LEVEL_HEIGHT, WALK_SURFACE, tileDef, tileHeight);
           tiles.push({
             x,
             y,
@@ -3285,7 +3275,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const syncWaterForChunk = () => {
       const waterTiles = collectWaterEffectTiles(
         waterZoneTiles,
-        LEVEL_HEIGHT_UNITS,
+        LEVEL_HEIGHT,
       );
       waterEffectSystem.syncChunk(
         key,
@@ -3645,7 +3635,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const state = playerState.getDoorState(door.uuid);
     const isOpen = !!state?.open;
     const levelWorldY = levelToWorldY(door.level);
-    const floorTop = levelWorldY + FLOOR_SURFACE_Y;
+    const floorTop = levelWorldY + WALK_SURFACE;
     const doorHeight = DOOR_PANEL_HEIGHT;
     const centerY = floorTop + doorHeight / 2;
     const tileCenterX = door.tileX + 0.5;
@@ -3793,7 +3783,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       Matrix.Identity(),
       activeCamera,
     );
-    const planeY = levelToWorldY(activeLevel) + FLOOR_SURFACE_Y;
+    const planeY = levelToWorldY(activeLevel) + WALK_SURFACE;
     if (Math.abs(ray.direction.y) < 1e-5) {
       return null;
     }
@@ -5979,7 +5969,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         ),
         pickWidth: door.hingeOnX ? 0.92 : 0.22,
         pickHeight: doorHeight,
-        pickCenterY: FLOOR_SURFACE_Y + doorHeight / 2,
+        pickCenterY: WALK_SURFACE + doorHeight / 2,
         pickMetadata: { sliceDoorUuid: door.uuid },
       });
     });
@@ -6502,7 +6492,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     worldZ: number,
     footY: number,
   ): boolean => {
-    const currentLevelNum = Math.floor(footY / LEVEL_HEIGHT_UNITS);
+    const currentLevelNum = Math.floor(footY / LEVEL_HEIGHT);
     const upperLevel = String(currentLevelNum + 1);
     if (!mapDataCache?.levels?.[upperLevel]) {
       return false;
@@ -6526,7 +6516,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const currentDefForSlab = currentSymbolForSlab
       ? mapDataCache?.tileDefinitions?.[currentSymbolForSlab]
       : undefined;
-    if (currentDefForSlab && isGradedWalkTile(currentDefForSlab, LEVEL_HEIGHT_UNITS)) {
+    if (currentDefForSlab && isGradedWalkTile(currentDefForSlab, LEVEL_HEIGHT)) {
       return false;
     }
     const playerTileX = Math.floor(player.position.x);
@@ -6535,7 +6525,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const playerDefForSlab = playerSymbolForSlab
       ? mapDataCache?.tileDefinitions?.[playerSymbolForSlab]
       : undefined;
-    if (playerDefForSlab && isGradedWalkTile(playerDefForSlab, LEVEL_HEIGHT_UNITS)) {
+    if (playerDefForSlab && isGradedWalkTile(playerDefForSlab, LEVEL_HEIGHT)) {
       return false;
     }
 
@@ -6545,14 +6535,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (
       isGradedWalkTile(
         upperSymbol ? mapDataCache?.tileDefinitions?.[upperSymbol] : undefined,
-        LEVEL_HEIGHT_UNITS,
+        LEVEL_HEIGHT,
       )
     ) {
       return false;
     }
 
     const slabBottomY = levelToWorldY(upperLevel);
-    const slabTopY = slabBottomY + FLOOR_SURFACE_Y;
+    const slabTopY = slabBottomY + WALK_SURFACE;
     const headY = footY + HERO_BODY_HEIGHT;
     if (headY <= slabBottomY + 0.02) {
       return false;
@@ -6580,7 +6570,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const ceilCheckDef = ceilCheckSymbol
       ? mapDataCache?.tileDefinitions?.[ceilCheckSymbol]
       : undefined;
-    if (ceilCheckDef && isFloorLevelRamp(ceilCheckDef, LEVEL_HEIGHT_UNITS)) {
+    if (ceilCheckDef && isFloorLevelRamp(ceilCheckDef, LEVEL_HEIGHT)) {
       return null;
     }
     if (!isSolidCeilingTileAt(upperLevel, tileX, tileZ)) {
@@ -6693,7 +6683,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   ) => {
     const dropDistance = Math.max(0, fallOriginFootY - landingFootY);
     const floorsFromDrop = Math.floor(
-      dropDistance / LEVEL_HEIGHT_UNITS + 0.12,
+      dropDistance / LEVEL_HEIGHT + 0.12,
     );
     const floors = Math.max(explicitFloors, floorsFromDrop);
     if (
@@ -7630,7 +7620,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const tileDef = symbol
         ? mapDataCache?.tileDefinitions?.[symbol]
         : undefined;
-      if (isGradedWalkTile(tileDef, LEVEL_HEIGHT_UNITS) && Math.abs(verticalVelocity) < 3.0) {
+      if (isGradedWalkTile(tileDef, LEVEL_HEIGHT) && Math.abs(verticalVelocity) < 3.0) {
         return true;
       }
       return false;
@@ -8207,7 +8197,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           { skipStart: true },
         ) === null,
       deltaSeconds,
-      FLOOR_SURFACE_Y + 0.025,
+      WALK_SURFACE + 0.025,
     );
 
     heroBillboard.setEnabled(true);
