@@ -2177,15 +2177,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const startDef = startSymbol ? mapDataCache?.tileDefinitions?.[startSymbol] : undefined;
       if (startDef && startDef.geometryProfile?.startsWith("ramp-")) {
         const profile = startDef.geometryProfile;
+        const endSymbol = getMapTileAt(activeLevel, endTileX, endTileZ);
+        const endDef = endSymbol ? mapDataCache?.tileDefinitions?.[endSymbol] : undefined;
+        const endIsSameRamp = endDef?.geometryProfile === profile;
         if (profile === "ramp-n" || profile === "ramp-s") {
           // North-South ramp: walking East or West is walking off the side cliff
-          if (startTileX !== endTileX) {
+          if (startTileX !== endTileX && !endIsSameRamp) {
             isGrounded = false;
             return;
           }
         } else if (profile === "ramp-e" || profile === "ramp-w") {
           // East-West ramp: walking North or South is walking off the side cliff
-          if (startTileZ !== endTileZ) {
+          if (startTileZ !== endTileZ && !endIsSameRamp) {
             isGrounded = false;
             return;
           }
