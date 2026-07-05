@@ -400,6 +400,11 @@ export function findHighestGroundBelow(
     if (sample.kind === "void") {
       continue;
     }
+    const tileDef = ctx.getTileDef(sample.symbol);
+    const isBlock = sample.symbol && sample.symbol !== "..." && tileDef && (tileDef.block || tileDef.renderAs === "block");
+    if (isBlock) {
+      continue;
+    }
     // Allow step up by at most 0.45 units (step limit).
     if (sample.footY <= currentY + 0.45) {
       if (sample.footY > bestFootY) {
@@ -447,6 +452,11 @@ export function findHighestGroundWithinStepLimit(
   for (const lvl of levels) {
     const sample = sampleTileSurface(worldX, worldZ, lvl, ctx);
     if (sample.kind === "void") {
+      continue;
+    }
+    const tileDef = ctx.getTileDef(sample.symbol);
+    const isBlock = sample.symbol && sample.symbol !== "..." && tileDef && (tileDef.block || tileDef.renderAs === "block");
+    if (isBlock) {
       continue;
     }
     const diff = sample.footY - currentY;

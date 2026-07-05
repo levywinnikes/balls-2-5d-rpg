@@ -287,8 +287,9 @@ export class CollisionWorld {
     const stepDepth = 1.0 / stepCount;
 
     for (let i = 0; i < stepCount; i++) {
-      const stepLowZ = tx + i * stepDepth;
-      const stepHighZ = tx + (i + 1) * stepDepth;
+      const zIndex = stairDir === "up" ? (stepCount - 1 - i) : i;
+      const stepLowZ = tz + zIndex * stepDepth;
+      const stepHighZ = tz + (zIndex + 1) * stepDepth;
       const stepBaseY = baseY + offset + WALK_SURFACE + i * stepRise;
       const stepTopY = stepBaseY + stepRise;
 
@@ -419,7 +420,16 @@ export class CollisionWorld {
       const dz = z - closestZ;
       if (dx * dx + dz * dz >= radiusSq) continue;
 
-      if (volumeOverlapsSegment(v, closestX, closestZ, footY, headY)) return true;
+      if (volumeOverlapsSegment(v, closestX, closestZ, footY, headY)) {
+        if (v.isWalkable) {
+          const sy = volumeSurfaceY(v, closestX, closestZ);
+          if (sy > footY + 0.45) {
+            return true;
+          }
+        } else {
+          return true;
+        }
+      }
     }
     return false;
   }
