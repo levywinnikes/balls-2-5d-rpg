@@ -11,17 +11,20 @@ import {
   STAIR_LEVEL_HEIGHT_UNITS,
   STAIR_STEP_COUNT,
 } from "./StairConfig3D";
+import { LEVEL_HEIGHT, WALK_SURFACE } from "../../constants/World";
 import {
   resolveRampRise,
   isFloorLevelRamp,
   resolveTileHeight,
-  DEFAULT_LEVEL_HEIGHT_UNITS,
-} from "./TileHeightResolver";
+} from "./TileWorldY";
 
 /** Matches dry cobble top and water pool rim. */
 export const DEFAULT_FLOOR_RIM_OFFSET = WATER_HOLE_RIM_OFFSET;
 
+/** @deprecated Import FEET_CLEARANCE from constants/World instead. */
 export const DEFAULT_FEET_CLEARANCE = 0.02;
+/** @deprecated Import LEVEL_HEIGHT from constants/World instead. */
+export const DEFAULT_LEVEL_HEIGHT_UNITS = LEVEL_HEIGHT;
 
 export type TileSurfaceTileLookup = (
   level: string,

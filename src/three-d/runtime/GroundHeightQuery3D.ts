@@ -1,5 +1,4 @@
 import {
-  DEFAULT_FEET_CLEARANCE,
   sampleActorFootY,
   sampleTileSurface,
   type TileSurfaceContext,
@@ -7,8 +6,6 @@ import {
   findHighestGroundWithinStepLimit,
   type HighestGroundResult,
 } from "./TileSurfaceResolver";
-
-export const FEET_CLEARANCE = DEFAULT_FEET_CLEARANCE;
 
 export type GroundHeightTileLookup = TileSurfaceContext["getTile"];
 export type GroundHeightTileDefLookup = TileSurfaceContext["getTileDef"];
@@ -127,3 +124,5 @@ export function sampleHighestGroundWithinStepLimit(
     toContext(levelToWorldY, getTile, getTileDef, options),
   );
 }
+
+export { FEET_CLEARANCE } from "../../constants/World";

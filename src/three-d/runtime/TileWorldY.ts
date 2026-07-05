@@ -1,7 +1,5 @@
 import type { SliceTileDefinition } from "./SliceTileTypes";
-
-export const DEFAULT_LEVEL_HEIGHT_UNITS = 2.0;
-export const DEFAULT_FLOOR_SURFACE_Y = 0.32;
+import { LEVEL_HEIGHT, WALK_SURFACE } from "../../constants/World";
 
 export function resolveRampRise(
   tileDef?: SliceTileDefinition | null,
@@ -18,13 +16,13 @@ export function resolveRampRise(
 
 export function isFloorLevelRamp(
   tileDef?: SliceTileDefinition | null,
-  levelHeightUnits = DEFAULT_LEVEL_HEIGHT_UNITS,
+  levelHeight = LEVEL_HEIGHT,
 ): boolean {
   const profile = tileDef?.geometryProfile;
   if (!profile?.startsWith("ramp-")) {
     return false;
   }
-  return resolveRampRise(tileDef) >= levelHeightUnits - 0.08;
+  return resolveRampRise(tileDef) >= levelHeight - 0.08;
 }
 
 export interface ResolvedTileHeight {
@@ -32,7 +30,7 @@ export interface ResolvedTileHeight {
   levelOffsetY: number;
   /** effective height sent to geometry worker (already adjusted for floor ramps) */
   height: number;
-  /** base Y for surface queries (levelBaseY + walkSurface for floor-level ramps) */
+  /** base Y for surface queries (levelBaseY + floorSurfaceY for floor-level ramps) */
   surfaceBaseY: number;
   isFloorRamp: boolean;
 }

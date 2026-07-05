@@ -1,4 +1,5 @@
 import { STAIR_LEVEL_HEIGHT_UNITS } from "./StairConfig3D";
+import { WALK_SURFACE } from "../../constants/World";
 
 /** Prevents level flicker when foot Y hovers on a floor boundary. */
 export const DEFAULT_LEVEL_FOOT_HYSTERESIS = 0.08;
@@ -29,7 +30,7 @@ export function inferLevelFromFootY(
   }
 
   const hysteresis = options.hysteresis ?? DEFAULT_LEVEL_FOOT_HYSTERESIS;
-  const floorSurfaceY = options.floorSurfaceY ?? 0.32;
+  const floorSurfaceY = options.floorSurfaceY ?? WALK_SURFACE;
   const parseLevel = options.parseLevelNumber;
 
   const sorted = [...levelKeys].sort(
@@ -54,7 +55,7 @@ export function floorFootWorldY(
     "levelToWorldY" | "floorSurfaceY"
   >,
 ): number {
-  const floorSurfaceY = options.floorSurfaceY ?? 0.32;
+  const floorSurfaceY = options.floorSurfaceY ?? WALK_SURFACE;
   return options.levelToWorldY(levelKey) + floorSurfaceY;
 }
 

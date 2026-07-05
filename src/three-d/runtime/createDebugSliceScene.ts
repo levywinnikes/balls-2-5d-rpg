@@ -110,7 +110,7 @@ import {
 import {
   isFloorLevelRamp,
   resolveTileHeight,
-} from "./TileHeightResolver";
+} from "./TileWorldY";
 import {
   DEFAULT_OCCLUSION_SCAN_RADIUS,
   resolveVerticalVisibleLevels,
