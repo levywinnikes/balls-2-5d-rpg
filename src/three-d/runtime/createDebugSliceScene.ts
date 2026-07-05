@@ -2065,7 +2065,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
    * a true void — the ramp geometry fills that space. */
   const isPlayerOverVoidAtLevel = (level: string) => {
     const groundBelow = getHighestGroundBelow(player.position.x, player.position.z, player.position.y);
-    return !groundBelow;
+    return !groundBelow || groundBelow.kind === "void";
   };
 
   const isDownHoleTile = (tileDef?: SliceTileDefinition | null) => {
@@ -2099,7 +2099,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const floor = collisionWorld.queryFloor(
       player.position.x,
       player.position.z,
-      player.position.y,
+      player.position.y - 0.45,
       player.position.y + HERO_BODY_HEIGHT,
       Object.keys(mapData.levels),
     );

@@ -178,6 +178,11 @@ export class CollisionWorld {
       return;
     }
 
+    const isHole = def.id === "hole" || (def as any).transition === "down" || (def as any).transition === "dwn";
+    if (isHole) {
+      return;
+    }
+
     // Water holes and water tiles
     if (isWaterTileId(def.id) || isWaterHoleTile(symbol, def)) {
       this.buildWaterVolume(level, baseY, tx, tz, def, symbol);
