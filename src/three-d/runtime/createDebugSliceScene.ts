@@ -2102,6 +2102,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       player.position.y - 0.45,
       player.position.y + HERO_BODY_HEIGHT,
       Object.keys(mapData.levels),
+      player.position.y + 0.45,
     );
     if (!floor) {
       isGrounded = false;

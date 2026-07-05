@@ -343,6 +343,7 @@ export class CollisionWorld {
     x: number, z: number,
     footY: number, headY: number,
     levelKeys: string[],
+    maxFootY?: number,
   ): { floor: { surfaceY: number; footY: number; level: string; isGraded: boolean } | null;
        ceiling: { bottomY: number; level: string; isGraded: boolean } | null } {
     let bestFloor: { surfaceY: number; footY: number; level: string; isGraded: boolean } | null = null;
@@ -371,6 +372,9 @@ export class CollisionWorld {
         const sy = volumeSurfaceY(v, x, z);
         const fY = sy + this.feetClearance;
         if (fY <= headY + 0.01) {
+          if (maxFootY !== undefined && fY > maxFootY) {
+            continue;
+          }
           const isGraded = v.kind === "wedge";
           if (!bestFloor || fY > bestFloor.footY) {
             bestFloor = { surfaceY: sy, footY: fY, level: v.level, isGraded };
@@ -397,8 +401,9 @@ export class CollisionWorld {
     x: number, z: number,
     footY: number, headY: number,
     levelKeys: string[],
+    maxFootY?: number,
   ): { surfaceY: number; footY: number; level: string; isGraded: boolean } | null {
-    return this.query(x, z, footY, headY, levelKeys).floor;
+    return this.query(x, z, footY, headY, levelKeys, maxFootY).floor;
   }
 
   /**
@@ -427,6 +432,11 @@ export class CollisionWorld {
 
       if (volumeOverlapsSegment(v, closestX, closestZ, footY, headY)) {
         if (v.isWalkable) {
+          // If the walkable volume is above the player's feet (e.g. ceiling/upper floor),
+          // it shouldn't block them horizontally.
+          if (v.kind === "aabb" && footY < v.y1) continue;
+          if (v.kind === "wedge" && footY < v.baseY) continue;
+
           const sy = volumeSurfaceY(v, closestX, closestZ);
           if (sy > footY + 0.45) {
             return true;
