@@ -3931,6 +3931,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
 
     WorldMapService.bootstrapMinimap(mapData, binaryLevels, activeLevel);
+    collisionWorld.rebuild(
+      levelKeys,
+      mapData.width ?? 0,
+      mapData.height ?? 0,
+    );
     worldMapReady = true;
   };
 
