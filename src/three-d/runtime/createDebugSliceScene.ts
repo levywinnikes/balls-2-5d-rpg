@@ -3264,7 +3264,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           const materialKey = `${renderLevel}::${mat.name}`;
 
           const renderLevelNum = renderLevel !== undefined ? parseLevelNumber(renderLevel) : 0;
-          const resolved = resolveTileHeight(tileDef, renderLevelNum, LEVEL_HEIGHT_UNITS, FLOOR_SURFACE_Y);
+          const resolved = resolveTileHeight(renderLevelNum, LEVEL_HEIGHT_UNITS, FLOOR_SURFACE_Y, tileDef, tileHeight);
           tiles.push({
             x,
             y,

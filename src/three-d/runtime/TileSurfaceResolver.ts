@@ -211,7 +211,7 @@ export function sampleTileSurface(
     const rampRise = resolveRampRise(belowDef);
     if (rampRise < levelHeight - 0.08) return null;
     const belowLevelNum = Number.parseInt(belowLevel, 10);
-    const belowResolved = resolveTileHeight(belowDef, belowLevelNum, levelHeight, walkSurface);
+    const belowResolved = resolveTileHeight(belowLevelNum, levelHeight, walkSurface, belowDef);
     const dir = belowProfile.split("-")[1] as "n" | "s" | "e" | "w";
     const surfaceY = sampleRampSurfaceY(belowResolved.surfaceBaseY, localX, localZ, dir, rampRise);
     return {
@@ -288,7 +288,7 @@ export function sampleTileSurface(
     const profile = geometryProfile!;
     const dir = profile.split("-")[1] as "n" | "s" | "e" | "w";
     const levelNum = Number.parseInt(level, 10);
-    const resolved = resolveTileHeight(tileDef, levelNum, levelHeight, walkSurface);
+    const resolved = resolveTileHeight(levelNum, levelHeight, walkSurface, tileDef);
     const surfaceY = sampleRampSurfaceY(
       resolved.surfaceBaseY,
       localX,

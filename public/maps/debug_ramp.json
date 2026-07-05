@@ -1,0 +1,68 @@
+{
+  "mapName": "debug_ramp",
+  "tileSize": 32,
+  "width": 12,
+  "height": 12,
+  "config": {
+    "startLevel": "0",
+    "mapName": "Debug Ramp",
+    "debugRamp": true,
+    "zones": {
+      "spawn": {
+        "x": 6,
+        "y": 3,
+        "level": "0",
+        "note": "north of ramp — walk south to climb"
+      },
+      "ramp": {
+        "x": 5,
+        "y": 5,
+        "level": "0",
+        "note": "ramp-s: walk south to climb"
+      },
+      "landingL1": {
+        "x": 6,
+        "y": 6,
+        "level": "1"
+      }
+    }
+  },
+  "tileAtlas": [
+    "...",
+    "stn",
+    "ramp"
+  ],
+  "tileDefinitions": {
+    "...": {
+      "id": "void",
+      "color": "#1e293b",
+      "height": 0.02,
+      "renderAs": "floor"
+    },
+    "stn": {
+      "id": "stone-plaza",
+      "color": "#94a3b8",
+      "height": 0.07,
+      "renderAs": "floor"
+    },
+    "ramp": {
+      "id": "stairs-down",
+      "color": "#a8845c",
+      "height": 2.32,
+      "rampRise": 2,
+      "renderAs": "floor",
+      "geometryProfile": "ramp-s"
+    }
+  },
+  "entityTemplates": {},
+  "levels": {
+    "0": {
+      "binFile": "debug_ramp_0.bin",
+      "entities": []
+    },
+    "1": {
+      "binFile": "debug_ramp_1.bin",
+      "entities": []
+    }
+  }
+}

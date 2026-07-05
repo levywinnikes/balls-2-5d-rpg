@@ -38,20 +38,22 @@ export interface ResolvedTileHeight {
 }
 
 export function resolveTileHeight(
-  tileDef: SliceTileDefinition | null | undefined,
   levelIndex: number,
   levelHeight: number,
   floorSurfaceY: number,
+  tileDef?: SliceTileDefinition | null,
+  tileHeight?: number,
 ): ResolvedTileHeight {
   const levelOffsetY = levelIndex * levelHeight;
-  const tileHeight = Math.max(0.03, tileDef?.height ?? floorSurfaceY);
   const isFloorRamp = isFloorLevelRamp(tileDef, levelHeight);
+  const rawTileHeight = tileHeight ?? tileDef?.height ?? floorSurfaceY;
+  const h = Math.max(0.03, rawTileHeight);
 
   if (isFloorRamp) {
     const yBot = levelOffsetY + floorSurfaceY;
     return {
       levelOffsetY: yBot,
-      height: tileHeight - floorSurfaceY,
+      height: h - floorSurfaceY,
       surfaceBaseY: yBot,
       isFloorRamp: true,
     };
@@ -59,7 +61,7 @@ export function resolveTileHeight(
 
   return {
     levelOffsetY,
-    height: tileHeight,
+    height: h,
     surfaceBaseY: levelOffsetY + floorSurfaceY,
     isFloorRamp: false,
   };
