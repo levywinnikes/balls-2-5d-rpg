@@ -97,15 +97,9 @@ import {
 } from "./WaterHoleConfig";
 import {
   FEET_CLEARANCE,
-  sampleGroundFootY,
-  sampleGroundSurfaceY,
-  sampleHighestGroundBelow,
-  sampleHighestGroundWithinStepLimit,
 } from "./GroundHeightQuery3D";
 import {
-  sampleActorWorldY,
   isGradedWalkTile,
-  type TileSurfaceContext,
 } from "./TileSurfaceResolver";
 import { LEVEL_HEIGHT, WALL_HEIGHT, WALK_SURFACE } from "../../constants/World";
 import { inferLevelFromFootY } from "./NaturalFloorLevel3D";
@@ -1851,55 +1845,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
     );
 
-  const getTileSurfaceContext = (): TileSurfaceContext => ({
-    levelToWorldY,
-    getTile: getMapTileAt,
-    getTileDef: (symbol) =>
-      symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-    levelHeightUnits: LEVEL_HEIGHT,
-    floorRimOffset: WATER_HOLE_RIM_OFFSET,
-    floorSlabThickness: WALK_SURFACE,
-    feetClearance: FEET_CLEARANCE,
-  });
-
-  const getGroundFootY = (worldX: number, worldZ: number, level: string) =>
-    sampleGroundFootY(
-      worldX,
-      worldZ,
-      level,
-      levelToWorldY,
-      getMapTileAt,
-      (symbol) =>
-        symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-      { levelHeightUnits: LEVEL_HEIGHT, feetClearance: FEET_CLEARANCE, floorSlabThickness: WALK_SURFACE, floorRimOffset: WATER_HOLE_RIM_OFFSET },
-    );
-
-  const getHighestGroundBelow = (worldX: number, worldZ: number, currentY: number) =>
-    sampleHighestGroundBelow(
-      worldX,
-      worldZ,
-      currentY,
-      Object.keys(mapDataCache?.levels || {}),
-      levelToWorldY,
-      getMapTileAt,
-      (symbol) =>
-        symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-      { levelHeightUnits: LEVEL_HEIGHT, feetClearance: FEET_CLEARANCE, floorSlabThickness: WALK_SURFACE, floorRimOffset: WATER_HOLE_RIM_OFFSET },
-    );
-
-  const getHighestGroundWithinStepLimit = (worldX: number, worldZ: number, currentY: number) =>
-    sampleHighestGroundWithinStepLimit(
-      worldX,
-      worldZ,
-      currentY,
-      Object.keys(mapDataCache?.levels || {}),
-      levelToWorldY,
-      getMapTileAt,
-      (symbol) =>
-        symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-      { levelHeightUnits: LEVEL_HEIGHT, feetClearance: FEET_CLEARANCE, floorSlabThickness: WALK_SURFACE, floorRimOffset: WATER_HOLE_RIM_OFFSET },
-    );
-
   const collisionWorld = new CollisionWorld(
     levelToWorldY,
     getMapTileAt,
@@ -1908,24 +1853,52 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     { levelHeight: LEVEL_HEIGHT, floorSurfaceY: WALK_SURFACE, feetClearance: FEET_CLEARANCE },
   );
 
-  const getGroundSurfaceY = (worldX: number, worldZ: number, level: string) => {
-    if (!levelBinaryCache.has(level)) {
-      return levelToWorldY(level) + WALK_SURFACE;
-    }
-    return sampleGroundSurfaceY(
+  const getGroundFootY = (worldX: number, worldZ: number, level: string) => {
+    const floor = collisionWorld.queryFloor(
       worldX,
       worldZ,
-      level,
-      levelToWorldY,
-      getMapTileAt,
-      (symbol) =>
-        symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-      {
-        levelHeightUnits: LEVEL_HEIGHT,
-        floorSlabThickness: WALK_SURFACE,
-        floorRimOffset: WATER_HOLE_RIM_OFFSET,
-      },
+      levelToWorldY(level),
+      levelToWorldY(level) + LEVEL_HEIGHT,
+      [level],
     );
+    return floor ? floor.footY : levelToWorldY(level) + WALK_SURFACE + FEET_CLEARANCE;
+  };
+
+  const getHighestGroundBelow = (worldX: number, worldZ: number, currentY: number) => {
+    const mapData = mapDataCache;
+    const levelKeys = mapData?.levels ? Object.keys(mapData.levels) : [activeLevel];
+    const floor = collisionWorld.queryFloor(
+      worldX,
+      worldZ,
+      -999,
+      currentY + HERO_BODY_HEIGHT,
+      levelKeys,
+    );
+    if (floor) {
+      return {
+        level: floor.level,
+        footY: floor.footY,
+        kind: floor.isGraded ? "ramp" as const : "floor" as const,
+        geometryProfile: null,
+      };
+    }
+    return {
+      level: levelKeys.includes("0") ? "0" : levelKeys[0],
+      footY: levelToWorldY(levelKeys.includes("0") ? "0" : levelKeys[0]) + WALK_SURFACE + FEET_CLEARANCE,
+      kind: "void" as const,
+      geometryProfile: null,
+    };
+  };
+
+  const getGroundSurfaceY = (worldX: number, worldZ: number, level: string) => {
+    const floor = collisionWorld.queryFloor(
+      worldX,
+      worldZ,
+      -9999,
+      9999,
+      [level],
+    );
+    return floor ? floor.surfaceY : levelToWorldY(level) + WALK_SURFACE;
   };
 
   /** Surface Y for billboards / loot (feet row at root origin). Includes water sink. */
@@ -1943,13 +1916,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const applyActorAquaticY = (worldPos: Vector3, level: string) => {
     const sample = getAquaticSampleAt(worldPos.x, worldPos.z, level);
-    worldPos.y = sampleActorWorldY(
-      worldPos.x,
-      worldPos.z,
-      level,
-      sample,
-      getTileSurfaceContext(),
-    );
+    const surfaceY = getGroundSurfaceY(worldPos.x, worldPos.z, level);
+    const footY = surfaceY + FEET_CLEARANCE;
+    worldPos.y = footY + sample.sinkOffset;
   };
 
   const applyActiveLevelChange = (
