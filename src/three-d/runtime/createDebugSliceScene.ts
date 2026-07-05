@@ -3559,7 +3559,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         door.mesh.position.x = tileCenterX + 0.34 * (door.hingeSide ?? 1);
       }
     }
-    door.mesh.setEnabled(door.level === activeLevel);
+    // Show door only when on the same floor as the player (Y-based, not level string)
+    door.mesh.setEnabled(
+      Math.abs(levelToWorldY(door.level) - levelToWorldY(activeLevel)) < LEVEL_HEIGHT,
+    );
   };
 
   const refreshDoorSystemsForLevel = (level: string) => {
@@ -3604,7 +3607,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const interactDoorByUuid = (uuid: string): boolean => {
     const door = doors.get(uuid);
-    if (!door || door.level !== activeLevel) {
+    if (!door || Math.abs(levelToWorldY(door.level) - player.position.y) >= LEVEL_HEIGHT) {
       return false;
     }
 
@@ -3634,7 +3637,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     let nearestDistance = maxDistanceUnits + 1;
 
     doors.forEach((door) => {
-      if (door.level !== activeLevel) {
+      // Only interact with doors on the same floor (Y-based)
+      if (Math.abs(levelToWorldY(door.level) - player.position.y) >= LEVEL_HEIGHT) {
         return;
       }
       const distance = getDoorInteractDistance(door);
@@ -3777,7 +3781,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const tryInteractPickedDoor = (doorUuid: string): boolean => {
     const door = doors.get(doorUuid);
-    if (!door || door.level !== activeLevel) {
+    if (!door || Math.abs(levelToWorldY(door.level) - player.position.y) >= LEVEL_HEIGHT) {
       return false;
     }
     if (getDoorInteractDistance(door) > DOOR_PICK_INTERACT_RADIUS) {
@@ -4270,8 +4274,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const streamRadiusSq = streamRadius * streamRadius;
     const despawnRadiusSq = propDespawnRadiusUnits * propDespawnRadiusUnits;
 
+    const py = player.position.y;
+
     props.forEach((prop, uid) => {
-      if (prop.level !== activeLevel) {
+      // Despawn props that are on a different floor (more than LEVEL_HEIGHT away vertically)
+      if (Math.abs(levelToWorldY(prop.level) - py) >= LEVEL_HEIGHT) {
         despawnProp(uid);
         return;
       }
@@ -4293,7 +4300,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
 
     propSpawnCatalog.forEach((entry, uid) => {
-      if (entry.level !== activeLevel || props.has(uid)) {
+      // Only spawn props on the same floor (within LEVEL_HEIGHT vertically)
+      if (Math.abs(levelToWorldY(entry.level) - py) >= LEVEL_HEIGHT || props.has(uid)) {
         return;
       }
 
@@ -4432,8 +4440,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const despawnRadiusSq =
       enemyDespawnRadiusUnits * enemyDespawnRadiusUnits;
 
+    const py = player.position.y;
+
     enemies.forEach((enemy, uid) => {
-      if (enemy.level !== activeLevel) {
+      // Despawn enemies that are on a different floor (more than LEVEL_HEIGHT away vertically)
+      if (Math.abs(levelToWorldY(enemy.level) - py) >= LEVEL_HEIGHT) {
         if (selectedEnemyUid === uid) {
           setSelectedEnemy(null);
         }
@@ -4455,7 +4466,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
 
     enemySpawnCatalog.forEach((entry, spawnKey) => {
-      if (entry.level !== activeLevel) {
+      // Only spawn enemies on the same floor (within LEVEL_HEIGHT vertically)
+      if (Math.abs(levelToWorldY(entry.level) - py) >= LEVEL_HEIGHT) {
         return;
       }
       if (pendingEnemyRespawns.has(spawnKey)) {
@@ -5534,7 +5546,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const now = Date.now();
 
     enemies.forEach((enemy) => {
-      const onActiveLevel = enemy.level === activeLevel;
+      // Treat enemy as "on active level" when within LEVEL_HEIGHT vertically (Y-based, not string)
+      const onActiveLevel = Math.abs(levelToWorldY(enemy.level) - player.position.y) < LEVEL_HEIGHT;
       if (!onActiveLevel) {
         enemy.meshRoot.setEnabled(false);
         if (selectedEnemyUid === enemy.uid) {
@@ -7538,7 +7551,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         enemyTime: Math.round(enemyTimeAccum * 10) / 10,
         physicsTime: Math.round(physicsTimeAccum * 10) / 10,
         activeEnemies: Array.from(enemies.values()).filter(
-          (e) => !e.isDead && e.level === activeLevel && Vector3.Distance(e.worldPos, player.position) <= ENEMY_AI_RADIUS_UNITS,
+          (e) => !e.isDead && Math.abs(levelToWorldY(e.level) - player.position.y) < LEVEL_HEIGHT && Vector3.Distance(e.worldPos, player.position) <= ENEMY_AI_RADIUS_UNITS,
         ).length,
         renderedTiles: chunkMeshes.size * CHUNK_SIZE * CHUNK_SIZE,
         totalObjects: activeMeshes,
@@ -7611,7 +7624,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       let visibleEnemies = 0;
       let aiActiveEnemies = 0;
       enemies.forEach((enemy) => {
-        if (enemy.isDead || enemy.level !== activeLevel) return;
+        if (enemy.isDead || Math.abs(levelToWorldY(enemy.level) - player.position.y) >= LEVEL_HEIGHT) return;
         const distance = Vector3.Distance(enemy.worldPos, player.position);
         if (distance <= ENEMY_AI_RADIUS_UNITS) {
           activeEnemies += 1;
