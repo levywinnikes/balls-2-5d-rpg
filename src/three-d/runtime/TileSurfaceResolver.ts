@@ -78,7 +78,7 @@ function resolveFloorTopHeight(
   return authored;
 }
 
-function resolveRampRise(
+export function resolveRampRise(
   tileDef?: SliceTileDefinition | null,
   defaultRise = 0.35,
 ): number {
@@ -89,6 +89,34 @@ function resolveRampRise(
     return tileDef.height;
   }
   return defaultRise;
+}
+
+export function isFloorLevelRamp(
+  tileDef?: SliceTileDefinition | null,
+  levelHeightUnits = DEFAULT_LEVEL_HEIGHT_UNITS,
+): boolean {
+  const profile = tileDef?.geometryProfile;
+  if (!profile?.startsWith("ramp-")) {
+    return false;
+  }
+  return resolveRampRise(tileDef) >= levelHeightUnits - 0.08;
+}
+
+/** Stairs and ramps change foot Y gradually — never treat as a void ledge. */
+export function isGradedWalkTile(
+  tileDef?: SliceTileDefinition | null,
+  levelHeightUnits = DEFAULT_LEVEL_HEIGHT_UNITS,
+): boolean {
+  if (!tileDef) {
+    return false;
+  }
+  if (tileDef.stairDir || tileDef.geometryProfile === "stair") {
+    return true;
+  }
+  if (isFloorLevelRamp(tileDef, levelHeightUnits)) {
+    return true;
+  }
+  return Boolean(tileDef.geometryProfile?.startsWith("ramp-"));
 }
 
 function sampleRampSurfaceY(
@@ -204,7 +232,7 @@ export function sampleTileSurface(
     if (rampRise < levelHeight - 0.08) return null;
     const belowBaseY = ctx?.levelToWorldY?.(belowLevel) ?? levelBaseY;
     const dir = belowProfile.split("-")[1] as "n" | "s" | "e" | "w";
-    const surfaceY = sampleRampSurfaceY(belowBaseY, localX, localZ, dir, rampRise);
+    const surfaceY = sampleRampSurfaceY(belowBaseY + walkSurface, localX, localZ, dir, rampRise);
     return {
       symbol: belowSymbol,
       tileId: (belowDef?.id || belowSymbol || "").toLowerCase(),
@@ -279,16 +307,16 @@ export function sampleTileSurface(
     const profile = geometryProfile!;
     const dir = profile.split("-")[1] as "n" | "s" | "e" | "w";
     const surfaceY = sampleRampSurfaceY(
-      levelBaseY,
+      levelBaseY + walkSurface,
       localX,
       localZ,
       dir,
       resolveRampRise(tileDef),
     );
     return {
-      symbol,
-      tileId,
-      kind,
+      symbol: symbol,
+      tileId: tileId,
+      kind: kind,
       geometryProfile: profile,
       surfaceY,
       footY: surfaceY + clearance,
@@ -358,4 +386,104 @@ export function isWaterTileAt(
 /** @deprecated Prefer sampleTileSurface — kept for callers using tile id only. */
 export function tileIdIsWater(tileId: string | null | undefined): boolean {
   return isWaterTileId(tileId);
+}
+
+export interface HighestGroundResult {
+  level: string;
+  footY: number;
+  kind: "floor" | "block" | "water" | "stair" | "ramp" | "slab" | "void";
+  geometryProfile: string | null | undefined;
+}
+
+export function findHighestGroundBelow(
+  worldX: number,
+  worldZ: number,
+  currentY: number,
+  levels: string[],
+  ctx: TileSurfaceContext,
+): HighestGroundResult {
+  let bestLevel = levels[0];
+  let bestFootY = -999;
+  let bestKind: HighestGroundResult["kind"] = "void";
+  let bestProfile: string | null | undefined = null;
+  let foundAny = false;
+
+  for (const lvl of levels) {
+    const sample = sampleTileSurface(worldX, worldZ, lvl, ctx);
+    // Void tiles are not solid ground, ignore them.
+    if (sample.kind === "void") {
+      continue;
+    }
+    // Allow step up by at most 0.45 units (step limit).
+    if (sample.footY <= currentY + 0.45) {
+      if (sample.footY > bestFootY) {
+        bestFootY = sample.footY;
+        bestLevel = lvl;
+        bestKind = sample.kind;
+        bestProfile = sample.geometryProfile;
+        foundAny = true;
+      }
+    }
+  }
+
+  if (!foundAny) {
+    const fallbackLvl = levels.includes("0") ? "0" : levels[0];
+    const fallbackSample = sampleTileSurface(worldX, worldZ, fallbackLvl, ctx);
+    return {
+      level: fallbackLvl,
+      footY: fallbackSample.footY,
+      kind: fallbackSample.kind,
+      geometryProfile: fallbackSample.geometryProfile,
+    };
+  }
+
+  return {
+    level: bestLevel,
+    footY: bestFootY,
+    kind: bestKind,
+    geometryProfile: bestProfile,
+  };
+}
+
+export function findHighestGroundWithinStepLimit(
+  worldX: number,
+  worldZ: number,
+  currentY: number,
+  levels: string[],
+  ctx: TileSurfaceContext,
+): HighestGroundResult | null {
+  let bestLevel = levels[0];
+  let bestFootY = -999;
+  let bestKind: HighestGroundResult["kind"] = "void";
+  let bestProfile: string | null | undefined = null;
+  let foundAny = false;
+
+  for (const lvl of levels) {
+    const sample = sampleTileSurface(worldX, worldZ, lvl, ctx);
+    if (sample.kind === "void") {
+      continue;
+    }
+    const diff = sample.footY - currentY;
+    // Constrain height change to step limit (up or down by at most 0.45 units)
+    if (diff >= -0.45 && diff <= 0.45) {
+      if (sample.footY > bestFootY) {
+        bestFootY = sample.footY;
+        bestLevel = lvl;
+        bestKind = sample.kind;
+        bestProfile = sample.geometryProfile;
+        foundAny = true;
+      }
+    }
+  }
+
+  if (!foundAny) {
+    return null;
+  }
+
+  return {
+    level: bestLevel,
+    footY: bestFootY,
+    kind: bestKind,
+    geometryProfile: bestProfile,
+  };
 }

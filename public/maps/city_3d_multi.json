@@ -41,8 +41,7 @@
     "fnt",
     "tre",
     "rok",
-    "stu",
-    "std",
+    "ramp",
     "hol",
     "dfn"
   ],
@@ -215,24 +214,6 @@
       "renderAs": "block",
       "block": true
     },
-    "stu": {
-      "id": "stairs-up",
-      "color": "#e2c87d",
-      "height": 2.32,
-      "renderAs": "floor",
-      "geometryProfile": "ramp-s",
-      "levelTransition": "up",
-      "rampRise": 2.32
-    },
-    "std": {
-      "id": "stairs-down",
-      "color": "#a07040",
-      "height": 2.32,
-      "renderAs": "floor",
-      "geometryProfile": "ramp-s",
-      "levelTransition": "down",
-      "rampRise": 2.32
-    },
     "hol": {
       "id": "hole",
       "color": "#111827",
@@ -245,6 +226,14 @@
       "color": "#1e293b",
       "height": 0.06,
       "renderAs": "floor"
+    },
+    "ramp": {
+      "id": "stairs-down",
+      "color": "#a07040",
+      "height": 2.32,
+      "renderAs": "floor",
+      "geometryProfile": "ramp-s",
+      "rampRise": 2.32
     }
   },
   "entityTemplates": {

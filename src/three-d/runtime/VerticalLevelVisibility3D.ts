@@ -55,7 +55,7 @@ export type VerticalVisibilityTileDefLookup = (
   symbol: string | null,
 ) => Pick<
   SliceTileDefinition,
-  "stairDir" | "levelTransition" | "geometryProfile"
+  "geometryProfile"
 > | null | undefined;
 
 export function isVoidMapSymbol(symbol: string | null | undefined): boolean {

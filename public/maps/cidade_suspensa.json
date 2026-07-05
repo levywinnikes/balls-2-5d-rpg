@@ -23,8 +23,7 @@
     "dwl",
     "arc",
     "sdw",
-    "stu",
-    "std",
+    "ramp",
     "swl",
     "sfl",
     "cfl",
@@ -158,24 +157,6 @@
       "renderAs": "floor",
       "block": false
     },
-    "stu": {
-      "color": 13152320,
-      "height": 2.32,
-      "renderAs": "floor",
-      "block": false,
-      "geometryProfile": "ramp-s",
-      "levelTransition": "up",
-      "rampRise": 2.32
-    },
-    "std": {
-      "color": 13144128,
-      "height": 2.32,
-      "renderAs": "floor",
-      "block": false,
-      "geometryProfile": "ramp-s",
-      "levelTransition": "down",
-      "rampRise": 2.32
-    },
     "swl": {
       "color": 5263456,
       "height": 2,
@@ -211,6 +192,14 @@
       "height": 0.2,
       "renderAs": "floor",
       "block": false
+    },
+    "ramp": {
+      "color": 13144128,
+      "height": 2.32,
+      "renderAs": "floor",
+      "block": false,
+      "geometryProfile": "ramp-s",
+      "rampRise": 2.32
     }
   },
   "entityTemplates": {

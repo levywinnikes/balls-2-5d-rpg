@@ -1,9 +1,11 @@
-import type { SliceTileDefinition } from "./SliceTileTypes";
 import {
   DEFAULT_FEET_CLEARANCE,
   sampleActorFootY,
   sampleTileSurface,
   type TileSurfaceContext,
+  findHighestGroundBelow,
+  findHighestGroundWithinStepLimit,
+  type HighestGroundResult,
 } from "./TileSurfaceResolver";
 
 export const FEET_CLEARANCE = DEFAULT_FEET_CLEARANCE;
@@ -74,6 +76,54 @@ export function sampleGroundFootY(
     worldX,
     worldZ,
     level,
+    toContext(levelToWorldY, getTile, getTileDef, options),
+  );
+}
+
+export function sampleHighestGroundBelow(
+  worldX: number,
+  worldZ: number,
+  currentY: number,
+  levels: string[],
+  levelToWorldY: GroundHeightLevelY,
+  getTile: GroundHeightTileLookup,
+  getTileDef: GroundHeightTileDefLookup,
+  options?: {
+    levelHeightUnits?: number;
+    feetClearance?: number;
+    floorRimOffset?: number;
+    floorSlabThickness?: number;
+  },
+): HighestGroundResult {
+  return findHighestGroundBelow(
+    worldX,
+    worldZ,
+    currentY,
+    levels,
+    toContext(levelToWorldY, getTile, getTileDef, options),
+  );
+}
+
+export function sampleHighestGroundWithinStepLimit(
+  worldX: number,
+  worldZ: number,
+  currentY: number,
+  levels: string[],
+  levelToWorldY: GroundHeightLevelY,
+  getTile: GroundHeightTileLookup,
+  getTileDef: GroundHeightTileDefLookup,
+  options?: {
+    levelHeightUnits?: number;
+    feetClearance?: number;
+    floorRimOffset?: number;
+    floorSlabThickness?: number;
+  },
+): HighestGroundResult | null {
+  return findHighestGroundWithinStepLimit(
+    worldX,
+    worldZ,
+    currentY,
+    levels,
     toContext(levelToWorldY, getTile, getTileDef, options),
   );
 }

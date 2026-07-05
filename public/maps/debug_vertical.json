@@ -130,20 +130,18 @@
     "stu": {
       "id": "stairs-up",
       "color": "#c4a07a",
-      "height": 2.32,
+      "height": 0.5,
       "renderAs": "floor",
-      "geometryProfile": "ramp-s",
-      "levelTransition": "up",
-      "rampRise": 2.32
+      "geometryProfile": "stair",
+      "stairDir": "up"
     },
     "std": {
       "id": "stairs-down",
       "color": "#a8845c",
-      "height": 2.32,
+      "height": 0.5,
       "renderAs": "floor",
-      "geometryProfile": "ramp-s",
-      "levelTransition": "down",
-      "rampRise": 2.32
+      "geometryProfile": "stair",
+      "stairDir": "down"
     },
     "rfu": {
       "id": "ramp-floor-up",

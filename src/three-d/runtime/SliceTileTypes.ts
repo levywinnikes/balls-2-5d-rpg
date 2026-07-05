@@ -6,8 +6,6 @@ export type SliceTileDefinition = {
   rampRise?: number;
   renderAs?: "floor" | "block";
   stairDir?: "up" | "down";
-  /** Full-height ramp: auto level change at ramp edge (`up` = climb, `down` = descend). */
-  levelTransition?: "up" | "down";
   waterProfile?: {
     mode?: "wading" | "swimming";
     surfaceLevel?: number;

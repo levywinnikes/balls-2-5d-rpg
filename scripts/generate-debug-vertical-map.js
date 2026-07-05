@@ -223,6 +223,13 @@ function buildLevel1() {
   // Balcony south — ledge fall test
   set(grid, TOWER_X, TOWER_DOWN_Y_L1 + 3, "bal");
   set(grid, TOWER_X, TOWER_DOWN_Y_L1 + 4, "...");
+
+  // West ramp landing and bridge connecting to the main Level 1 room (doorway at x: 20)
+  for (let x = 16; x <= 20; x++) {
+    set(grid, x, 29, "cob");
+    set(grid, x, 30, "cob");
+  }
+
   return grid;
 }
 

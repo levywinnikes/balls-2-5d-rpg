@@ -99,16 +99,15 @@ import {
   FEET_CLEARANCE,
   sampleGroundFootY,
   sampleGroundSurfaceY,
+  sampleHighestGroundBelow,
+  sampleHighestGroundWithinStepLimit,
 } from "./GroundHeightQuery3D";
 import {
   sampleActorWorldY,
-  type TileSurfaceContext,
-} from "./TileSurfaceResolver";
-import {
   isGradedWalkTile,
   isFloorLevelRamp,
-  probeRampLevelTransition,
-} from "./VerticalTransition3D";
+  type TileSurfaceContext,
+} from "./TileSurfaceResolver";
 import {
   DEFAULT_OCCLUSION_SCAN_RADIUS,
   resolveVerticalVisibleLevels,
@@ -1877,6 +1876,32 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       { levelHeightUnits: LEVEL_HEIGHT_UNITS, feetClearance: FEET_CLEARANCE, floorSlabThickness: FLOOR_SLAB_THICKNESS, floorRimOffset: WATER_HOLE_RIM_OFFSET },
     );
 
+  const getHighestGroundBelow = (worldX: number, worldZ: number, currentY: number) =>
+    sampleHighestGroundBelow(
+      worldX,
+      worldZ,
+      currentY,
+      Object.keys(mapDataCache?.levels || {}),
+      levelToWorldY,
+      getMapTileAt,
+      (symbol) =>
+        symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+      { levelHeightUnits: LEVEL_HEIGHT_UNITS, feetClearance: FEET_CLEARANCE, floorSlabThickness: FLOOR_SLAB_THICKNESS, floorRimOffset: WATER_HOLE_RIM_OFFSET },
+    );
+
+  const getHighestGroundWithinStepLimit = (worldX: number, worldZ: number, currentY: number) =>
+    sampleHighestGroundWithinStepLimit(
+      worldX,
+      worldZ,
+      currentY,
+      Object.keys(mapDataCache?.levels || {}),
+      levelToWorldY,
+      getMapTileAt,
+      (symbol) =>
+        symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+      { levelHeightUnits: LEVEL_HEIGHT_UNITS, feetClearance: FEET_CLEARANCE, floorSlabThickness: FLOOR_SLAB_THICKNESS, floorRimOffset: WATER_HOLE_RIM_OFFSET },
+    );
+
   const getGroundSurfaceY = (worldX: number, worldZ: number, level: string) => {
     if (!levelBinaryCache.has(level)) {
       return levelToWorldY(level) + FLOOR_SURFACE_Y;
@@ -2036,21 +2061,34 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
-    // Guard: graded walk tiles (ramp/stairs) prevent foot-height from changing level.
-    // The ramp/hole transition system (tryVerticalLevelTransitions) handles level
-    // changes on these tiles via explicit edge detection.
+    // Stairs use discrete transition (teleport to landing) — block foot-height
+    // level inference for them.  Floor-level ramps are continuous inclines —
+    // let inferLevelFromFootY handle the transition naturally (FPS-style).
     const tileX = Math.floor(player.position.x);
     const tileZ = Math.floor(player.position.z);
     const symbol = getMapTileAt(activeLevel, tileX, tileZ);
     const tileDef = symbol
       ? mapData.tileDefinitions?.[symbol]
       : undefined;
-    if (isGradedWalkTile(tileDef, LEVEL_HEIGHT_UNITS)) {
+    if (tileDef?.stairDir || tileDef?.geometryProfile === "stair") {
       return;
     }
 
     if (!symbol || symbol === "...") {
-      return;
+      // Void tile on current level may sit directly above a floor-level ramp
+      // on the level below (the chunk builder removes the slab there).  Allow
+      // foot-height inference so the player can descend naturally.
+      const levelNum = parseLevelNumber(activeLevel);
+      const belowLevel = String(levelNum - 1);
+      const belowSym = mapData.levels?.[belowLevel]
+        ? getMapTileAt(belowLevel, tileX, tileZ)
+        : null;
+      const belowDef = belowSym && belowSym !== "..."
+        ? mapData.tileDefinitions?.[belowSym]
+        : undefined;
+      if (!(belowDef && isFloorLevelRamp(belowDef, LEVEL_HEIGHT_UNITS))) {
+        return;
+      }
     }
 
     const inferred = inferLevelFromFootY(
@@ -2066,7 +2104,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     if (inferred !== activeLevel) {
       applyActiveLevelChange(inferred, undefined, { natural: true });
-      snapFootToGradedSurface(inferred);
+      snapFootToGradedSurface(inferred, moveStartX, moveStartZ);
       levelTransitionCooldown = 0.35;
     }
   };
@@ -2097,10 +2135,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const isVoidSymbol = (symbol: string | null) => !symbol || symbol === "...";
 
+  /** True void = no physical surface at this tile on the given level.
+   * A void tile directly above a floor-level ramp on the level below is NOT
+   * a true void — the ramp geometry fills that space. */
   const isPlayerOverVoidAtLevel = (level: string) => {
-    const tileX = Math.floor(player.position.x);
-    const tileZ = Math.floor(player.position.z);
-    return isVoidSymbol(getMapTileAt(level, tileX, tileZ));
+    const groundBelow = getHighestGroundBelow(player.position.x, player.position.z, player.position.y);
+    return !groundBelow;
   };
 
   const isDownHoleTile = (tileDef?: SliceTileDefinition | null) => {
@@ -2111,7 +2151,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       transition?: "up" | "down" | "dwn";
     };
     return (
-      tileDef.levelTransition === "down" ||
       legacy.transition === "down" ||
       legacy.transition === "dwn" ||
       tileDef.id === "hole"
@@ -2129,8 +2168,50 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       LEVEL_HEIGHT_UNITS,
     );
 
-  const snapFootToGradedSurface = (level: string) => {
-    applyActorAquaticY(player.position, level);
+  const snapFootToGradedSurface = (level: string, startX?: number, startZ?: number) => {
+    // Detect if the player walked off the side (orthogonal to incline axis) of a ramp
+    const startTileX = startX !== undefined ? Math.floor(startX) : Math.floor(player.position.x);
+    const startTileZ = startZ !== undefined ? Math.floor(startZ) : Math.floor(player.position.z);
+    const endTileX = Math.floor(player.position.x);
+    const endTileZ = Math.floor(player.position.z);
+
+    if (startTileX !== endTileX || startTileZ !== endTileZ) {
+      const startSymbol = getMapTileAt(activeLevel, startTileX, startTileZ);
+      const startDef = startSymbol ? mapDataCache?.tileDefinitions?.[startSymbol] : undefined;
+      if (startDef && startDef.geometryProfile?.startsWith("ramp-")) {
+        const profile = startDef.geometryProfile;
+        if (profile === "ramp-n" || profile === "ramp-s") {
+          // North-South ramp: walking East or West is walking off the side cliff
+          if (startTileX !== endTileX) {
+            isGrounded = false;
+            return;
+          }
+        } else if (profile === "ramp-e" || profile === "ramp-w") {
+          // East-West ramp: walking North or South is walking off the side cliff
+          if (startTileZ !== endTileZ) {
+            isGrounded = false;
+            return;
+          }
+        }
+      }
+    }
+
+    const levelGround = getHighestGroundWithinStepLimit(
+      player.position.x,
+      player.position.z,
+      player.position.y,
+    );
+    if (!levelGround) {
+      isGrounded = false;
+      return;
+    }
+    const resolvedLevel = levelGround.level;
+    const aquatic = getAquaticSampleAt(player.position.x, player.position.z, resolvedLevel);
+    if (aquatic.mode === "dry") {
+      player.position.y = levelGround.footY;
+    } else {
+      player.position.y = levelGround.footY + aquatic.sinkOffset;
+    }
   };
 
   const getPropTileKey = (tileX: number, tileY: number) =>
@@ -2226,7 +2307,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       [worldX, worldZ + radius],
     ];
 
-    for (const [sx, sz] of samplePoints) {
+    for (let i = 0; i < samplePoints.length; i++) {
+      const [sx, sz] = samplePoints[i];
       if (sx < 0 || sz < 0 || sx >= mapData.width || sz >= mapData.height) {
         return true;
       }
@@ -2237,14 +2319,48 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       const tileX = Math.floor(sx);
       const tileY = Math.floor(sz);
-      const symbol = getMapTileAt(activeLevel, tileX, tileY);
-      if (blockVoidForPlayer && isVoidSymbol(symbol)) {
-        return true;
-      }
+      const levelNum = Math.floor(footY / LEVEL_HEIGHT_UNITS);
+      const checkLevel = String(levelNum);
+
+      const symbol = mapData.levels?.[checkLevel]
+        ? getMapTileAt(checkLevel, tileX, tileY)
+        : null;
       const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
+
+      // Block entry if target ground Y is too high, except when transitioning within same ramp/stair incline
+      const currentTileX = Math.floor(player.position.x);
+      const currentTileZ = Math.floor(player.position.z);
+      const currentLevel = String(Math.floor(player.position.y / LEVEL_HEIGHT_UNITS));
+      const currentSymbol = getMapTileAt(currentLevel, currentTileX, currentTileZ);
+      const currentDef = currentSymbol ? mapDataCache?.tileDefinitions?.[currentSymbol] : undefined;
+
+      const isCurrentGraded = currentDef && (currentDef.geometryProfile?.startsWith("ramp-") || currentDef.geometryProfile === "stair" || currentDef.stairDir);
+      const isTargetGraded = tileDef && (tileDef.geometryProfile?.startsWith("ramp-") || tileDef.geometryProfile === "stair" || tileDef.stairDir);
+
+      if (!(isCurrentGraded && isTargetGraded)) {
+        const sampleGroundY = getGroundFootY(sx, sz, checkLevel);
+        if (sampleGroundY > footY + 0.45) {
+          return true;
+        }
+      }
+
+      const checkVoid = blockVoidForPlayer && (i === 0);
+      if (checkVoid && isVoidSymbol(symbol)) {
+        // Void tile above a floor-level ramp is walkable (ramp fills the space).
+        const belowLevel = String(levelNum - 1);
+        const belowSym = mapData.levels?.[belowLevel]
+          ? getMapTileAt(belowLevel, tileX, tileY)
+          : null;
+        const belowDef = belowSym && belowSym !== "..."
+          ? mapData.tileDefinitions?.[belowSym]
+          : undefined;
+        if (!(belowDef && isGradedWalkTile(belowDef, LEVEL_HEIGHT_UNITS))) {
+          return true;
+        }
+      }
       if (
         isBlockingTile(symbol, tileDef, {
-          level: activeLevel,
+          level: checkLevel,
           tileX,
           tileY,
         })
@@ -6381,13 +6497,40 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     worldZ: number,
     footY: number,
   ): boolean => {
-    const upperLevel = String(activeLevelNumber + 1);
+    const currentLevelNum = Math.floor(footY / LEVEL_HEIGHT_UNITS);
+    const upperLevel = String(currentLevelNum + 1);
     if (!mapDataCache?.levels?.[upperLevel]) {
       return false;
     }
 
+    const checkLevel = String(currentLevelNum);
+
     // Stairs/ramps climb through the slab band — never treat as a pit lip.
-    if (isGradedWalkAt(worldX, worldZ, activeLevel)) {
+    if (
+      isGradedWalkAt(player.position.x, player.position.z, checkLevel) ||
+      isGradedWalkAt(worldX, worldZ, checkLevel)
+    ) {
+      return false;
+    }
+    // Floor-level ramp on the current level fills the slab band of the upper
+    // level — the chunk builder omits the slab mesh there, so no physical
+    // ceiling exists to collide with.
+    const slabTileX = Math.floor(worldX);
+    const slabTileZ = Math.floor(worldZ);
+    const currentSymbolForSlab = getMapTileAt(checkLevel, slabTileX, slabTileZ);
+    const currentDefForSlab = currentSymbolForSlab
+      ? mapDataCache?.tileDefinitions?.[currentSymbolForSlab]
+      : undefined;
+    if (currentDefForSlab && isGradedWalkTile(currentDefForSlab, LEVEL_HEIGHT_UNITS)) {
+      return false;
+    }
+    const playerTileX = Math.floor(player.position.x);
+    const playerTileZ = Math.floor(player.position.z);
+    const playerSymbolForSlab = getMapTileAt(checkLevel, playerTileX, playerTileZ);
+    const playerDefForSlab = playerSymbolForSlab
+      ? mapDataCache?.tileDefinitions?.[playerSymbolForSlab]
+      : undefined;
+    if (playerDefForSlab && isGradedWalkTile(playerDefForSlab, LEVEL_HEIGHT_UNITS)) {
       return false;
     }
 
@@ -6427,6 +6570,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (isGradedWalkAt(player.position.x, player.position.z, activeLevel)) {
       return null;
     }
+    // Floor-level ramp opens the passage between levels — no ceiling cap.
+    const ceilCheckSymbol = getMapTileAt(activeLevel, tileX, tileZ);
+    const ceilCheckDef = ceilCheckSymbol
+      ? mapDataCache?.tileDefinitions?.[ceilCheckSymbol]
+      : undefined;
+    if (ceilCheckDef && isFloorLevelRamp(ceilCheckDef, LEVEL_HEIGHT_UNITS)) {
+      return null;
+    }
     if (!isSolidCeilingTileAt(upperLevel, tileX, tileZ)) {
       return null;
     }
@@ -6459,6 +6610,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const applyCeilingCollisionToVerticalMotion = () => {
+    // Ramps are continuous inclines — ceiling collision would trap the player
+    // in a push-up / push-down loop between the ramp surface and the slab above.
+    if (isGradedWalkAt(player.position.x, player.position.z, activeLevel)) {
+      return;
+    }
     const feetCap = resolveUpperLevelCeilingFeetCap();
     if (feetCap == null) {
       return;
@@ -7356,7 +7512,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             }
 
             if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
-              snapFootToGradedSurface(activeLevel);
+              snapFootToGradedSurface(activeLevel, movementStartX, movementStartZ);
             }
           }
         }
@@ -7369,6 +7525,62 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           mapMaxZ,
           Math.max(mapMinZ + 0.5, player.position.z),
         );
+
+        // Run Circle-vs-AABB depenetration on a 3x3 grid around the player to push them out of solid walls
+        {
+          const px = player.position.x;
+          const pz = player.position.z;
+          const tileX = Math.floor(px);
+          const tileZ = Math.floor(pz);
+          const radius = 0.32;
+          const epsilon = 0.01;
+
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              const tx = tileX + dx;
+              const tz = tileZ + dz;
+              const symbol = getMapTileAt(activeLevel, tx, tz);
+              const tileDef = symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined;
+
+              if (isBlockingTile(symbol, tileDef, { level: activeLevel, tileX: tx, tileY: tz })) {
+                // Find closest point on the solid tile to the player's center
+                const closestX = Math.max(tx, Math.min(player.position.x, tx + 1));
+                const closestZ = Math.max(tz, Math.min(player.position.z, tz + 1));
+
+                const diffX = player.position.x - closestX;
+                const diffZ = player.position.z - closestZ;
+                const dist = Math.sqrt(diffX * diffX + diffZ * diffZ);
+
+                if (dist < radius) {
+                  if (dist > 0.0001) {
+                    const penDepth = radius - dist;
+                    const pushX = (diffX / dist) * (penDepth + epsilon);
+                    const pushZ = (diffZ / dist) * (penDepth + epsilon);
+                    player.position.x += pushX;
+                    player.position.z += pushZ;
+                  } else {
+                    // Center is exactly inside the wall. Push out to closest edge.
+                    const distLeft = player.position.x - tx;
+                    const distRight = (tx + 1) - player.position.x;
+                    const distTop = player.position.z - tz;
+                    const distBottom = (tz + 1) - player.position.z;
+
+                    const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+                    if (minDist === distLeft) {
+                      player.position.x = tx - radius - epsilon;
+                    } else if (minDist === distRight) {
+                      player.position.x = tx + 1 + radius + epsilon;
+                    } else if (minDist === distTop) {
+                      player.position.z = tz - radius - epsilon;
+                    } else {
+                      player.position.z = tz + 1 + radius + epsilon;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
 
         if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
           syncVerticalLevelFromMovement(
@@ -7419,44 +7631,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return false;
     };
 
-    const tryRampLevelTransition = () => {
-      if (!canAttemptVerticalTransition()) {
-        return;
-      }
-
-      const probe = probeRampLevelTransition(
-        player.position.x,
-        player.position.z,
-        activeLevel,
-        getMapTileAt,
-        (symbol) =>
-          symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-        {
-          parseLevelNumber,
-          levelHeightUnits: LEVEL_HEIGHT_UNITS,
-          hasLevel: (level) => Boolean(mapDataCache?.levels?.[level]),
-        },
-      );
-      if (!probe) {
-        return;
-      }
-
-      levelTransitionCooldown = 0.65;
-      const fromLevelNum = activeLevelNumber;
-      applyActiveLevelChange(probe.targetLevel, undefined, { natural: true });
-
-      const toLevelNum = parseLevelNumber(probe.targetLevel);
-      if (toLevelNum > fromLevelNum) {
-        player.position.y =
-          levelToWorldY(probe.targetLevel) + FLOOR_SURFACE_Y + FEET_CLEARANCE;
-        verticalVelocity = 0;
-        isGrounded = true;
-        lastGroundedFootY = player.position.y;
-      } else {
-        snapFootToGradedSurface(probe.targetLevel);
-      }
-    };
-
     const tryHoleLevelTransition = () => {
       if (!canAttemptVerticalTransition()) {
         return;
@@ -7498,10 +7672,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
       tryHoleLevelTransition();
-      if (levelTransitionCooldown > 0) {
-        return;
-      }
-      tryRampLevelTransition();
     };
 
     tryVerticalLevelTransitions();
@@ -7879,8 +8049,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     {
       const tileX = Math.floor(player.position.x);
       const tileZ = Math.floor(player.position.z);
-      const supportSymbol = getMapTileAt(activeLevel, tileX, tileZ);
-      const onVoidTile = isVoidSymbol(supportSymbol);
+      const onVoidTile = isPlayerOverVoidAtLevel(activeLevel);
 
       if (!onVoidTile) {
         lastSafePlayerX = player.position.x;
@@ -7914,12 +8083,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         verticalVelocity += (holeFallLandingLevel ? fallGravity : gravity) * deltaSeconds;
         player.position.y += verticalVelocity * deltaSeconds;
 
-        const landingLevel = holeFallLandingLevel ?? activeLevel;
-        const levelGroundY = getGroundFootY(
+        const levelGround = getHighestGroundBelow(
           player.position.x,
           player.position.z,
-          landingLevel,
+          player.position.y,
         );
+        const levelGroundY = levelGround.footY;
+        const landingLevel = holeFallLandingLevel ?? levelGround.level;
+
         if (player.position.y <= levelGroundY) {
           const impactSpeed = Math.abs(verticalVelocity);
           player.position.y = levelGroundY;
@@ -7945,7 +8116,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
-      applyActorAquaticY(player.position, activeLevel);
+      snapFootToGradedSurface(activeLevel, movementStartX, movementStartZ);
       syncVerticalLevelFromMovement(
         isMoving,
         movementStartX,
