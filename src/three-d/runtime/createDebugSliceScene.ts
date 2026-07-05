@@ -2118,7 +2118,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       LEVEL_HEIGHT,
     );
 
-  const snapFootToGradedSurface = (level: string, startX?: number, startZ?: number) => {
+  const snapFootToGradedSurface = (level: string, startX?: number, startZ?: number, sameLevelOnly = false) => {
     // Detect if the player walked off the side (orthogonal to incline axis) of a ramp
     const startTileX = startX !== undefined ? Math.floor(startX) : Math.floor(player.position.x);
     const startTileZ = startZ !== undefined ? Math.floor(startZ) : Math.floor(player.position.z);
@@ -2160,6 +2160,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       isGrounded = false;
       return;
     }
+    // Inside the sub-step loop we only want same-level snaps (ramp following).
+    // Cross-level snaps are handled by the outer syncVerticalLevelFromMovement.
+    if (sameLevelOnly && floor.level !== level) return;
     // Prevent snapping to a surface too far above the player's current foot
     // (preserves the step-up constraint from the old getHighestGroundWithinStepLimit).
     if (floor.footY > player.position.y + 0.45) {
@@ -7362,7 +7365,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             }
 
             if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
-              snapFootToGradedSurface(activeLevel, movementStartX, movementStartZ);
+              snapFootToGradedSurface(activeLevel, movementStartX, movementStartZ, true);
             }
           }
         }
