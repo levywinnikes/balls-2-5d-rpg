@@ -105,9 +105,12 @@ import {
 import {
   sampleActorWorldY,
   isGradedWalkTile,
-  isFloorLevelRamp,
   type TileSurfaceContext,
 } from "./TileSurfaceResolver";
+import {
+  isFloorLevelRamp,
+  resolveTileHeight,
+} from "./TileHeightResolver";
 import {
   DEFAULT_OCCLUSION_SCAN_RADIUS,
   resolveVerticalVisibleLevels,
@@ -3260,6 +3263,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           const mat = getTileMaterial(symbol, tileDef, fallbackHex);
           const materialKey = `${renderLevel}::${mat.name}`;
 
+          const renderLevelNum = renderLevel !== undefined ? parseLevelNumber(renderLevel) : 0;
+          const resolved = resolveTileHeight(tileDef, renderLevelNum, LEVEL_HEIGHT_UNITS, FLOOR_SURFACE_Y);
           tiles.push({
             x,
             y,
@@ -3269,8 +3274,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             geometryProfile,
             isStair: geometryProfile === "stair",
             stairDir: tileDef?.stairDir,
-            height: tileHeight,
-            levelOffsetY,
+            height: resolved.height,
+            levelOffsetY: resolved.levelOffsetY,
             materialKey,
           });
         }

@@ -311,12 +311,12 @@
       "height": 2.32,
       "renderAs": "floor",
       "geometryProfile": "ramp-s",
-      "rampRise": 2.32
+      "rampRise": 2
     },
     "rfu": {
       "id": "ramp-floor-up",
       "color": "#ca8a04",
-      "height": 2,
+      "height": 2.32,
       "rampRise": 2,
       "levelTransition": "up",
       "renderAs": "floor",

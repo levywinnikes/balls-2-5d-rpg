@@ -11,13 +11,17 @@ import {
   STAIR_LEVEL_HEIGHT_UNITS,
   STAIR_STEP_COUNT,
 } from "./StairConfig3D";
+import {
+  resolveRampRise,
+  isFloorLevelRamp,
+  resolveTileHeight,
+  DEFAULT_LEVEL_HEIGHT_UNITS,
+} from "./TileHeightResolver";
 
 /** Matches dry cobble top and water pool rim. */
 export const DEFAULT_FLOOR_RIM_OFFSET = WATER_HOLE_RIM_OFFSET;
 
 export const DEFAULT_FEET_CLEARANCE = 0.02;
-
-export const DEFAULT_LEVEL_HEIGHT_UNITS = 2.0;
 
 export type TileSurfaceTileLookup = (
   level: string,
@@ -76,30 +80,6 @@ function resolveFloorTopHeight(
     return Math.max(authored, slab);
   }
   return authored;
-}
-
-export function resolveRampRise(
-  tileDef?: SliceTileDefinition | null,
-  defaultRise = 0.35,
-): number {
-  if (tileDef?.rampRise != null) {
-    return tileDef.rampRise;
-  }
-  if (tileDef?.height != null && tileDef.height > 0.12) {
-    return tileDef.height;
-  }
-  return defaultRise;
-}
-
-export function isFloorLevelRamp(
-  tileDef?: SliceTileDefinition | null,
-  levelHeightUnits = DEFAULT_LEVEL_HEIGHT_UNITS,
-): boolean {
-  const profile = tileDef?.geometryProfile;
-  if (!profile?.startsWith("ramp-")) {
-    return false;
-  }
-  return resolveRampRise(tileDef) >= levelHeightUnits - 0.08;
 }
 
 /** Stairs and ramps change foot Y gradually — never treat as a void ledge. */
@@ -230,9 +210,10 @@ export function sampleTileSurface(
     ) return null;
     const rampRise = resolveRampRise(belowDef);
     if (rampRise < levelHeight - 0.08) return null;
-    const belowBaseY = ctx?.levelToWorldY?.(belowLevel) ?? levelBaseY;
+    const belowLevelNum = Number.parseInt(belowLevel, 10);
+    const belowResolved = resolveTileHeight(belowDef, belowLevelNum, levelHeight, walkSurface);
     const dir = belowProfile.split("-")[1] as "n" | "s" | "e" | "w";
-    const surfaceY = sampleRampSurfaceY(belowBaseY + walkSurface, localX, localZ, dir, rampRise);
+    const surfaceY = sampleRampSurfaceY(belowResolved.surfaceBaseY, localX, localZ, dir, rampRise);
     return {
       symbol: belowSymbol,
       tileId: (belowDef?.id || belowSymbol || "").toLowerCase(),
@@ -306,8 +287,10 @@ export function sampleTileSurface(
   if (kind === "ramp") {
     const profile = geometryProfile!;
     const dir = profile.split("-")[1] as "n" | "s" | "e" | "w";
+    const levelNum = Number.parseInt(level, 10);
+    const resolved = resolveTileHeight(tileDef, levelNum, levelHeight, walkSurface);
     const surfaceY = sampleRampSurfaceY(
-      levelBaseY + walkSurface,
+      resolved.surfaceBaseY,
       localX,
       localZ,
       dir,
