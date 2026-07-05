@@ -76,14 +76,28 @@ Objetivo: `activeLevel` vira `let cachedPlayerLevel` apenas para evitar recomput
 - `applyActiveLevelChange` vira event-only (não seta estado).
 - `cachedPlayerLevel` só é lido, nunca escrito manualmente — atualizado automaticamente no frame loop.
 
----
+## Status de Execução
 
-## Riscos e Mitigações
+| Fase | Status | Commit |
+|------|--------|--------|
+| Fase 1: Física e Movimento | ✅ Concluída | `f2d885e` |
+| Fase 2: Streaming de Conteúdo | ✅ Concluída | `4de8a2d` |
+| Fase 3: Renderização e Visibilidade | ✅ Já estava correta* | — |
+| Fase 4: Purga do `activeLevel` | ⏳ Pendente | — |
 
-| Risco | Mitigação |
-|-------|-----------|
-| Desempenho: `inferLevelFromFootY` chamado centenas de vezes/frame | Cache com dirty flag (`cachedPlayerLevel`, invalidado quando `player.position.y` muda) |
-| Holes/transição vertical: `holeFallLandingLevel` ainda existe | Mantido como estado temporário, mas não afeta `cachedPlayerLevel` |
-| Save/load: salva `activeLevel` | Salvar Y do jogador; derivar level no load |
-| PlayerState.getCurrentLevel() | Substituir por `inferLevelFromFootY(playerState.getLastPosition().y)` |
-| Inicialização (bootstrap antes do jogador ter Y) | Usar level do save ou default "0" como fallback único |
+*`hideWallsOnRay` e `getRenderableLevels` já usam Y da câmera/player via `levelToWorldY`. A referência a `parseLevelNumber(activeLevel)` é apenas para calcular o número de nível a partir do nível em cache — como `activeLevel` é atualizado por `inferLevelFromFootY`, o resultado é correto.
+
+### Fase 4 — Notas
+
+As 5 mutações reais de `activeLevel`:
+- L453: inicialização (necessária, seed do estado)
+- L1970: em `applyActiveLevelChange` (drive principal)
+- L3986: em `ensureMapLevelReady` (bootstrap inicial)
+- L5710: em `reanchorWorldContentOnLevel` / level change event
+- L6597: em `applyHoleFallLanding` (queda em buraco)
+
+Para Fase 4: `applyActiveLevelChange` deve virar event emitter puro — o setter
+`activeLevel = newLevel` fica dentro do frame loop via `inferLevelFromFootY`,
+não mais dentro do handler de transição. Isso requer separar o seeding de level
+do setter de `activeLevel`.
+
