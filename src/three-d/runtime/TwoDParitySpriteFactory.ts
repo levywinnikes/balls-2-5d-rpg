@@ -979,6 +979,12 @@ export function getHeroVisibleBodyHeight(): number {
   );
 }
 
+/**
+ * Height of the hero's collision volume (smaller than the visible sprite to
+ * leave headroom for ramps, stairs, and ceiling clearance).
+ */
+export const HERO_COLLISION_HEIGHT = 1.2;
+
 /** Nominal humanoid reference in PROFILE_BY_ENEMY_ID — maps to hero billboard height. */
 export const GENERATED_ENEMY_PROFILE_BASE_HEIGHT = 1.2;
 

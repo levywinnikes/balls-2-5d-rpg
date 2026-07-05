@@ -1,7 +1,10 @@
+import { LEVEL_HEIGHT } from "../../constants/World";
+
 /** Keep in sync with `geometry.worker.ts` STEP_COUNT. */
 export const STAIR_STEP_COUNT = 8;
 
-export const STAIR_LEVEL_HEIGHT_UNITS = 2.0;
+/** @deprecated Use `LEVEL_HEIGHT` from `constants/World` instead. */
+export const STAIR_LEVEL_HEIGHT_UNITS = LEVEL_HEIGHT;
 
 /**
  * @deprecated Stair level changes use foot height (`inferLevelFromFootY`), not edge probes.

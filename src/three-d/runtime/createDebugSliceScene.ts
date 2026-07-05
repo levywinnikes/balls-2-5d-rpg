@@ -63,7 +63,7 @@ import {
   resolveHeroBmsDirection,
   HERO_BILLBOARD_LAYOUT,
   getHeroFirstPersonEyeHeight,
-  getHeroVisibleBodyHeight,
+  HERO_COLLISION_HEIGHT,
   getGeneratedDeathDurationMs,
   getGeneratedAttackDurationMs,
   type HeroAnimState,
@@ -426,7 +426,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const DROPPED_ITEM_REST_OFFSET = 0.02;
   // Eye line ~58% of hero body height — chest-level FP view (see HERO_FIRST_PERSON_EYE_BODY_RATIO).
   const FIRST_PERSON_EYE_ABOVE_FEET = getHeroFirstPersonEyeHeight();
-  const HERO_BODY_HEIGHT = getHeroVisibleBodyHeight();
+  const HERO_BODY_HEIGHT = HERO_COLLISION_HEIGHT;
   const CEILING_BODY_CLEARANCE = 0.14;
   /** Headroom (world units) for a full jump when under a solid ceiling tile. */
   const JUMP_FULL_HEADROOM = 0.85;
