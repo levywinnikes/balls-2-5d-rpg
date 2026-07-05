@@ -423,4 +423,59 @@ export class CollisionWorld {
     }
     return false;
   }
+
+  /**
+   * Resolve depenetration pushout for non-walkable volumes at (x,z).
+   * Returns `[dx, dz]` pushout vector that should be applied to the player position,
+   * or null if no pushout is needed.
+   */
+  resolvePushout(
+    x: number, z: number,
+    footY: number, headY: number,
+    radius: number,
+    levelKeys: string[],
+  ): [number, number] | null {
+    const radiusSq = radius * radius;
+    const epsilon = 0.01;
+    const levelSet = new Set(levelKeys);
+    let pushX = 0;
+    let pushZ = 0;
+
+    for (const v of this.volumes) {
+      if (!levelSet.has(v.level)) continue;
+      if (v.isWalkable) continue; // Only non-walkable volumes push out
+
+      // Circle-vs-AABB 2D overlap
+      const closestX = Math.max(v.x1, Math.min(x, v.x2));
+      const closestZ = Math.max(v.z1, Math.min(z, v.z2));
+      const diffX = x - closestX;
+      const diffZ = z - closestZ;
+      const distSq = diffX * diffX + diffZ * diffZ;
+      if (distSq >= radiusSq) continue;
+
+      // Vertical overlap
+      if (!volumeOverlapsSegment(v, closestX, closestZ, footY, headY)) continue;
+
+      const dist = Math.sqrt(distSq);
+      if (dist > 0.0001) {
+        const penDepth = radius - dist;
+        pushX += (diffX / dist) * (penDepth + epsilon);
+        pushZ += (diffZ / dist) * (penDepth + epsilon);
+      } else {
+        // Center exactly inside — push to closest edge
+        const dLeft = x - v.x1;
+        const dRight = v.x2 - x;
+        const dTop = z - v.z1;
+        const dBottom = v.z2 - z;
+        const minDist = Math.min(dLeft, dRight, dTop, dBottom);
+        if (minDist === dLeft) pushX -= radius + epsilon;
+        else if (minDist === dRight) pushX += radius + epsilon;
+        else if (minDist === dTop) pushZ -= radius + epsilon;
+        else pushZ += radius + epsilon;
+      }
+    }
+
+    if (pushX === 0 && pushZ === 0) return null;
+    return [pushX, pushZ];
+  }
 }
