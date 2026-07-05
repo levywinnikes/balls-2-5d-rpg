@@ -305,11 +305,20 @@
       "renderAs": "floor",
       "geometryProfile": "slab"
     },
+    "ramp": {
+      "id": "ramp-shaft",
+      "color": "#c4a07a",
+      "height": 2.32,
+      "renderAs": "floor",
+      "geometryProfile": "ramp-s",
+      "rampRise": 2.32
+    },
     "rfu": {
       "id": "ramp-floor-up",
       "color": "#ca8a04",
       "height": 2,
       "rampRise": 2,
+      "levelTransition": "up",
       "renderAs": "floor",
       "geometryProfile": "ramp-n"
     },
@@ -357,14 +366,6 @@
       "color": "#a8a29e",
       "height": 3.8,
       "renderAs": "block"
-    },
-    "ramp": {
-      "id": "stairs-down",
-      "color": "#a8845c",
-      "height": 2.32,
-      "renderAs": "floor",
-      "geometryProfile": "ramp-s",
-      "rampRise": 2.32
     }
   },
   "entityTemplates": {

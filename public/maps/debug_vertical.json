@@ -83,8 +83,7 @@
     "cob",
     "wal",
     "grs",
-    "stu",
-    "std",
+    "ramp",
     "rfu",
     "wat",
     "wtr",
@@ -127,21 +126,13 @@
       "height": 2.4,
       "renderAs": "block"
     },
-    "stu": {
-      "id": "stairs-up",
+    "ramp": {
+      "id": "ramp-shaft",
       "color": "#c4a07a",
-      "height": 0.5,
+      "height": 2.32,
       "renderAs": "floor",
-      "geometryProfile": "stair",
-      "stairDir": "up"
-    },
-    "std": {
-      "id": "stairs-down",
-      "color": "#a8845c",
-      "height": 0.5,
-      "renderAs": "floor",
-      "geometryProfile": "stair",
-      "stairDir": "down"
+      "geometryProfile": "ramp-s",
+      "rampRise": 2.32
     },
     "rfu": {
       "id": "ramp-floor-up",

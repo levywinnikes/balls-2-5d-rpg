@@ -215,7 +215,7 @@ function buildVerticalLevelBuffers(
   wallIdx,
 ) {
   const voidIdx = indexOf("...");
-  const stdIdx = indexOf("std");
+  const rampIdx = indexOf("ramp");
 
   const {
     towerRoom,
@@ -232,18 +232,17 @@ function buildVerticalLevelBuffers(
     const shaft = shaftRoomMetrics(x, y, w, h);
     carveShaftRoomOnBuffer(levelUp, width, height, x, y, w, h, indexOf);
     setTile(levelUp, width, height, towerStairX, towerStairY, floorIdx);
-    setTile(levelUp, width, height, shaft.cx, shaft.downZ, stdIdx);
+    setTile(levelUp, width, height, shaft.cx, shaft.downZ, rampIdx);
   }
 
   const levelDown = buildVoidLevelBuffer(width, height, voidIdx);
   if (cellarRoom) {
     const { x, y, w, h } = cellarRoom;
     const shaft = shaftRoomMetrics(x, y, w, h);
-    const stuIdx = indexOf("stu");
     carveShaftRoomOnBuffer(levelDown, width, height, x, y, w, h, indexOf);
     setTile(levelDown, width, height, cellarStairX, cellarStairY, floorIdx);
-    // Return path: stu one row south of landing (L0 tile above must stay floor — M2).
-    setTile(levelDown, width, height, shaft.cx, shaft.continueUpZ, stuIdx);
+    // Return path: ramp at same position; ramp-s-south entry ascends to north.
+    setTile(levelDown, width, height, shaft.cx, shaft.continueUpZ, rampIdx);
   }
 
   return { levelUp, levelDown };
@@ -307,8 +306,7 @@ function carveShaftTileOnBuffer(
   direction,
 ) {
   const floorIdx = indexOf("cob");
-  const stuIdx = indexOf("stu");
-  const stdIdx = indexOf("std");
+  const rampIdx = indexOf("ramp");
   const shaft = shaftRoomMetrics(roomX, roomY, roomW, roomH);
 
   carveShaftRoomOnBuffer(
@@ -322,11 +320,7 @@ function carveShaftTileOnBuffer(
     indexOf,
   );
   setTile(buffer, width, height, shaft.cx, shaft.doorZ, floorIdx);
-  if (direction === "up") {
-    setTile(buffer, width, height, shaft.cx, shaft.landingZ, stuIdx);
-  } else {
-    setTile(buffer, width, height, shaft.cx, shaft.landingZ, stdIdx);
-  }
+  setTile(buffer, width, height, shaft.cx, shaft.landingZ, rampIdx);
   return { shaftX: shaft.cx, shaftZ: shaft.landingZ, shaft };
 }
 
@@ -427,8 +421,7 @@ function buildStackedTowerOnBuffers(
   const floorIdx = indexOf(opts.floorSym || "cob");
   const wallIdx = indexOf(opts.wallSym || "wal");
   const roofIdx = indexOf(opts.roofSym || "rof");
-  const stuIdx = indexOf("stu");
-  const stdIdx = indexOf("std");
+  const rampIdx = indexOf("ramp");
   const shaft = shaftRoomMetrics(x, y, w, h);
 
   for (let n = fromFloor; n <= toFloor; n += 1) {
@@ -440,15 +433,15 @@ function buildStackedTowerOnBuffers(
     carveShaftRoomOnBuffer(buf, width, height, x, y, w, h, indexOf);
     if (n === fromFloor) {
       setTile(buf, width, height, shaft.cx, shaft.doorZ, floorIdx);
-      setTile(buf, width, height, shaft.cx, shaft.landingZ, stuIdx);
+      setTile(buf, width, height, shaft.cx, shaft.landingZ, rampIdx);
     } else {
       setTile(buf, width, height, shaft.cx, shaft.landingZ, floorIdx);
-      setTile(buf, width, height, shaft.cx, shaft.downZ, stdIdx);
+      setTile(buf, width, height, shaft.cx, shaft.downZ, rampIdx);
       if (n < toFloor) {
         const leg = n - fromFloor;
         const climbZ =
           leg % 2 === 1 ? shaft.continueUpZ : shaft.landingZ;
-        setTile(buf, width, height, shaft.cx, climbZ, stuIdx);
+        setTile(buf, width, height, shaft.cx, climbZ, rampIdx);
       }
     }
   }
@@ -463,8 +456,7 @@ function buildCraterShaftOnBuffers(buffers, width, height, cx, cy, radius, depth
   const voidIdx = indexOf("...");
   const holIdx = indexOf("hol");
   const arcIdx = indexOf("arc");
-  const stuIdx = indexOf("stu");
-  const stdIdx = indexOf("std");
+  const rampIdx = indexOf("ramp");
   const dfnIdx = indexOf("dfn");
   const dwlIdx = indexOf("dwl");
   const floorIdx = indexOf("cob");
@@ -509,8 +501,8 @@ function buildCraterShaftOnBuffers(buffers, width, height, cx, cy, radius, depth
     }
     setTile(buf, width, height, shaft.cx, shaft.landingZ, dfnFloorIdx);
     if (d > 1) {
-      setTile(buf, width, height, shaft.cx, shaft.downZ, stdIdx);
-      setTile(buf, width, height, shaft.cx, shaft.landingZ, stuIdx);
+      setTile(buf, width, height, shaft.cx, shaft.downZ, rampIdx);
+      setTile(buf, width, height, shaft.cx, shaft.landingZ, rampIdx);
     }
   }
 }
@@ -518,7 +510,7 @@ function buildCraterShaftOnBuffers(buffers, width, height, cx, cy, radius, depth
 function buildDungeonHallsOnBuffers(buffers, width, height, hallX, hallY, indexOf) {
   const dfnIdx = indexOf("dfn");
   const dwlIdx = indexOf("dwl");
-  const stdIdx = indexOf("std");
+  const rampIdx = indexOf("ramp");
   const floorIdx = indexOf("cob");
   const hallW = 14;
   const hallH = 8;
@@ -526,7 +518,7 @@ function buildDungeonHallsOnBuffers(buffers, width, height, hallX, hallY, indexO
 
   carveRoom(buffers["0"], width, height, hallX, hallY, hallW, hallH, dfnIdx, dwlIdx);
   setTile(buffers["0"], width, height, hallX + 7, hallY + 7, indexOf("arc"));
-  setTile(buffers["0"], width, height, shaft.cx, shaft.landingZ, stdIdx);
+  setTile(buffers["0"], width, height, shaft.cx, shaft.landingZ, rampIdx);
 
   carveRoom(buffers["-1"], width, height, hallX, hallY, hallW, hallH, dfnIdx, dwlIdx);
   setTile(buffers["-1"], width, height, shaft.cx, shaft.landingZ, floorIdx);
@@ -713,8 +705,7 @@ function buildIsolatedChambersLayoutMap(
   const rpnIdx = indexOf("rpn");
   const rpsIdx = indexOf("rps");
   const hlmIdx = indexOf("hlm");
-  const stuIdx = indexOf("stu");
-  const stdIdx = indexOf("std");
+  const rampIdx = indexOf("ramp");
   const rfuIdx = indexOf("rfu");
 
   const roomRows = Math.ceil(enemies.length / roomCols) || 1;
@@ -1673,8 +1664,7 @@ function main() {
     "rpn",
     "rps",
     "hlm",
-    "stu",
-    "std",
+    "ramp",
     "rfu",
     "hol",
     "dfn",
@@ -1909,21 +1899,13 @@ function main() {
         renderAs: "floor",
         geometryProfile: "slab",
       },
-      stu: {
-        id: "stairs-up",
+      ramp: {
+        id: "ramp-shaft",
         color: "#c4a07a",
-        height: 0.5,
+        height: 2.32,
         renderAs: "floor",
-        geometryProfile: "stair",
-        stairDir: "up",
-      },
-      std: {
-        id: "stairs-down",
-        color: "#a8845c",
-        height: 0.5,
-        renderAs: "floor",
-        geometryProfile: "stair",
-        stairDir: "down",
+        geometryProfile: "ramp-s",
+        rampRise: 2.32,
       },
       rfu: {
         id: "ramp-floor-up",

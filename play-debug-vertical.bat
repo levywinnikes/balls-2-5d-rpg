@@ -35,7 +35,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-set "PLAY_URL=http://localhost:4000/?slice3d=1&map=debug_vertical&autostart=1"
+set "PLAY_URL=http://localhost:4000/?slice3d=1&map=debug_vertical&autostart=1&log=1&overlay=1"
 
 echo [2/3] Verificando servidor dev (porta 4000)...
 powershell -NoProfile -Command "try { (Invoke-WebRequest -Uri 'http://localhost:4000/' -UseBasicParsing -TimeoutSec 2).StatusCode | Out-Null; exit 0 } catch { exit 1 }"

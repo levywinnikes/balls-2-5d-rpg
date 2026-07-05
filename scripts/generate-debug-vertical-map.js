@@ -36,8 +36,7 @@ const ATLAS = [
   "cob",
   "wal",
   "grs",
-  "stu",
-  "std",
+  "ramp",
   "rfu",
   "wat",
   "wtr",
@@ -63,21 +62,13 @@ const TILE_DEFS = {
     height: 2.4,
     renderAs: "block",
   },
-  stu: {
-    id: "stairs-up",
+  ramp: {
+    id: "ramp-shaft",
     color: "#c4a07a",
-    height: 0.5,
+    height: 2.32,
     renderAs: "floor",
-    geometryProfile: "stair",
-    stairDir: "up",
-  },
-  std: {
-    id: "stairs-down",
-    color: "#a8845c",
-    height: 0.5,
-    renderAs: "floor",
-    geometryProfile: "stair",
-    stairDir: "down",
+    geometryProfile: "ramp-s",
+    rampRise: 2.32,
   },
   rfu: {
     id: "ramp-floor-up",
@@ -193,11 +184,11 @@ function buildLevel0() {
 
   // North-east tower base (up only on surface)
   carveRoom(grid, CX - 2, 8, 15, 12, "cob", "wal");
-  set(grid, TOWER_X, TOWER_UP_Y, "stu");
+  set(grid, TOWER_X, TOWER_UP_Y, "ramp");
 
   // South dungeon mouth (down only — separate shaft from tower)
   carveRoom(grid, CX - 5, HEIGHT - 18, 11, 9, "cob", "wal");
-  set(grid, DUNGEON_X, DUNGEON_MOUTH_Y, "std");
+  set(grid, DUNGEON_X, DUNGEON_MOUTH_Y, "ramp");
 
   // West ramp to mid tower (walk south on gold tile)
   set(grid, CX - 12, CY, "rfu");
@@ -217,9 +208,9 @@ function buildLevel1() {
   // Landing from tower up-stair (level 0)
   set(grid, TOWER_X, TOWER_UP_Y, "cob");
   // Descend tower — south side, 5+ tiles from landing
-  set(grid, TOWER_X, TOWER_DOWN_Y_L1, "std");
+  set(grid, TOWER_X, TOWER_DOWN_Y_L1, "ramp");
   // Ascend to roof — north-west, away from down stair
-  set(grid, TOWER_X - 8, TOWER_UP_Y_L1, "stu");
+  set(grid, TOWER_X - 8, TOWER_UP_Y_L1, "ramp");
   // Balcony south — ledge fall test
   set(grid, TOWER_X, TOWER_DOWN_Y_L1 + 3, "bal");
   set(grid, TOWER_X, TOWER_DOWN_Y_L1 + 4, "...");
@@ -239,7 +230,7 @@ function buildLevel2() {
   // Landing from mid-tower up-stair
   set(grid, TOWER_X - 8, TOWER_UP_Y_L1, "bal");
   // Descend to mid floor
-  set(grid, TOWER_X - 8, TOWER_DOWN_Y_L2, "std");
+  set(grid, TOWER_X - 8, TOWER_DOWN_Y_L2, "ramp");
   fillRect(grid, TOWER_X - 9, TOWER_DOWN_Y_L2 + 1, 3, 2, "...");
   return grid;
 }
@@ -249,7 +240,7 @@ function buildLevelMinus1() {
   carveRoom(grid, 8, 8, WIDTH - 16, HEIGHT - 16, "sfl", "swl");
   carveRoom(grid, CX - 6, CY - 6, 13, 13, "sfl", "swl");
   // Up from dungeon mouth (level 0) — dedicated south shaft only
-  set(grid, DUNGEON_X, DUNGEON_UP_Y_L1, "stu");
+  set(grid, DUNGEON_X, DUNGEON_UP_Y_L1, "ramp");
   fillRect(grid, CX - 1, CY - 1, 3, 3, "...");
   return grid;
 }
@@ -258,7 +249,7 @@ function buildLevelMinus2() {
   const grid = makeGrid("...");
   carveRoom(grid, 6, 6, WIDTH - 12, HEIGHT - 12, "cfl", "cwl");
   carveWaterLake(grid, CX - 4, CY + 2, 8, 6);
-  set(grid, CX, 8, "stu");
+  set(grid, CX, 8, "ramp");
   fillRect(grid, CX - 1, CY - 1, 3, 3, "...");
   return grid;
 }
