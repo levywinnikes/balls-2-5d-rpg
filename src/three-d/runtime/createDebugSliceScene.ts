@@ -2049,7 +2049,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     const levelKeys = Object.keys(mapData.levels);
-    const inferredLevel = inferLevelFromFootY(player.position.y, levelKeys, {
+    const aquatic = getAquaticSampleAt(player.position.x, player.position.z, activeLevel);
+    const unsunkFootY = player.position.y - (aquatic.mode !== "dry" ? aquatic.sinkOffset : 0);
+    const inferredLevel = inferLevelFromFootY(unsunkFootY, levelKeys, {
       levelToWorldY,
       parseLevelNumber,
       levelHeightUnits: LEVEL_HEIGHT,
