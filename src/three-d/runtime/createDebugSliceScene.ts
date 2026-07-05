@@ -108,6 +108,7 @@ import {
   type TileSurfaceContext,
 } from "./TileSurfaceResolver";
 import { LEVEL_HEIGHT, WALL_HEIGHT, WALK_SURFACE } from "../../constants/World";
+import { CollisionWorld } from "./CollisionWorld";
 import {
    isFloorLevelRamp,
    resolveTileHeight,
@@ -117,7 +118,6 @@ import {
   resolveVerticalVisibleLevels,
 } from "./VerticalLevelVisibility3D";
 import { findFirstBlockingTileOnWorldLine } from "./WallRevealLos";
-import { inferLevelFromFootY } from "./NaturalFloorLevel3D";
 import {
   probeHoleLevelTransition,
   STAIR_LANDING_LOCAL_Z,
@@ -1899,6 +1899,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       { levelHeightUnits: LEVEL_HEIGHT, feetClearance: FEET_CLEARANCE, floorSlabThickness: WALK_SURFACE, floorRimOffset: WATER_HOLE_RIM_OFFSET },
     );
 
+  const collisionWorld = new CollisionWorld(
+    levelToWorldY,
+    getMapTileAt,
+    (symbol) => symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+    parseLevelNumber,
+    { levelHeight: LEVEL_HEIGHT, floorSurfaceY: WALK_SURFACE, feetClearance: FEET_CLEARANCE },
+  );
+
   const getGroundSurfaceY = (worldX: number, worldZ: number, level: string) => {
     if (!levelBinaryCache.has(level)) {
       return levelToWorldY(level) + WALK_SURFACE;
@@ -2032,77 +2040,22 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (!mapData?.levels) {
       return;
     }
-    if (verticalTransitionGuard) {
-      if (performance.now() <= verticalTransitionGuard.untilMs) {
-        const tileX = Math.floor(player.position.x);
-        const tileZ = Math.floor(player.position.z);
-        if (
-          tileX === verticalTransitionGuard.tileX &&
-          tileZ === verticalTransitionGuard.tileZ
-        ) {
-          return;
-        }
-      } else {
-        verticalTransitionGuard = null;
-      }
-    }
-
-    // Stair-based level changes share the same cooldown as ramp/hole transitions.
-    // This prevents rapid re-triggering when the player is still inside the exit
-    // zone after a level change (the floor-cascade bug on stacked stair columns).
-    if (levelTransitionCooldown > 0) {
-      return;
-    }
-
     if (holeFallLandingLevel || isPlayerOverVoidAtLevel(activeLevel)) {
       return;
     }
 
-    // Stairs use discrete transition (teleport to landing) — block foot-height
-    // level inference for them.  Floor-level ramps are continuous inclines —
-    // let inferLevelFromFootY handle the transition naturally (FPS-style).
-    const tileX = Math.floor(player.position.x);
-    const tileZ = Math.floor(player.position.z);
-    const symbol = getMapTileAt(activeLevel, tileX, tileZ);
-    const tileDef = symbol
-      ? mapData.tileDefinitions?.[symbol]
-      : undefined;
-    if (tileDef?.stairDir || tileDef?.geometryProfile === "stair") {
-      return;
-    }
-
-    if (!symbol || symbol === "...") {
-      // Void tile on current level may sit directly above a floor-level ramp
-      // on the level below (the chunk builder removes the slab there).  Allow
-      // foot-height inference so the player can descend naturally.
-      const levelNum = parseLevelNumber(activeLevel);
-      const belowLevel = String(levelNum - 1);
-      const belowSym = mapData.levels?.[belowLevel]
-        ? getMapTileAt(belowLevel, tileX, tileZ)
-        : null;
-      const belowDef = belowSym && belowSym !== "..."
-        ? mapData.tileDefinitions?.[belowSym]
-        : undefined;
-      if (!(belowDef && isFloorLevelRamp(belowDef, LEVEL_HEIGHT))) {
-        return;
-      }
-    }
-
-    const inferred = inferLevelFromFootY(
+    const floor = collisionWorld.queryFloor(
+      player.position.x,
+      player.position.z,
       player.position.y,
+      player.position.y + HERO_BODY_HEIGHT,
       Object.keys(mapData.levels),
-      {
-        levelToWorldY,
-        parseLevelNumber,
-        levelHeightUnits: LEVEL_HEIGHT,
-        floorSurfaceY: WALK_SURFACE,
-      },
     );
+    if (!floor) return;
 
-    if (inferred !== activeLevel) {
-      applyActiveLevelChange(inferred, undefined, { natural: true });
-      snapFootToGradedSurface(inferred, moveStartX, moveStartZ);
-      levelTransitionCooldown = 0.35;
+    if (floor.level !== activeLevel) {
+      applyActiveLevelChange(floor.level, undefined, { natural: true });
+      snapFootToGradedSurface(floor.level, moveStartX, moveStartZ);
     }
   };
 
@@ -2181,13 +2134,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         const endDef = endSymbol ? mapDataCache?.tileDefinitions?.[endSymbol] : undefined;
         const endIsSameRamp = endDef?.geometryProfile === profile;
         if (profile === "ramp-n" || profile === "ramp-s") {
-          // North-South ramp: walking East or West is walking off the side cliff
           if (startTileX !== endTileX && !endIsSameRamp) {
             isGrounded = false;
             return;
           }
         } else if (profile === "ramp-e" || profile === "ramp-w") {
-          // East-West ramp: walking North or South is walking off the side cliff
           if (startTileZ !== endTileZ && !endIsSameRamp) {
             isGrounded = false;
             return;
@@ -2196,21 +2147,30 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
-    const levelGround = getHighestGroundWithinStepLimit(
+    const mapData = mapDataCache;
+    if (!mapData?.levels) { isGrounded = false; return; }
+    const floor = collisionWorld.queryFloor(
       player.position.x,
       player.position.z,
       player.position.y,
+      player.position.y + HERO_BODY_HEIGHT,
+      Object.keys(mapData.levels),
     );
-    if (!levelGround) {
+    if (!floor) {
       isGrounded = false;
       return;
     }
-    const resolvedLevel = levelGround.level;
-    const aquatic = getAquaticSampleAt(player.position.x, player.position.z, resolvedLevel);
+    // Prevent snapping to a surface too far above the player's current foot
+    // (preserves the step-up constraint from the old getHighestGroundWithinStepLimit).
+    if (floor.footY > player.position.y + 0.45) {
+      isGrounded = false;
+      return;
+    }
+    const aquatic = getAquaticSampleAt(player.position.x, player.position.z, floor.level);
     if (aquatic.mode === "dry") {
-      player.position.y = levelGround.footY;
+      player.position.y = floor.footY;
     } else {
-      player.position.y = levelGround.footY + aquatic.sinkOffset;
+      player.position.y = floor.footY + aquatic.sinkOffset;
     }
   };
 
@@ -2295,61 +2255,32 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return false;
     }
 
-    const blockVoidForPlayer =
-      Boolean(options?.blockVoidForPlayer) && playerState.isFallSafetyEnabled();
+    if (worldX < 0 || worldZ < 0 || worldX >= mapData.width || worldZ >= mapData.height) {
+      return true;
+    }
+
     const footY = options?.footY ?? player.position.y;
+    const headY = footY + HERO_BODY_HEIGHT;
+    const levelKeys = Object.keys(mapData.levels || {});
 
-    const samplePoints: Array<[number, number]> = [
-      [worldX, worldZ],
-      [worldX - radius, worldZ],
-      [worldX + radius, worldZ],
-      [worldX, worldZ - radius],
-      [worldX, worldZ + radius],
-    ];
+    // Volume overlap check — replaces all old tile-level lookups
+    if (collisionWorld.isHorizontalBlocked(worldX, worldZ, footY, headY, radius, levelKeys)) {
+      return true;
+    }
 
-    for (let i = 0; i < samplePoints.length; i++) {
-      const [sx, sz] = samplePoints[i];
-      if (sx < 0 || sz < 0 || sx >= mapData.width || sz >= mapData.height) {
-        return true;
-      }
-
-      if (isBlockedByUpperFloorSlabAt(sx, sz, footY)) {
-        return true;
-      }
-
-      const tileX = Math.floor(sx);
-      const tileY = Math.floor(sz);
+    // Fall-safety void check (center point only)
+    if (Boolean(options?.blockVoidForPlayer) && playerState.isFallSafetyEnabled()) {
+      const tx = Math.floor(worldX);
+      const tz = Math.floor(worldZ);
       const levelNum = Math.floor(footY / LEVEL_HEIGHT);
       const checkLevel = String(levelNum);
-
       const symbol = mapData.levels?.[checkLevel]
-        ? getMapTileAt(checkLevel, tileX, tileY)
+        ? getMapTileAt(checkLevel, tx, tz)
         : null;
-      const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
-
-      // Block entry if target ground Y is too high, except when transitioning within same ramp/stair incline
-      const currentTileX = Math.floor(player.position.x);
-      const currentTileZ = Math.floor(player.position.z);
-      const currentLevel = String(Math.floor(player.position.y / LEVEL_HEIGHT));
-      const currentSymbol = getMapTileAt(currentLevel, currentTileX, currentTileZ);
-      const currentDef = currentSymbol ? mapDataCache?.tileDefinitions?.[currentSymbol] : undefined;
-
-      const isCurrentGraded = currentDef && (currentDef.geometryProfile?.startsWith("ramp-") || currentDef.geometryProfile === "stair" || currentDef.stairDir);
-      const isTargetGraded = tileDef && (tileDef.geometryProfile?.startsWith("ramp-") || tileDef.geometryProfile === "stair" || tileDef.stairDir);
-
-      if (!(isCurrentGraded && isTargetGraded)) {
-        const sampleGroundY = getGroundFootY(sx, sz, checkLevel);
-        if (sampleGroundY > footY + 0.45) {
-          return true;
-        }
-      }
-
-      const checkVoid = blockVoidForPlayer && (i === 0);
-      if (checkVoid && isVoidSymbol(symbol)) {
-        // Void tile above a floor-level ramp is walkable (ramp fills the space).
+      if (symbol === "..." || !symbol) {
         const belowLevel = String(levelNum - 1);
         const belowSym = mapData.levels?.[belowLevel]
-          ? getMapTileAt(belowLevel, tileX, tileY)
+          ? getMapTileAt(belowLevel, tx, tz)
           : null;
         const belowDef = belowSym && belowSym !== "..."
           ? mapData.tileDefinitions?.[belowSym]
@@ -2357,15 +2288,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         if (!(belowDef && isGradedWalkTile(belowDef, LEVEL_HEIGHT))) {
           return true;
         }
-      }
-      if (
-        isBlockingTile(symbol, tileDef, {
-          level: checkLevel,
-          tileX,
-          tileY,
-        })
-      ) {
-        return true;
       }
     }
 
@@ -4023,6 +3945,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         throw new Error(`Map metadata missing (${response.status})`);
       }
       mapDataCache = (await response.json()) as SliceMapData;
+      if (mapDataCache && mapDataCache.width && mapDataCache.height) {
+        collisionWorld.rebuild(
+          Object.keys(mapDataCache.levels || {}),
+          mapDataCache.width,
+          mapDataCache.height,
+        );
+      }
       return mapDataCache;
     } catch (error) {
       console.warn(
@@ -6495,101 +6424,27 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     worldZ: number,
     footY: number,
   ): boolean => {
-    const currentLevelNum = Math.floor(footY / LEVEL_HEIGHT);
-    const upperLevel = String(currentLevelNum + 1);
-    if (!mapDataCache?.levels?.[upperLevel]) {
-      return false;
-    }
-
-    const checkLevel = String(currentLevelNum);
-
-    // Stairs/ramps climb through the slab band — never treat as a pit lip.
-    if (
-      isGradedWalkAt(player.position.x, player.position.z, checkLevel) ||
-      isGradedWalkAt(worldX, worldZ, checkLevel)
-    ) {
-      return false;
-    }
-    // Floor-level ramp on the current level fills the slab band of the upper
-    // level — the chunk builder omits the slab mesh there, so no physical
-    // ceiling exists to collide with.
-    const slabTileX = Math.floor(worldX);
-    const slabTileZ = Math.floor(worldZ);
-    const currentSymbolForSlab = getMapTileAt(checkLevel, slabTileX, slabTileZ);
-    const currentDefForSlab = currentSymbolForSlab
-      ? mapDataCache?.tileDefinitions?.[currentSymbolForSlab]
-      : undefined;
-    if (currentDefForSlab && isGradedWalkTile(currentDefForSlab, LEVEL_HEIGHT)) {
-      return false;
-    }
-    const playerTileX = Math.floor(player.position.x);
-    const playerTileZ = Math.floor(player.position.z);
-    const playerSymbolForSlab = getMapTileAt(checkLevel, playerTileX, playerTileZ);
-    const playerDefForSlab = playerSymbolForSlab
-      ? mapDataCache?.tileDefinitions?.[playerSymbolForSlab]
-      : undefined;
-    if (playerDefForSlab && isGradedWalkTile(playerDefForSlab, LEVEL_HEIGHT)) {
-      return false;
-    }
-
-    const tileX = Math.floor(worldX);
-    const tileZ = Math.floor(worldZ);
-    const upperSymbol = getMapTileAt(upperLevel, tileX, tileZ);
-    if (
-      isGradedWalkTile(
-        upperSymbol ? mapDataCache?.tileDefinitions?.[upperSymbol] : undefined,
-        LEVEL_HEIGHT,
-      )
-    ) {
-      return false;
-    }
-
-    const slabBottomY = levelToWorldY(upperLevel);
-    const slabTopY = slabBottomY + WALK_SURFACE;
-    const headY = footY + HERO_BODY_HEIGHT;
-    if (headY <= slabBottomY + 0.02) {
-      return false;
-    }
-    if (footY >= slabTopY - 0.08) {
-      return false;
-    }
-
-    return isSolidCeilingTileAt(upperLevel, tileX, tileZ);
+    if (!mapDataCache?.levels) return false;
+    const result = collisionWorld.query(
+      worldX, worldZ,
+      footY, footY + HERO_BODY_HEIGHT,
+      Object.keys(mapDataCache.levels),
+    );
+    if (!result.ceiling) return false;
+    return result.ceiling.bottomY <= footY + HERO_BODY_HEIGHT;
   };
 
   /** Feet Y cap when standing under solid geometry on the level above (column-only). */
   const resolveUpperLevelCeilingFeetCap = (): number | null => {
-    const upperLevel = String(activeLevelNumber + 1);
-    if (!mapDataCache?.levels?.[upperLevel]) {
-      return null;
-    }
-    const tileX = Math.floor(player.position.x);
-    const tileZ = Math.floor(player.position.z);
-    if (isGradedWalkAt(player.position.x, player.position.z, activeLevel)) {
-      return null;
-    }
-    // Floor-level ramp opens the passage between levels — no ceiling cap.
-    const ceilCheckSymbol = getMapTileAt(activeLevel, tileX, tileZ);
-    const ceilCheckDef = ceilCheckSymbol
-      ? mapDataCache?.tileDefinitions?.[ceilCheckSymbol]
-      : undefined;
-    if (ceilCheckDef && isFloorLevelRamp(ceilCheckDef, LEVEL_HEIGHT)) {
-      return null;
-    }
-    if (!isSolidCeilingTileAt(upperLevel, tileX, tileZ)) {
-      return null;
-    }
-    const slabBottomY = levelToWorldY(upperLevel);
-    const headY = player.position.y + HERO_BODY_HEIGHT;
-    // Only cap when the head reaches the underside — not when beside the slab in a pit column.
-    if (headY < slabBottomY - 0.04) {
-      return null;
-    }
-    return (
-      slabBottomY -
-      CEILING_BODY_CLEARANCE -
-      HERO_BODY_HEIGHT
+    if (!mapDataCache?.levels) return null;
+    const result = collisionWorld.query(
+      player.position.x, player.position.z,
+      player.position.y, player.position.y + HERO_BODY_HEIGHT,
+      Object.keys(mapDataCache.levels),
     );
+    if (!result.ceiling || result.ceiling.isGraded) return null;
+    if (player.position.y + HERO_BODY_HEIGHT < result.ceiling.bottomY - 0.04) return null;
+    return result.ceiling.bottomY - CEILING_BODY_CLEARANCE - HERO_BODY_HEIGHT;
   };
 
   const resolveJumpImpulseForHeadroom = (): number => {
@@ -6608,20 +6463,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const applyCeilingCollisionToVerticalMotion = () => {
-    // Ramps are continuous inclines — ceiling collision would trap the player
-    // in a push-up / push-down loop between the ramp surface and the slab above.
-    if (isGradedWalkAt(player.position.x, player.position.z, activeLevel)) {
-      return;
-    }
-    const feetCap = resolveUpperLevelCeilingFeetCap();
-    if (feetCap == null) {
-      return;
-    }
-    if (player.position.y > feetCap) {
-      player.position.y = feetCap;
-      if (verticalVelocity > 0) {
-        verticalVelocity = 0;
-      }
+    if (!mapDataCache?.levels) return;
+    const result = collisionWorld.query(
+      player.position.x, player.position.z,
+      player.position.y, player.position.y + HERO_BODY_HEIGHT,
+      Object.keys(mapDataCache.levels),
+    );
+    if (!result.ceiling || result.ceiling.isGraded) return;
+    const maxY = result.ceiling.bottomY - CEILING_BODY_CLEARANCE - HERO_BODY_HEIGHT;
+    if (player.position.y > maxY) {
+      player.position.y = maxY;
+      if (verticalVelocity > 0) verticalVelocity = 0;
     }
   };
 
