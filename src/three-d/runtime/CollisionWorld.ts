@@ -109,7 +109,7 @@ export type CollisionWorldOptions = {
  * No tile-definition lookups at query time — pure geometry collision.
  */
 export class CollisionWorld {
-  private volumes: CollisionVolume[] = [];
+  public volumes: CollisionVolume[] = [];
   private levelHeight: number;
   private floorSurfaceY: number;
   private feetClearance: number;
@@ -353,6 +353,16 @@ export class CollisionWorld {
     // Filter volumes by level
     const levelSet = new Set(levelKeys);
 
+    // Quick pass to check if the player's center overlaps any wedge (ramp) on the current level.
+    let onRamp = false;
+    for (const v of this.volumes) {
+      if (!levelSet.has(v.level)) continue;
+      if (v.kind === "wedge" && x >= v.x1 && x < v.x2 && z >= v.z1 && z < v.z2) {
+        onRamp = true;
+        break;
+      }
+    }
+
     for (const v of this.volumes) {
       if (!levelSet.has(v.level)) continue;
 
@@ -391,12 +401,18 @@ export class CollisionWorld {
         if (vLvlNum <= playerLvlNum) {
           continue;
         }
+        // If the player is standing on a ramp, the floor slabs of the level immediately
+        // above (which they are transitioning to) should not act as ceilings.
+        if (onRamp && vLvlNum === playerLvlNum + 1) {
+          continue;
+        }
       }
 
       // A volume creates a ceiling when the player's body is below the volume's bottom.
       // Only consider ceilings within 0.04 units of the player's head.
+      // The bottom of the ceiling must be at least 0.45 units above the player's feet.
       const cY = v.kind === "aabb" ? v.y1 : Math.min(v.baseY, v.highY);
-      if (cY > footY - 0.01 && headY > cY - 0.04) {
+      if (cY > footY + 0.45 && headY > cY - 0.04) {
         const isGraded = v.kind === "wedge";
         if (!bestCeiling || cY < bestCeiling.bottomY) {
           bestCeiling = { bottomY: cY, level: v.level, isGraded };

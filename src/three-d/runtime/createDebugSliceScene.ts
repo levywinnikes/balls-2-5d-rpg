@@ -2120,6 +2120,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     } else {
       player.position.y = floor.footY + aquatic.sinkOffset;
     }
+    if (floor.level !== activeLevel) {
+      applyActiveLevelChange(floor.level, undefined, { natural: true });
+    }
   };
 
   const getPropTileKey = (tileX: number, tileY: number) =>
@@ -3903,6 +3906,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           mapDataCache.width,
           mapDataCache.height,
         );
+        rebuildDebugColliderMeshes();
       }
       return mapDataCache;
     } catch (error) {
@@ -3937,6 +3941,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       mapData.width ?? 0,
       mapData.height ?? 0,
     );
+    rebuildDebugColliderMeshes();
     worldMapReady = true;
   };
 
@@ -6878,6 +6883,130 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerState.log("action_cast_rune", { runeId }, "#ff8800");
   };
 
+  let debugCollidersVisible = false;
+  let debugColliderParent: TransformNode | null = null;
+  let playerDebugMesh: Mesh | null = null;
+
+  const createWedgeMesh = (v: any, parent: TransformNode) => {
+    const mesh = new Mesh("wedge_" + v.level, scene);
+    mesh.parent = parent;
+
+    const x1 = v.x1, x2 = v.x2;
+    const z1 = v.z1, z2 = v.z2;
+    const baseY = v.baseY, highY = v.highY;
+
+    let y_nw = baseY, y_ne = baseY, y_sw = baseY, y_se = baseY;
+    if (v.direction === "n") {
+      y_nw = highY; y_ne = highY;
+    } else if (v.direction === "s") {
+      y_sw = highY; y_se = highY;
+    } else if (v.direction === "e") {
+      y_ne = highY; y_se = highY;
+    } else if (v.direction === "w") {
+      y_nw = highY; y_sw = highY;
+    }
+
+    const positions = [
+      x1, baseY, z1,
+      x2, baseY, z1,
+      x2, baseY, z2,
+      x1, baseY, z2,
+      x1, y_sw, z1,
+      x2, y_se, z1,
+      x2, y_ne, z2,
+      x1, y_nw, z2,
+    ];
+
+    const indices = [
+      0, 2, 1,  0, 3, 2,
+      4, 5, 6,  4, 6, 7,
+      0, 1, 5,  0, 5, 4,
+      1, 2, 6,  1, 6, 5,
+      2, 3, 7,  2, 7, 6,
+      3, 0, 4,  3, 4, 7
+    ];
+
+    const normals: number[] = [];
+    VertexData.ComputeNormals(positions, indices, normals);
+
+    const vertexData = new VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+    vertexData.normals = normals;
+    vertexData.applyToMesh(mesh);
+
+    return mesh;
+  };
+
+  const rebuildDebugColliderMeshes = () => {
+    if (debugColliderParent) {
+      debugColliderParent.dispose();
+      debugColliderParent = null;
+    }
+    if (playerDebugMesh) {
+      playerDebugMesh.dispose();
+      playerDebugMesh = null;
+    }
+    if (!debugCollidersVisible) return;
+
+    debugColliderParent = new TransformNode("debugCollidersParent", scene);
+
+    const matWalkable = new StandardMaterial("matWalkable", scene);
+    matWalkable.diffuseColor = new Color3(0, 1, 0);
+    matWalkable.alpha = 0.3;
+    matWalkable.backFaceCulling = false;
+
+    const matSolid = new StandardMaterial("matSolid", scene);
+    matSolid.diffuseColor = new Color3(1, 0, 0);
+    matSolid.alpha = 0.3;
+    matSolid.backFaceCulling = false;
+
+    for (const v of collisionWorld.volumes) {
+      let mesh: Mesh;
+      if (v.kind === "aabb") {
+        mesh = MeshBuilder.CreateBox("aabb_" + v.level, {
+          width: v.x2 - v.x1,
+          height: v.y2 - v.y1,
+          depth: v.z2 - v.z1,
+        }, scene);
+        mesh.parent = debugColliderParent;
+        mesh.position.set(
+          (v.x1 + v.x2) / 2,
+          (v.y1 + v.y2) / 2,
+          (v.z1 + v.z2) / 2,
+        );
+      } else {
+        mesh = createWedgeMesh(v, debugColliderParent);
+      }
+      mesh.material = v.isWalkable ? matWalkable : matSolid;
+    }
+  };
+
+  const updatePlayerDebugMesh = () => {
+    if (!debugCollidersVisible) {
+      if (playerDebugMesh) {
+        playerDebugMesh.dispose();
+        playerDebugMesh = null;
+      }
+      return;
+    }
+
+    if (!playerDebugMesh) {
+      playerDebugMesh = MeshBuilder.CreateCylinder("playerDebug", {
+        diameter: 0.64,
+        height: HERO_BODY_HEIGHT,
+      }, scene);
+      const mat = new StandardMaterial("playerDebugMat", scene);
+      mat.diffuseColor = new Color3(0, 0, 1);
+      mat.alpha = 0.4;
+      playerDebugMesh.material = mat;
+    }
+
+    playerDebugMesh.position.x = player.position.x;
+    playerDebugMesh.position.y = player.position.y + HERO_BODY_HEIGHT / 2;
+    playerDebugMesh.position.z = player.position.z;
+  };
+
   const onKeyDown = (event: KeyboardEvent) => {
     if (gameplayPaused || isPlayerDeathSequenceActive) {
       return;
@@ -6898,6 +7027,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         }
       }
       event.preventDefault();
+    }
+
+    if (key === "g" && !event.repeat) {
+      debugCollidersVisible = !debugCollidersVisible;
+      rebuildDebugColliderMeshes();
+      // eslint-disable-next-line no-console
+      console.warn(`[DEBUG] Collision visualization: ${debugCollidersVisible ? "ON" : "OFF"}`);
     }
 
     if (key === "v" && !event.repeat) {
@@ -8009,6 +8145,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       player.position.x * 32,
       player.position.z * 32,
     );
+
+    updatePlayerDebugMesh();
   });
 
   // ── Fase 2 (2.2): SaveSystem instance for 3D save/load ─────────────────────
