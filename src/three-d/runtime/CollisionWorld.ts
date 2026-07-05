@@ -343,6 +343,7 @@ export class CollisionWorld {
     x: number, z: number,
     footY: number, headY: number,
     levelKeys: string[],
+    activeLevel?: string,
     maxFootY?: number,
   ): { floor: { surfaceY: number; footY: number; level: string; isGraded: boolean } | null;
        ceiling: { bottomY: number; level: string; isGraded: boolean } | null } {
@@ -383,6 +384,15 @@ export class CollisionWorld {
       }
 
       // --- Ceiling ---
+      // Walkable volumes (floors/ramps) on or below the player's activeLevel cannot be ceilings.
+      if (v.isWalkable && activeLevel !== undefined) {
+        const playerLvlNum = this.parseLevelNum(activeLevel);
+        const vLvlNum = this.parseLevelNum(v.level);
+        if (vLvlNum <= playerLvlNum) {
+          continue;
+        }
+      }
+
       // A volume creates a ceiling when the player's body is below the volume's bottom.
       // Only consider ceilings within 0.04 units of the player's head.
       const cY = v.kind === "aabb" ? v.y1 : Math.min(v.baseY, v.highY);
@@ -403,7 +413,7 @@ export class CollisionWorld {
     levelKeys: string[],
     maxFootY?: number,
   ): { surfaceY: number; footY: number; level: string; isGraded: boolean } | null {
-    return this.query(x, z, footY, headY, levelKeys, maxFootY).floor;
+    return this.query(x, z, footY, headY, levelKeys, undefined, maxFootY).floor;
   }
 
   /**

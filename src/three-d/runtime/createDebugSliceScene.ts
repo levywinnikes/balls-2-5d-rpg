@@ -6434,26 +6434,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       player.position.x, player.position.z,
       player.position.y, player.position.y + HERO_BODY_HEIGHT,
       Object.keys(mapDataCache.levels),
+      activeLevel,
     );
     if (!result.ceiling || result.ceiling.isGraded) return;
-
-    if (isGrounded) {
-      const floor = collisionWorld.queryFloor(
-        player.position.x,
-        player.position.z,
-        player.position.y - 0.45,
-        player.position.y + HERO_BODY_HEIGHT,
-        Object.keys(mapDataCache.levels),
-      );
-      if (floor && floor.isGraded) {
-        const playerLevelNum = parseLevelNumber(activeLevel);
-        const ceilingLevelNum = parseLevelNumber(result.ceiling.level);
-        if (ceilingLevelNum > playerLevelNum) {
-          return;
-        }
-      }
-    }
-
     const maxY = result.ceiling.bottomY - CEILING_BODY_CLEARANCE - HERO_BODY_HEIGHT;
     if (player.position.y > maxY) {
       player.position.y = maxY;
