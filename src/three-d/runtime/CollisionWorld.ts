@@ -397,6 +397,8 @@ export class CollisionWorld {
 
   /**
    * Check if the capsule at (x, z) with Y-range [footY, headY] overlaps any solid volume.
+   * Uses proper circle-vs-AABB 2D overlap instead of discrete probe points so that
+   * wedge/ramp volumes are detected from all directions (not just cardinal approach).
    */
   isHorizontalBlocked(
     x: number, z: number,
@@ -404,17 +406,20 @@ export class CollisionWorld {
     radius: number,
     levelKeys: string[],
   ): boolean {
-    const pts: Array<[number, number]> = [
-      [x, z],
-      [x - radius, z], [x + radius, z],
-      [x, z - radius], [x, z + radius],
-    ];
+    const radiusSq = radius * radius;
+    const levelSet = new Set(levelKeys);
 
-    for (const [px, pz] of pts) {
-      for (const v of this.volumes) {
-        if (!levelKeys.includes(v.level)) continue;
-        if (volumeOverlapsSegment(v, px, pz, footY, headY)) return true;
-      }
+    for (const v of this.volumes) {
+      if (!levelSet.has(v.level)) continue;
+
+      // Circle-vs-AABB 2D overlap: closest point on volume footprint to capsule center
+      const closestX = Math.max(v.x1, Math.min(x, v.x2));
+      const closestZ = Math.max(v.z1, Math.min(z, v.z2));
+      const dx = x - closestX;
+      const dz = z - closestZ;
+      if (dx * dx + dz * dz >= radiusSq) continue;
+
+      if (volumeOverlapsSegment(v, closestX, closestZ, footY, headY)) return true;
     }
     return false;
   }

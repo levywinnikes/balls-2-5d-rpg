@@ -108,6 +108,7 @@ import {
   type TileSurfaceContext,
 } from "./TileSurfaceResolver";
 import { LEVEL_HEIGHT, WALL_HEIGHT, WALK_SURFACE } from "../../constants/World";
+import { inferLevelFromFootY } from "./NaturalFloorLevel3D";
 import { CollisionWorld } from "./CollisionWorld";
 import {
    isFloorLevelRamp,
@@ -2043,19 +2044,22 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (holeFallLandingLevel || isPlayerOverVoidAtLevel(activeLevel)) {
       return;
     }
+    if (levelTransitionCooldown > 0) {
+      return;
+    }
 
-    const floor = collisionWorld.queryFloor(
-      player.position.x,
-      player.position.z,
-      player.position.y,
-      player.position.y + HERO_BODY_HEIGHT,
-      Object.keys(mapData.levels),
-    );
-    if (!floor) return;
+    const levelKeys = Object.keys(mapData.levels);
+    const inferredLevel = inferLevelFromFootY(player.position.y, levelKeys, {
+      levelToWorldY,
+      parseLevelNumber,
+      levelHeightUnits: LEVEL_HEIGHT,
+      floorSurfaceY: WALK_SURFACE,
+    });
 
-    if (floor.level !== activeLevel) {
-      applyActiveLevelChange(floor.level, undefined, { natural: true });
-      snapFootToGradedSurface(floor.level, moveStartX, moveStartZ);
+    if (inferredLevel !== activeLevel) {
+      levelTransitionCooldown = 0.35;
+      applyActiveLevelChange(inferredLevel, undefined, { natural: true });
+      snapFootToGradedSurface(inferredLevel, moveStartX, moveStartZ);
     }
   };
 
