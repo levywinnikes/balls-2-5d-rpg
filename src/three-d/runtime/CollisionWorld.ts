@@ -5,6 +5,25 @@ import { resolveRampRise, isFloorLevelRamp } from "./TileWorldY";
 import { LEVEL_HEIGHT, WALK_SURFACE, FEET_CLEARANCE } from "../../constants/World";
 
 // ---------------------------------------------------------------------------
+// Guard helpers
+// ---------------------------------------------------------------------------
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+function guardFinite(...values: number[]): boolean {
+  for (const v of values) {
+    if (!isFiniteNumber(v)) return true;
+  }
+  return false;
+}
+
+function guardLevelKeys(keys: string[]): boolean {
+  return !Array.isArray(keys) || keys.length === 0;
+}
+
+// ---------------------------------------------------------------------------
 // Volume types
 // ---------------------------------------------------------------------------
 
@@ -136,6 +155,10 @@ export class CollisionWorld {
 
   /** Rebuild all volumes from the given level keys. Call whenever map data changes. */
   rebuild(levelKeys: string[], mapWidth: number, mapHeight: number): void {
+    if (guardLevelKeys(levelKeys) || guardFinite(mapWidth, mapHeight) || mapWidth <= 0 || mapHeight <= 0) {
+      this.volumes = [];
+      return;
+    }
     this.volumes = [];
     for (const level of levelKeys) {
       const baseY = this.levelToWorldY(level);
@@ -152,7 +175,9 @@ export class CollisionWorld {
    * tileX/tileZ are chunk-aligned tile coordinates.
    */
   buildChunk(level: string, chunkTileX: number, chunkTileZ: number, chunkSize: number): void {
+    if (!level || guardFinite(chunkTileX, chunkTileZ, chunkSize) || chunkSize <= 0) return;
     const baseY = this.levelToWorldY(level);
+    if (!isFiniteNumber(baseY)) return;
     for (let dz = 0; dz < chunkSize; dz++) {
       for (let dx = 0; dx < chunkSize; dx++) {
         const tx = chunkTileX + dx;
@@ -164,6 +189,7 @@ export class CollisionWorld {
 
   /** Build and add collision volume(s) for a single tile. */
   private buildTileVolume(level: string, baseY: number, tx: number, tz: number): void {
+    if (!level || guardFinite(baseY, tx, tz) || tx < 0 || tz < 0) return;
     const symbol = this.getTile(level, tx, tz);
     if (!symbol || symbol === "...") {
       // Void: no volume. A floor-level ramp on the level below will
@@ -351,6 +377,9 @@ export class CollisionWorld {
     maxFootY?: number,
   ): { floor: { surfaceY: number; footY: number; level: string; isGraded: boolean } | null;
         ceiling: { bottomY: number; level: string; isGraded: boolean } | null } {
+    if (guardFinite(x, z, footY, headY) || guardLevelKeys(levelKeys)) {
+      return { floor: null, ceiling: null };
+    }
     let bestFloor: { surfaceY: number; footY: number; level: string; isGraded: boolean } | null = null;
     let bestCeiling: { bottomY: number; level: string; isGraded: boolean } | null = null;
 
@@ -447,6 +476,9 @@ export class CollisionWorld {
     radius: number,
     levelKeys: string[],
   ): boolean {
+    if (guardFinite(x, z, footY, headY, radius) || guardLevelKeys(levelKeys)) {
+      return false;
+    }
     const radiusSq = radius * radius;
     const levelSet = new Set(levelKeys);
 
@@ -498,6 +530,9 @@ export class CollisionWorld {
     radius: number,
     levelKeys: string[],
   ): [number, number] | null {
+    if (guardFinite(x, z, footY, headY, radius) || guardLevelKeys(levelKeys)) {
+      return null;
+    }
     const radiusSq = radius * radius;
     const epsilon = 0.01;
     const levelSet = new Set(levelKeys);
