@@ -1783,12 +1783,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     try {
       const response = await fetch(`/maps/${binFile}`);
       if (!response.ok) {
+        console.warn(`[3D Slice] Level binary fetch failed for ${level} (${response.status})`);
         return null;
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
       levelBinaryCache.set(level, bytes);
       return bytes;
-    } catch {
+    } catch (error) {
+      console.warn(`[3D Slice] Level binary fetch error for ${level}`, error);
       return null;
     }
   };
@@ -5431,58 +5433,70 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       poll();
     });
 
-  const bootstrapWorldSession = async () => {
+  const bootstrapWorldSession = async (retries = 3, baseDelayMs = 2000) => {
     pushLogEvent("world.bootstrap.start", { map: sliceMapName, level: getCurrentLevel() });
-    try {
-      await ensureMapLevelReady(getCurrentLevel());
-      snapPlayerFootToActiveLevel();
-      await waitForSpawnChunkReady();
-      snapPlayerFootToActiveLevel();
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delay = baseDelayMs * Math.pow(2, attempt - 1);
+          console.warn(`[3D Slice] Bootstrap attempt ${attempt + 1}/${retries + 1} after ${delay}ms`);
+          await new Promise((r) => setTimeout(r, delay));
+        }
 
-      const tileX = Math.floor(player.position.x);
-      const tileZ = Math.floor(player.position.z);
-      const supportSymbol = getMapTileAt(getCurrentLevel(), tileX, tileZ);
-      if (isVoidSymbol(supportSymbol)) {
-        throw new Error(
-          `[3D Slice] Invalid spawn tile (${tileX},${tileZ}) on level ${getCurrentLevel()}`,
+        await ensureMapLevelReady(getCurrentLevel());
+        snapPlayerFootToActiveLevel();
+        await waitForSpawnChunkReady();
+        snapPlayerFootToActiveLevel();
+
+        const tileX = Math.floor(player.position.x);
+        const tileZ = Math.floor(player.position.z);
+        const supportSymbol = getMapTileAt(getCurrentLevel(), tileX, tileZ);
+        if (isVoidSymbol(supportSymbol)) {
+          throw new Error(
+            `[3D Slice] Invalid spawn tile (${tileX},${tileZ}) on level ${getCurrentLevel()}`,
+          );
+        }
+
+        lastGroundedFootY = player.position.y;
+        fallOriginFootY = player.position.y;
+        isGrounded = true;
+        holeFallLandingLevel = null;
+        holeFallFloorCount = 0;
+        verticalVelocity = 0;
+
+        reanchorWorldContentOnLevel(getRenderLevel());
+        propSystem.syncStream(true);
+
+        worldBootstrapReady = true;
+        setPlayerAvatarVisible(true);
+        camera.setTarget(
+          new Vector3(player.position.x, player.position.y, player.position.z),
         );
+
+        resolveWorldReady?.();
+        document.dispatchEvent(
+          new CustomEvent("slice3d:worldBootstrap", {
+            detail: { ready: true, map: sliceMapName, level: getCurrentLevel() },
+          }),
+        );
+        pushLogEvent("world.bootstrap.ready", {
+          x: Math.round(player.position.x * 100) / 100,
+          y: Math.round(player.position.y * 100) / 100,
+          z: Math.round(player.position.z * 100) / 100,
+        });
+        return;
+      } catch (error) {
+        console.error(`[3D Slice] World bootstrap failed (attempt ${attempt + 1})`, error);
+        if (attempt >= retries) {
+          document.dispatchEvent(
+            new CustomEvent("slice3d:worldBootstrap", {
+              detail: { ready: false, map: sliceMapName, error: String(error) },
+            }),
+          );
+          pushLogEvent("world.bootstrap.failed", { error: String(error), attempts: attempt + 1 });
+          return;
+        }
       }
-
-      lastGroundedFootY = player.position.y;
-      fallOriginFootY = player.position.y;
-      isGrounded = true;
-      holeFallLandingLevel = null;
-      holeFallFloorCount = 0;
-      verticalVelocity = 0;
-
-      reanchorWorldContentOnLevel(getRenderLevel());
-      propSystem.syncStream(true);
-
-      worldBootstrapReady = true;
-      setPlayerAvatarVisible(true);
-      camera.setTarget(
-        new Vector3(player.position.x, player.position.y, player.position.z),
-      );
-
-      resolveWorldReady?.();
-      document.dispatchEvent(
-        new CustomEvent("slice3d:worldBootstrap", {
-          detail: { ready: true, map: sliceMapName, level: getCurrentLevel() },
-        }),
-      );
-      pushLogEvent("world.bootstrap.ready", {
-        x: Math.round(player.position.x * 100) / 100,
-        y: Math.round(player.position.y * 100) / 100,
-        z: Math.round(player.position.z * 100) / 100,
-      });
-    } catch (error) {
-      console.error("[3D Slice] World bootstrap failed", error);
-      document.dispatchEvent(
-        new CustomEvent("slice3d:worldBootstrap", {
-          detail: { ready: false, map: sliceMapName, error: String(error) },
-        }),
-      );
-      pushLogEvent("world.bootstrap.failed", { error: String(error) });
     }
   };
 
