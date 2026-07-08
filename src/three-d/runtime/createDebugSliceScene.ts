@@ -140,13 +140,12 @@ import { RuneRegistry } from "../../core/magic/RuneRegistry";
 import { SaveSystem } from "../../core/systems/SaveSystem";
 import { PropStreamSystem } from "./PropStreamSystem";
 import { EnemyStreamSystem, type SliceEnemy, type EnemySpawnData } from "./EnemyStreamSystem";
+import { DropStreamSystem, type SliceDroppedItem } from "./DropStreamSystem";
 import type {
   GeometryWorkerRequest,
   GeometryWorkerResponse,
   GeometryGroupBuffer,
 } from "../../workers/geometry.worker";
-
-type SliceDroppedItem = DroppedItemData & { level: string };
 
 type SliceRuntime = {
   engine: Engine;
@@ -382,7 +381,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
   /** Props / dropped loot sit on walkable surface (not actor foot clearance). */
   const WORLD_ANCHOR_REST_OFFSET = 0.012;
-  const DROPPED_ITEM_REST_OFFSET = 0.02;
   // Eye line ~58% of hero body height — chest-level FP view (see HERO_FIRST_PERSON_EYE_BODY_RATIO).
   const FIRST_PERSON_EYE_ABOVE_FEET = getHeroFirstPersonEyeHeight();
   const HERO_BODY_HEIGHT = HERO_COLLISION_HEIGHT;
@@ -647,39 +645,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   pickupOrb.material = pickupMaterial;
   let fallbackPickupConsumed = false;
 
-  const droppedItemIconMaterials = new Map<string, StandardMaterial>();
-  const getDroppedItemMaterial = (itemVisualId: string): StandardMaterial => {
-    const cached = droppedItemIconMaterials.get(itemVisualId);
-    if (cached) {
-      return cached;
-    }
-    const mat = new StandardMaterial(
-      `slice-dropped-item-${itemVisualId}`,
-      scene,
-    );
-    mat.backFaceCulling = false;
-    mat.specularColor = Color3.Black();
-    mat.useAlphaFromDiffuseTexture = true;
-    mat.disableLighting = true;
-    mat.emissiveColor = Color3.White();
-    const texture = new Texture(
-      `/assets/items/${itemVisualId}.png`,
-      scene,
-      false,
-      true,
-      Texture.NEAREST_NEAREST,
-    );
-    texture.hasAlpha = true;
-    mat.diffuseTexture = texture;
-    mat.opacityTexture = texture;
-    droppedItemIconMaterials.set(itemVisualId, mat);
-    return mat;
-  };
-  const droppedItemShadowMat = new StandardMaterial("slice-dropped-shadow-mat", scene);
-  droppedItemShadowMat.diffuseColor = Color3.Black();
-  droppedItemShadowMat.specularColor = Color3.Black();
-  droppedItemShadowMat.disableLighting = true;
-
   const getDeterministicRotation = (id: string): number => {
     let hash = 0;
     for (let i = 0; i < id.length; i++) {
@@ -687,10 +652,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
     return (Math.abs(hash) % 360) * (Math.PI / 180);
   };
-
-  const droppedItemMeshes = new Map<string, TransformNode>();
-  const getDroppedItemMeshKey = (level: string, itemId: string) =>
-    `${level}::${itemId}`;
 
   type ActiveSlash = {
     mesh: Mesh;
@@ -841,8 +802,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
   const ENEMY_AI_RADIUS_UNITS = 18;
   const WALL_REVEAL_TARGET_RADIUS_UNITS = 22;
-  const DROP_SYNC_INTERVAL = 0.2;
-
   let qualityStreamConfig = resolveQualityStreamConfig(
     playerState.getDisplaySettings().qualityPreset,
   );
@@ -905,8 +864,28 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const seededEnemyLevels = enemySystem.seededLevels;
   enemySystem.enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
   enemySystem.enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
-  let droppedItemStreamRadiusUnits =
-    streamRadiiUnits.droppedItemStreamRadiusUnits;
+  const seededLevels = new Set<string>();
+  const dropSystem = new DropStreamSystem({
+    scene,
+    mapRoot,
+    getPlayerPosition: () => ({ x: player.position.x, z: player.position.z }),
+    getCurrentLevel: () => getCurrentLevel(),
+    levelToWorldY: (level: string | number) => levelToWorldY(level),
+    worldToSliceCoord: (value: number) => worldToSliceCoord(value),
+    resolveWorldAnchorY: (ix: number, iz: number, level: string, restOffset: number) => resolveWorldAnchorY(ix, iz, level, restOffset),
+    getDeterministicRotation: (id: string) => getDeterministicRotation(id),
+    loadMapDataAsync: () => loadMapData(),
+    getPersistentDroppedItems: (level: string) => playerState.getPersistentDroppedItems(level),
+    addPersistentDroppedItem: (level: string, item: any) => playerState.addPersistentDroppedItem(level, item),
+    removePersistentDroppedItem: (level: string, uid: string) => playerState.removePersistentDroppedItem(level, uid),
+    hasVisitedLevel: (level: string) => playerState.hasVisitedLevel(level),
+    markLevelVisited: (level: string) => playerState.markLevelVisited(level),
+    seededLevels,
+    addItemToContainer: (containerUid: string, itemId: string, count: number) =>
+      playerState.addItemToContainer(containerUid, itemId, count),
+    logWarn: (msg: string) => console.warn(msg),
+  });
+  dropSystem.droppedItemStreamRadiusUnits = streamRadiiUnits.droppedItemStreamRadiusUnits;
 
   const applyQualityStreamConfig = (
     preset: ReturnType<typeof playerState.getDisplaySettings>["qualityPreset"],
@@ -925,7 +904,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     propSystem.propDespawnRadiusUnits = streamRadiiUnits.propDespawnRadiusUnits;
     enemySystem.enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
     enemySystem.enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
-    droppedItemStreamRadiusUnits =
+    dropSystem.droppedItemStreamRadiusUnits =
       streamRadiiUnits.droppedItemStreamRadiusUnits;
   };
   let isFirstPerson = false;
@@ -1987,7 +1966,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
     void ensureLevelDoorsSeeded(newLevel);
     void enemySystem.ensureLevelSeeded(newLevel);
-    void ensureLevelItemsSeeded(newLevel);
+    void dropSystem.ensureLevelSeeded(newLevel);
     void propSystem.ensureLevelSeeded(newLevel);
     // Seed adjacent levels so enemies/props are visible via Y-based visibility
     const newNum = parseLevelNumber(newLevel);
@@ -3283,9 +3262,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       ts: Date.now(),
     };
   };
-  const seededLevels = new Set<string>();
-  const seedingLevels = new Set<string>();
-  let hasRealDroppedItems = false;
   let isAudioReady = false;
 
   const ensureAudioReady = async () => {
@@ -3295,80 +3271,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       isAudioReady = true;
     } catch (error) {
       console.warn("[3D Slice] Audio init failed:", error);
-    }
-  };
-
-  const ensureLevelItemsSeeded = async (level: string) => {
-    if (seededLevels.has(level) || seedingLevels.has(level)) return;
-
-    if (playerState.hasVisitedLevel(level)) {
-      seededLevels.add(level);
-      return;
-    }
-
-    seedingLevels.add(level);
-
-    try {
-      const mapData = await loadMapData();
-      if (!mapData) {
-        throw new Error("Map metadata missing");
-      }
-
-      const tileSize = mapData.tileSize || 32;
-      const levelData = mapData.levels?.[level];
-      const entityTemplates = mapData.entityTemplates || {};
-
-      if (levelData?.entities && Array.isArray(levelData.entities)) {
-        levelData.entities.forEach((entity) => {
-          const entityDef = entityTemplates[entity.symbol];
-          if (!entityDef || entityDef.type !== "item") return;
-
-          const worldX = entity.x * tileSize + tileSize / 2;
-          const worldY = entity.y * tileSize + tileSize / 2;
-          const rawItemUid = entity.uuid || entityDef.uuid;
-          const uniqueId = rawItemUid || `map_${level}_${entity.x}_${entity.y}`;
-
-          playerState.addPersistentDroppedItem(level, {
-            itemId: uniqueId,
-            weaponId: entityDef.id,
-            x: worldX,
-            y: worldY,
-          });
-
-          const contents = entity.contents || entityDef.contents;
-          if (!contents || !Array.isArray(contents)) return;
-
-          contents.forEach((content: { id: string; count: number }) => {
-            const def =
-              WeaponRegistry.getWeaponDefinition(content.id) ||
-              ItemRegistry.getItem(content.id);
-            const isStackable = !!def?.stackable;
-
-            if (isStackable) {
-              playerState.addItemToContainer(
-                uniqueId,
-                content.id,
-                content.count,
-              );
-              return;
-            }
-
-            for (let i = 0; i < content.count; i++) {
-              playerState.addItemToContainer(uniqueId, content.id, 1);
-            }
-          });
-        });
-      }
-
-      playerState.markLevelVisited(level);
-      seededLevels.add(level);
-    } catch (error) {
-      console.warn(
-        `[3D Slice] Failed to seed map items for ${sliceMapName}/${level}`,
-        error,
-      );
-    } finally {
-      seedingLevels.delete(level);
     }
   };
 
@@ -3705,7 +3607,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const pickupRange = playerState.pickupRange / 32;
     let nearestDistance = Number.POSITIVE_INFINITY;
 
-    droppedItemMeshes.forEach((mesh) => {
+    dropSystem.droppedItemMeshes.forEach((mesh) => {
       if (!mesh.isEnabled()) {
         return;
       }
@@ -5262,22 +5164,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const syncDroppedItems = (force = false) => {
-    if (!force) {
-      const now = performance.now();
-      const prev = (syncDroppedItems as any)._lastSyncAt as number | undefined;
-      if (prev !== undefined && now - prev < DROP_SYNC_INTERVAL * 1000) {
-        return;
-      }
-      (syncDroppedItems as any)._lastSyncAt = now;
-    }
-
     const currentLevel = playerState.getCurrentLevel();
     if (currentLevel !== getCurrentLevel()) {
       const previousLevel = getCurrentLevel();
       applyActiveLevelChange(currentLevel, undefined, { natural: true });
       void ensureMapLevelReady(currentLevel);
       void ensureLevelDoorsSeeded(currentLevel);
-      void ensureLevelItemsSeeded(currentLevel);
+      void dropSystem.ensureLevelSeeded(currentLevel);
       void enemySystem.ensureLevelSeeded(currentLevel);
       void propSystem.ensureLevelSeeded(currentLevel);
       setSelectedEnemy(null);
@@ -5288,103 +5181,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         playerZ: Math.round(player.position.z * 100) / 100,
       });
     }
-
-    const persistentItems = playerState.getPersistentDroppedItems(currentLevel);
-    const playerX = player.position.x;
-    const playerZ = player.position.z;
-    const maxDistSq =
-      droppedItemStreamRadiusUnits * droppedItemStreamRadiusUnits;
-
-    const streamedItems = persistentItems.filter((item) => {
-      const ix = worldToSliceCoord(item.x);
-      const iz = worldToSliceCoord(item.y);
-      const dx = ix - playerX;
-      const dz = iz - playerZ;
-      return dx * dx + dz * dz <= maxDistSq;
-    });
-
-    const nextKeys = new Set(
-      streamedItems.map((item) =>
-        getDroppedItemMeshKey(currentLevel, item.itemId),
-      ),
-    );
-
-    droppedItemMeshes.forEach((mesh, meshKey) => {
-      const item = mesh.metadata as SliceDroppedItem | undefined;
-      const isCurrentLevelMesh = item?.level === currentLevel;
-
-      if (!isCurrentLevelMesh || !nextKeys.has(meshKey)) {
-        mesh.dispose();
-        droppedItemMeshes.delete(meshKey);
-        return;
-      }
-
-      mesh.setEnabled(true);
-    });
-
-    streamedItems.forEach((item) => {
-      const meshKey = getDroppedItemMeshKey(currentLevel, item.itemId);
-      let container = droppedItemMeshes.get(meshKey);
-      if (!container) {
-        container = new TransformNode(`slice-dropped-root-${item.itemId}`, scene);
-
-        const itemPlane = MeshBuilder.CreatePlane(
-          `slice-dropped-plane-${item.itemId}`,
-          { width: 0.42, height: 0.42 },
-          scene,
-        );
-        itemPlane.material = getDroppedItemMaterial(item.weaponId);
-        itemPlane.rotation.x = Math.PI / 2;
-        itemPlane.parent = container;
-        itemPlane.isPickable = false;
-
-        const shadowDisc = MeshBuilder.CreateDisc(
-          `slice-dropped-shadow-${item.itemId}`,
-          { radius: 0.2, tessellation: 16 },
-          scene,
-        );
-        shadowDisc.material = droppedItemShadowMat;
-        shadowDisc.parent = container;
-        shadowDisc.rotation.x = Math.PI / 2;
-        shadowDisc.position.y = 0.002;
-        shadowDisc.isPickable = false;
-
-        // Apply deterministic rotation around Y axis
-        container.rotation.y = getDeterministicRotation(item.itemId);
-
-        (container as any).itemPlane = itemPlane;
-        (container as any).shadowDisc = shadowDisc;
-
-        droppedItemMeshes.set(meshKey, container);
-      }
-
-      const ix = worldToSliceCoord(item.x);
-      const iz = worldToSliceCoord(item.y);
-      const anchorY = resolveWorldAnchorY(
-        ix,
-        iz,
-        currentLevel,
-        DROPPED_ITEM_REST_OFFSET,
-      );
-      container.position.set(ix, anchorY, iz);
-      container.metadata = {
-        ...item,
-        level: currentLevel,
-      } satisfies SliceDroppedItem;
-      container.setEnabled(true);
-    });
-
-    hasRealDroppedItems = persistentItems.length > 0;
-    const showFallbackPickup = !hasRealDroppedItems && !fallbackPickupConsumed;
-    if (showFallbackPickup) {
-      pickupOrb.position.y = resolveWorldAnchorY(
-        pickupOrb.position.x,
-        pickupOrb.position.z,
-        currentLevel,
-        0.3,
-      );
-    }
-    pickupOrb.setEnabled(showFallbackPickup);
+    dropSystem.syncStream(force);
   };
 
   /** Re-snap props/loot after floor slab height or tile binary becomes available. */
@@ -5527,7 +5324,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     let nearestItem: DroppedItemData | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
 
-    droppedItemMeshes.forEach((mesh) => {
+    dropSystem.droppedItemMeshes.forEach((mesh) => {
       if (!mesh.isEnabled()) return;
 
       const item = mesh.metadata as SliceDroppedItem | undefined;
@@ -5711,7 +5508,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   // Seed all levels at bootstrap so content is available when Y-position changes levels.
   const seedLevelKeys = Object.keys((mapDataCache as SliceMapData | null)?.levels ?? {});
   for (const lvl of seedLevelKeys) {
-    void ensureLevelItemsSeeded(lvl);
+    void dropSystem.ensureLevelSeeded(lvl);
     void enemySystem.ensureLevelSeeded(lvl);
     void propSystem.ensureLevelSeeded(lvl);
   }
@@ -5747,7 +5544,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   } | null = null;
   const CHUNK_UPDATE_INTERVAL = 0.2;
   const PERF_PUBLISH_INTERVAL = 0.25;
-  let dropSyncTimer = 0;
   let navWindowTimer = 0;
   let perfPublishTimer = 0;
 
@@ -6428,7 +6224,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
 
-      if (!hasRealDroppedItems) {
+      if (!dropSystem.hasRealDroppedItems) {
         const dist = Vector3.Distance(player.position, pickupOrb.position);
         if (dist <= 1.25) {
           const added = playerState.addItem("torch", 1);
@@ -6580,11 +6376,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     let tStart = tFrameStart;
 
     tStart = performance.now();
-    dropSyncTimer += deltaSeconds;
-    if (dropSyncTimer >= DROP_SYNC_INTERVAL) {
-      dropSyncTimer = 0;
-      syncDroppedItems();
-    }
+    dropSystem.tick(deltaSeconds);
     mapTimeAccum += performance.now() - tStart;
 
     tStart = performance.now();
@@ -6600,29 +6392,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       rebuildNavigationWindow(getCurrentLevel());
     }
     mapTimeAccum += performance.now() - tStart;
-
-    tStart = performance.now();
-    // Animate dropped items (floating bob & shadow scaling)
-    droppedItemMeshes.forEach((container) => {
-      if (!container.isEnabled()) return;
-      const itemPlane = (container as any).itemPlane;
-      const shadowDisc = (container as any).shadowDisc;
-      if (itemPlane) {
-        const time = performance.now() * 0.003;
-        const item = container.metadata as SliceDroppedItem | undefined;
-        const phase = item ? getDeterministicRotation(item.itemId) * 10 : 0;
-        
-        // Bob height fluctuates above the grounded container anchor
-        itemPlane.position.y = 0.06 + Math.sin(time + phase) * 0.03;
-
-        if (shadowDisc) {
-          const ratio = (itemPlane.position.y - 0.03) / 0.06;
-          shadowDisc.visibility = 0.28 - ratio * 0.12; // fade shadow slightly as it rises
-          const scale = 1.0 - ratio * 0.15; // shrink shadow slightly as it rises
-          shadowDisc.scaling.set(scale, scale, scale);
-        }
-      }
-    });
 
     // Animate active slash trails
     const deltaMs = engine.getDeltaTime();
@@ -6890,7 +6659,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         chunkLoading: chunkStats.loadingChunks || chunkLoading.size,
         pendingChunkCandidates: chunkStats.pendingCandidates || 0,
         pendingChunkUnloads: chunkStats.pendingUnloads || 0,
-        streamedDroppedItems: droppedItemMeshes.size,
+        streamedDroppedItems: dropSystem.droppedItemMeshes.size,
         streamedEnemies: enemies.size,
         catalogedEnemies: enemySpawnCatalog.size,
         streamedProps: propSystem.getProps().size,
@@ -6984,8 +6753,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           selectedEnemyUid,
         },
         items: {
-          streamedDroppedItems: droppedItemMeshes.size,
-          hasRealDroppedItems,
+          streamedDroppedItems: dropSystem.droppedItemMeshes.size,
+          hasRealDroppedItems: dropSystem.hasRealDroppedItems,
         },
         pathfinding: {
           requests: pathMetrics.requests,
@@ -7406,8 +7175,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       heroAquaticTint.dispose();
       mapRoot.dispose();
       tileMaterials.forEach((material) => material.dispose());
-      droppedItemMeshes.forEach((mesh) => mesh.dispose());
-      droppedItemMeshes.clear();
+      dropSystem.clear();
       activeSlashtrails.forEach((slash) => {
         slash.mesh.dispose();
         slash.material.dispose();
