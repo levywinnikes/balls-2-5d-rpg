@@ -17,6 +17,9 @@ declare global {
       deleteGame: (
         name: string,
       ) => Promise<{ success: boolean; error?: string }>;
+      writeRuntimeLog: (
+        data: unknown,
+      ) => Promise<{ success: boolean; path?: string; error?: string }>;
     };
   }
 }

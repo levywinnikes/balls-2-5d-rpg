@@ -1,4 +1,5 @@
 import {
+  Mesh,
   Scene,
   TransformNode,
   StandardMaterial,
@@ -9,6 +10,11 @@ import {
 import { ItemRegistry } from "../../core/registries/ItemRegistry";
 import { WeaponRegistry } from "../../core/registries/WeaponRegistry";
 import type { DroppedItemData } from "../../game/entities/Player/PlayerState";
+
+type DroppedItemContainer = TransformNode & {
+  itemPlane?: Mesh;
+  shadowDisc?: Mesh;
+};
 
 export type SliceDroppedItem = DroppedItemData & { level: string };
 
@@ -39,6 +45,7 @@ export class DropStreamSystem {
 
   private config: DropStreamConfig;
   private dropSyncTimer = 0;
+  private syncStreamLastAt = 0;
   private seedingLevels = new Set<string>();
   private DROP_SYNC_INTERVAL = 0.2;
   private DROPPED_ITEM_REST_OFFSET = 0.02;
@@ -162,11 +169,11 @@ export class DropStreamSystem {
 
     if (!force) {
       const now = performance.now();
-      const prev = (this.syncStream as any)._lastSyncAt as number | undefined;
-      if (prev !== undefined && now - prev < this.DROP_SYNC_INTERVAL * 1000) {
+      const prev = this.syncStreamLastAt;
+      if (prev !== 0 && now - prev < this.DROP_SYNC_INTERVAL * 1000) {
         return;
       }
-      (this.syncStream as any)._lastSyncAt = now;
+      this.syncStreamLastAt = now;
     }
 
     const currentLevel = cfg.getCurrentLevel();
@@ -235,8 +242,8 @@ export class DropStreamSystem {
 
         container.rotation.y = cfg.getDeterministicRotation(item.itemId);
 
-        (container as any).itemPlane = itemPlane;
-        (container as any).shadowDisc = shadowDisc;
+        (container as DroppedItemContainer).itemPlane = itemPlane;
+        (container as DroppedItemContainer).shadowDisc = shadowDisc;
 
         this.droppedItemMeshes.set(meshKey, container);
       }
@@ -269,8 +276,8 @@ export class DropStreamSystem {
 
     this.droppedItemMeshes.forEach((container) => {
       if (!container.isEnabled()) return;
-      const itemPlane = (container as any).itemPlane;
-      const shadowDisc = (container as any).shadowDisc;
+      const itemPlane = (container as DroppedItemContainer).itemPlane;
+      const shadowDisc = (container as DroppedItemContainer).shadowDisc;
       if (itemPlane) {
         const time = performance.now() * 0.003;
         const item = container.metadata as SliceDroppedItem | undefined;

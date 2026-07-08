@@ -37,6 +37,21 @@ const GENERATED_SPRITE_ALIASES: Record<string, string> = {
 export type GeneratedSpriteDirection = "south" | "north" | "east" | "west";
 export type GeneratedSpriteState = "idle" | "walk" | "attack" | "death";
 
+export type GeneratedSpriteMaterial = StandardMaterial & {
+  _setAnimState: (state: GeneratedSpriteState, restart?: boolean) => void;
+  _setDirection: (direction: GeneratedSpriteDirection) => void;
+  _setAnimPaused: (paused: boolean) => void;
+  _setAnimIntervalScale: (scale: number) => void;
+};
+
+export type HeroSpriteMaterial = StandardMaterial & {
+  _setAnimState: (state: HeroAnimState) => void;
+  _setDirection: (direction: HeroBmsDirection) => void;
+  _setVisualProfile: (profile: CharacterVisualProfile) => void;
+  _consumeFootstepTick: () => boolean;
+  _onReady?: () => void;
+};
+
 type GeneratedAnimDef = {
   state: GeneratedSpriteState;
   direction: GeneratedSpriteDirection;
@@ -415,7 +430,7 @@ export function createGeneratedSpriteAnimatedMaterial(
     applyFrame();
   });
 
-  (mat as any)._setAnimState = (
+  (mat as GeneratedSpriteMaterial)._setAnimState = (
     state: GeneratedSpriteState,
     restart = false,
   ) => {
@@ -438,7 +453,7 @@ export function createGeneratedSpriteAnimatedMaterial(
     applyFrame();
   };
 
-  (mat as any)._setDirection = (direction: GeneratedSpriteDirection) => {
+  (mat as GeneratedSpriteMaterial)._setDirection = (direction: GeneratedSpriteDirection) => {
     if (direction === currentDirection) {
       return;
     }
@@ -450,11 +465,11 @@ export function createGeneratedSpriteAnimatedMaterial(
     }
   };
 
-  (mat as any)._setAnimPaused = (paused: boolean) => {
+  (mat as GeneratedSpriteMaterial)._setAnimPaused = (paused: boolean) => {
     animPaused = paused;
   };
 
-  (mat as any)._setAnimIntervalScale = (scale: number) => {
+  (mat as GeneratedSpriteMaterial)._setAnimIntervalScale = (scale: number) => {
     animIntervalScale = Math.max(0.25, Math.min(4, scale));
   };
 
@@ -538,7 +553,7 @@ function createGeneratedRotationSpriteMaterial(
     mat.alpha = 1 - Math.min(1, fadeElapsed / GENERATED_DEATH_FADE_MS);
   });
 
-  (mat as any)._setAnimState = (state: GeneratedSpriteState) => {
+  (mat as GeneratedSpriteMaterial)._setAnimState = (state: GeneratedSpriteState) => {
     if (state === currentState) {
       return;
     }
@@ -553,7 +568,7 @@ function createGeneratedRotationSpriteMaterial(
     applyDirection();
   };
 
-  (mat as any)._setDirection = (direction: GeneratedSpriteDirection) => {
+  (mat as GeneratedSpriteMaterial)._setDirection = (direction: GeneratedSpriteDirection) => {
     if (direction === currentDirection || currentState === "death") {
       return;
     }
@@ -1635,7 +1650,7 @@ export function createHeroModularSpriteMaterial(
     applyFrame();
   });
 
-  (mat as any)._consumeFootstepTick = (): boolean => {
+  (mat as HeroSpriteMaterial)._consumeFootstepTick = (): boolean => {
     if (!pendingFootstep) {
       return false;
     }
@@ -1643,7 +1658,7 @@ export function createHeroModularSpriteMaterial(
     return true;
   };
 
-  (mat as any)._setAnimState = (state: HeroAnimState) => {
+  (mat as HeroSpriteMaterial)._setAnimState = (state: HeroAnimState) => {
     if (state === currentState) {
       return;
     }
@@ -1654,7 +1669,7 @@ export function createHeroModularSpriteMaterial(
     applyFrame();
   };
 
-  (mat as any)._setDirection = (direction: HeroBmsDirection) => {
+  (mat as HeroSpriteMaterial)._setDirection = (direction: HeroBmsDirection) => {
     if (direction === currentDirection) {
       return;
     }
@@ -1665,7 +1680,7 @@ export function createHeroModularSpriteMaterial(
     applyFrame();
   };
 
-  (mat as any)._setVisualProfile = (nextProfile: CharacterVisualProfile) => {
+  (mat as HeroSpriteMaterial)._setVisualProfile = (nextProfile: CharacterVisualProfile) => {
     void loadVisualProfile(nextProfile);
   };
 
@@ -1676,7 +1691,7 @@ export function createHeroModularSpriteMaterial(
   });
 
   void loadVisualProfile(visualProfile).then(() => {
-    const onReady = (mat as any)._onReady;
+    const onReady = (mat as HeroSpriteMaterial)._onReady;
     if (typeof onReady === "function") {
       onReady();
     }

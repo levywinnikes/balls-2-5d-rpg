@@ -152,7 +152,7 @@ function resolveTileKind(
   if (tileDef && (tileDef.block || tileDef.renderAs === "block")) {
     return "void";
   }
-  if (tileDef && (tileDef.id === "hole" || (tileDef as any).transition === "down" || (tileDef as any).transition === "dwn")) {
+  if (tileDef && (tileDef.id === "hole" || tileDef.transition === "down" || tileDef.transition === "dwn")) {
     return "void";
   }
   if (isWaterHoleTile(symbol, tileDef)) {

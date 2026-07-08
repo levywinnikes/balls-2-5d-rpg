@@ -204,7 +204,7 @@ export class CollisionWorld {
       return;
     }
 
-    const isHole = def.id === "hole" || (def as any).transition === "down" || (def as any).transition === "dwn";
+    const isHole = def.id === "hole" || def.transition === "down" || def.transition === "dwn";
     if (isHole) {
       return;
     }

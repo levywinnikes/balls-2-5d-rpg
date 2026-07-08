@@ -128,7 +128,14 @@ class PhysicsLogger {
 
 export const physicsLogger = new PhysicsLogger();
 
+declare global {
+  interface Window {
+    __physicsLogger: PhysicsLogger;
+    __pl: PhysicsLogger;
+  }
+}
+
 if (typeof window !== "undefined") {
-  (window as any).__physicsLogger = physicsLogger;
-  (window as any).__pl = physicsLogger;
+  window.__physicsLogger = physicsLogger;
+  window.__pl = physicsLogger;
 }

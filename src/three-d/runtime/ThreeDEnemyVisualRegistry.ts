@@ -13,8 +13,9 @@ import {
   getGeneratedEnemyBillboardDimensions,
   resolveGeneratedSpriteEntityId,
   type GeneratedSpriteDirection,
+  type GeneratedSpriteMaterial,
 } from "./TwoDParitySpriteFactory";
-import { attachAquaticShaderTint } from "./AquaticSpriteShader";
+import { attachAquaticShaderTint, type AquaticShaderHandle } from "./AquaticSpriteShader";
 import {
   resolveAnimLodIntervalScale,
   setSpriteAnimIntervalScale,
@@ -35,6 +36,18 @@ export type EnemyVisualProfile = {
 };
 
 export type EnemyVisualAnimState = "idle" | "walk" | "attack" | "death";
+
+type TargetMarkerMaterial = StandardMaterial & {
+  _markerTexture: DynamicTexture;
+  _markerLastRatio: number;
+  _updateMarkerHealth: (ratio: number) => void;
+};
+
+export type EnemyVisualRoot = TransformNode & {
+  _setAnimState?: (state: EnemyVisualAnimState, restart?: boolean) => void;
+  _setDirection?: (direction: GeneratedSpriteDirection) => void;
+  _aquaticTint?: AquaticShaderHandle | null;
+};
 
 const DEFAULT_PROFILE: EnemyVisualProfile = {
   baseColor: "#8b5a2b",
@@ -241,15 +254,15 @@ function createTargetHeadMarkerMaterial(
   material.disableDepthWrite = true;
   configureBillboardSpriteMaterial(material);
 
-  (material as any)._markerTexture = texture;
-  (material as any)._markerLastRatio = 1;
-  (material as any)._updateMarkerHealth = (ratio: number) => {
+  (material as TargetMarkerMaterial)._markerTexture = texture;
+  (material as TargetMarkerMaterial)._markerLastRatio = 1;
+  (material as TargetMarkerMaterial)._updateMarkerHealth = (ratio: number) => {
     const clamped = clamp01(ratio);
-    const last = (material as any)._markerLastRatio as number;
+    const last = (material as TargetMarkerMaterial)._markerLastRatio;
     if (Math.abs(last - clamped) < 0.004) {
       return;
     }
-    (material as any)._markerLastRatio = clamped;
+    (material as TargetMarkerMaterial)._markerLastRatio = clamped;
     drawTargetMarkerTexture(ctx, clamped);
     texture.update();
   };
@@ -279,10 +292,10 @@ export function createEnemyVisual(
     `${nodeName}-sprite`,
     enemyId,
   );
-  const spriteAnimSetter = (spriteMat as any)._setAnimState;
-  const spriteDirSetter = (spriteMat as any)._setDirection;
+  const spriteAnimSetter = (spriteMat as GeneratedSpriteMaterial)._setAnimState;
+  const spriteDirSetter = (spriteMat as GeneratedSpriteMaterial)._setDirection;
   if (typeof spriteAnimSetter === "function") {
-    (root as any)._setAnimState = (
+    (root as EnemyVisualRoot)._setAnimState = (
       state: EnemyVisualAnimState,
       restart?: boolean,
     ) => {
@@ -290,7 +303,7 @@ export function createEnemyVisual(
     };
   }
   if (typeof spriteDirSetter === "function") {
-    (root as any)._setDirection = (direction: GeneratedSpriteDirection) => {
+    (root as EnemyVisualRoot)._setDirection = (direction: GeneratedSpriteDirection) => {
       spriteDirSetter(direction);
     };
   }
@@ -321,7 +334,7 @@ export function createEnemyVisual(
   sprite.billboardMode = Mesh.BILLBOARDMODE_Y;
   configureBillboardSpriteMesh(sprite);
 
-  (root as any)._aquaticTint = attachAquaticShaderTint(spriteMat);
+  (root as EnemyVisualRoot)._aquaticTint = attachAquaticShaderTint(spriteMat);
 
   const shadowMat = new StandardMaterial(`${nodeName}-shadow-mat`, scene);
   shadowMat.diffuseColor = Color3.Black();
@@ -441,9 +454,7 @@ export function restoreEnemyTargetVisual(enemyRoot: TransformNode): void {
     const markerMat = marker.material as StandardMaterial | undefined;
     if (markerMat) {
       markerMat.emissiveColor = Color3.White();
-      const updater = (markerMat as any)._updateMarkerHealth as
-        | ((ratio: number) => void)
-        | undefined;
+      const updater = (markerMat as TargetMarkerMaterial)._updateMarkerHealth;
       if (typeof updater === "function") {
         updater(1);
       }
@@ -494,9 +505,7 @@ export function applyEnemyTargetVisual(
     const markerMat = marker.material as StandardMaterial | undefined;
     if (markerMat) {
       markerMat.emissiveColor = Color3.White();
-      const updater = (markerMat as any)._updateMarkerHealth as
-        | ((ratio: number) => void)
-        | undefined;
+      const updater = (markerMat as TargetMarkerMaterial)._updateMarkerHealth;
       if (typeof updater === "function") {
         const max = Math.max(1, health?.max ?? 1);
         const current = Math.max(0, health?.current ?? max);
@@ -511,7 +520,7 @@ export function setEnemyVisualAnimState(
   state: EnemyVisualAnimState,
   restart = false,
 ): void {
-  const setter = (enemyRoot as any)._setAnimState;
+  const setter = (enemyRoot as EnemyVisualRoot)._setAnimState;
   if (typeof setter === "function") {
     setter(state, restart);
   }
@@ -521,7 +530,7 @@ export function setEnemyVisualDirection(
   enemyRoot: TransformNode,
   direction: GeneratedSpriteDirection,
 ): void {
-  const setter = (enemyRoot as any)._setDirection;
+  const setter = (enemyRoot as EnemyVisualRoot)._setDirection;
   if (typeof setter === "function") {
     setter(direction);
   }

@@ -7,6 +7,7 @@ import {
 import {
   createPropBillboard,
   isKnownPropId,
+  type PropAnimRoot,
 } from "./PropBillboardFactory";
 
 export type PropSpawnData = {
@@ -135,18 +136,16 @@ export class PropStreamSystem {
     if (!prop) {
       return;
     }
-    const observer = (prop.meshRoot as any)._propAnimObserver;
+    const observer = (prop.meshRoot as PropAnimRoot)._propAnimObserver;
     if (observer) {
-      this.config.scene.onBeforeRenderObservable.remove(observer);
+      this.config.scene.onBeforeRenderObservable.remove(observer as import("@babylonjs/core").Observer<Scene>);
     }
     prop.meshRoot.dispose();
     this.props.delete(uid);
   }
 
   private applyPropAnimLod(prop: SliceProp, distance: number): void {
-    const setter = (prop.meshRoot as any)._setAnimIntervalScale as
-      | ((scale: number) => void)
-      | undefined;
+    const setter = (prop.meshRoot as PropAnimRoot)._setAnimIntervalScale;
     if (typeof setter !== "function") {
       return;
     }
@@ -307,9 +306,9 @@ export class PropStreamSystem {
 
   clear(): void {
     this.props.forEach((prop) => {
-      const observer = (prop.meshRoot as any)._propAnimObserver;
+      const observer = (prop.meshRoot as PropAnimRoot)._propAnimObserver;
       if (observer) {
-        this.config.scene.onBeforeRenderObservable.remove(observer);
+        this.config.scene.onBeforeRenderObservable.remove(observer as import("@babylonjs/core").Observer<Scene>);
       }
       prop.meshRoot.dispose();
     });

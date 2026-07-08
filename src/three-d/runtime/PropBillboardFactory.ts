@@ -20,6 +20,11 @@ import {
   releasePooledSpriteTextures,
 } from "./SpriteTexturePool";
 
+export type PropAnimRoot = TransformNode & {
+  _propAnimObserver: unknown;
+  _setAnimIntervalScale: (scale: number) => void;
+};
+
 const KNOWN_PROP_IDS = new Set<string>(["oak_tree", "wild_flower"]);
 
 /** Plane local Y so prop feet (opaque base row) sit on the ground plane. */
@@ -123,8 +128,8 @@ export function createPropBillboard(
     frame = (frame + 1) % textures.length;
     applyFrame();
   });
-  (root as any)._propAnimObserver = animObserver;
-  (root as any)._setAnimIntervalScale = (scale: number) => {
+  (root as PropAnimRoot)._propAnimObserver = animObserver;
+  (root as PropAnimRoot)._setAnimIntervalScale = (scale: number) => {
     animIntervalScale = Math.max(0.25, Math.min(4, scale));
   };
 

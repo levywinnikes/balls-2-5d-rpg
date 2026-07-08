@@ -46,6 +46,7 @@ import {
   setEnemyVisualAnimState,
   setEnemyVisualDirection,
   type EnemyVisualAnimState,
+  type EnemyVisualRoot,
 } from "./ThreeDEnemyVisualRegistry";
 import {
   Projectile3DSystem,
@@ -68,6 +69,7 @@ import {
   getGeneratedAttackDurationMs,
   type HeroAnimState,
   type HeroBmsDirection,
+  type HeroSpriteMaterial,
 } from "./TwoDParitySpriteFactory";
 import {
   sampleAquaticAtWorldFootprint,
@@ -75,6 +77,9 @@ import {
 import { isWaterTileId, sampleAquaticFromTile, type AquaticSample } from "./WaterProfile";
 import { attachAquaticShaderTint } from "./AquaticSpriteShader";
 import { configureBillboardSpriteMesh } from "./BillboardDepthConfig";
+import { SliceInputManager } from "./SliceInputManager";
+import type { SliceSceneContext } from "./SliceSceneContext";
+import { SliceEnemySystem } from "./SliceEnemySystem";
 import {
   createFirstPersonCombatCameraState,
   FP_CAMERA_FOV,
@@ -134,7 +139,7 @@ import {
   resolveQualityStreamConfig,
 } from "./SliceQualityRuntime";
 import { disposeAllPooledSpriteTexturesForScene } from "./SpriteTexturePool";
-import type { SliceTileDefinition } from "./SliceTileTypes";
+import type { SliceTileDefinition, MapEntity, SliceLevelData, SliceMapData } from "./SliceTileTypes";
 import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
 import { RuneRegistry } from "../../core/magic/RuneRegistry";
 import { SaveSystem } from "../../core/systems/SaveSystem";
@@ -279,6 +284,60 @@ type Slice3DSummary = {
   sessionHealthScore: number;
 };
 
+declare global {
+  interface Window {
+    __slice3dLogs?: {
+      get: () => unknown;
+      getSummary: () => unknown;
+      getHotspots: (limit: number) => unknown;
+      download: () => void;
+      clear: () => void;
+      mark: (label: string, extra?: Record<string, unknown>) => void;
+      setEnabled: (value: boolean) => void;
+      isEnabled: () => boolean;
+      getLastFilePath: () => string | null;
+      flushToFile: () => Promise<void>;
+      storageKey: string;
+    };
+    __slice3dVerticalVisibility?: {
+      currentLevel: string;
+      visibleLevels: string[];
+      occludedFromLevel: number | null;
+      occlusionScanRadius: number;
+      verticalStackRadiusTiles: number;
+      firstPersonCeilingLevel: string | null;
+      totalLevels: number;
+      columnRadius: number;
+      playerTile: { x: number; y: number };
+      ts: number;
+    };
+    __slice3dChunkStreaming?: {
+      playerChunk?: { x: number; y: number };
+      loadedChunks?: number;
+      loadingChunks?: number;
+      builtThisTick?: number;
+      drawRadiusChunks?: number;
+      chunkBuildBudgetPerTick?: number;
+      firstPersonLod?: boolean;
+      pendingCandidates?: number;
+      unloadedThisTick?: number;
+      pendingUnloads?: number;
+      visibleLevels?: string[];
+      ts?: number;
+    };
+    __slice3dPerfDiagnostics?: Record<string, unknown>;
+    __slice3dPerf?: Record<string, unknown>;
+    __slice3dLogsData?: { latestSample: unknown; totalSamples: number; totalEvents: number; counters: unknown; summary: unknown; topHotspots: unknown };
+  }
+  interface Performance {
+    memory?: {
+      jsHeapSizeLimit: number;
+      totalJSHeapSize: number;
+      usedJSHeapSize: number;
+    };
+  }
+}
+
 type TopDownCameraPreset = "safe" | "cinematic";
 
 function createMaterial(
@@ -296,35 +355,35 @@ function worldToSliceCoord(value: number): number {
   return value / 32;
 }
 
-type MapEntity = {
-  x: number;
-  y: number;
-  symbol: string;
-  uuid?: string;
-  contents?: Array<{ id: string; count: number }>;
-  locked?: boolean;
-  keyId?: string | null;
-};
 
-type SliceLevelData = {
-  binFile?: string;
-  entities?: MapEntity[];
-  playerPos?: { x: number; y: number };
-};
 
-type SliceMapData = {
-  width?: number;
-  height?: number;
-  tileSize?: number;
-  config?: {
-    debugSandbox?: boolean;
-    startLevel?: string;
-  };
-  tileAtlas?: string[];
-  tileDefinitions?: Record<string, SliceTileDefinition>;
-  entityTemplates?: Record<string, any>;
-  levels?: Record<string, SliceLevelData>;
-};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -492,7 +551,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
 
   const syncHeroVisualProfile = () => {
-    const setter = (heroSpriteMat as any)._setVisualProfile;
+    const setter = (heroSpriteMat as HeroSpriteMaterial)._setVisualProfile;
     if (typeof setter === "function") {
       setter(resolveCharacterVisualProfile(playerState));
     }
@@ -508,7 +567,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const setHeroAnimState = (state: HeroAnimState, lockMs = 0) => {
     heroAnimState = state;
-    const setter = (heroSpriteMat as any)._setAnimState;
+    const setter = (heroSpriteMat as HeroSpriteMaterial)._setAnimState;
     if (typeof setter === "function") {
       setter(state);
     }
@@ -519,7 +578,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const setHeroDirection = (direction: HeroBmsDirection) => {
     heroDirection = direction;
-    const setter = (heroSpriteMat as any)._setDirection;
+    const setter = (heroSpriteMat as HeroSpriteMaterial)._setDirection;
     if (typeof setter === "function") {
       setter(direction);
     }
@@ -607,7 +666,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     heroBillboard.setEnabled(!isFirstPerson);
   };
   setPlayerAvatarVisible(false);
-  (heroSpriteMat as any)._onReady = () => {
+  (heroSpriteMat as HeroSpriteMaterial)._onReady = () => {
     if (worldBootstrapReady) {
       heroBall.setEnabled(false);
     }
@@ -1273,7 +1332,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const flushRuntimeLogsToFile = async (force = false) => {
-    const electronAPI = (window as any).electronAPI;
+    const electronAPI = window.electronAPI;
     if (!electronAPI?.writeRuntimeLog) {
       return;
     }
@@ -1315,7 +1374,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     pushLogEvent("log.download");
   };
 
-  (window as any).__slice3dLogs = {
+  window.__slice3dLogs = {
     get: () => exportRuntimeLogs(),
     getSummary: () => buildSummary(),
     getHotspots: (limit = 10) =>
@@ -2636,7 +2695,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     waterEffectSystem.updateOcclusion(occlusionStartLevel, deltaSeconds);
 
-    (window as any).__slice3dVerticalVisibility = {
+    window.__slice3dVerticalVisibility = {
       currentLevel: getCurrentLevel(),
       visibleLevels: Array.from(verticallyVisible),
       occludedFromLevel: occlusionStartLevel,
@@ -3238,7 +3297,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     // Lightweight runtime metrics for Sprint 1 tuning.
-    (window as any).__slice3dChunkStreaming = {
+    window.__slice3dChunkStreaming = {
       playerChunk: { x: playerCX, y: playerCY },
       loadedChunks: chunkMeshes.size,
       loadingChunks: chunkLoading.size,
@@ -4061,13 +4120,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const setEnemyDirection = (enemy: SliceEnemy, direction: HeroBmsDirection) => {
-    if (enemy.animDirection === direction) {
-      return;
-    }
-    enemy.animDirection = direction;
-    setEnemyVisualDirection(enemy.meshRoot, direction);
-  };
+
+
+
+
+
+
+
 
   const setEnemyAnimState = (
     enemy: SliceEnemy,
@@ -4689,190 +4748,42 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     enemy.meshRoot.position = enemy.worldPos;
   };
 
-  const resolveEnemyBmsDirection = (
-    enemy: SliceEnemy,
-    deltaX: number,
-    deltaZ: number,
-  ): HeroBmsDirection => {
-    const activeCamera = scene.activeCamera ?? camera;
-    return resolveBmsDirectionFromWorldDelta(
-      deltaX,
-      deltaZ,
-      enemy.animDirection,
-      {
-        scene,
-        camera: activeCamera,
-        origin: enemy.worldPos,
-      },
-    );
-  };
 
-  const faceEnemyToward = (
-    enemy: SliceEnemy,
-    targetX: number,
-    targetZ: number,
-  ) => {
-    if (enemy.isDead) {
-      return;
-    }
-    const dx = targetX - enemy.worldPos.x;
-    const dz = targetZ - enemy.worldPos.z;
-    if (Math.abs(dx) < 0.001 && Math.abs(dz) < 0.001) {
-      return;
-    }
-    setEnemyDirection(enemy, resolveEnemyBmsDirection(enemy, dx, dz));
-  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const updateEnemyAI = (deltaSeconds: number) => {
-    const now = Date.now();
-
-    enemies.forEach((enemy) => {
-      // Treat enemy as "on current level" when within LEVEL_HEIGHT vertically (Y-based)
-      const onActiveLevel = Math.abs(levelToWorldY(enemy.level) - levelToWorldY(getCurrentLevel())) <= LEVEL_HEIGHT;
-      if (!onActiveLevel) {
-        enemy.meshRoot.setEnabled(false);
-        if (selectedEnemyUid === enemy.uid) {
-          setSelectedEnemy(null);
-        }
-        return;
-      }
-
-      if (enemy.isDead) {
-        enemy.meshRoot.setEnabled(true);
-        enemy.meshRoot.position = enemy.worldPos;
-        return;
-      }
-
-      const distanceToPlayer = Vector3.Distance(
-        enemy.worldPos,
-        player.position,
-      );
-      const enemyVisible = distanceToPlayer <= ENEMY_VISIBILITY_RADIUS_UNITS;
-      enemy.meshRoot.setEnabled(enemyVisible);
-      applyEnemyAnimLod(enemy.meshRoot, distanceToPlayer, enemyVisible);
-
-      if (isFirstPerson && enemyVisible) {
-        const fpScale = getFirstPersonEnemyProximityScale(distanceToPlayer);
-        enemy.meshRoot.scaling.set(fpScale, fpScale, fpScale);
-      } else if (enemy.meshRoot.scaling.x !== 1) {
-        enemy.meshRoot.scaling.set(1, 1, 1);
-      }
-
-      if (!enemyVisible && selectedEnemyUid === enemy.uid) {
-        setSelectedEnemy(null);
-      }
-
-      if (distanceToPlayer > ENEMY_AI_RADIUS_UNITS) {
-        setEnemyAnimState(enemy, "idle");
-        enemy.currentPath = [];
-        enemy.meshRoot.position = enemy.worldPos; // Ensure base position is applied
-        return;
-      }
-
-      // Perform resource-heavy operations only when within AI range (active AI)
-      applyActorAquaticY(enemy.worldPos, enemy.level);
-      enemy.meshRoot.position = enemy.worldPos;
-      const enemyAquatic = getAquaticSampleAt(
-        enemy.worldPos.x,
-        enemy.worldPos.z,
-        enemy.level,
-      );
-      const enemyAquaticTint = (enemy.meshRoot as any)._aquaticTint as
-        | { update: (sample: AquaticSample) => void }
-        | undefined;
-      enemyAquaticTint?.update(enemyAquatic);
-
-      const attackRangeUnits = Math.max(1, enemy.definition.attackRange / 32);
-      const aggroRangeUnits = Math.max(2, enemy.definition.aggroRange);
-      const chaseRangeUnits = Math.max(4, enemy.definition.chaseRange);
-      const effectiveChaseRange = enemy.isProvoked
-        ? chaseRangeUnits * 1.5
-        : chaseRangeUnits;
-      const playerInAggro = distanceToPlayer <= aggroRangeUnits;
-      const shouldChasePlayer = playerInAggro || enemy.isProvoked;
-
-      if (shouldChasePlayer && distanceToPlayer > effectiveChaseRange) {
-        enemy.isProvoked = false;
-        enemy.currentPath = [];
-      }
-
-      const currentlyChasing = playerInAggro || enemy.isProvoked;
-      const didCastMagic = currentlyChasing
-        ? tryEnemyMagicAttack(enemy, now)
-        : false;
-
-      if (didCastMagic) {
-        enemy.currentPath = [];
-        return;
-      }
-
-      if (
-        currentlyChasing &&
-        distanceToPlayer <= attackRangeUnits &&
-        hasLineOfSight(enemy.worldPos, player.position)
-      ) {
-        enemy.currentPath = [];
-        faceEnemyToward(
-          enemy,
-          player.position.x,
-          player.position.z,
-        );
-        applyEnemyAttackToPlayer(enemy, now);
-        if (now >= enemy.animLockedUntil && enemy.animState === "attack") {
-          setEnemyAnimState(enemy, "idle");
-        }
-        return;
-      }
-
-      const targetPos = currentlyChasing ? player.position : enemy.spawnPos;
-      const prevX = enemy.worldPos.x;
-      const prevZ = enemy.worldPos.z;
-
-      if (now - enemy.lastPathAt > 1000) {
-        // Skip pathfinding when the enemy is already at (or within 0.8 units of)
-        // its target — prevents hammering the pathfinder with trivially empty paths.
-        const distToTarget = Vector3.Distance(enemy.worldPos, targetPos);
-        if (distToTarget >= 0.8) {
-          enemy.lastPathAt = now;
-          void requestEnemyPath(enemy, targetPos);
-        }
-      }
-
-      advanceEnemyPath(enemy, deltaSeconds);
-      const movedSq =
-        (enemy.worldPos.x - prevX) * (enemy.worldPos.x - prevX) +
-        (enemy.worldPos.z - prevZ) * (enemy.worldPos.z - prevZ);
-
-      if (currentlyChasing) {
-        faceEnemyToward(
-          enemy,
-          player.position.x,
-          player.position.z,
-        );
-      } else if (movedSq > 0.0001) {
-        setEnemyDirection(
-          enemy,
-          resolveEnemyBmsDirection(
-            enemy,
-            enemy.worldPos.x - prevX,
-            enemy.worldPos.z - prevZ,
-          ),
-        );
-      }
-
-      if (movedSq > 0.0001) {
-        setEnemyAnimState(enemy, "walk");
-      } else {
-        setEnemyAnimState(enemy, "idle");
-      }
-
-      if (
-        !currentlyChasing &&
-        Vector3.Distance(enemy.worldPos, enemy.spawnPos) < 0.4
-      ) {
-        enemy.currentPath = [];
-      }
-    });
+    sliceEnemySystem.update(deltaSeconds);
   };
 
   const checkLevelDrift = () => {
@@ -5216,11 +5127,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   void orchestrator.seedAllLevels(seedLevelKeys);
   orchestrator.dropSystem.syncStream(true);
 
-  const pressedKeys = new Set<string>();
+  let inputManager: SliceInputManager;
+  let ctx: SliceSceneContext;
+  let sliceEnemySystem: SliceEnemySystem;
 
   // Physics state — PlayerContext is the single source of truth
   const playerCtx = createPlayerContext(player.position.x, player.position.y, player.position.z);
-  let jumpRequested = false; // consumed by tickPhysics each frame
+
   const FALL_DAMAGE_MIN_IMPACT_SPEED = 9.5;
 
   // Mirrors of playerCtx for backward compat with non-physics code
@@ -5249,17 +5162,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let navWindowTimer = 0;
   let perfPublishTimer = 0;
 
-  const requestPointerLockIfPossible = () => {
-    if (!isFirstPerson || document.pointerLockElement === canvas) {
-      return;
-    }
 
-    try {
-      canvas.requestPointerLock?.();
-    } catch {
-      // Browser blocks pointer lock outside user gesture; ignore and retry on click/key toggle.
-    }
-  };
+
+
+
+
+
+
+
+
+
+
 
   const setCameraMode = (
     firstPerson: boolean,
@@ -5302,7 +5215,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         fpCaptureSuspendedForMenu = false;
         firstPersonCamera.attachControl(canvas, true);
         if (shouldRequestPointerLock) {
-          requestPointerLockIfPossible();
+          inputManager.requestPointerLockIfPossible();
         }
       }
       return;
@@ -5365,7 +5278,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const handleGameplayPauseChanged = (paused: boolean) => {
     gameplayPaused = paused;
-    pressedKeys.clear();
+    inputManager?.clearPressedKeys();
     if (paused) {
       suspendCameraCaptureForMenu();
       return;
@@ -5532,7 +5445,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const respawn = resolveRespawnSpawn();
 
     playerState.respawn();
-    pressedKeys.clear();
+    inputManager.clearPressedKeys();
     setSelectedEnemy(null);
     projectileSystem.disposeAll();
     holeFallLandingLevel = null;
@@ -5578,7 +5491,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     isPlayerDeathSequenceActive = true;
-    pressedKeys.clear();
+    inputManager.clearPressedKeys();
     setSelectedEnemy(null);
     if (isFirstPerson) {
       setCameraMode(false, false);
@@ -5856,66 +5769,91 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerState.log("action_cast_rune", { runeId }, "#ff8800");
   };
 
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (gameplayPaused || isPlayerDeathSequenceActive) {
-      return;
-    }
-    void ensureAudioReady();
+  ctx = {
+    get engine() { return engine; },
+    get scene() { return scene; },
+    get canvas() { return canvas; },
+    get player() { return player; },
+    get playerCtx() { return playerCtx; },
+    get playerState() { return playerState; },
+    get camera() { return camera; },
+    get firstPersonCamera() { return firstPersonCamera; },
+    get audioManager() { return audioManager; },
+    get collisionWorld() { return collisionWorld; },
+    get enemies() { return enemies; },
+    get isFirstPerson() { return isFirstPerson; },
+    set isFirstPerson(v) { isFirstPerson = v; },
+    get gameplayPaused() { return gameplayPaused; },
+    set gameplayPaused(v) { gameplayPaused = v; },
+    get debugCollidersVisible() { return debugCollidersVisible; },
+    set debugCollidersVisible(v) { debugCollidersVisible = v; },
+    get mapDataCache() { return mapDataCache; },
+    set mapDataCache(v) { mapDataCache = v; },
+    get currentMapWidth() { return currentMapWidth; },
+    set currentMapWidth(v) { currentMapWidth = v; },
+    get currentMapHeight() { return currentMapHeight; },
+    set currentMapHeight(v) { currentMapHeight = v; },
+    get selectedEnemyUid() { return selectedEnemyUid; },
+    set selectedEnemyUid(v) { selectedEnemyUid = v; },
+    setSelectedEnemy(v) { setSelectedEnemy(v); },
+    get activeRuneSlotIndex() { return activeRuneSlotIndex; },
+    set activeRuneSlotIndex(v) { activeRuneSlotIndex = v; },
+  };
 
-    const key = event.key.toLowerCase();
-    pressedKeys.add(key);
+  sliceEnemySystem = new SliceEnemySystem({
+    ctx,
+    applyEnemyAttackToPlayer: (enemy, now) => applyEnemyAttackToPlayer(enemy, now),
+    tryEnemyMagicAttack: (enemy, now) => tryEnemyMagicAttack(enemy, now),
+    requestEnemyPath: (enemy, targetPos) => requestEnemyPath(enemy, targetPos),
+    advanceEnemyPath: (enemy, deltaSeconds) => advanceEnemyPath(enemy, deltaSeconds),
+    applyActorAquaticY: (worldPos, level) => applyActorAquaticY(worldPos, level),
+    getAquaticSampleAt: (x, z, level) => getAquaticSampleAt(x, z, level),
+    levelToWorldY: (level) => levelToWorldY(level),
+    getCurrentLevel: () => getCurrentLevel(),
+    hasLineOfSight: (origin, target) => hasLineOfSight(origin, target),
+    setSelectedEnemy: (uid) => setSelectedEnemy(uid),
+    getSelectedEnemy: () => selectedEnemyUid,
+  });
 
-    if (event.code === "Space") {
-      jumpRequested = true;
-      event.preventDefault();
-    }
-
-    if (key === "g" && !event.repeat) {
+  inputManager = new SliceInputManager({
+    canvas,
+    isPaused: () => gameplayPaused,
+    isPlayerDeathSequenceActive: () => isPlayerDeathSequenceActive,
+    isFirstPerson: () => isFirstPerson,
+    ensureAudioReady: () => ensureAudioReady(),
+    onCastRune: () => castRune3d(),
+    onCycleRuneSlot: () => {
+      activeRuneSlotIndex = (activeRuneSlotIndex + 1) % 3;
+      dispatchRuneSlotUpdate();
+    },
+    onToggleDebugColliders: () => {
       debugCollidersVisible = !debugCollidersVisible;
       rebuildDebugColliderMeshes();
       // eslint-disable-next-line no-console
       console.warn(`[DEBUG] Collision visualization: ${debugCollidersVisible ? "ON" : "OFF"}`);
-    }
-
-    if (key === "v" && !event.repeat) {
-      // S12-T5: FP mode is DEBUG ONLY — product is always top-down. V = debug toggle.
-      if (!isFirstPerson) {
+    },
+    onToggleCameraMode: (newFP: boolean) => {
+      if (newFP) {
         // eslint-disable-next-line no-console
         console.warn(
           "[DEBUG] Entering first-person mode — debug-only camera. Top-down is the product view.",
         );
       }
-      setCameraMode(!isFirstPerson, !isFirstPerson);
-    }
-
-    if (key === "c" && !event.repeat) {
-      if (isFirstPerson) {
-        return;
-      }
+      setCameraMode(newFP, newFP);
+    },
+    onCycleCameraPreset: () => {
       const nextPreset: TopDownCameraPreset =
         activeTopDownCameraPreset === "safe" ? "cinematic" : "safe";
       applyTopDownCameraPreset(nextPreset);
-    }
-
-    if (key === "f" && !event.repeat) {
+    },
+    onToggleFallSafety: () => {
       const safetyEnabled = playerState.toggleFallSafety();
       playerState.emit("uiNotification", {
         type: safetyEnabled ? "info" : "warning",
         message: t_game(safetyEnabled ? "fall_safety_on" : "fall_safety_off"),
       });
-    }
-
-    // S8-T2: Q = cast active rune; R = cycle active rune slot
-    if (key === "q" && !event.repeat) {
-      castRune3d();
-    }
-
-    if (key === "r" && !event.repeat) {
-      activeRuneSlotIndex = (activeRuneSlotIndex + 1) % 3;
-      dispatchRuneSlotUpdate();
-    }
-
-    if (key === "e" && !event.repeat) {
+    },
+    onInteract: () => {
       const pickedRealItem = tryPickupNearestItem();
       if (pickedRealItem) {
         orchestrator.dropSystem.syncStream(true);
@@ -5939,14 +5877,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         }
       }
     }
-  };
+  });
 
-  const onKeyUp = (event: KeyboardEvent) => {
-    pressedKeys.delete(event.key.toLowerCase());
-  };
 
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
+
+
+
+
+
   playerState.on("dropItem", handleDropItem);
   playerState.on("requestPickup", handleRequestPickup);
   playerState.on("spawnDroppedItem", addDroppedItemFromEvent);
@@ -5966,18 +5904,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   // S8-T2: emit initial rune slot state so React HUD can show slots on load
   dispatchRuneSlotUpdate();
 
-  const onCanvasContextMenu = (event: MouseEvent) => {
-    event.preventDefault();
-  };
-  canvas.addEventListener("contextmenu", onCanvasContextMenu);
 
-  const onCanvasPointerDown = () => {
-    if (gameplayPaused || isPlayerDeathSequenceActive) {
-      return;
-    }
-    requestPointerLockIfPossible();
-  };
-  canvas.addEventListener("pointerdown", onCanvasPointerDown);
+
+
+
+
+
+
+
+
+
+
+
 
   const pointerObserver = scene.onPointerObservable.add((pointerInfo) => {
     if (gameplayPaused || isPlayerDeathSequenceActive) {
@@ -6115,7 +6053,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       chunkUpdateTimer = 0;
       updateChunks();
 
-      const chunkStats = (window as any).__slice3dChunkStreaming || {};
+      const chunkStats = window.__slice3dChunkStreaming || {};
       const unloadedThisTick = chunkStats.unloadedThisTick || 0;
       if (unloadedThisTick > 0 && previousHeapUsedMb !== undefined) {
         unloadCheckpoints.push({
@@ -6130,6 +6068,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
+    const movementInput = inputManager.getMovementInput();
+    let moveForward = movementInput.moveForward;
+    let moveRight = movementInput.moveRight;
     mapTimeAccum += performance.now() - tStart;
 
     tStart = performance.now();
@@ -6139,13 +6080,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       getCurrentLevel(),
     );
     const speed = 4.5 * aquaticSample.speedMultiplier;
-    let moveForward = 0;
-    let moveRight = 0;
 
-    if (pressedKeys.has("w") || pressedKeys.has("arrowup")) moveForward += 1;
-    if (pressedKeys.has("s") || pressedKeys.has("arrowdown")) moveForward -= 1;
-    if (pressedKeys.has("a") || pressedKeys.has("arrowleft")) moveRight -= 1;
-    if (pressedKeys.has("d") || pressedKeys.has("arrowright")) moveRight += 1;
+
+
+
+
+
+
 
     const isMoving = moveForward !== 0 || moveRight !== 0;
     const movementStartX = player.position.x;
@@ -6216,11 +6157,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         moveX: worldDx,
         moveZ: worldDz,
         deltaSeconds,
-        jumpPressed: jumpRequested,
-        sprintHeld: pressedKeys.has("shift"),
+        jumpPressed: inputManager.consumeJumpRequested(),
+        sprintHeld: inputManager.isKeyPressed("shift"),
         speedMultiplier: aquaticSample.speedMultiplier,
       };
-      jumpRequested = false;
+
 
       tickPhysics(playerCtx, physicsInput, collisionWorld, {
         getMapTileAt,
@@ -6276,7 +6217,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
     physicsTimeAccum += performance.now() - tStart;
 
-    const consumeFootstep = (heroSpriteMat as any)._consumeFootstepTick;
+    const consumeFootstep = (heroSpriteMat as HeroSpriteMaterial)._consumeFootstepTick;
     if (typeof consumeFootstep === "function" && consumeFootstep()) {
       audioManager.playFootstep("floor", true);
     }
@@ -6305,7 +6246,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const totalTextures = scene.textures.length;
       const totalVertices = scene.getTotalVertices();
 
-      const perfMem = (performance as any).memory;
+      const perfMem = performance.memory;
       const usedHeapMb = perfMem
         ? Math.round((perfMem.usedJSHeapSize / (1024 * 1024)) * 10) / 10
         : undefined;
@@ -6313,7 +6254,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         ? Math.round((perfMem.totalJSHeapSize / (1024 * 1024)) * 10) / 10
         : undefined;
 
-      const chunkStats = (window as any).__slice3dChunkStreaming || {};
+      const chunkStats = window.__slice3dChunkStreaming || {};
 
       playerState.updatePerfMetrics({
         fps: Math.round(engine.getFps()),
@@ -6339,7 +6280,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         chunkLoading: chunkStats.loadingChunks || chunkLoading.size,
       });
 
-      (window as any).__slice3dPerfDiagnostics = {
+      window.__slice3dPerfDiagnostics = {
         fps: Math.round(engine.getFps()),
         frameMs: Math.round(engine.getDeltaTime() * 10) / 10,
         drawCalls,
@@ -6367,7 +6308,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         propStreamRadiusUnits: propSystem.propStreamRadiusUnits,
         ts: Date.now(),
       };
-      (window as any).__slice3dPerf = (window as any).__slice3dPerfDiagnostics;
+      window.__slice3dPerf = window.__slice3dPerfDiagnostics;
     }
 
     telemetryLogTimer += deltaSeconds;
@@ -6375,8 +6316,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (telemetryEnabled && telemetryLogTimer >= LOG_SAMPLE_INTERVAL) {
       telemetryLogTimer = 0;
 
-      const chunkStats = (window as any).__slice3dChunkStreaming || {};
-      const perfMem = (performance as any).memory;
+      const chunkStats = window.__slice3dChunkStreaming || {};
+      const perfMem = performance.memory;
       const usedHeapMb = perfMem
         ? Math.round((perfMem.usedJSHeapSize / (1024 * 1024)) * 10) / 10
         : undefined;
@@ -6564,7 +6505,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         });
       }
 
-      (window as any).__slice3dLogsData = {
+      window.__slice3dLogsData = {
         latestSample: sample,
         totalSamples: runtimeLog.samples.length,
         totalEvents: runtimeLog.events.length,
@@ -6844,10 +6785,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         samples: runtimeLog.samples.length,
         events: runtimeLog.events.length,
       });
+      inputManager.dispose();
       persistRuntimeLogs();
       void flushRuntimeLogsToFile(true);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
+
+
       playerState.off("dropItem", handleDropItem);
       playerState.off("requestPickup", handleRequestPickup);
       playerState.off("spawnDroppedItem", addDroppedItemFromEvent);
@@ -6859,8 +6801,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         window.clearTimeout(playerDeathTimeoutId);
         playerDeathTimeoutId = null;
       }
-      canvas.removeEventListener("contextmenu", onCanvasContextMenu);
-      canvas.removeEventListener("pointerdown", onCanvasPointerDown);
+
+
       scene.onPointerObservable.remove(pointerObserver);
       document.exitPointerLock?.();
       clearAllChunks();
@@ -6882,10 +6824,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       projectileSystem.disposeAll();
       disposeAllPooledSpriteTexturesForScene(scene);
       // S7-FP4: torus marker removed — no dispose needed
-      delete (window as any).__slice3dLogs;
-      delete (window as any).__slice3dLogsData;
-      delete (window as any).__slice3dPerf;
-      delete (window as any).__slice3dPerfDiagnostics;
+      delete window.__slice3dLogs;
+      delete window.__slice3dLogsData;
+      delete window.__slice3dPerf;
+      delete window.__slice3dPerfDiagnostics;
       geometryWorker.terminate();
       scene.dispose();
       engine.dispose();
