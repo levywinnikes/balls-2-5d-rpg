@@ -142,6 +142,7 @@ import { PropStreamSystem } from "./PropStreamSystem";
 import { EnemyStreamSystem, type SliceEnemy, type EnemySpawnData } from "./EnemyStreamSystem";
 import { DropStreamSystem, type SliceDroppedItem } from "./DropStreamSystem";
 import { StreamOrchestrator } from "./StreamOrchestrator";
+import { DoorSystem } from "./DoorSystem";
 import type {
   GeometryWorkerRequest,
   GeometryWorkerResponse,
@@ -325,19 +326,6 @@ type SliceMapData = {
   levels?: Record<string, SliceLevelData>;
 };
 
-type SliceDoor = {
-  uuid: string;
-  level: string;
-  tileX: number;
-  tileY: number;
-  doorId: string;
-  locked: boolean;
-  keyId?: string | null;
-  mesh: Mesh;
-  hingeOnX: boolean;
-  hingeSide: number;
-};
-
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -375,11 +363,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     searchParams.get("map") ||
     searchParams.get("mapName") ||
     "debug_sandbox";
-  /** Door panel fits inside standard wall extrusion (level 0 → wall top). */
-  const DOOR_PANEL_HEIGHT = Math.max(
-    1.35,
-    LEVEL_HEIGHT - WALK_SURFACE - 0.08,
-  );
   /** Props / dropped loot sit on walkable surface (not actor foot clearance). */
   const WORLD_ANCHOR_REST_OFFSET = 0.012;
   // Eye line ~58% of hero body height — chest-level FP view (see HERO_FIRST_PERSON_EYE_BODY_RATIO).
@@ -759,9 +742,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       endScale: 1.1,
     });
   };
-  const doors = new Map<string, SliceDoor>();
-  const doorByLevelTile = new Map<string, string>();
-  const seededDoorLevels = new Set<string>();
   let selectedEnemyUid: string | null = null;
   let lastFocusedCombatHealthSyncAt = 0;
   let lastPlayerAttackAt = 0;
@@ -886,6 +866,31 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     logWarn: (msg: string) => console.warn(msg),
   });
   dropSystem.droppedItemStreamRadiusUnits = streamRadiiUnits.droppedItemStreamRadiusUnits;
+  const doorSystem = new DoorSystem({
+    scene,
+    getCurrentLevel: () => getCurrentLevel(),
+    levelToWorldY: (level: string | number) => levelToWorldY(level),
+    parseLevelNumber: (level: string) => parseLevelNumber(level),
+    getMapTileAt: (level: string, tx: number, tz: number) => getMapTileAt(level, tx, tz),
+    isStaticTileBlocking: (symbol: string | null, tileDef?: any) => isStaticTileBlocking(symbol, tileDef),
+    loadMapDataAsync: () => loadMapData(),
+    safeTileColor: (hex: string | undefined, fallback: string) => safeTileColor(hex, fallback),
+    rebuildNavigationGrid: (level: string) => rebuildNavigationGrid(level),
+    resetLevelEnemyPaths: (level: string) => {
+      enemies.forEach((enemy: any) => {
+        if (enemy.level !== level) return;
+        enemy.currentPath = [];
+        enemy.currentPathIndex = 0;
+        enemy.lastPathAt = 0;
+      });
+    },
+    getDoorState: (uuid: string) => playerState.getDoorState(uuid),
+    setDoorOpen: (uuid: string, open: boolean) => playerState.setDoorOpen(uuid, open),
+    seedDoorState: (uuid: string, state: any) => playerState.seedDoorState(uuid, state),
+    emitMessage: (msg: string) => playerState.emit("message", msg),
+    emitUiNotification: (notification: { type: string; message: string }) => playerState.emit("uiNotification", notification),
+    getPlayerPosition: () => ({ x: player.position.x, z: player.position.z }),
+  });
   const orchestrator = new StreamOrchestrator(
     propSystem,
     enemySystem,
@@ -896,7 +901,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       applyActiveLevelChange: (level: string, transition?: any, options?: { natural?: boolean }) =>
         applyActiveLevelChange(level, transition, options),
       ensureMapLevelReady: (level: string) => ensureMapLevelReady(level),
-      ensureLevelDoorsSeeded: (level: string) => ensureLevelDoorsSeeded(level),
+      ensureLevelDoorsSeeded: (level: string) => doorSystem.ensureLevelSeeded(level),
       setSelectedEnemy: (uid: string | null) => setSelectedEnemy(uid),
       pushLogEvent: (event: string, data: any) => pushLogEvent(event, data),
     },
@@ -1975,7 +1980,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     } else {
       rebuildNavigationWindow(newLevel);
     }
-    void ensureLevelDoorsSeeded(newLevel);
+    void doorSystem.ensureLevelSeeded(newLevel);
     orchestrator.seedLevel(newLevel);
     orchestrator.seedAdjacentLevels(newLevel);
     enemySystem.syncStream(true);
@@ -2022,14 +2027,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     verticalVelocity = 0;
     isGrounded = true;
     lastGroundedFootY = footY;
-  };
-
-  const getDoorTileKey = (level: string, tileX: number, tileY: number) =>
-    `${level}:${tileX}:${tileY}`;
-
-  const getDoorAtTile = (level: string, tileX: number, tileY: number) => {
-    const uuid = doorByLevelTile.get(getDoorTileKey(level, tileX, tileY));
-    return uuid ? doors.get(uuid) || null : null;
   };
 
   const isVoidSymbol = (symbol: string | null) => !symbol || symbol === "...";
@@ -2127,14 +2124,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return Boolean(tileDef?.block);
   };
 
-  const isDoorOpenAtTile = (level: string, tileX: number, tileY: number) => {
-    const door = getDoorAtTile(level, tileX, tileY);
-    if (!door) {
-      return false;
-    }
-    return !!playerState.getDoorState(door.uuid)?.open;
-  };
-
   const isBlockingTile = (
     symbol: string | null,
     tileDef?: SliceTileDefinition,
@@ -2145,9 +2134,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       options.tileX !== undefined &&
       options.tileY !== undefined
     ) {
-      const door = getDoorAtTile(options.level, options.tileX, options.tileY);
+      const door = doorSystem.getDoorAtTile(options.level, options.tileX, options.tileY);
       if (door) {
-        return !isDoorOpenAtTile(options.level, options.tileX, options.tileY);
+        return !doorSystem.isDoorOpenAtTile(options.level, options.tileX, options.tileY);
       }
 
       if (
@@ -3315,171 +3304,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
   };
 
-  const resolveDoorOrientation = (
-    level: string,
-    tileX: number,
-    tileY: number,
-    mapData: SliceMapData,
-  ) => {
-    const wallAt = (x: number, y: number) => {
-      const symbol = getMapTileAt(level, x, y);
-      const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
-      return isStaticTileBlocking(symbol, tileDef);
-    };
-
-    const northWall = wallAt(tileX, tileY - 1);
-    const southWall = wallAt(tileX, tileY + 1);
-    const eastWall = wallAt(tileX + 1, tileY);
-    const westWall = wallAt(tileX - 1, tileY);
-
-    // Door panel spans the axis where side walls sit (E/W -> panel along X).
-    const hingeOnX = eastWall || westWall;
-    const hingeOnZ = northWall || southWall;
-
-    if (hingeOnX && !hingeOnZ) {
-      return { hingeOnX: true, hingeSide: westWall ? -1 : 1 };
-    }
-    if (hingeOnZ && !hingeOnX) {
-      return { hingeOnX: false, hingeSide: northWall ? -1 : 1 };
-    }
-
-    // Fallback for symmetric room entrances: corridor runs N/S in sandbox rooms.
-    return { hingeOnX: true, hingeSide: westWall ? -1 : 1 };
-  };
-
-  const updateDoorVisual = (door: SliceDoor) => {
-    const state = playerState.getDoorState(door.uuid);
-    const isOpen = !!state?.open;
-    const levelWorldY = levelToWorldY(door.level);
-    const floorTop = levelWorldY + WALK_SURFACE;
-    const doorHeight = DOOR_PANEL_HEIGHT;
-    const centerY = floorTop + doorHeight / 2;
-    const tileCenterX = door.tileX + 0.5;
-    const tileCenterZ = door.tileY + 0.5;
-    const hingeOffset = 0.46 * (door.hingeSide ?? 1);
-
-    door.mesh.rotation.y = 0;
-    if (door.hingeOnX) {
-      door.mesh.position.set(tileCenterX, centerY, tileCenterZ);
-      if (isOpen) {
-        door.mesh.rotation.y = (Math.PI / 2) * (door.hingeSide ?? 1);
-        door.mesh.position.x = tileCenterX + hingeOffset;
-        door.mesh.position.z = tileCenterZ + 0.34 * (door.hingeSide ?? 1);
-      }
-    } else {
-      door.mesh.position.set(tileCenterX, centerY, tileCenterZ);
-      if (isOpen) {
-        door.mesh.rotation.y = (Math.PI / 2) * (door.hingeSide ?? 1);
-        door.mesh.position.z = tileCenterZ + hingeOffset;
-        door.mesh.position.x = tileCenterX + 0.34 * (door.hingeSide ?? 1);
-      }
-    }
-    // Show door when within one floor of the player (Y-based)
-    door.mesh.setEnabled(
-      Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) <= LEVEL_HEIGHT,
-    );
-  };
-
-  const refreshDoorSystemsForLevel = (level: string) => {
-    rebuildNavigationGrid(level);
-    enemies.forEach((enemy) => {
-      if (enemy.level !== level) {
-        return;
-      }
-      enemy.currentPath = [];
-      enemy.currentPathIndex = 0;
-      enemy.lastPathAt = 0;
-    });
-  };
-
-  const DOOR_INTERACT_RADIUS = 1.55;
-  /** Direct click on the door mesh — slightly farther than proximity E. */
-  const DOOR_PICK_INTERACT_RADIUS = 2.75;
-
-  const getDoorInteractDistance = (door: SliceDoor): number => {
-    const px = player.position.x;
-    const pz = player.position.z;
-    const closestX = Math.max(door.tileX, Math.min(door.tileX + 1, px));
-    const closestZ = Math.max(door.tileY, Math.min(door.tileY + 1, pz));
-    const dx = px - closestX;
-    const dz = pz - closestZ;
-    return Math.sqrt(dx * dx + dz * dz);
-  };
-
-  const isPlayerOnDoorTile = (door: SliceDoor) => {
-    return (
-      Math.floor(player.position.x) === door.tileX &&
-      Math.floor(player.position.z) === door.tileY
-    );
-  };
-
-  const canCloseDoor = (door: SliceDoor) => {
-    if (!playerState.getDoorState(door.uuid)?.open) {
-      return true;
-    }
-    return !isPlayerOnDoorTile(door);
-  };
-
-  const interactDoorByUuid = (uuid: string): boolean => {
-    const door = doors.get(uuid);
-    if (!door || Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
-      return false;
-    }
-
-    const state = playerState.getDoorState(uuid);
-    if (state?.locked) {
-      playerState.emit("message", "Door is locked.");
-      return false;
-    }
-
-    const isOpen = !!state?.open;
-    if (isOpen && !canCloseDoor(door)) {
-      playerState.emit("uiNotification", {
-        type: "warning",
-        message: "Não dá para fechar — você está na passagem.",
-      });
-      return false;
-    }
-
-    playerState.setDoorOpen(uuid, !isOpen);
-    updateDoorVisual(door);
-    refreshDoorSystemsForLevel(door.level);
-    return true;
-  };
-
-  const findNearbyDoor = (maxDistanceUnits = DOOR_INTERACT_RADIUS): SliceDoor | null => {
-    let nearestDoor: SliceDoor | null = null;
-    let nearestDistance = maxDistanceUnits + 1;
-
-    doors.forEach((door) => {
-      // Only interact with doors on the same floor (Y-based)
-      if (Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
-        return;
-      }
-      const distance = getDoorInteractDistance(door);
-      if (distance > maxDistanceUnits || distance >= nearestDistance) {
-        return;
-      }
-      nearestDoor = door;
-      nearestDistance = distance;
-    });
-
-    return nearestDoor;
-  };
-
-  const findDoorUuidFromPick = (pickResult: { pickedMesh?: any } | null | undefined) => {
-    let currentMesh = pickResult?.pickedMesh;
-    while (currentMesh) {
-      const uuid = (currentMesh.metadata as { sliceDoorUuid?: string } | undefined)
-        ?.sliceDoorUuid;
-      if (uuid) {
-        return uuid;
-      }
-      currentMesh = currentMesh.parent;
-    }
-    return null;
-  };
-
   const extractEnemyUidFromMeshChain = (mesh: any): string | undefined => {
     let currentMesh = mesh;
     while (currentMesh) {
@@ -3563,7 +3387,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const multiHits = scene.multiPick(pointerX, pointerY);
     if (multiHits) {
       for (const hit of multiHits) {
-        const uuid = findDoorUuidFromPick(hit);
+        const uuid = doorSystem.findDoorUuidFromPick(hit);
         if (uuid) {
           return uuid;
         }
@@ -3571,7 +3395,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     const singlePick = scene.pick(pointerX, pointerY);
-    const fromSingle = findDoorUuidFromPick(singlePick);
+    const fromSingle = doorSystem.findDoorUuidFromPick(singlePick);
     if (fromSingle) {
       return fromSingle;
     }
@@ -3585,24 +3409,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           0.95,
         );
         const uuid = occluded?.pickMetadata.sliceDoorUuid;
-        if (uuid && doors.has(uuid)) {
+        if (uuid && doorSystem.doors.has(uuid)) {
           return uuid;
         }
       }
     }
 
     return null;
-  };
-
-  const tryInteractPickedDoor = (doorUuid: string): boolean => {
-    const door = doors.get(doorUuid);
-    if (!door || Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
-      return false;
-    }
-    if (getDoorInteractDistance(door) > DOOR_PICK_INTERACT_RADIUS) {
-      return false;
-    }
-    return interactDoorByUuid(doorUuid);
   };
 
   const getNearestPickupItemDistance = (): number => {
@@ -3624,109 +3437,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
 
     return nearestDistance;
-  };
-
-  /** E-key door use — skipped when a pickup is closer than the door. */
-  const tryInteractNearbyDoorRespectingPickup = (): boolean => {
-    const pickupRange = playerState.pickupRange / 32;
-    const nearestItemDistance = getNearestPickupItemDistance();
-    const nearbyDoor = findNearbyDoor(DOOR_INTERACT_RADIUS);
-    if (!nearbyDoor) {
-      return false;
-    }
-
-    const doorDistance = getDoorInteractDistance(nearbyDoor);
-    if (
-      nearestItemDistance <= pickupRange &&
-      nearestItemDistance + 0.08 < doorDistance
-    ) {
-      return false;
-    }
-
-    return interactDoorByUuid(nearbyDoor.uuid);
-  };
-
-  const ensureLevelDoorsSeeded = async (level: string) => {
-    if (seededDoorLevels.has(level)) {
-      return;
-    }
-
-    const mapData = await loadMapData();
-    if (!mapData) {
-      return;
-    }
-
-    const levelData = mapData.levels?.[level];
-    const entityTemplates = mapData.entityTemplates || {};
-    const wallColor = safeTileColor(
-      mapData.tileDefinitions?.wal?.color,
-      "#7c5a3b",
-    );
-
-    levelData?.entities?.forEach((entity, index) => {
-      const entityDef = entityTemplates[entity.symbol];
-      if (!entityDef || entityDef.type !== "door") {
-        return;
-      }
-
-      const uuid =
-        entity.uuid ||
-        entityDef.uuid ||
-        `door_${level}_${entity.x}_${entity.y}_${index}`;
-      if (doors.has(uuid)) {
-        return;
-      }
-
-      playerState.seedDoorState(uuid, {
-        open: false,
-        locked: entity.locked ?? entityDef.locked ?? false,
-        keyId: entity.keyId ?? entityDef.keyId ?? null,
-      });
-
-      const orientation = resolveDoorOrientation(
-        level,
-        entity.x,
-        entity.y,
-        mapData,
-      );
-      const doorHeight = DOOR_PANEL_HEIGHT;
-
-      const doorMesh = MeshBuilder.CreateBox(
-        `slice-door-${uuid}`,
-        {
-          width: orientation.hingeOnX ? 0.96 : 0.14,
-          height: doorHeight,
-          depth: orientation.hingeOnX ? 0.14 : 0.96,
-        },
-        scene,
-      );
-      const doorMaterial = new StandardMaterial(`slice-door-mat-${uuid}`, scene);
-      doorMaterial.diffuseColor = wallColor.scale(0.9);
-      doorMaterial.specularColor = Color3.Black();
-      doorMaterial.emissiveColor = wallColor.scale(0.15);
-      doorMesh.material = doorMaterial;
-      doorMesh.isPickable = true;
-      doorMesh.metadata = { sliceDoorUuid: uuid };
-
-      const door: SliceDoor = {
-        uuid,
-        level,
-        tileX: entity.x,
-        tileY: entity.y,
-        doorId: entityDef.id || "door",
-        locked: entity.locked ?? entityDef.locked ?? false,
-        keyId: entity.keyId ?? entityDef.keyId ?? null,
-        mesh: doorMesh,
-        hingeOnX: orientation.hingeOnX,
-        hingeSide: orientation.hingeSide,
-      };
-      doors.set(uuid, door);
-      doorByLevelTile.set(getDoorTileKey(level, entity.x, entity.y), uuid);
-      updateDoorVisual(door);
-    });
-
-    seededDoorLevels.add(level);
-    refreshDoorSystemsForLevel(level);
   };
 
   let debugCollidersVisible = false;
@@ -3926,7 +3636,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     await ensureWorldMapReady(mapData);
     ensureDebugSandboxStarterLoadout(mapData);
-    await ensureLevelDoorsSeeded(resolvedLevel);
+    await doorSystem.ensureLevelSeeded(resolvedLevel);
 
     if (resolvedLevel !== getCurrentLevel()) {
       applyActiveLevelChange(resolvedLevel, undefined, { natural: true });
@@ -5211,13 +4921,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       });
     });
 
-    doors.forEach((door) => {
+    doorSystem.doors.forEach((door) => {
       if (Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
         return;
       }
 
       const feetY = levelToWorldY(door.level);
-      const doorHeight = DOOR_PANEL_HEIGHT;
+      const doorHeight = doorSystem.DOOR_PANEL_HEIGHT;
       targets.push({
         id: door.uuid,
         kind: "door",
@@ -6212,7 +5922,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
 
-      if (tryInteractNearbyDoorRespectingPickup()) {
+      if (doorSystem.tryInteractNearbyDoorRespectingPickup(playerState.pickupRange / 32, getNearestPickupItemDistance())) {
         return;
       }
 
@@ -6328,13 +6038,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (
       pickedDoorUuid &&
       isRightClick &&
-      tryInteractPickedDoor(pickedDoorUuid)
+      doorSystem.tryInteractPickedDoor(pickedDoorUuid)
     ) {
       return;
     }
 
     if (isRightClick) {
-      tryInteractNearbyDoorRespectingPickup();
+      doorSystem.tryInteractNearbyDoorRespectingPickup(playerState.pickupRange / 32, getNearestPickupItemDistance());
       return;
     }
 
@@ -7119,8 +6829,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
   playerState.on("displaySettingsChanged", handleDisplaySettings);
   const handleDoorStatesChanged = () => {
-    doors.forEach((door) => updateDoorVisual(door));
-    refreshDoorSystemsForLevel(getRenderLevel());
+    doorSystem.handleDoorStatesChanged();
   };
   playerState.on("doorStatesChanged", handleDoorStatesChanged);
 
@@ -7167,15 +6876,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         slash.texture.dispose();
       });
       activeSlashtrails.length = 0;
-      doors.forEach((door) => {
-        const material = door.mesh.material;
-        door.mesh.dispose();
-        if (material instanceof StandardMaterial) {
-          material.dispose();
-        }
-      });
-      doors.clear();
-      doorByLevelTile.clear();
+      doorSystem.clear();
       propSystem.clear();
       enemySystem.clear();
       projectileSystem.disposeAll();
