@@ -30,6 +30,7 @@ export interface GameSaveData {
   map: string;
   currentLevel: string;
   playerPos: { x: number; y: number };
+  playerY?: number;
   playerState: {
     characterName?: string;
     health: number;

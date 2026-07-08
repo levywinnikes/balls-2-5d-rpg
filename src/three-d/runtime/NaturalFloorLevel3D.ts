@@ -14,7 +14,7 @@ export type InferLevelFromFootYOptions = {
 };
 
 /**
- * Derive BMS active level from world foot height — no tile probes, no Z snap.
+ * Derive BMS level from world foot height — no tile probes, no Z snap.
  *
  * Each level N owns the band [floorFoot(N), floorFoot(N+1)) where
  * floorFoot(N) = levelToWorldY(N) + floorSurfaceY.

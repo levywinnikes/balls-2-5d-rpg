@@ -136,7 +136,7 @@ export class InteractableWallRevealSystem {
   update(
     enabled: boolean,
     observer: Vector3,
-    activeLevel: string,
+    currentLevel: string,
     targets: InteractableRevealTarget[],
     hasWorldLineOfSight: WorldLineOfSightCheck,
     deltaSeconds: number,
@@ -159,7 +159,7 @@ export class InteractableWallRevealSystem {
     const occludedThisFrame: ActiveOccludedTarget[] = [];
 
     for (const target of targets) {
-      if (target.level !== activeLevel) {
+      if (target.level !== currentLevel) {
         continue;
       }
 

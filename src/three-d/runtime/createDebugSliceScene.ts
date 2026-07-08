@@ -98,12 +98,19 @@ import {
 import {
   FEET_CLEARANCE,
 } from "./GroundHeightQuery3D";
+import { CollisionWorld, isGradedWalkTile } from "./CollisionWorld";
 import {
-  isGradedWalkTile,
-} from "./TileSurfaceResolver";
+  type PlayerContext,
+  type PhysicsInput,
+  createPlayerContext,
+} from "./PlayerContext";
+import {
+  tickPhysics,
+  type PhysicsWorldQueries,
+  type PhysicsEvents,
+} from "./PlayerPhysicsSystem";
 import { LEVEL_HEIGHT, WALL_HEIGHT, WALK_SURFACE } from "../../constants/World";
 import { inferLevelFromFootY } from "./NaturalFloorLevel3D";
-import { CollisionWorld } from "./CollisionWorld";
 import {
    isFloorLevelRamp,
    resolveTileHeight,
@@ -131,6 +138,8 @@ import type { SliceTileDefinition } from "./SliceTileTypes";
 import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
 import { RuneRegistry } from "../../core/magic/RuneRegistry";
 import { SaveSystem } from "../../core/systems/SaveSystem";
+import { PropStreamSystem } from "./PropStreamSystem";
+import { EnemyStreamSystem, type SliceEnemy, type EnemySpawnData } from "./EnemyStreamSystem";
 import type {
   GeometryWorkerRequest,
   GeometryWorkerResponse,
@@ -150,7 +159,7 @@ type SliceRuntime = {
 type Slice3DLogSample = {
   ts: number;
   elapsedSec: number;
-  activeLevel: string;
+  currentLevel: string;
   player: {
     x: number;
     y: number;
@@ -316,51 +325,6 @@ type SliceMapData = {
   levels?: Record<string, SliceLevelData>;
 };
 
-type EnemySpawnData = {
-  enemyType: string;
-  x: number;
-  y: number;
-};
-
-type PropSpawnData = {
-  propId: string;
-  tileX: number;
-  tileY: number;
-  isCollidable: boolean;
-};
-
-type SliceEnemy = {
-  uid: string;
-  spawnKey: string; // deterministic key for persistence (level_type_index)
-  level: string;
-  enemyType: string;
-  definition: EnemyDefinition;
-  meshRoot: TransformNode;
-  health: number;
-  maxHealth: number;
-  worldPos: Vector3;
-  spawnPos: Vector3;
-  lastAttackAt: number;
-  lastPathAt: number;
-  currentPath: Array<{ x: number; y: number }>;
-  currentPathIndex: number;
-  magicCooldowns: Map<string, number>;
-  isDead: boolean;
-  isProvoked: boolean;
-  animState: EnemyVisualAnimState;
-  animDirection: HeroBmsDirection;
-  animLockedUntil: number;
-};
-
-type SliceProp = {
-  uid: string;
-  level: string;
-  propId: string;
-  tileX: number;
-  tileY: number;
-  meshRoot: TransformNode;
-};
-
 type SliceDoor = {
   uuid: string;
   level: string;
@@ -422,10 +386,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   // Eye line ~58% of hero body height — chest-level FP view (see HERO_FIRST_PERSON_EYE_BODY_RATIO).
   const FIRST_PERSON_EYE_ABOVE_FEET = getHeroFirstPersonEyeHeight();
   const HERO_BODY_HEIGHT = HERO_COLLISION_HEIGHT;
-  const CEILING_BODY_CLEARANCE = 0.14;
-  /** Headroom (world units) for a full jump when under a solid ceiling tile. */
-  const JUMP_FULL_HEADROOM = 0.85;
-
   // ── S12-T1/T4: Layer Semantics & Ownership (canonical, top-down is the product mode) ───────────
   // Layer conventions:
   //   -1 = underground / sewers (esgoto)
@@ -433,7 +393,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   //   +1 = first upper floor / floating islands (cidade suspensa)
   //   +2 = rooftops / open sky structures
   // Ownership rules:
-  //   - LevelRenderer (buildChunk) owns all 3D tile geometry for visible levels around activeLevel.
+  //   - LevelRenderer (buildChunk) owns all 3D tile geometry for visible levels around currentLevel.
   //   - Chunks are rebuilt on level change to keep visual stack and currentLevel state synchronized.
   //   - Upper-level structures are faded by level-occlusion when the player is under them.
   //   - All map/tile decisions use top-down perspective as the canonical product view.
@@ -444,8 +404,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       typeof level === "number" ? level : parseLevelNumber(level);
     return levelNumber * LEVEL_HEIGHT;
   };
-  let activeLevel = playerState.getCurrentLevel();
-  let activeLevelNumber = parseLevelNumber(activeLevel);
+  let lastSideEffectLevel: string | null = null;
+  const getCurrentLevel = (): string => {
+    if (!mapDataCache?.levels) return playerState.getCurrentLevel();
+    return inferLevelFromFootY(player.position.y, Object.keys(mapDataCache.levels), {
+      levelToWorldY,
+      parseLevelNumber,
+      levelHeightUnits: LEVEL_HEIGHT,
+      floorSurfaceY: WALK_SURFACE,
+    });
+  };
+
+  /** Derive level from player Y for rendering/presentation — same as getCurrentLevel. */
+  const getRenderLevel = (): string => getCurrentLevel();
   let activeTopDownCameraPreset: TopDownCameraPreset = "safe";
 
   const camera = new ArcRotateCamera(
@@ -519,9 +490,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     { radius: 0.42, height: 0.84, tessellation: 12 },
     scene,
   );
+  const initLevelNumber = parseLevelNumber(playerState.getCurrentLevel());
+  const savedPlayerY = searchParams.get("playerY");
+  const initY = savedPlayerY !== null
+    ? parseFloat(savedPlayerY)
+    : levelToWorldY(initLevelNumber) + WALK_SURFACE;
   player.position = new Vector3(
     startingPosition.x !== 0 ? worldToSliceCoord(startingPosition.x) : 6,
-    levelToWorldY(activeLevelNumber) + WALK_SURFACE,
+    initY,
     startingPosition.y !== 0 ? worldToSliceCoord(startingPosition.y) : 6,
   );
   player.material = playerMaterial;
@@ -600,7 +576,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   heroShadow.material = heroShadowMat;
   heroShadow.position = new Vector3(
     player.position.x,
-    levelToWorldY(activeLevelNumber) + WALK_SURFACE + 0.01,
+    levelToWorldY(initLevelNumber) + WALK_SURFACE + 0.01,
     player.position.z,
   );
   heroShadow.rotation.x = Math.PI / 2;
@@ -750,9 +726,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
     const dir = delta.normalize();
 
-    const levelWorldY = levelToWorldY(activeLevel);
     const slashPos = player.position.clone();
-    slashPos.y = levelWorldY + 0.4;
+    slashPos.y = player.position.y + 0.05;
     slashPos.addInPlace(dir.scale(0.5));
 
     const slashMesh = MeshBuilder.CreatePlane(
@@ -822,22 +797,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       endScale: 1.1,
     });
   };
-  const enemies = new Map<string, SliceEnemy>();
-  const ENEMY_RESPAWN_MS = 60_000;
-  const pendingEnemyRespawns = new Map<
-    string,
-    {
-      level: string;
-      spawn: EnemySpawnData;
-      index: number;
-      elapsedMs: number;
-      respawnTimeMs: number;
-    }
-  >();
-  const enemySpawnCatalog = new Map<
-    string,
-    { level: string; spawn: EnemySpawnData; index: number }
-  >();
   const doors = new Map<string, SliceDoor>();
   const doorByLevelTile = new Map<string, string>();
   const seededDoorLevels = new Set<string>();
@@ -849,14 +808,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   // S11-T1: rune targeting mode (Opção A parity)
   let runeTargetingMode = false;
   let targetingRuneId: string | null = null;
-  const seededEnemyLevels = new Set<string>();
-  const props = new Map<string, SliceProp>();
-  const propSpawnCatalog = new Map<
-    string,
-    { level: string; spawn: PropSpawnData; index: number }
-  >();
-  const collidablePropTilesByLevel = new Map<string, Set<string>>();
-  const seededPropLevels = new Set<string>();
   let mapDataCache: SliceMapData | null = null;
   let worldMapReady = false;
   const recentPlayerDamagePopups = new Map<
@@ -864,8 +815,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     { at: number; value: number }
   >();
 
-  // S7-FP4: emissive pulse on selected enemy mesh (replaces torus ring)
-  // selectedEnemyMarker removed — highlight is applied directly to enemy meshes
   let enemyHighlightPulseT = 0; // accumulator for sine pulse (seconds)
 
   const mapRoot = new TransformNode("slice-map-root", scene);
@@ -873,14 +822,24 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const wallRevealSystem = new InteractableWallRevealSystem(scene, mapRoot, {
     revealRadiusTiles: 20,
   });
+  const propSystem = new PropStreamSystem({
+    scene,
+    mapRoot,
+    getPlayerPosition: () => player.position,
+    getCurrentLevel: () => getCurrentLevel(),
+    isFirstPerson: () => isFirstPerson,
+    levelToWorldY: (level: string | number) => levelToWorldY(level),
+    resolveWorldAnchorY: (worldX: number, worldZ: number, level: string, restOffset?: number) =>
+      resolveWorldAnchorY(worldX, worldZ, level, restOffset),
+    loadMapDataAsync: () => loadMapData(),
+    onNavigationRebuild: (level: string) => rebuildNavigationWindow(level),
+  });
   // Chunk streaming constants (visual profile depends on camera mode; gameplay state remains global)
   const CHUNK_SIZE = 16; // tiles per chunk side
   const CHUNK_UNLOAD_BUDGET_PER_TICK = 8; // max chunks to unload each update tick
-  const PROP_STREAM_SYNC_INTERVAL = 0.35;
   const NAV_WINDOW_RADIUS = 40;
   const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
   const ENEMY_AI_RADIUS_UNITS = 18;
-  const ENEMY_STREAM_SYNC_INTERVAL = 0.35;
   const WALL_REVEAL_TARGET_RADIUS_UNITS = 22;
   const DROP_SYNC_INTERVAL = 0.2;
 
@@ -895,12 +854,57 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     qualityStreamConfig.topDownChunkBuildBudgetPerTick;
   let firstPersonChunkBuildBudgetPerTick =
     qualityStreamConfig.firstPersonChunkBuildBudgetPerTick;
-  let propStreamRadiusUnits = streamRadiiUnits.propStreamRadiusUnits;
-  let propStreamRadiusUnitsFirstPerson =
-    streamRadiiUnits.propStreamRadiusUnitsFirstPerson;
-  let propDespawnRadiusUnits = streamRadiiUnits.propDespawnRadiusUnits;
-  let enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
-  let enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
+  propSystem.propStreamRadiusUnits = streamRadiiUnits.propStreamRadiusUnits;
+  propSystem.propStreamRadiusUnitsFirstPerson = streamRadiiUnits.propStreamRadiusUnitsFirstPerson;
+  propSystem.propDespawnRadiusUnits = streamRadiiUnits.propDespawnRadiusUnits;
+  const enemySystem = new EnemyStreamSystem({
+    scene,
+    mapRoot,
+    getPlayerPosition: () => player.position,
+    getCurrentLevel: () => getCurrentLevel(),
+    levelToWorldY: (level: string | number) => levelToWorldY(level),
+    worldToSliceCoord: (value: number) => worldToSliceCoord(value),
+    applyActorAquaticY: (worldPos: Vector3, level: string) => applyActorAquaticY(worldPos, level),
+    loadMapDataAsync: () => loadMapData(),
+    onSelectedEnemyChanged: (uid: string | null) => {
+      if (uid === null && selectedEnemyUid !== null) {
+        const prev = enemies.get(selectedEnemyUid);
+        if (prev) {
+          restoreEnemyTargetVisual(prev.meshRoot);
+        }
+        playerState.emit("combatFocusChanged", { uid: null });
+      }
+    },
+    onEnemyDeadPersistenceClear: (level: string, spawnKey: string) => {
+      const unmark = playerState.unmarkEnemy3dDead;
+      if (typeof unmark === "function") {
+        unmark.call(playerState, level, spawnKey);
+        return;
+      }
+      if (!playerState.isEnemy3dDead(level, spawnKey)) {
+        return;
+      }
+      const snapshot = playerState.getDeadEnemies3dSnapshot();
+      const remaining = snapshot[level]?.filter((key: string) => key !== spawnKey) ?? [];
+      if (remaining.length > 0) {
+        snapshot[level] = remaining;
+      } else {
+        delete snapshot[level];
+      }
+      playerState.loadDeadEnemies3d(snapshot);
+    },
+    isEnemy3dDead: (level: string, spawnKey: string) =>
+      playerState.isEnemy3dDead(level, spawnKey),
+    getSelectedEnemyUid: () => selectedEnemyUid,
+    setSelectedEnemyUid: (uid: string | null) => { selectedEnemyUid = uid; },
+  });
+  const enemies = enemySystem.enemies;
+  const ENEMY_RESPAWN_MS = enemySystem.ENEMY_RESPAWN_MS;
+  const pendingEnemyRespawns = enemySystem.pendingEnemyRespawns;
+  const enemySpawnCatalog = enemySystem.spawnCatalog;
+  const seededEnemyLevels = enemySystem.seededLevels;
+  enemySystem.enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
+  enemySystem.enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
   let droppedItemStreamRadiusUnits =
     streamRadiiUnits.droppedItemStreamRadiusUnits;
 
@@ -916,12 +920,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       qualityStreamConfig.topDownChunkBuildBudgetPerTick;
     firstPersonChunkBuildBudgetPerTick =
       qualityStreamConfig.firstPersonChunkBuildBudgetPerTick;
-    propStreamRadiusUnits = streamRadiiUnits.propStreamRadiusUnits;
-    propStreamRadiusUnitsFirstPerson =
-      streamRadiiUnits.propStreamRadiusUnitsFirstPerson;
-    propDespawnRadiusUnits = streamRadiiUnits.propDespawnRadiusUnits;
-    enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
-    enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
+    propSystem.propStreamRadiusUnits = streamRadiiUnits.propStreamRadiusUnits;
+    propSystem.propStreamRadiusUnitsFirstPerson = streamRadiiUnits.propStreamRadiusUnitsFirstPerson;
+    propSystem.propDespawnRadiusUnits = streamRadiiUnits.propDespawnRadiusUnits;
+    enemySystem.enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
+    enemySystem.enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
     droppedItemStreamRadiusUnits =
       streamRadiiUnits.droppedItemStreamRadiusUnits;
   };
@@ -1268,7 +1271,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       ...runtimeLog,
       exportedAt: new Date().toISOString(),
       runtime: {
-        activeLevel,
+        currentLevel: getCurrentLevel(),
         isFirstPerson,
       },
       summary,
@@ -1358,7 +1361,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   pushLogEvent("session.start", {
     map: sliceMapName,
-    level: activeLevel,
+    level: getCurrentLevel(),
   });
 
   let mapMinX = 0;
@@ -1399,18 +1402,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return true;
     }
 
-    const symbol = getMapTileAt(activeLevel, tileX, tileY);
+    const symbol = getMapTileAt(getCurrentLevel(), tileX, tileY);
     const tileDef = symbol ? mapData.tileDefinitions?.[symbol] : undefined;
     if (
       isBlockingTile(symbol, tileDef, {
-        level: activeLevel,
+        level: getCurrentLevel(),
         tileX,
         tileY,
       })
     ) {
       return true;
     }
-    return isCollidablePropAtTile(activeLevel, tileX, tileY);
+    return propSystem.isCollidableTile(getCurrentLevel(), tileX, tileY);
   };
 
   projectileGridContext.isTileBlocked = (tileX, tileY) =>
@@ -1866,7 +1869,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const getHighestGroundBelow = (worldX: number, worldZ: number, currentY: number) => {
     const mapData = mapDataCache;
-    const levelKeys = mapData?.levels ? Object.keys(mapData.levels) : [activeLevel];
+    const levelKeys = mapData?.levels ? Object.keys(mapData.levels) : [getCurrentLevel()];
     const floor = collisionWorld.queryFloor(
       worldX,
       worldZ,
@@ -1931,17 +1934,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     },
     options?: { natural?: boolean },
   ) => {
-    if (newLevel === activeLevel) {
+    if (newLevel === lastSideEffectLevel) {
       return;
     }
-    const previousLevel = activeLevel;
+    const previousLevel = lastSideEffectLevel ?? newLevel;
+    lastSideEffectLevel = newLevel;
     const natural = options?.natural === true;
-    activeLevel = newLevel;
-    activeLevelNumber = parseLevelNumber(newLevel);
     playerState.setCurrentLevel(newLevel);
     WorldMapService.ensureLevelBuffer(newLevel);
 
     if (transition) {
+      console.log("[WARP] applyActiveLevelChange with transition", { from: previousLevel, to: newLevel, tileX: transition.tileX, tileZ: transition.tileZ, landingLocalZ: transition.landingLocalZ });
       player.position.z = transition.tileZ + transition.landingLocalZ;
       player.position.x = Math.min(
         mapMaxX,
@@ -1983,11 +1986,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       rebuildNavigationWindow(newLevel);
     }
     void ensureLevelDoorsSeeded(newLevel);
-    void ensureLevelEnemiesSeeded(newLevel);
+    void enemySystem.ensureLevelSeeded(newLevel);
     void ensureLevelItemsSeeded(newLevel);
-    void ensureLevelPropsSeeded(newLevel);
-    syncEnemyStream(true);
-    syncPropStream(true);
+    void propSystem.ensureLevelSeeded(newLevel);
+    // Seed adjacent levels so enemies/props are visible via Y-based visibility
+    const newNum = parseLevelNumber(newLevel);
+    for (const adjacent of [String(newNum - 1), String(newNum + 1)]) {
+      if (mapDataCache?.levels?.[adjacent]) {
+        void enemySystem.ensureLevelSeeded(adjacent);
+        void propSystem.ensureLevelSeeded(adjacent);
+      }
+    }
+    enemySystem.syncStream(true);
+    propSystem.syncStream(true);
     pushLogEvent("level.change", {
       from: previousLevel,
       to: newLevel,
@@ -1997,51 +2008,33 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   /**
-   * Map layer follows stair exit + foot height (Quake-style walk, no Z snap).
-   *
-   * FIX: Added levelTransitionCooldown guard so stair-triggered level changes
-   * cannot fire again for 0.35 s, preventing floor-cascade on stacked stair tiles.
+   * Trigger side effects when Y-derived level changes (no cache, no hysteresis).
+   * Replaces the old syncVerticalLevelFromMovement pattern.
    */
-  const syncVerticalLevelFromMovement = (didMove: boolean, moveStartX: number, moveStartZ: number) => {
-    if (!worldBootstrapReady) {
-      return;
-    }
+  const syncLevelSideEffects = () => {
+    if (!worldBootstrapReady) return;
     const mapData = mapDataCache;
-    if (!mapData?.levels) {
-      return;
-    }
-    if (holeFallLandingLevel || isPlayerOverVoidAtLevel(activeLevel)) {
-      return;
-    }
-    if (levelTransitionCooldown > 0) {
-      return;
-    }
+    if (!mapData?.levels) return;
+    if (holeFallLandingLevel || isPlayerOverVoidAtLevel(getCurrentLevel())) return;
+    if (levelTransitionCooldown > 0) return;
 
-    const levelKeys = Object.keys(mapData.levels);
-    const aquatic = getAquaticSampleAt(player.position.x, player.position.z, activeLevel);
-    const unsunkFootY = player.position.y - (aquatic.mode !== "dry" ? aquatic.sinkOffset : 0);
-    const inferredLevel = inferLevelFromFootY(unsunkFootY, levelKeys, {
-      levelToWorldY,
-      parseLevelNumber,
-      levelHeightUnits: LEVEL_HEIGHT,
-      floorSurfaceY: WALK_SURFACE,
-    });
-
-    if (inferredLevel !== activeLevel) {
+    const currentLevel = getCurrentLevel();
+    if (currentLevel !== lastSideEffectLevel) {
       levelTransitionCooldown = 0.35;
-      applyActiveLevelChange(inferredLevel, undefined, { natural: true });
+      applyActiveLevelChange(currentLevel, undefined, { natural: true });
       snapFootToGradedSurface();
     }
   };
 
   const snapPlayerFootToActiveLevel = () => {
-    const footY = levelBinaryCache.has(activeLevel)
+    const currentLevel = getCurrentLevel();
+    const footY = levelBinaryCache.has(currentLevel)
       ? getGroundFootY(
           player.position.x,
           player.position.z,
-          activeLevel,
+          currentLevel,
         )
-      : levelToWorldY(activeLevel) +
+      : levelToWorldY(currentLevel) +
         WALK_SURFACE +
         FEET_CLEARANCE;
     player.position.y = footY;
@@ -2120,19 +2113,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     } else {
       player.position.y = floor.footY + aquatic.sinkOffset;
     }
-    if (floor.level !== activeLevel) {
+    if (floor.level !== getCurrentLevel()) {
       applyActiveLevelChange(floor.level, undefined, { natural: true });
     }
   };
-
-  const getPropTileKey = (tileX: number, tileY: number) =>
-    `${tileX},${tileY}`;
-
-  const isCollidablePropAtTile = (
-    level: string,
-    tileX: number,
-    tileY: number,
-  ) => collidablePropTilesByLevel.get(level)?.has(getPropTileKey(tileX, tileY)) ?? false;
 
   const isStaticTileBlocking = (
     symbol: string | null,
@@ -2186,63 +2170,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
 
       if (
-        isCollidablePropAtTile(options.level, options.tileX, options.tileY)
+        propSystem.isCollidableTile(options.level, options.tileX, options.tileY)
       ) {
         return true;
       }
     }
 
     return isStaticTileBlocking(symbol, tileDef);
-  };
-
-  const isWorldPositionBlocked = (
-    worldX: number,
-    worldZ: number,
-    radius = 0.32,
-    options?: { blockVoidForPlayer?: boolean; footY?: number },
-  ) => {
-    const mapData = mapDataCache;
-    if (!mapData || !mapData.width || !mapData.height) {
-      return false;
-    }
-
-    if (worldX < 0 || worldZ < 0 || worldX >= mapData.width || worldZ >= mapData.height) {
-      return true;
-    }
-
-    const footY = options?.footY ?? player.position.y;
-    const headY = footY + HERO_BODY_HEIGHT;
-    const levelKeys = Object.keys(mapData.levels || {});
-
-    // Volume overlap check — replaces all old tile-level lookups
-    if (collisionWorld.isHorizontalBlocked(worldX, worldZ, footY, headY, radius, levelKeys)) {
-      return true;
-    }
-
-    // Fall-safety void check (center point only)
-    if (Boolean(options?.blockVoidForPlayer) && playerState.isFallSafetyEnabled()) {
-      const tx = Math.floor(worldX);
-      const tz = Math.floor(worldZ);
-      const levelNum = Math.floor(footY / LEVEL_HEIGHT);
-      const checkLevel = String(levelNum);
-      const symbol = mapData.levels?.[checkLevel]
-        ? getMapTileAt(checkLevel, tx, tz)
-        : null;
-      if (symbol === "..." || !symbol) {
-        const belowLevel = String(levelNum - 1);
-        const belowSym = mapData.levels?.[belowLevel]
-          ? getMapTileAt(belowLevel, tx, tz)
-          : null;
-        const belowDef = belowSym && belowSym !== "..."
-          ? mapData.tileDefinitions?.[belowSym]
-          : undefined;
-        if (!(belowDef && isGradedWalkTile(belowDef, LEVEL_HEIGHT))) {
-          return true;
-        }
-      }
-    }
-
-    return false;
   };
 
   const clearChunk = (key: string) => {
@@ -2586,11 +2520,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const tileX = Math.floor(player.position.x);
     const tileZ = Math.floor(player.position.z);
     const verticalStackRadius = resolveVerticalStackRadiusTiles();
+    const renderLevel = getRenderLevel();
 
     if (
       tileX === lastCachedTileX &&
       tileZ === lastCachedTileZ &&
-      activeLevel === lastCachedActiveLevel &&
+      renderLevel === lastCachedActiveLevel &&
       isFirstPerson === lastCachedIsFirstPerson &&
       verticalStackRadius === lastCachedVerticalStackRadius &&
       cachedRenderableLevels.length > 0
@@ -2600,18 +2535,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     lastCachedTileX = tileX;
     lastCachedTileZ = tileZ;
-    lastCachedActiveLevel = activeLevel;
+    lastCachedActiveLevel = renderLevel;
     lastCachedIsFirstPerson = isFirstPerson;
     lastCachedVerticalStackRadius = verticalStackRadius;
 
     const mapData = mapDataCache;
     if (!mapData?.levels) {
-      cachedRenderableLevels = [activeLevel];
+      cachedRenderableLevels = [renderLevel];
       return cachedRenderableLevels;
     }
 
     const stack = resolveVerticalVisibleLevels(
-      activeLevel,
+      renderLevel,
       tileX,
       tileZ,
       Object.keys(mapData.levels),
@@ -2621,8 +2556,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       { parseLevelNumber, columnRadius: verticalStackRadius },
     );
     const merged = new Set<string>(stack);
-    merged.add(activeLevel);
-    const n = parseLevelNumber(activeLevel);
+    merged.add(renderLevel);
+    const n = parseLevelNumber(renderLevel);
     const below = String(n - 1);
     const above = String(n + 1);
     if (mapData.levels[below]) {
@@ -2646,7 +2581,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (isFirstPerson && levelMeshes.size > 0) {
       const showLevels = mapData?.levels
         ? new Set(Object.keys(mapData.levels))
-        : new Set([activeLevel]);
+        : new Set([getCurrentLevel()]);
       if (holeFallLandingLevel) {
         showLevels.add(holeFallLandingLevel);
       }
@@ -2732,7 +2667,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     waterEffectSystem.updateOcclusion(occlusionStartLevel, deltaSeconds);
 
     (window as any).__slice3dVerticalVisibility = {
-      activeLevel,
+      currentLevel: getCurrentLevel(),
       visibleLevels: Array.from(verticallyVisible),
       occludedFromLevel: occlusionStartLevel,
       occlusionScanRadius: DEFAULT_OCCLUSION_SCAN_RADIUS,
@@ -2819,7 +2754,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const dy = heroPos.y - camPos.y;
     if (Math.abs(dy) < 0.001) return;
 
-    const currentNum = parseLevelNumber(activeLevel);
+    const currentNum = parseLevelNumber(getRenderLevel());
     const dir = heroPos.subtract(camPos);
     const toHide = new Set<Mesh>();
 
@@ -2886,14 +2821,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const mapData = mapDataCache;
     if (!mapData?.levels) return null;
 
-    if (isGradedWalkAt(player.position.x, player.position.z, activeLevel)) {
+    const footLevel = getRenderLevel();
+    if (isGradedWalkAt(player.position.x, player.position.z, footLevel)) {
       return null;
     }
 
     const camPos = camera.position;
     const heroPos = player.position;
     const dir = heroPos.subtract(camPos);
-    const currentNum = parseLevelNumber(activeLevel);
+    const currentNum = parseLevelNumber(footLevel);
 
     const upperLevels = Object.keys(mapData.levels)
       .filter((key) => parseLevelNumber(key) > currentNum)
@@ -3534,9 +3470,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         door.mesh.position.x = tileCenterX + 0.34 * (door.hingeSide ?? 1);
       }
     }
-    // Show door only when on the same floor as the player (Y-based, not level string)
+    // Show door when within one floor of the player (Y-based)
     door.mesh.setEnabled(
-      Math.abs(levelToWorldY(door.level) - levelToWorldY(activeLevel)) < LEVEL_HEIGHT,
+      Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) <= LEVEL_HEIGHT,
     );
   };
 
@@ -3582,7 +3518,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const interactDoorByUuid = (uuid: string): boolean => {
     const door = doors.get(uuid);
-    if (!door || Math.abs(levelToWorldY(door.level) - player.position.y) >= LEVEL_HEIGHT) {
+    if (!door || Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
       return false;
     }
 
@@ -3613,7 +3549,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     doors.forEach((door) => {
       // Only interact with doors on the same floor (Y-based)
-      if (Math.abs(levelToWorldY(door.level) - player.position.y) >= LEVEL_HEIGHT) {
+      if (Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
         return;
       }
       const distance = getDoorInteractDistance(door);
@@ -3663,7 +3599,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       Matrix.Identity(),
       activeCamera,
     );
-    const planeY = levelToWorldY(activeLevel) + WALK_SURFACE;
+    const planeY = levelToWorldY(getRenderLevel()) + WALK_SURFACE;
     if (Math.abs(ray.direction.y) < 1e-5) {
       return null;
     }
@@ -3756,7 +3692,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const tryInteractPickedDoor = (doorUuid: string): boolean => {
     const door = doors.get(doorUuid);
-    if (!door || Math.abs(levelToWorldY(door.level) - player.position.y) >= LEVEL_HEIGHT) {
+    if (!door || Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
       return false;
     }
     if (getDoorInteractDistance(door) > DOOR_PICK_INTERACT_RADIUS) {
@@ -3889,6 +3825,130 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     refreshDoorSystemsForLevel(level);
   };
 
+  let debugCollidersVisible = false;
+  let debugColliderParent: TransformNode | null = null;
+  let playerDebugMesh: Mesh | null = null;
+
+  const createWedgeMesh = (v: any, parent: TransformNode) => {
+    const mesh = new Mesh("wedge_" + v.level, scene);
+    mesh.parent = parent;
+
+    const x1 = v.x1, x2 = v.x2;
+    const z1 = v.z1, z2 = v.z2;
+    const baseY = v.baseY, highY = v.highY;
+
+    let y_nw = baseY, y_ne = baseY, y_sw = baseY, y_se = baseY;
+    if (v.direction === "n") {
+      y_nw = highY; y_ne = highY;
+    } else if (v.direction === "s") {
+      y_sw = highY; y_se = highY;
+    } else if (v.direction === "e") {
+      y_ne = highY; y_se = highY;
+    } else if (v.direction === "w") {
+      y_nw = highY; y_sw = highY;
+    }
+
+    const positions = [
+      x1, baseY, z1,
+      x2, baseY, z1,
+      x2, baseY, z2,
+      x1, baseY, z2,
+      x1, y_sw, z1,
+      x2, y_se, z1,
+      x2, y_ne, z2,
+      x1, y_nw, z2,
+    ];
+
+    const indices = [
+      0, 2, 1,  0, 3, 2,
+      4, 5, 6,  4, 6, 7,
+      0, 1, 5,  0, 5, 4,
+      1, 2, 6,  1, 6, 5,
+      2, 3, 7,  2, 7, 6,
+      3, 0, 4,  3, 4, 7
+    ];
+
+    const normals: number[] = [];
+    VertexData.ComputeNormals(positions, indices, normals);
+
+    const vertexData = new VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+    vertexData.normals = normals;
+    vertexData.applyToMesh(mesh);
+
+    return mesh;
+  };
+
+  const rebuildDebugColliderMeshes = () => {
+    if (debugColliderParent) {
+      debugColliderParent.dispose();
+      debugColliderParent = null;
+    }
+    if (playerDebugMesh) {
+      playerDebugMesh.dispose();
+      playerDebugMesh = null;
+    }
+    if (!debugCollidersVisible) return;
+
+    debugColliderParent = new TransformNode("debugCollidersParent", scene);
+
+    const matWalkable = new StandardMaterial("matWalkable", scene);
+    matWalkable.diffuseColor = new Color3(0, 1, 0);
+    matWalkable.alpha = 0.3;
+    matWalkable.backFaceCulling = false;
+
+    const matSolid = new StandardMaterial("matSolid", scene);
+    matSolid.diffuseColor = new Color3(1, 0, 0);
+    matSolid.alpha = 0.3;
+    matSolid.backFaceCulling = false;
+
+    for (const v of collisionWorld.volumes) {
+      let mesh: Mesh;
+      if (v.kind === "aabb") {
+        mesh = MeshBuilder.CreateBox("aabb_" + v.level, {
+          width: v.x2 - v.x1,
+          height: v.y2 - v.y1,
+          depth: v.z2 - v.z1,
+        }, scene);
+        mesh.parent = debugColliderParent;
+        mesh.position.set(
+          (v.x1 + v.x2) / 2,
+          (v.y1 + v.y2) / 2,
+          (v.z1 + v.z2) / 2,
+        );
+      } else {
+        mesh = createWedgeMesh(v, debugColliderParent);
+      }
+      mesh.material = v.isWalkable ? matWalkable : matSolid;
+    }
+  };
+
+  const updatePlayerDebugMesh = () => {
+    if (!debugCollidersVisible) {
+      if (playerDebugMesh) {
+        playerDebugMesh.dispose();
+        playerDebugMesh = null;
+      }
+      return;
+    }
+
+    if (!playerDebugMesh) {
+      playerDebugMesh = MeshBuilder.CreateCylinder("playerDebug", {
+        diameter: 0.64,
+        height: HERO_BODY_HEIGHT,
+      }, scene);
+      const mat = new StandardMaterial("playerDebugMat", scene);
+      mat.diffuseColor = new Color3(0, 0, 1);
+      mat.alpha = 0.4;
+      playerDebugMesh.material = mat;
+    }
+
+    playerDebugMesh.position.x = player.position.x;
+    playerDebugMesh.position.y = player.position.y + HERO_BODY_HEIGHT / 2;
+    playerDebugMesh.position.z = player.position.z;
+  };
+
   const loadMapData = async (): Promise<SliceMapData | null> => {
     if (mapDataCache) {
       return mapDataCache;
@@ -3935,7 +3995,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }),
     );
 
-    WorldMapService.bootstrapMinimap(mapData, binaryLevels, activeLevel);
+    WorldMapService.bootstrapMinimap(mapData, binaryLevels, getCurrentLevel());
     collisionWorld.rebuild(
       levelKeys,
       mapData.width ?? 0,
@@ -3964,14 +4024,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     ensureDebugSandboxStarterLoadout(mapData);
     await ensureLevelDoorsSeeded(resolvedLevel);
 
-    if (resolvedLevel !== activeLevel) {
-      activeLevel = resolvedLevel;
-      activeLevelNumber = parseLevelNumber(resolvedLevel);
-      playerState.setCurrentLevel(resolvedLevel);
+    if (resolvedLevel !== getCurrentLevel()) {
+      applyActiveLevelChange(resolvedLevel, undefined, { natural: true });
     }
 
     await renderMapLevel(resolvedLevel);
-    await ensureLevelPropsSeeded(resolvedLevel);
+    await propSystem.ensureLevelSeeded(resolvedLevel);
 
     const mapWidth = mapData.width ?? 0;
     const mapHeight = mapData.height ?? 0;
@@ -4087,390 +4145,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return resolvedLevel;
   };
 
-  const getEnemySpawnsForLevel = async (
-    level: string,
-  ): Promise<EnemySpawnData[]> => {
-    const mapData = await loadMapData();
-    if (!mapData) {
-      return [];
-    }
-
-    const tileSize = mapData.tileSize || 32;
-    const levelData = mapData.levels?.[level];
-    const templates = mapData.entityTemplates || {};
-    if (!levelData?.entities) {
-      return [];
-    }
-
-    const spawns: EnemySpawnData[] = [];
-    for (const entity of levelData.entities) {
-      const template = templates[entity.symbol];
-      if (!template || template.type !== "enemy" || !template.id) {
-        continue;
-      }
-
-      const def = EnemyRegistry.getEnemyDefinition(template.id);
-      if (!def) {
-        continue;
-      }
-
-      spawns.push({
-        enemyType: template.id,
-        x: entity.x * tileSize + tileSize / 2,
-        y: entity.y * tileSize + tileSize / 2,
-      });
-    }
-
-    return spawns;
-  };
-
-  const getPropSpawnsForLevel = async (
-    level: string,
-  ): Promise<PropSpawnData[]> => {
-    const mapData = await loadMapData();
-    if (!mapData) {
-      return [];
-    }
-
-    const levelData = mapData.levels?.[level];
-    const templates = mapData.entityTemplates || {};
-    if (!levelData?.entities) {
-      return [];
-    }
-
-    const spawns: PropSpawnData[] = [];
-    for (const entity of levelData.entities) {
-      const template = templates[entity.symbol];
-      if (!template || template.type !== "decoration" || !template.id) {
-        continue;
-      }
-      if (!isKnownPropId(template.id)) {
-        continue;
-      }
-
-      spawns.push({
-        propId: template.id,
-        tileX: entity.x,
-        tileY: entity.y,
-        isCollidable: template.isCollidable ?? false,
-      });
-    }
-
-    return spawns;
-  };
-
-  const clearProps = () => {
-    props.forEach((prop) => {
-      const observer = (prop.meshRoot as any)._propAnimObserver;
-      if (observer) {
-        scene.onBeforeRenderObservable.remove(observer);
-      }
-      prop.meshRoot.dispose();
-    });
-    props.clear();
-    propSpawnCatalog.clear();
-    collidablePropTilesByLevel.clear();
-    seededPropLevels.clear();
-  };
-
-  const getPropCatalogKey = (level: string, spawn: PropSpawnData) =>
-    `${level}_${spawn.propId}_${spawn.tileX}_${spawn.tileY}`;
-
-  const despawnProp = (uid: string) => {
-    const prop = props.get(uid);
-    if (!prop) {
-      return;
-    }
-    const observer = (prop.meshRoot as any)._propAnimObserver;
-    if (observer) {
-      scene.onBeforeRenderObservable.remove(observer);
-    }
-    prop.meshRoot.dispose();
-    props.delete(uid);
-  };
-
-  const applyPropAnimLod = (prop: SliceProp, distance: number) => {
-    const setter = (prop.meshRoot as any)._setAnimIntervalScale as
-      | ((scale: number) => void)
-      | undefined;
-    if (typeof setter !== "function") {
-      return;
-    }
-    if (distance <= 18) {
-      setter(1);
-    } else if (distance <= 36) {
-      setter(0.55);
-    } else {
-      setter(0.3);
-    }
-  };
-
-  const spawnProp = (spawn: PropSpawnData, index: number, level: string) => {
-    const meshRoot = createPropBillboard(
-      scene,
-      spawn.propId,
-      `slice-prop-${level}-${spawn.propId}-${index}`,
-      spawn.tileX,
-      spawn.tileY,
-    );
-    if (!meshRoot) {
-      return;
-    }
-
-    const uid = `${level}_${spawn.propId}_${spawn.tileX}_${spawn.tileY}`;
-    const worldX = spawn.tileX + 0.5;
-    const worldZ = spawn.tileY + 0.5;
-    meshRoot.parent = mapRoot;
-    meshRoot.position.set(
-      worldX,
-      resolveWorldAnchorY(worldX, worldZ, level),
-      worldZ,
-    );
-    meshRoot.setEnabled(false);
-
-    props.set(uid, {
-      uid,
-      level,
-      propId: spawn.propId,
-      tileX: spawn.tileX,
-      tileY: spawn.tileY,
-      meshRoot,
-    });
-  };
-
-  const syncPropStream = (force = false) => {
-    if (!force) {
-      const now = performance.now();
-      const prev = (syncPropStream as any)._lastSyncAt as number | undefined;
-      if (prev !== undefined && now - prev < PROP_STREAM_SYNC_INTERVAL * 1000) {
-        return;
-      }
-      (syncPropStream as any)._lastSyncAt = now;
-    }
-
-    const px = player.position.x;
-    const pz = player.position.z;
-    const streamRadius = isFirstPerson
-      ? propStreamRadiusUnitsFirstPerson
-      : propStreamRadiusUnits;
-    const streamRadiusSq = streamRadius * streamRadius;
-    const despawnRadiusSq = propDespawnRadiusUnits * propDespawnRadiusUnits;
-
-    const py = player.position.y;
-
-    props.forEach((prop, uid) => {
-      // Despawn props that are on a different floor (more than LEVEL_HEIGHT away vertically)
-      if (Math.abs(levelToWorldY(prop.level) - py) >= LEVEL_HEIGHT) {
-        despawnProp(uid);
-        return;
-      }
-      const dx = prop.meshRoot.position.x - px;
-      const dz = prop.meshRoot.position.z - pz;
-      const distSq = dx * dx + dz * dz;
-      if (distSq <= despawnRadiusSq) {
-        if (prop.meshRoot.isEnabled()) {
-          prop.meshRoot.position.y = resolveWorldAnchorY(
-            prop.meshRoot.position.x,
-            prop.meshRoot.position.z,
-            prop.level,
-          );
-          applyPropAnimLod(prop, Math.hypot(dx, dz));
-        }
-        return;
-      }
-      despawnProp(uid);
-    });
-
-    propSpawnCatalog.forEach((entry, uid) => {
-      // Only spawn props on the same floor (within LEVEL_HEIGHT vertically)
-      if (Math.abs(levelToWorldY(entry.level) - py) >= LEVEL_HEIGHT || props.has(uid)) {
-        return;
-      }
-
-      const spawnX = entry.spawn.tileX + 0.5;
-      const spawnZ = entry.spawn.tileY + 0.5;
-      const dx = spawnX - px;
-      const dz = spawnZ - pz;
-      if (dx * dx + dz * dz > streamRadiusSq) {
-        return;
-      }
-
-      spawnProp(entry.spawn, entry.index, entry.level);
-      const spawned = props.get(uid);
-      if (!spawned) {
-        return;
-      }
-      const dist = Math.hypot(dx, dz);
-      spawned.meshRoot.position.y = resolveWorldAnchorY(spawnX, spawnZ, entry.level);
-      spawned.meshRoot.setEnabled(true);
-      applyPropAnimLod(spawned, dist);
-    });
-  };
-
-  const ensureLevelPropsSeeded = async (level: string) => {
-    if (seededPropLevels.has(level)) {
-      syncPropStream(true);
-      return;
-    }
-
-    const spawns = await getPropSpawnsForLevel(level);
-    spawns.forEach((spawn, index) => {
-      const key = getPropCatalogKey(level, spawn);
-      propSpawnCatalog.set(key, { level, spawn, index });
-      if (spawn.isCollidable) {
-        const tileSet =
-          collidablePropTilesByLevel.get(level) ?? new Set<string>();
-        tileSet.add(getPropTileKey(spawn.tileX, spawn.tileY));
-        collidablePropTilesByLevel.set(level, tileSet);
-      }
-    });
-    seededPropLevels.add(level);
-
-    if (level === activeLevel) {
-      rebuildNavigationWindow(level, true);
-    }
-
-    (window as any).__slice3dProps = {
-      level,
-      streamed: props.size,
-      cataloged: propSpawnCatalog.size,
-    };
-    syncPropStream(true);
-  };
-
-  const clearEnemies = () => {
-    enemies.forEach((enemy) => enemy.meshRoot.dispose());
-    enemies.clear();
-    enemySpawnCatalog.clear();
-    pendingEnemyRespawns.clear();
-    seededEnemyLevels.clear();
-    selectedEnemyUid = null;
-  };
-
-  /** 2D parity: on player death, living enemies reset to spawn/full HP; killed ones keep respawn timers. */
-  const resetLivingEnemiesForPlayerRespawn = () => {
-    enemies.forEach((enemy) => {
-      if (!enemy.meshRoot.isDisposed()) {
-        enemy.meshRoot.dispose();
-      }
-    });
-    enemies.clear();
-    setSelectedEnemy(null);
-    syncEnemyStream(true);
-  };
-
-  const hydratePendingEnemyRespawnsFromPersistedDead = () => {
-    enemySpawnCatalog.forEach((entry, spawnKey) => {
-      if (!playerState.isEnemy3dDead(entry.level, spawnKey)) {
-        return;
-      }
-      if (pendingEnemyRespawns.has(spawnKey)) {
-        return;
-      }
-      pendingEnemyRespawns.set(spawnKey, {
-        level: entry.level,
-        spawn: entry.spawn,
-        index: entry.index,
-        elapsedMs: 0,
-        respawnTimeMs: ENEMY_RESPAWN_MS,
-      });
-    });
-  };
-
-  const clearEnemy3dDeadPersistence = (level: string, spawnKey: string) => {
-    const unmark = playerState.unmarkEnemy3dDead;
-    if (typeof unmark === "function") {
-      unmark.call(playerState, level, spawnKey);
-      return;
-    }
-    if (!playerState.isEnemy3dDead(level, spawnKey)) {
-      return;
-    }
-    const snapshot = playerState.getDeadEnemies3dSnapshot();
-    const remaining = snapshot[level]?.filter((key) => key !== spawnKey) ?? [];
-    if (remaining.length > 0) {
-      snapshot[level] = remaining;
-    } else {
-      delete snapshot[level];
-    }
-    playerState.loadDeadEnemies3d(snapshot);
-  };
-
-  const isSpawnKeyInstantiated = (spawnKey: string) => {
-    let found = false;
-    enemies.forEach((enemy) => {
-      if (enemy.spawnKey === spawnKey) {
-        found = true;
-      }
-    });
-    return found;
-  };
-
-  const syncEnemyStream = (force = false) => {
-    if (!force) {
-      const now = performance.now();
-      const prev = (syncEnemyStream as any)._lastSyncAt as number | undefined;
-      if (prev !== undefined && now - prev < ENEMY_STREAM_SYNC_INTERVAL * 1000) {
-        return;
-      }
-      (syncEnemyStream as any)._lastSyncAt = now;
-    }
-
-    const px = player.position.x;
-    const pz = player.position.z;
-    const streamRadiusSq = enemyStreamRadiusUnits * enemyStreamRadiusUnits;
-    const despawnRadiusSq =
-      enemyDespawnRadiusUnits * enemyDespawnRadiusUnits;
-
-    const py = player.position.y;
-
-    enemies.forEach((enemy, uid) => {
-      // Despawn enemies that are on a different floor (more than LEVEL_HEIGHT away vertically)
-      if (Math.abs(levelToWorldY(enemy.level) - py) >= LEVEL_HEIGHT) {
-        if (selectedEnemyUid === uid) {
-          setSelectedEnemy(null);
-        }
-        enemy.meshRoot.dispose();
-        enemies.delete(uid);
-        return;
-      }
-
-      const dx = enemy.worldPos.x - px;
-      const dz = enemy.worldPos.z - pz;
-      if (dx * dx + dz * dz <= despawnRadiusSq) {
-        return;
-      }
-      if (selectedEnemyUid === uid) {
-        setSelectedEnemy(null);
-      }
-      enemy.meshRoot.dispose();
-      enemies.delete(uid);
-    });
-
-    enemySpawnCatalog.forEach((entry, spawnKey) => {
-      // Only spawn enemies on the same floor (within LEVEL_HEIGHT vertically)
-      if (Math.abs(levelToWorldY(entry.level) - py) >= LEVEL_HEIGHT) {
-        return;
-      }
-      if (pendingEnemyRespawns.has(spawnKey)) {
-        return;
-      }
-      if (isSpawnKeyInstantiated(spawnKey)) {
-        return;
-      }
-
-      const spawnX = worldToSliceCoord(entry.spawn.x);
-      const spawnZ = worldToSliceCoord(entry.spawn.y);
-      const dx = spawnX - px;
-      const dz = spawnZ - pz;
-      if (dx * dx + dz * dz > streamRadiusSq) {
-        return;
-      }
-
-      spawnEnemy(entry.spawn, entry.index, spawnKey, entry.level);
-    });
-  };
-
   const setSelectedEnemy = (enemyUid: string | null) => {
     if (selectedEnemyUid && selectedEnemyUid !== enemyUid) {
       const prev = enemies.get(selectedEnemyUid);
@@ -4518,99 +4192,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const spawnEnemy = (
-    spawn: EnemySpawnData,
-    index: number,
-    spawnKey: string,
-    level: string,
-    options?: { withRespawnVfx?: boolean },
-  ) => {
-    const definition = EnemyRegistry.getEnemyDefinition(spawn.enemyType);
-    if (!definition) {
-      return;
-    }
-
-    // Skip enemies waiting on respawn timer
-    if (pendingEnemyRespawns.has(spawnKey)) {
-      return;
-    }
-
-    const uid = `${level}_${spawn.enemyType}_${index}_${Date.now().toString(36)}`;
-    const meshRoot = createEnemyVisual(
-      scene,
-      spawn.enemyType,
-      `slice-enemy-${uid}`,
-    );
-    const spawnLevelY = levelToWorldY(level);
-    const worldPos = new Vector3(
-      worldToSliceCoord(spawn.x),
-      spawnLevelY,
-      worldToSliceCoord(spawn.y),
-    );
-    applyActorAquaticY(worldPos, level);
-    meshRoot.position = worldPos.clone();
-    meshRoot.metadata = { sliceEnemyUid: uid };
-
-    const instance: SliceEnemy = {
-      uid,
-      spawnKey,
-      level,
-      enemyType: spawn.enemyType,
-      definition,
-      meshRoot,
-      health: definition.health,
-      maxHealth: definition.health,
-      worldPos: worldPos.clone(),
-      spawnPos: worldPos.clone(),
-      lastAttackAt: 0,
-      lastPathAt: 0,
-      currentPath: [],
-      currentPathIndex: 0,
-      magicCooldowns: new Map<string, number>(),
-      isDead: false,
-      isProvoked: false,
-      animState: "idle",
-      animDirection: "south",
-      animLockedUntil: 0,
-    };
-
-    setEnemyAnimState(instance, "idle");
-
-    const showOnActiveLevel = () => {
-      meshRoot.setEnabled(level === activeLevel);
-    };
-
-    if (options?.withRespawnVfx) {
-      meshRoot.setEnabled(false);
-      playRespawnGlowAt(scene, worldPos, level, activeLevel, showOnActiveLevel);
-    } else {
-      showOnActiveLevel();
-    }
-
-    enemies.set(uid, instance);
-  };
-
-  const ensureLevelEnemiesSeeded = async (level: string) => {
-    if (seededEnemyLevels.has(level)) {
-      hydratePendingEnemyRespawnsFromPersistedDead();
-      syncEnemyStream(true);
-      return;
-    }
-
-    const spawns = await getEnemySpawnsForLevel(level);
-    spawns.forEach((spawn, index) => {
-      const spawnKey = `${level}_${spawn.enemyType}_${index}`;
-      enemySpawnCatalog.set(spawnKey, { level, spawn, index });
-    });
-    seededEnemyLevels.add(level);
-    hydratePendingEnemyRespawnsFromPersistedDead();
-    syncEnemyStream(true);
-  };
-
   const grantEnemyLoot = (enemy: SliceEnemy) => {
     const loot = EnemyRegistry.generateLoot(enemy.enemyType);
     loot.forEach((drop) => {
-      playerState.addPersistentDroppedItem(activeLevel, {
+      playerState.addPersistentDroppedItem(getCurrentLevel(), {
         itemId: playerState.generateUID(),
         weaponId: drop.itemId,
         x: enemy.worldPos.x * 32,
@@ -5528,8 +5113,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const now = Date.now();
 
     enemies.forEach((enemy) => {
-      // Treat enemy as "on active level" when within LEVEL_HEIGHT vertically (Y-based, not string)
-      const onActiveLevel = Math.abs(levelToWorldY(enemy.level) - player.position.y) < LEVEL_HEIGHT;
+      // Treat enemy as "on current level" when within LEVEL_HEIGHT vertically (Y-based)
+      const onActiveLevel = Math.abs(levelToWorldY(enemy.level) - levelToWorldY(getCurrentLevel())) <= LEVEL_HEIGHT;
       if (!onActiveLevel) {
         enemy.meshRoot.setEnabled(false);
         if (selectedEnemyUid === enemy.uid) {
@@ -5687,15 +5272,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     const currentLevel = playerState.getCurrentLevel();
-    if (currentLevel !== activeLevel) {
-      const previousLevel = activeLevel;
-      activeLevel = currentLevel;
-      activeLevelNumber = parseLevelNumber(currentLevel);
+    if (currentLevel !== getCurrentLevel()) {
+      const previousLevel = getCurrentLevel();
+      applyActiveLevelChange(currentLevel, undefined, { natural: true });
       void ensureMapLevelReady(currentLevel);
       void ensureLevelDoorsSeeded(currentLevel);
       void ensureLevelItemsSeeded(currentLevel);
-      void ensureLevelEnemiesSeeded(currentLevel);
-      void ensureLevelPropsSeeded(currentLevel);
+      void enemySystem.ensureLevelSeeded(currentLevel);
+      void propSystem.ensureLevelSeeded(currentLevel);
       setSelectedEnemy(null);
       pushLogEvent("level.change", {
         from: previousLevel,
@@ -5805,23 +5389,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   /** Re-snap props/loot after floor slab height or tile binary becomes available. */
   const reanchorWorldContentOnLevel = (level: string) => {
-    props.forEach((prop) => {
-      if (prop.level !== level) {
-        return;
-      }
-      const x = prop.meshRoot.position.x;
-      const z = prop.meshRoot.position.z;
-      prop.meshRoot.position.y = resolveWorldAnchorY(x, z, level);
-    });
+    propSystem.reanchorAll(level);
     syncDroppedItems(true);
   };
 
   const collectInteractableRevealTargets = (): InteractableRevealTarget[] => {
     const targets: InteractableRevealTarget[] = [];
-    const level = activeLevel;
 
     enemies.forEach((enemy) => {
-      if (enemy.isDead || enemy.level !== level) {
+      if (enemy.isDead || Math.abs(levelToWorldY(enemy.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
         return;
       }
 
@@ -5845,7 +5421,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       targets.push({
         id: enemy.uid,
         kind: "enemy",
-        level,
+        level: enemy.level,
         position: enemy.worldPos.clone(),
         pickWidth,
         pickHeight,
@@ -5855,7 +5431,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
 
     doors.forEach((door) => {
-      if (door.level !== level) {
+      if (Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
         return;
       }
 
@@ -5864,7 +5440,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       targets.push({
         id: door.uuid,
         kind: "door",
-        level,
+        level: door.level,
         position: new Vector3(
           door.tileX + 0.5,
           feetY,
@@ -5900,7 +5476,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           item.itemId,
           containerDef.id,
           t_game(containerDef.name as any),
-          { x: item.x, y: item.y, level: activeLevel },
+          { x: item.x, y: item.y, level: getCurrentLevel() },
         );
         return true;
       }
@@ -5924,13 +5500,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (availableCount > pickupCount) {
-      const persistent = playerState.getPersistentDroppedItems(activeLevel);
+      const persistent = playerState.getPersistentDroppedItems(getCurrentLevel());
       const target = persistent.find((entry) => entry.itemId === item.itemId);
       if (target) {
         target.count = availableCount - pickupCount;
       }
     } else {
-      playerState.removePersistentDroppedItem(activeLevel, item.itemId);
+      playerState.removePersistentDroppedItem(getCurrentLevel(), item.itemId);
     }
 
     const def = WeaponRegistry.getWeaponDefinition(item.weaponId);
@@ -5987,7 +5563,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const fallbackY = player.position.z * 32;
     const uid = data.itemId || playerState.generateUID();
 
-    playerState.addPersistentDroppedItem(activeLevel, {
+    playerState.addPersistentDroppedItem(getCurrentLevel(), {
       itemId: uid,
       weaponId,
       x: data.x ?? fallbackX,
@@ -6043,7 +5619,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const handleRequestPickup = (payload: { uid: string; count?: number }) => {
-    const persistent = playerState.getPersistentDroppedItems(activeLevel);
+    const persistent = playerState.getPersistentDroppedItems(getCurrentLevel());
     const item = persistent.find((entry) => entry.itemId === payload.uid);
     if (!item) return;
     tryPickupPersistentItem(item, payload.count);
@@ -6077,19 +5653,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
 
   const bootstrapWorldSession = async () => {
-    pushLogEvent("world.bootstrap.start", { map: sliceMapName, level: activeLevel });
+    pushLogEvent("world.bootstrap.start", { map: sliceMapName, level: getCurrentLevel() });
     try {
-      await ensureMapLevelReady(activeLevel);
+      await ensureMapLevelReady(getCurrentLevel());
       snapPlayerFootToActiveLevel();
       await waitForSpawnChunkReady();
       snapPlayerFootToActiveLevel();
 
       const tileX = Math.floor(player.position.x);
       const tileZ = Math.floor(player.position.z);
-      const supportSymbol = getMapTileAt(activeLevel, tileX, tileZ);
+      const supportSymbol = getMapTileAt(getCurrentLevel(), tileX, tileZ);
       if (isVoidSymbol(supportSymbol)) {
         throw new Error(
-          `[3D Slice] Invalid spawn tile (${tileX},${tileZ}) on level ${activeLevel}`,
+          `[3D Slice] Invalid spawn tile (${tileX},${tileZ}) on level ${getCurrentLevel()}`,
         );
       }
 
@@ -6100,8 +5676,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       holeFallFloorCount = 0;
       verticalVelocity = 0;
 
-      reanchorWorldContentOnLevel(activeLevel);
-      syncPropStream(true);
+      reanchorWorldContentOnLevel(getRenderLevel());
+      propSystem.syncStream(true);
 
       worldBootstrapReady = true;
       setPlayerAvatarVisible(true);
@@ -6112,7 +5688,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       resolveWorldReady?.();
       document.dispatchEvent(
         new CustomEvent("slice3d:worldBootstrap", {
-          detail: { ready: true, map: sliceMapName, level: activeLevel },
+          detail: { ready: true, map: sliceMapName, level: getCurrentLevel() },
         }),
       );
       pushLogEvent("world.bootstrap.ready", {
@@ -6132,30 +5708,34 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   void bootstrapWorldSession();
-  void ensureLevelItemsSeeded(activeLevel);
-  void ensureLevelEnemiesSeeded(activeLevel);
-  void ensureLevelPropsSeeded(activeLevel);
+  // Seed all levels at bootstrap so content is available when Y-position changes levels.
+  const seedLevelKeys = Object.keys((mapDataCache as SliceMapData | null)?.levels ?? {});
+  for (const lvl of seedLevelKeys) {
+    void ensureLevelItemsSeeded(lvl);
+    void enemySystem.ensureLevelSeeded(lvl);
+    void propSystem.ensureLevelSeeded(lvl);
+  }
   syncDroppedItems();
 
   const pressedKeys = new Set<string>();
 
-  let verticalVelocity = 0;
-  const gravity = -18;
-  const fallGravity = -32;
-  const jumpImpulse = 7.2;
-  /** Quake-style: normal jump landings stay below this; hard falls exceed it. */
+  // Physics state — PlayerContext is the single source of truth
+  const playerCtx = createPlayerContext(player.position.x, player.position.y, player.position.z);
+  let jumpRequested = false; // consumed by tickPhysics each frame
   const FALL_DAMAGE_MIN_IMPACT_SPEED = 9.5;
-  let isGrounded = true;
-  /** Set when stepping into a void tile; gravity runs until landing level ground. */
-  let holeFallLandingLevel: string | null = null;
-  let holeFallFloorCount = 0;
-  let fallOriginFootY = player.position.y;
-  let wasOnVoidWithSafety = false;
-  let lastSafePlayerX = player.position.x;
-  let lastSafePlayerZ = player.position.z;
-  let lastGroundedFootY = player.position.y;
+
+  // Mirrors of playerCtx for backward compat with non-physics code
+  let verticalVelocity = playerCtx.verticalVelocity;
+  let isGrounded = playerCtx.isGrounded;
+  let holeFallLandingLevel = playerCtx.holeFallLandingLevel;
+  let holeFallFloorCount = playerCtx.holeFallFloorCount;
+  let fallOriginFootY = playerCtx.fallOriginFootY;
+  let wasOnVoidWithSafety = playerCtx.wasOnVoidWithSafety;
+  let lastSafePlayerX = playerCtx.lastSafePositionX;
+  let lastSafePlayerZ = playerCtx.lastSafePositionZ;
+  let lastGroundedFootY = playerCtx.lastGroundedFootY;
+  let levelTransitionCooldown = playerCtx.levelTransitionCooldown;
   let chunkUpdateTimer = 0;
-  let levelTransitionCooldown = 0; // seconds until next floor change (ramp/stair)
   let isPlayerDeathSequenceActive = false;
   let playerDeathTimeoutId: number | null = null;
   let verticalTransitionGuard: {
@@ -6168,8 +5748,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const CHUNK_UPDATE_INTERVAL = 0.2;
   const PERF_PUBLISH_INTERVAL = 0.25;
   let dropSyncTimer = 0;
-  let enemyStreamTimer = 0;
-  let propStreamTimer = 0;
   let navWindowTimer = 0;
   let perfPublishTimer = 0;
 
@@ -6199,7 +5777,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       });
     }
 
-    if (activeLevelNumber < 0) {
+    if (parseLevelNumber(getCurrentLevel()) < 0) {
       clearAllChunks();
       invalidateVerticalVisibilityCache();
       chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
@@ -6336,29 +5914,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return null;
   };
 
-  const beginGravityHoleFall = (
-    landingLevel: string,
-    floors: number,
-  ) => {
-    if (holeFallLandingLevel) {
-      return;
-    }
-    fallOriginFootY = player.position.y;
-    isGrounded = false;
-    verticalVelocity = Math.min(verticalVelocity, 0);
-    holeFallLandingLevel = landingLevel;
-    holeFallFloorCount = floors;
-
-    const mapData = mapDataCache;
-    if (mapData) {
-      void loadLevelBinary(landingLevel, mapData);
-    }
-    void ensureLevelDoorsSeeded(landingLevel);
-    void ensureLevelEnemiesSeeded(landingLevel);
-    void ensureLevelItemsSeeded(landingLevel);
-    void ensureLevelPropsSeeded(landingLevel);
-  };
-
   const calculateFallDamagePercent = (
     floors: number,
     impactSpeed: number,
@@ -6369,84 +5924,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       Math.max(0, Math.abs(impactSpeed) - 9) * 0.012,
     );
     return Math.min(0.9, perFloor + speedBonus);
-  };
-
-  const isSolidCeilingTileAt = (
-    level: string,
-    tileX: number,
-    tileZ: number,
-  ) => {
-    const symbol = getMapTileAt(level, tileX, tileZ);
-    if (isVoidSymbol(symbol)) {
-      return false;
-    }
-    const tileDef = symbol
-      ? mapDataCache?.tileDefinitions?.[symbol]
-      : undefined;
-    return !isDownHoleTile(tileDef);
-  };
-
-  /**
-   * Upper-floor slab side / underside — blocks movement when the hero body
-   * intersects the 0.32u floor thickness band from below (pit edge, jump into lip).
-   */
-  const isBlockedByUpperFloorSlabAt = (
-    worldX: number,
-    worldZ: number,
-    footY: number,
-  ): boolean => {
-    if (!mapDataCache?.levels) return false;
-    const result = collisionWorld.query(
-      worldX, worldZ,
-      footY, footY + HERO_BODY_HEIGHT,
-      Object.keys(mapDataCache.levels),
-    );
-    if (!result.ceiling) return false;
-    return result.ceiling.bottomY <= footY + HERO_BODY_HEIGHT;
-  };
-
-  /** Feet Y cap when standing under solid geometry on the level above (column-only). */
-  const resolveUpperLevelCeilingFeetCap = (): number | null => {
-    if (!mapDataCache?.levels) return null;
-    const result = collisionWorld.query(
-      player.position.x, player.position.z,
-      player.position.y, player.position.y + HERO_BODY_HEIGHT,
-      Object.keys(mapDataCache.levels),
-    );
-    if (!result.ceiling || result.ceiling.isGraded) return null;
-    if (player.position.y + HERO_BODY_HEIGHT < result.ceiling.bottomY - 0.04) return null;
-    return result.ceiling.bottomY - CEILING_BODY_CLEARANCE - HERO_BODY_HEIGHT;
-  };
-
-  const resolveJumpImpulseForHeadroom = (): number => {
-    const feetCap = resolveUpperLevelCeilingFeetCap();
-    if (feetCap == null) {
-      return jumpImpulse;
-    }
-    const headRoom = feetCap - player.position.y;
-    if (headRoom < 0.35) {
-      return 0;
-    }
-    if (headRoom < JUMP_FULL_HEADROOM) {
-      return jumpImpulse * (headRoom / JUMP_FULL_HEADROOM);
-    }
-    return jumpImpulse;
-  };
-
-  const applyCeilingCollisionToVerticalMotion = () => {
-    if (!mapDataCache?.levels) return;
-    const result = collisionWorld.query(
-      player.position.x, player.position.z,
-      player.position.y, player.position.y + HERO_BODY_HEIGHT,
-      Object.keys(mapDataCache.levels),
-      activeLevel,
-    );
-    if (!result.ceiling || result.ceiling.isGraded) return;
-    const maxY = result.ceiling.bottomY - CEILING_BODY_CLEARANCE - HERO_BODY_HEIGHT;
-    if (player.position.y > maxY) {
-      player.position.y = maxY;
-      if (verticalVelocity > 0) verticalVelocity = 0;
-    }
   };
 
   const applyFallImpactDamage = (
@@ -6538,8 +6015,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         ? mapData.config.startLevel
         : levels["0"]
           ? "0"
-          : Object.keys(levels).find((level) => levels[level]?.playerPos) ??
-            activeLevel;
+          :           Object.keys(levels).find((level) => levels[level]?.playerPos) ??
+            getCurrentLevel();
 
     const playerPos = levels[preferredLevel]?.playerPos;
     if (!playerPos) {
@@ -6567,7 +6044,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     levelTransitionCooldown = 0;
     verticalTransitionGuard = null;
 
-    if (respawn.level !== activeLevel) {
+    if (respawn.level !== getCurrentLevel()) {
       applyActiveLevelChange(respawn.level, {
         tileX: Math.floor(respawn.x),
         tileZ: Math.floor(respawn.z),
@@ -6577,8 +6054,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       await ensureMapLevelReady(respawn.level);
     }
 
-    activeLevel = respawn.level;
-    activeLevelNumber = parseLevelNumber(respawn.level);
     playerState.setCurrentLevel(respawn.level);
     WorldMapService.ensureLevelBuffer(respawn.level);
     player.position.x = respawn.x;
@@ -6592,7 +6067,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       player.position.x * 32,
       player.position.z * 32,
     );
-    resetLivingEnemiesForPlayerRespawn();
+    enemySystem.resetLivingForPlayerRespawn();
     setHeroAnimState("idle");
     heroAnimLockedUntil = 0;
     isPlayerDeathSequenceActive = false;
@@ -6883,130 +6358,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerState.log("action_cast_rune", { runeId }, "#ff8800");
   };
 
-  let debugCollidersVisible = false;
-  let debugColliderParent: TransformNode | null = null;
-  let playerDebugMesh: Mesh | null = null;
-
-  const createWedgeMesh = (v: any, parent: TransformNode) => {
-    const mesh = new Mesh("wedge_" + v.level, scene);
-    mesh.parent = parent;
-
-    const x1 = v.x1, x2 = v.x2;
-    const z1 = v.z1, z2 = v.z2;
-    const baseY = v.baseY, highY = v.highY;
-
-    let y_nw = baseY, y_ne = baseY, y_sw = baseY, y_se = baseY;
-    if (v.direction === "n") {
-      y_nw = highY; y_ne = highY;
-    } else if (v.direction === "s") {
-      y_sw = highY; y_se = highY;
-    } else if (v.direction === "e") {
-      y_ne = highY; y_se = highY;
-    } else if (v.direction === "w") {
-      y_nw = highY; y_sw = highY;
-    }
-
-    const positions = [
-      x1, baseY, z1,
-      x2, baseY, z1,
-      x2, baseY, z2,
-      x1, baseY, z2,
-      x1, y_sw, z1,
-      x2, y_se, z1,
-      x2, y_ne, z2,
-      x1, y_nw, z2,
-    ];
-
-    const indices = [
-      0, 2, 1,  0, 3, 2,
-      4, 5, 6,  4, 6, 7,
-      0, 1, 5,  0, 5, 4,
-      1, 2, 6,  1, 6, 5,
-      2, 3, 7,  2, 7, 6,
-      3, 0, 4,  3, 4, 7
-    ];
-
-    const normals: number[] = [];
-    VertexData.ComputeNormals(positions, indices, normals);
-
-    const vertexData = new VertexData();
-    vertexData.positions = positions;
-    vertexData.indices = indices;
-    vertexData.normals = normals;
-    vertexData.applyToMesh(mesh);
-
-    return mesh;
-  };
-
-  const rebuildDebugColliderMeshes = () => {
-    if (debugColliderParent) {
-      debugColliderParent.dispose();
-      debugColliderParent = null;
-    }
-    if (playerDebugMesh) {
-      playerDebugMesh.dispose();
-      playerDebugMesh = null;
-    }
-    if (!debugCollidersVisible) return;
-
-    debugColliderParent = new TransformNode("debugCollidersParent", scene);
-
-    const matWalkable = new StandardMaterial("matWalkable", scene);
-    matWalkable.diffuseColor = new Color3(0, 1, 0);
-    matWalkable.alpha = 0.3;
-    matWalkable.backFaceCulling = false;
-
-    const matSolid = new StandardMaterial("matSolid", scene);
-    matSolid.diffuseColor = new Color3(1, 0, 0);
-    matSolid.alpha = 0.3;
-    matSolid.backFaceCulling = false;
-
-    for (const v of collisionWorld.volumes) {
-      let mesh: Mesh;
-      if (v.kind === "aabb") {
-        mesh = MeshBuilder.CreateBox("aabb_" + v.level, {
-          width: v.x2 - v.x1,
-          height: v.y2 - v.y1,
-          depth: v.z2 - v.z1,
-        }, scene);
-        mesh.parent = debugColliderParent;
-        mesh.position.set(
-          (v.x1 + v.x2) / 2,
-          (v.y1 + v.y2) / 2,
-          (v.z1 + v.z2) / 2,
-        );
-      } else {
-        mesh = createWedgeMesh(v, debugColliderParent);
-      }
-      mesh.material = v.isWalkable ? matWalkable : matSolid;
-    }
-  };
-
-  const updatePlayerDebugMesh = () => {
-    if (!debugCollidersVisible) {
-      if (playerDebugMesh) {
-        playerDebugMesh.dispose();
-        playerDebugMesh = null;
-      }
-      return;
-    }
-
-    if (!playerDebugMesh) {
-      playerDebugMesh = MeshBuilder.CreateCylinder("playerDebug", {
-        diameter: 0.64,
-        height: HERO_BODY_HEIGHT,
-      }, scene);
-      const mat = new StandardMaterial("playerDebugMat", scene);
-      mat.diffuseColor = new Color3(0, 0, 1);
-      mat.alpha = 0.4;
-      playerDebugMesh.material = mat;
-    }
-
-    playerDebugMesh.position.x = player.position.x;
-    playerDebugMesh.position.y = player.position.y + HERO_BODY_HEIGHT / 2;
-    playerDebugMesh.position.z = player.position.z;
-  };
-
   const onKeyDown = (event: KeyboardEvent) => {
     if (gameplayPaused || isPlayerDeathSequenceActive) {
       return;
@@ -7017,15 +6368,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     pressedKeys.add(key);
 
     if (event.code === "Space") {
-      if (isGrounded) {
-        const impulse = resolveJumpImpulseForHeadroom();
-        if (impulse > 0) {
-          fallOriginFootY = player.position.y;
-          verticalVelocity = impulse;
-          isGrounded = false;
-          audioManager.playJump();
-        }
-      }
+      jumpRequested = true;
       event.preventDefault();
     }
 
@@ -7245,24 +6588,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     mapTimeAccum += performance.now() - tStart;
 
     tStart = performance.now();
-    enemyStreamTimer += deltaSeconds;
-    if (enemyStreamTimer >= ENEMY_STREAM_SYNC_INTERVAL) {
-      enemyStreamTimer = 0;
-      syncEnemyStream();
-    }
+    enemySystem.tick(deltaSeconds);
     enemyTimeAccum += performance.now() - tStart;
 
     tStart = performance.now();
-    propStreamTimer += deltaSeconds;
-    if (propStreamTimer >= PROP_STREAM_SYNC_INTERVAL) {
-      propStreamTimer = 0;
-      syncPropStream();
-    }
+    propSystem.tick(deltaSeconds);
 
     navWindowTimer += deltaSeconds;
     if (navWindowTimer >= 0.45) {
       navWindowTimer = 0;
-      rebuildNavigationWindow(activeLevel);
+      rebuildNavigationWindow(getCurrentLevel());
     }
     mapTimeAccum += performance.now() - tStart;
 
@@ -7337,7 +6672,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const aquaticSample = getAquaticSampleAt(
       player.position.x,
       player.position.z,
-      activeLevel,
+      getCurrentLevel(),
     );
     const speed = 4.5 * aquaticSample.speedMultiplier;
     let moveForward = 0;
@@ -7363,267 +6698,125 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
-    if (isMoving) {
+    // ── Physics tick ───────────────────────────────────────────────────────
+    {
+      // Compute world-space movement direction from camera-relative input
+      let worldDx = 0;
+      let worldDz = 0;
+      if (isMoving) {
         let movement = Vector3.Zero();
-
         if (isFirstPerson) {
           const yaw = firstPersonCamera.rotation.y;
           const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
           const right = new Vector3(forward.z, 0, -forward.x);
           movement = forward.scale(moveForward).add(right.scale(moveRight));
         } else {
-          // Deterministic camera-to-screen mapping: solve which world-space
-          // (X,Z) delta produces desired screen-space delta.
-          // Desired screen axes: right = +Xscreen, up = -Yscreen.
           const engineRef = scene.getEngine();
           const viewport = camera.viewport.toGlobal(
             engineRef.getRenderWidth(),
             engineRef.getRenderHeight(),
           );
           const origin = player.position.clone();
-          const screenOrigin = Vector3.Project(
-            origin,
-            Matrix.Identity(),
-            scene.getTransformMatrix(),
-            viewport,
-          );
-          const screenX = Vector3.Project(
-            origin.add(new Vector3(1, 0, 0)),
-            Matrix.Identity(),
-            scene.getTransformMatrix(),
-            viewport,
-          );
-          const screenZ = Vector3.Project(
-            origin.add(new Vector3(0, 0, 1)),
-            Matrix.Identity(),
-            scene.getTransformMatrix(),
-            viewport,
-          );
-
-          const basisX = new Vector2(
-            screenX.x - screenOrigin.x,
-            screenX.y - screenOrigin.y,
-          );
-          const basisZ = new Vector2(
-            screenZ.x - screenOrigin.x,
-            screenZ.y - screenOrigin.y,
-          );
+          const screenOrigin = Vector3.Project(origin, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+          const screenX = Vector3.Project(origin.add(new Vector3(1, 0, 0)), Matrix.Identity(), scene.getTransformMatrix(), viewport);
+          const screenZ = Vector3.Project(origin.add(new Vector3(0, 0, 1)), Matrix.Identity(), scene.getTransformMatrix(), viewport);
+          const basisX = new Vector2(screenX.x - screenOrigin.x, screenX.y - screenOrigin.y);
+          const basisZ = new Vector2(screenZ.x - screenOrigin.x, screenZ.y - screenOrigin.y);
           const desired = new Vector2(moveRight, -moveForward);
-
           const det = basisX.x * basisZ.y - basisX.y * basisZ.x;
           if (Math.abs(det) > 1e-6) {
-            const worldDX = (desired.x * basisZ.y - desired.y * basisZ.x) / det;
-            const worldDZ = (basisX.x * desired.y - basisX.y * desired.x) / det;
-            movement = new Vector3(worldDX, 0, worldDZ);
+            const wdx = (desired.x * basisZ.y - desired.y * basisZ.x) / det;
+            const wdz = (basisX.x * desired.y - basisX.y * desired.x) / det;
+            movement = new Vector3(wdx, 0, wdz);
           } else {
-            // Fallback for degenerate projection matrix edge-cases.
             const cameraForward = camera.target.subtract(camera.position);
             cameraForward.y = 0;
             if (cameraForward.lengthSquared() > 1e-6) {
               cameraForward.normalize();
-              const cameraRight = new Vector3(
-                cameraForward.z,
-                0,
-                -cameraForward.x,
-              );
-              movement = cameraForward
-                .scale(moveForward)
-                .add(cameraRight.scale(moveRight));
+              const cameraRight = new Vector3(cameraForward.z, 0, -cameraForward.x);
+              movement = cameraForward.scale(moveForward).add(cameraRight.scale(moveRight));
             }
           }
         }
-
-        movement.normalize().scaleInPlace(speed * deltaSeconds);
-
-        // Substepping to prevent tunneling through walls during lag spikes
-        const totalDistance = movement.length();
-        if (totalDistance > 0) {
-          const maxStepSize = 0.1; // safe step size (player radius is 0.32)
-          const numSteps = Math.ceil(totalDistance / maxStepSize);
-          const stepMovement = movement.scale(1 / numSteps);
-
-          for (let i = 0; i < numSteps; i++) {
-            const nextX = player.position.x + stepMovement.x;
-            const nextZ = player.position.z + stepMovement.z;
-
-            if (
-              !isWorldPositionBlocked(nextX, player.position.z, 0.32, {
-                blockVoidForPlayer: true,
-                footY: player.position.y,
-              })
-            ) {
-              player.position.x = nextX;
-            }
-
-            if (
-              !isWorldPositionBlocked(player.position.x, nextZ, 0.32, {
-                blockVoidForPlayer: true,
-                footY: player.position.y,
-              })
-            ) {
-              player.position.z = nextZ;
-            }
-
-            if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
-              snapFootToGradedSurface();
-            }
-          }
+        const len = movement.length();
+        if (len > 0.001) {
+          worldDx = movement.x / len;
+          worldDz = movement.z / len;
         }
+      }
 
-        player.position.x = Math.min(
-          mapMaxX,
-          Math.max(mapMinX + 0.5, player.position.x),
-        );
-        player.position.z = Math.min(
-          mapMaxZ,
-          Math.max(mapMinZ + 0.5, player.position.z),
-        );
+      // Sync fall-safety from PlayerState to physics context
+      playerCtx.isFallSafetyEnabled = playerState.isFallSafetyEnabled();
 
-        // Push player out of non-walkable collision volumes using CollisionWorld.
-        // Replaces the old tile-grid depenetration that relied on activeLevel + isBlockingTile.
-        {
-          const footY = player.position.y;
-          const headY = footY + HERO_BODY_HEIGHT;
-          const radius = 0.32;
-          const levelKeys = Object.keys(mapDataCache?.levels ?? {});
-          const push = collisionWorld.resolvePushout(player.position.x, player.position.z, footY, headY, radius, levelKeys);
-          if (push) {
-            player.position.x += push[0];
-            player.position.z += push[1];
-          }
-        }
+      const physicsInput: PhysicsInput = {
+        moveX: worldDx,
+        moveZ: worldDz,
+        deltaSeconds,
+        jumpPressed: jumpRequested,
+        sprintHeld: pressedKeys.has("shift"),
+        speedMultiplier: aquaticSample.speedMultiplier,
+      };
+      jumpRequested = false;
 
-        if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
-          syncVerticalLevelFromMovement(
-            isMoving,
-            movementStartX,
-            movementStartZ,
+      tickPhysics(playerCtx, physicsInput, collisionWorld, {
+        getMapTileAt,
+        getTileDef: (symbol: string | null) =>
+          symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
+        hasLevel: (level: string) => Boolean(mapDataCache?.levels?.[level]),
+        allLevels: () => Object.keys(mapDataCache?.levels ?? {}),
+        getMapWidth: () => currentMapWidth,
+        getMapHeight: () => currentMapHeight,
+        parseLevelNumber,
+      }, {
+        onFallSafetyActive: (_ctx) => {
+          playerState.emit("uiNotification", {
+            type: "warning",
+            message: t_game("fall_safety_active"),
+          });
+        },
+        onHoleTransition: (_fromLevel, toLevel, transition) => {
+          applyActiveLevelChange(toLevel, transition);
+        },
+        onNaturalLevelTransition: (toLevel) => {
+          applyActiveLevelChange(toLevel, undefined, { natural: true });
+        },
+        onGrounded: (_ctx, impactSpeed) => {
+          finishAirborneLanding(
+            getCurrentLevel(),
+            playerCtx.position.y,
+            impactSpeed,
+            playerCtx.holeFallFloorCount,
           );
-        }
+        },
+        onJump: () => {
+          audioManager.playJump();
+        },
+      });
+
+      // Sync player mesh position
+      player.position.x = playerCtx.position.x;
+      player.position.y = playerCtx.position.y;
+      player.position.z = playerCtx.position.z;
+
+      // Sync local mirrors for non-physics code
+      verticalVelocity = playerCtx.verticalVelocity;
+      isGrounded = playerCtx.isGrounded;
+      holeFallLandingLevel = playerCtx.holeFallLandingLevel;
+      holeFallFloorCount = playerCtx.holeFallFloorCount;
+      fallOriginFootY = playerCtx.fallOriginFootY;
+      wasOnVoidWithSafety = playerCtx.wasOnVoidWithSafety;
+      lastSafePlayerX = playerCtx.lastSafePositionX;
+      lastSafePlayerZ = playerCtx.lastSafePositionZ;
+      lastGroundedFootY = playerCtx.lastGroundedFootY;
+      levelTransitionCooldown = playerCtx.levelTransitionCooldown;
     }
     physicsTimeAccum += performance.now() - tStart;
-
-    tStart = performance.now();
-    const isVerticalTransitionGuarded = () => {
-      if (!verticalTransitionGuard) {
-        return false;
-      }
-      if (performance.now() > verticalTransitionGuard.untilMs) {
-        verticalTransitionGuard = null;
-        return false;
-      }
-      const tileX = Math.floor(player.position.x);
-      const tileZ = Math.floor(player.position.z);
-      return (
-        tileX === verticalTransitionGuard.tileX &&
-        tileZ === verticalTransitionGuard.tileZ
-      );
-    };
-
-    const canAttemptVerticalTransition = () => {
-      if (levelTransitionCooldown > 0 || holeFallLandingLevel) {
-        return false;
-      }
-      if (isVerticalTransitionGuarded()) {
-        return false;
-      }
-      if (isGrounded) {
-        return true;
-      }
-      const tileX = Math.floor(player.position.x);
-      const tileZ = Math.floor(player.position.z);
-      const symbol = getMapTileAt(activeLevel, tileX, tileZ);
-      const tileDef = symbol
-        ? mapDataCache?.tileDefinitions?.[symbol]
-        : undefined;
-      if (isGradedWalkTile(tileDef, LEVEL_HEIGHT) && Math.abs(verticalVelocity) < 3.0) {
-        return true;
-      }
-      return false;
-    };
-
-    const tryHoleLevelTransition = () => {
-      if (!canAttemptVerticalTransition()) {
-        return;
-      }
-
-      const probe = probeHoleLevelTransition(
-        player.position.x,
-        player.position.z,
-        activeLevel,
-        getMapTileAt,
-        (symbol: string | null) =>
-          symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-        {
-          parseLevelNumber,
-          hasLevel: (level: string) => Boolean(mapDataCache?.levels?.[level]),
-        },
-      );
-      if (!probe) {
-        return;
-      }
-
-      if (!playerState.isFallSafetyEnabled()) {
-        beginGravityHoleFall(probe.targetLevel, 1);
-        levelTransitionCooldown = 0.35;
-        return;
-      }
-
-      levelTransitionCooldown = 0.65;
-      applyActiveLevelChange(probe.targetLevel, {
-        tileX: probe.tileX,
-        tileZ: probe.tileZ,
-        landingLocalZ: probe.landingLocalZ,
-        guardMs: 1200,
-      });
-    };
-
-    const tryVerticalLevelTransitions = () => {
-      if (holeFallLandingLevel) {
-        return;
-      }
-      tryHoleLevelTransition();
-    };
-
-    tryVerticalLevelTransitions();
 
     const consumeFootstep = (heroSpriteMat as any)._consumeFootstepTick;
     if (typeof consumeFootstep === "function" && consumeFootstep()) {
       audioManager.playFootstep("floor", true);
     }
 
-    if (levelTransitionCooldown > 0) {
-      levelTransitionCooldown -= deltaSeconds;
-    }
-
-    const respawnDeltaMs = deltaSeconds * 1000;
-    const px = player.position.x;
-    const pz = player.position.z;
-    const streamRadiusSq = enemyStreamRadiusUnits * enemyStreamRadiusUnits;
-    pendingEnemyRespawns.forEach((record, spawnKey) => {
-      record.elapsedMs += respawnDeltaMs;
-      if (record.elapsedMs < record.respawnTimeMs) {
-        return;
-      }
-      pendingEnemyRespawns.delete(spawnKey);
-
-      if (record.level !== activeLevel) {
-        return;
-      }
-
-      const spawnX = worldToSliceCoord(record.spawn.x);
-      const spawnZ = worldToSliceCoord(record.spawn.y);
-      const dx = spawnX - px;
-      const dz = spawnZ - pz;
-      if (dx * dx + dz * dz > streamRadiusSq) {
-        return;
-      }
-
-      clearEnemy3dDeadPersistence(record.level, spawnKey);
-      spawnEnemy(record.spawn, record.index, spawnKey, record.level, {
-        withRespawnVfx: true,
-      });
-    });
     physicsTimeAccum += performance.now() - tStart;
 
     tStart = performance.now();
@@ -7665,7 +6858,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         enemyTime: Math.round(enemyTimeAccum * 10) / 10,
         physicsTime: Math.round(physicsTimeAccum * 10) / 10,
         activeEnemies: Array.from(enemies.values()).filter(
-          (e) => !e.isDead && Math.abs(levelToWorldY(e.level) - player.position.y) < LEVEL_HEIGHT && Vector3.Distance(e.worldPos, player.position) <= ENEMY_AI_RADIUS_UNITS,
+          (e) => !e.isDead && Math.abs(levelToWorldY(e.level) - levelToWorldY(getCurrentLevel())) <= LEVEL_HEIGHT && Vector3.Distance(e.worldPos, player.position) <= ENEMY_AI_RADIUS_UNITS,
         ).length,
         renderedTiles: chunkMeshes.size * CHUNK_SIZE * CHUNK_SIZE,
         totalObjects: activeMeshes,
@@ -7700,14 +6893,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         streamedDroppedItems: droppedItemMeshes.size,
         streamedEnemies: enemies.size,
         catalogedEnemies: enemySpawnCatalog.size,
-        streamedProps: props.size,
-        catalogedProps: propSpawnCatalog.size,
+        streamedProps: propSystem.getProps().size,
+        catalogedProps: propSystem.getDebugInfo().cataloged,
         navWindowTiles: navigationGridSize,
-        activeLevel,
+        currentLevel: getCurrentLevel(),
         qualityPreset: playerState.getDisplaySettings().qualityPreset,
         topDownDrawRadiusChunks,
-        enemyStreamRadiusUnits,
-        propStreamRadiusUnits,
+        enemyStreamRadiusUnits: enemySystem.enemyStreamRadiusUnits,
+        propStreamRadiusUnits: propSystem.propStreamRadiusUnits,
         ts: Date.now(),
       };
       (window as any).__slice3dPerf = (window as any).__slice3dPerfDiagnostics;
@@ -7738,7 +6931,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       let visibleEnemies = 0;
       let aiActiveEnemies = 0;
       enemies.forEach((enemy) => {
-        if (enemy.isDead || Math.abs(levelToWorldY(enemy.level) - player.position.y) >= LEVEL_HEIGHT) return;
+        if (enemy.isDead || Math.abs(levelToWorldY(enemy.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) return;
         const distance = Vector3.Distance(enemy.worldPos, player.position);
         if (distance <= ENEMY_AI_RADIUS_UNITS) {
           activeEnemies += 1;
@@ -7754,7 +6947,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       const sample: Slice3DLogSample = {
         ts: Date.now(),
         elapsedSec: getElapsedSec(),
-        activeLevel,
+        currentLevel: getCurrentLevel(),
         player: {
           x: Math.round(player.position.x * 100) / 100,
           y: Math.round(player.position.y * 100) / 100,
@@ -7864,9 +7057,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         });
       }
 
-      const chunkKey = `${sample.activeLevel}:${sample.player.chunkX}_${sample.player.chunkZ}`;
+      const chunkKey = `${sample.currentLevel}:${sample.player.chunkX}_${sample.player.chunkZ}`;
       const chunkEntry = chunkHotspots.get(chunkKey) || {
-        level: sample.activeLevel,
+        level: sample.currentLevel,
         chunkX: sample.player.chunkX,
         chunkZ: sample.player.chunkZ,
         samples: 0,
@@ -7956,90 +7149,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       }
     }
 
-    // Gravity and fall system
-    {
-      const tileX = Math.floor(player.position.x);
-      const tileZ = Math.floor(player.position.z);
-      const onVoidTile = isPlayerOverVoidAtLevel(activeLevel);
-
-      if (!onVoidTile) {
-        lastSafePlayerX = player.position.x;
-        lastSafePlayerZ = player.position.z;
-        wasOnVoidWithSafety = false;
-      }
-
-      if (isGrounded && onVoidTile && !holeFallLandingLevel) {
-        if (playerState.isFallSafetyEnabled()) {
-          if (!wasOnVoidWithSafety) {
-            wasOnVoidWithSafety = true;
-            playerState.emit("uiNotification", {
-              type: "warning",
-              message: t_game("fall_safety_active"),
-            });
-          }
-
-          player.position.x = lastSafePlayerX;
-          player.position.z = lastSafePlayerZ;
-          verticalVelocity = 0;
-          isGrounded = true;
-        } else {
-          const landing = findVoidFallLanding(activeLevel, tileX, tileZ);
-          if (landing) {
-            beginGravityHoleFall(landing.landingLevel, landing.floors);
-          }
-        }
-      }
-
-      if (!isGrounded) {
-        verticalVelocity += (holeFallLandingLevel ? fallGravity : gravity) * deltaSeconds;
-        player.position.y += verticalVelocity * deltaSeconds;
-
-        const levelGround = getHighestGroundBelow(
-          player.position.x,
-          player.position.z,
-          player.position.y,
-        );
-        const levelGroundY = levelGround.footY;
-        const landingLevel = holeFallLandingLevel ?? levelGround.level;
-
-        if (player.position.y <= levelGroundY) {
-          const impactSpeed = Math.abs(verticalVelocity);
-          player.position.y = levelGroundY;
-          verticalVelocity = 0;
-          isGrounded = true;
-
-          if (landingLevel !== activeLevel) {
-            applyActiveLevelChange(landingLevel, undefined, { natural: true });
-          }
-          lastGroundedFootY = player.position.y;
-          finishAirborneLanding(
-            landingLevel,
-            levelGroundY,
-            impactSpeed,
-            holeFallFloorCount,
-          );
-          holeFallLandingLevel = null;
-          holeFallFloorCount = 0;
-        }
-      }
-
-      applyCeilingCollisionToVerticalMotion();
-    }
-
-    if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(activeLevel)) {
-      snapFootToGradedSurface();
-      syncVerticalLevelFromMovement(
-        isMoving,
-        movementStartX,
-        movementStartZ,
-      );
-      lastGroundedFootY = player.position.y;
+    // Keep-alive: sync side effects to current level (handled by events, but safe backstop)
+    if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(getCurrentLevel())) {
+      syncLevelSideEffects();
     }
 
     const playerAquatic = getAquaticSampleAt(
       player.position.x,
       player.position.z,
-      activeLevel,
+      getCurrentLevel(),
     );
     heroAquaticTint.update(playerAquatic);
     if (
@@ -8083,7 +7201,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       firstPersonCamera.fov = fpCamera.fov;
 
       playerState.exploreArea(
-        activeLevel,
+        getRenderLevel(),
         Math.floor(player.position.x),
         Math.floor(player.position.z),
         8,
@@ -8091,7 +7209,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         currentMapHeight,
       );
       playerState.recordPlayerPosition(
-        activeLevel,
+        getCurrentLevel(),
         player.position.x * 32,
         player.position.z * 32,
       );
@@ -8101,7 +7219,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     wallRevealSystem.update(
       true,
       player.position,
-      activeLevel,
+      getRenderLevel(),
       collectInteractableRevealTargets(),
       (fromWorldX, fromWorldZ, toWorldX, toWorldZ) =>
         findFirstBlockingTileOnWorldLine(
@@ -8120,7 +7238,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     heroShadow.setEnabled(true);
     heroShadow.position.set(
       player.position.x,
-      getGroundSurfaceY(player.position.x, player.position.z, activeLevel) +
+      getGroundSurfaceY(player.position.x, player.position.z, getRenderLevel()) +
         0.01,
       player.position.z,
     );
@@ -8131,8 +7249,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       new Vector3(player.position.x, player.position.y, player.position.z),
     );
 
+    const currentLevel = getCurrentLevel();
     playerState.exploreArea(
-      activeLevel,
+      currentLevel,
       Math.floor(player.position.x),
       Math.floor(player.position.z),
       8,
@@ -8141,7 +7260,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
 
     playerState.recordPlayerPosition(
-      activeLevel,
+      currentLevel,
       player.position.x * 32,
       player.position.z * 32,
     );
@@ -8161,11 +7280,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       autoSaveTimer = 0;
       void saveSystem.saveGameDirect({
         map: sliceMapName,
-        currentLevel: activeLevel,
+        currentLevel: getCurrentLevel(),
         playerPos: {
           x: Math.round(player.position.x * 32 * 100) / 100,
           y: Math.round(player.position.z * 32 * 100) / 100,
         },
+        playerY: Math.round(player.position.y * 1000) / 1000,
       });
     }
   });
@@ -8174,11 +7294,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const save = () =>
     saveSystem.saveGameDirect({
       map: sliceMapName,
-      currentLevel: activeLevel,
+      currentLevel: getCurrentLevel(),
       playerPos: {
         x: Math.round(player.position.x * 32 * 100) / 100,
         y: Math.round(player.position.z * 32 * 100) / 100,
       },
+      playerY: Math.round(player.position.y * 1000) / 1000,
     });
 
   let fpsTargetMinFrameMs = 0;
@@ -8245,7 +7366,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   playerState.on("displaySettingsChanged", handleDisplaySettings);
   const handleDoorStatesChanged = () => {
     doors.forEach((door) => updateDoorVisual(door));
-    refreshDoorSystemsForLevel(activeLevel);
+    refreshDoorSystemsForLevel(getRenderLevel());
   };
   playerState.on("doorStatesChanged", handleDoorStatesChanged);
 
@@ -8256,7 +7377,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     whenWorldReady: () => worldReadyPromise,
     dispose: () => {
       pushLogEvent("session.dispose", {
-        activeLevel,
+        currentLevel: getCurrentLevel(),
         samples: runtimeLog.samples.length,
         events: runtimeLog.events.length,
       });
@@ -8302,8 +7423,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       });
       doors.clear();
       doorByLevelTile.clear();
-      clearProps();
-      clearEnemies();
+      propSystem.clear();
+      enemySystem.clear();
       projectileSystem.disposeAll();
       disposeAllPooledSpriteTexturesForScene(scene);
       // S7-FP4: torus marker removed — no dispose needed

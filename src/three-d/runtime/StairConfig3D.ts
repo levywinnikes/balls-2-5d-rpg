@@ -72,7 +72,7 @@ export type StairTransitionProbe = VerticalTransitionProbe;
 export function probeStairLevelTransition(
   worldX: number,
   worldZ: number,
-  activeLevel: string,
+  currentLevel: string,
   getTile: (level: string, tileX: number, tileY: number) => string | null,
   getTileDef: (symbol: string | null) => StairTileDef | null | undefined,
   options: {
@@ -82,7 +82,7 @@ export function probeStairLevelTransition(
 ): VerticalTransitionProbe | null {
   const tileX = Math.floor(worldX);
   const tileZ = Math.floor(worldZ);
-  const symbol = getTile(activeLevel, tileX, tileZ);
+  const symbol = getTile(currentLevel, tileX, tileZ);
   const tileDef = getTileDef(symbol);
   const stairDir = tileDef?.stairDir;
   if (!stairDir && tileDef?.geometryProfile !== "stair") {
@@ -90,7 +90,7 @@ export function probeStairLevelTransition(
   }
 
   const localZ = worldZ - tileZ;
-  const current = options.parseLevelNumber(activeLevel);
+  const current = options.parseLevelNumber(currentLevel);
 
   if (stairDir === "up" && localZ <= STAIR_TOP_EDGE_Z) {
     const targetLevel = String(current + 1);
@@ -128,7 +128,7 @@ export function probeStairLevelTransitionAlongSegment(
   z0: number,
   x1: number,
   z1: number,
-  activeLevel: string,
+  currentLevel: string,
   getTile: (level: string, tileX: number, tileY: number) => string | null,
   getTileDef: (symbol: string | null) => StairTileDef | null | undefined,
   options: {
@@ -143,7 +143,7 @@ export function probeStairLevelTransitionAlongSegment(
     const probe = probeStairLevelTransition(
       x0 + (x1 - x0) * t,
       z0 + (z1 - z0) * t,
-      activeLevel,
+      currentLevel,
       getTile,
       getTileDef,
       options,
@@ -159,7 +159,7 @@ export function probeStairLevelTransitionAlongSegment(
 export function probeHoleLevelTransition(
   worldX: number,
   worldZ: number,
-  activeLevel: string,
+  currentLevel: string,
   getTile: (level: string, tileX: number, tileY: number) => string | null,
   getTileDef: (symbol: string | null) => StairTileDef | null | undefined,
   options: {
@@ -169,7 +169,7 @@ export function probeHoleLevelTransition(
 ): VerticalTransitionProbe | null {
   const tileX = Math.floor(worldX);
   const tileZ = Math.floor(worldZ);
-  const symbol = getTile(activeLevel, tileX, tileZ);
+  const symbol = getTile(currentLevel, tileX, tileZ);
   const tileDef = getTileDef(symbol);
   const goesDown =
     tileDef?.transition === "down" ||
@@ -184,7 +184,7 @@ export function probeHoleLevelTransition(
     return null;
   }
 
-  const targetLevel = String(options.parseLevelNumber(activeLevel) - 1);
+  const targetLevel = String(options.parseLevelNumber(currentLevel) - 1);
   if (!options.hasLevel(targetLevel)) {
     return null;
   }

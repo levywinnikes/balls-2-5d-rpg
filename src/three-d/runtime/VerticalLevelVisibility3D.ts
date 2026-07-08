@@ -12,7 +12,7 @@ export const DEFAULT_OCCLUSION_SCAN_RADIUS = 0;
  * vanish when you walk past a building.
  */
 export function resolveUpperOcclusionLevel(
-  activeLevel: string,
+  currentLevel: string,
   playerTileX: number,
   playerTileY: number,
   levelKeys: string[],
@@ -29,7 +29,7 @@ export function resolveUpperOcclusionLevel(
   const parseLevel =
     options?.parseLevelNumber ??
     ((level: string) => Number.parseInt(level, 10) || 0);
-  const currentNum = parseLevel(activeLevel);
+  const currentNum = parseLevel(currentLevel);
 
   const upperLevels = levelKeys
     .filter((levelKey) => parseLevel(levelKey) > currentNum)
@@ -72,7 +72,7 @@ export function isVoidMapSymbol(symbol: string | null | undefined): boolean {
  * `resolveUpperOcclusionLevel` + `syncVerticalLevelVisibility`.
  */
 export function resolveVerticalVisibleLevels(
-  activeLevel: string,
+  currentLevel: string,
   playerTileX: number,
   playerTileY: number,
   levelKeys: string[],
@@ -84,11 +84,11 @@ export function resolveVerticalVisibleLevels(
   },
 ): string[] {
   if (levelKeys.length === 0) {
-    return [activeLevel];
+    return [currentLevel];
   }
 
   const radius = options?.columnRadius ?? DEFAULT_VERTICAL_COLUMN_RADIUS;
-  const visible = new Set<string>([activeLevel]);
+  const visible = new Set<string>([currentLevel]);
 
   for (let dy = -radius; dy <= radius; dy += 1) {
     for (let dx = -radius; dx <= radius; dx += 1) {

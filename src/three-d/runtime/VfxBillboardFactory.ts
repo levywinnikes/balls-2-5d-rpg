@@ -278,7 +278,6 @@ export function playRespawnGlowAt(
   scene: Scene,
   worldPos: Vector3,
   level: string,
-  activeLevel: string,
   onComplete?: () => void,
 ): void {
   const vfx = createRespawnGlowVfx(
@@ -286,6 +285,7 @@ export function playRespawnGlowAt(
     `respawn-glow-${Date.now().toString(36)}`,
   );
   vfx.root.position = worldPos.clone();
-  vfx.root.setEnabled(level === activeLevel);
+  // Show VFX regardless of level — it's positioned at worldPos and visible briefly
+  vfx.root.setEnabled(true);
   vfx.play(onComplete);
 }

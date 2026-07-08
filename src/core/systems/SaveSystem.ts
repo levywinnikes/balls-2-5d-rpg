@@ -43,6 +43,7 @@ export interface GameSaveData {
   map: string;
   currentLevel: string;
   playerPos: { x: number; y: number };
+  playerY?: number;
   playerState: {
     characterName?: string;
     health: number;
@@ -265,6 +266,7 @@ export class SaveSystem {
     map: string;
     currentLevel: string;
     playerPos: { x: number; y: number };
+    playerY?: number;
     deadEnemies?: DeadEnemy[];
     activeEnemies?: ActiveEnemyState[];
     uiData?: any;
@@ -278,6 +280,7 @@ export class SaveSystem {
       map: context.map,
       currentLevel: context.currentLevel,
       playerPos: context.playerPos,
+      playerY: context.playerY,
       playerState: playerState.exportSnapshot(),
       deadEnemies: context.deadEnemies ?? [],
       activeEnemies: context.activeEnemies ?? [],
@@ -308,6 +311,7 @@ export class SaveSystem {
     map: string;
     currentLevel: string;
     playerPos: { x: number; y: number };
+    playerY?: number;
     deadEnemies?: DeadEnemy[];
     activeEnemies?: ActiveEnemyState[];
   }): Promise<boolean> {

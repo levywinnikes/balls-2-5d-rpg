@@ -71,6 +71,9 @@ export function ThreeDSliceView() {
       if (data.currentLevel != null) {
         url.searchParams.set("level", String(data.currentLevel));
       }
+      if (data.playerY != null) {
+        url.searchParams.set("playerY", String(data.playerY));
+      }
       window.history.replaceState(null, "", url.toString());
     }
 

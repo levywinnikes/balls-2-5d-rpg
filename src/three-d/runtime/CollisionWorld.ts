@@ -173,7 +173,7 @@ export class CollisionWorld {
     const def = this.getTileDef(symbol);
     if (!def) {
       // Tiles without a definition entry still exist in the map — treat as a basic
-      // walkable floor (consistent with TileSurfaceResolver defaults).
+      // walkable floor (consistent with isGradedWalkTile defaults).
       this.buildFloorVolume(level, baseY, tx, tz, def);
       return;
     }
@@ -229,12 +229,16 @@ export class CollisionWorld {
   }
 
   private buildBoxVolume(level: string, baseY: number, tx: number, tz: number, def?: SliceTileDefinition | null): void {
-    const h = def?.height ?? this.levelHeight;
+    // Start the wall at the FLOOR SURFACE (baseY + floorSurfaceY), not the floor bottom.
+    // Clamp to level ceiling so walls don't invade the level above.
+    const y1 = baseY + this.floorSurfaceY;
+    const rawTop = baseY + (def?.height ?? this.levelHeight);
+    const y2 = Math.min(rawTop, baseY + this.levelHeight);
     this.volumes.push({
       kind: "aabb",
-      x1: tx, y1: baseY, z1: tz,
-      x2: tx + 1, y2: baseY + h, z2: tz + 1,
-      surfaceY: baseY + h,
+      x1: tx, y1, z1: tz,
+      x2: tx + 1, y2, z2: tz + 1,
+      surfaceY: y2,
       level,
       isWalkable: false,
     });
@@ -343,10 +347,10 @@ export class CollisionWorld {
     x: number, z: number,
     footY: number, headY: number,
     levelKeys: string[],
-    activeLevel?: string,
+    currentLevel?: string,
     maxFootY?: number,
   ): { floor: { surfaceY: number; footY: number; level: string; isGraded: boolean } | null;
-       ceiling: { bottomY: number; level: string; isGraded: boolean } | null } {
+        ceiling: { bottomY: number; level: string; isGraded: boolean } | null } {
     let bestFloor: { surfaceY: number; footY: number; level: string; isGraded: boolean } | null = null;
     let bestCeiling: { bottomY: number; level: string; isGraded: boolean } | null = null;
 
@@ -394,9 +398,9 @@ export class CollisionWorld {
       }
 
       // --- Ceiling ---
-      // Walkable volumes (floors/ramps) on or below the player's activeLevel cannot be ceilings.
-      if (v.isWalkable && activeLevel !== undefined) {
-        const playerLvlNum = this.parseLevelNum(activeLevel);
+      // Walkable volumes (floors/ramps) on or below the player's currentLevel cannot be ceilings.
+      if (v.isWalkable && currentLevel !== undefined) {
+        const playerLvlNum = this.parseLevelNum(currentLevel);
         const vLvlNum = this.parseLevelNum(v.level);
         if (vLvlNum <= playerLvlNum) {
           continue;
@@ -462,6 +466,14 @@ export class CollisionWorld {
           // it shouldn't block them horizontally.
           if (v.kind === "aabb" && footY < v.y1) continue;
           if (v.kind === "wedge" && footY < v.baseY) continue;
+
+          // Wedges (ramps) are graded surfaces: check if the player is ON the wedge
+          // by comparing the surface at the player's actual position, not the closest point.
+          // This allows walking up a ramp without being blocked by the rising surface ahead.
+          if (v.kind === "wedge") {
+            const syAtPlayer = volumeSurfaceY(v, x, z);
+            if (syAtPlayer <= footY + 0.45) continue;
+          }
 
           const sy = volumeSurfaceY(v, closestX, closestZ);
           if (sy > footY + 0.45) {
@@ -529,4 +541,21 @@ export class CollisionWorld {
     if (pushX === 0 && pushZ === 0) return null;
     return [pushX, pushZ];
   }
+}
+
+/** Stairs and ramps change foot Y gradually — never treat as a void ledge. */
+export function isGradedWalkTile(
+  tileDef?: SliceTileDefinition | null,
+  levelHeightUnits = LEVEL_HEIGHT,
+): boolean {
+  if (!tileDef) {
+    return false;
+  }
+  if (tileDef.stairDir || tileDef.geometryProfile === "stair") {
+    return true;
+  }
+  if (isFloorLevelRamp(tileDef, levelHeightUnits)) {
+    return true;
+  }
+  return Boolean(tileDef.geometryProfile?.startsWith("ramp-"));
 }
