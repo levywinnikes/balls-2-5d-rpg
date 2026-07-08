@@ -141,6 +141,7 @@ import { SaveSystem } from "../../core/systems/SaveSystem";
 import { PropStreamSystem } from "./PropStreamSystem";
 import { EnemyStreamSystem, type SliceEnemy, type EnemySpawnData } from "./EnemyStreamSystem";
 import { DropStreamSystem, type SliceDroppedItem } from "./DropStreamSystem";
+import { StreamOrchestrator } from "./StreamOrchestrator";
 import type {
   GeometryWorkerRequest,
   GeometryWorkerResponse,
@@ -861,7 +862,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const ENEMY_RESPAWN_MS = enemySystem.ENEMY_RESPAWN_MS;
   const pendingEnemyRespawns = enemySystem.pendingEnemyRespawns;
   const enemySpawnCatalog = enemySystem.spawnCatalog;
-  const seededEnemyLevels = enemySystem.seededLevels;
   enemySystem.enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
   enemySystem.enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
   const seededLevels = new Set<string>();
@@ -886,6 +886,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     logWarn: (msg: string) => console.warn(msg),
   });
   dropSystem.droppedItemStreamRadiusUnits = streamRadiiUnits.droppedItemStreamRadiusUnits;
+  const orchestrator = new StreamOrchestrator(
+    propSystem,
+    enemySystem,
+    dropSystem,
+    {
+      getCurrentLevel: () => getCurrentLevel(),
+      getLevelKeys: () => Object.keys((mapDataCache as SliceMapData | null)?.levels ?? {}),
+      applyActiveLevelChange: (level: string, transition?: any, options?: { natural?: boolean }) =>
+        applyActiveLevelChange(level, transition, options),
+      ensureMapLevelReady: (level: string) => ensureMapLevelReady(level),
+      ensureLevelDoorsSeeded: (level: string) => ensureLevelDoorsSeeded(level),
+      setSelectedEnemy: (uid: string | null) => setSelectedEnemy(uid),
+      pushLogEvent: (event: string, data: any) => pushLogEvent(event, data),
+    },
+  );
 
   const applyQualityStreamConfig = (
     preset: ReturnType<typeof playerState.getDisplaySettings>["qualityPreset"],
@@ -899,13 +914,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       qualityStreamConfig.topDownChunkBuildBudgetPerTick;
     firstPersonChunkBuildBudgetPerTick =
       qualityStreamConfig.firstPersonChunkBuildBudgetPerTick;
-    propSystem.propStreamRadiusUnits = streamRadiiUnits.propStreamRadiusUnits;
-    propSystem.propStreamRadiusUnitsFirstPerson = streamRadiiUnits.propStreamRadiusUnitsFirstPerson;
-    propSystem.propDespawnRadiusUnits = streamRadiiUnits.propDespawnRadiusUnits;
-    enemySystem.enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
-    enemySystem.enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
-    dropSystem.droppedItemStreamRadiusUnits =
-      streamRadiiUnits.droppedItemStreamRadiusUnits;
+    orchestrator.setStreamRadii(streamRadiiUnits);
   };
   let isFirstPerson = false;
   let fpCombatCameraState = createFirstPersonCombatCameraState();
@@ -1965,17 +1974,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       rebuildNavigationWindow(newLevel);
     }
     void ensureLevelDoorsSeeded(newLevel);
-    void enemySystem.ensureLevelSeeded(newLevel);
-    void dropSystem.ensureLevelSeeded(newLevel);
-    void propSystem.ensureLevelSeeded(newLevel);
-    // Seed adjacent levels so enemies/props are visible via Y-based visibility
-    const newNum = parseLevelNumber(newLevel);
-    for (const adjacent of [String(newNum - 1), String(newNum + 1)]) {
-      if (mapDataCache?.levels?.[adjacent]) {
-        void enemySystem.ensureLevelSeeded(adjacent);
-        void propSystem.ensureLevelSeeded(adjacent);
-      }
-    }
+    orchestrator.seedLevel(newLevel);
+    orchestrator.seedAdjacentLevels(newLevel);
     enemySystem.syncStream(true);
     propSystem.syncStream(true);
     pushLogEvent("level.change", {
@@ -5163,31 +5163,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const syncDroppedItems = (force = false) => {
-    const currentLevel = playerState.getCurrentLevel();
-    if (currentLevel !== getCurrentLevel()) {
-      const previousLevel = getCurrentLevel();
-      applyActiveLevelChange(currentLevel, undefined, { natural: true });
-      void ensureMapLevelReady(currentLevel);
-      void ensureLevelDoorsSeeded(currentLevel);
-      void dropSystem.ensureLevelSeeded(currentLevel);
-      void enemySystem.ensureLevelSeeded(currentLevel);
-      void propSystem.ensureLevelSeeded(currentLevel);
-      setSelectedEnemy(null);
-      pushLogEvent("level.change", {
-        from: previousLevel,
-        to: currentLevel,
-        playerX: Math.round(player.position.x * 100) / 100,
-        playerZ: Math.round(player.position.z * 100) / 100,
-      });
-    }
-    dropSystem.syncStream(force);
+  const checkLevelDrift = () => {
+    orchestrator.checkLevelDrift(playerState.getCurrentLevel());
   };
 
   /** Re-snap props/loot after floor slab height or tile binary becomes available. */
   const reanchorWorldContentOnLevel = (level: string) => {
-    propSystem.reanchorAll(level);
-    syncDroppedItems(true);
+    orchestrator.reanchorLevel(level);
   };
 
   const collectInteractableRevealTargets = (): InteractableRevealTarget[] => {
@@ -5507,12 +5489,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   void bootstrapWorldSession();
   // Seed all levels at bootstrap so content is available when Y-position changes levels.
   const seedLevelKeys = Object.keys((mapDataCache as SliceMapData | null)?.levels ?? {});
-  for (const lvl of seedLevelKeys) {
-    void dropSystem.ensureLevelSeeded(lvl);
-    void enemySystem.ensureLevelSeeded(lvl);
-    void propSystem.ensureLevelSeeded(lvl);
-  }
-  syncDroppedItems();
+  void orchestrator.seedAllLevels(seedLevelKeys);
+  orchestrator.dropSystem.syncStream(true);
 
   const pressedKeys = new Set<string>();
 
@@ -6216,7 +6194,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (key === "e" && !event.repeat) {
       const pickedRealItem = tryPickupNearestItem();
       if (pickedRealItem) {
-        syncDroppedItems(true);
+        orchestrator.dropSystem.syncStream(true);
         return;
       }
 
@@ -6375,16 +6353,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     let tStart = tFrameStart;
 
+    checkLevelDrift();
     tStart = performance.now();
-    dropSystem.tick(deltaSeconds);
-    mapTimeAccum += performance.now() - tStart;
-
-    tStart = performance.now();
-    enemySystem.tick(deltaSeconds);
-    enemyTimeAccum += performance.now() - tStart;
-
-    tStart = performance.now();
-    propSystem.tick(deltaSeconds);
+    orchestrator.tick(deltaSeconds);
 
     navWindowTimer += deltaSeconds;
     if (navWindowTimer >= 0.45) {
