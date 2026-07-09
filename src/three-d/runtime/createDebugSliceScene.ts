@@ -143,6 +143,7 @@ import { DoorSystem } from "./DoorSystem";
 import { ChunkStreamSystem } from "./ChunkStreamSystem";
 import { NavigationSystem } from "./NavigationSystem";
 import { AudioSystem } from "./AudioSystem";
+import { CameraSystem } from "./CameraSystem";
 import type {
   GeometryWorkerRequest,
   GeometryWorkerResponse,
@@ -450,59 +451,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   /** Derive level from player Y for rendering/presentation — same as getCurrentLevel. */
   const getRenderLevel = (): string => getCurrentLevel();
-  let activeTopDownCameraPreset: TopDownCameraPreset = "safe";
-
-  const camera = new ArcRotateCamera(
-    "slice-camera",
-    Math.PI / 2, // top-down: alpha = +90° (north-facing, looking south) so +Z = screen-down = minimap south
-    0.72,
-    9,
-    new Vector3(0, 1.5, 0),
-    scene,
-  );
-  const applyTopDownCameraPreset = (preset: TopDownCameraPreset) => {
-    activeTopDownCameraPreset = preset;
-    if (preset === "safe") {
-      // Safe preset: higher readability for combat/navigation.
-      camera.beta = 0.72; // ~49° from ground
-      camera.radius = 9;
-      camera.fov = 0.92;
-      camera.maxZ = 52;
-      camera.lowerRadiusLimit = 9;
-      camera.upperRadiusLimit = 9;
-      camera.lowerBetaLimit = 0.72;
-      camera.upperBetaLimit = 0.72;
-    } else {
-      // Cinematic preset: slightly steeper depth feel.
-      camera.beta = 0.56; // ~58° from ground
-      camera.radius = 11;
-      camera.fov = 1.05;
-      camera.maxZ = 58;
-      camera.lowerRadiusLimit = 11;
-      camera.upperRadiusLimit = 11;
-      camera.lowerBetaLimit = 0.56;
-      camera.upperBetaLimit = 0.56;
-    }
-
-    camera.lowerAlphaLimit = Math.PI / 2;
-    camera.upperAlphaLimit = Math.PI / 2;
-  };
-  applyTopDownCameraPreset(activeTopDownCameraPreset);
-  camera.wheelPrecision = 1000000;
-  camera.panningSensibility = 0;
-  camera.attachControl(canvas, true);
-
-  const firstPersonCamera = new UniversalCamera(
-    "slice-fp-camera",
-    new Vector3(6, 1.55, 6),
-    scene,
-  );
-  firstPersonCamera.minZ = 0.05;
-  firstPersonCamera.maxZ = 120;
-  firstPersonCamera.fov = FP_CAMERA_FOV;
-  firstPersonCamera.inertia = 0.05;
-  firstPersonCamera.angularSensibility = 800; // ~CS:GO/Valorant default feel
-  firstPersonCamera.speed = 0;
+  // cameraSystem created after state variables are declared
+  // these are just references set later
+  let camera: ArcRotateCamera;
+  let firstPersonCamera: UniversalCamera;
 
   const hemiLight = new HemisphericLight(
     "slice-hemi-light",
@@ -971,10 +923,23 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     orchestrator.setStreamRadii(streamRadiiUnits);
   };
   let isFirstPerson = false;
-  let fpCombatCameraState = createFirstPersonCombatCameraState();
   let gameplayPaused = playerState.isGameplayPaused();
-  let fpCaptureSuspendedForMenu = false;
-  let topDownCaptureSuspendedForMenu = false;
+  const cameraSystem = new CameraSystem({
+    scene,
+    canvas,
+    getPlayerPosition: () => player.position,
+    getHeroDirection: () => heroDirection,
+    setHeroDirection: (dir) => { heroDirection = dir; },
+    getIsGameplayPaused: () => gameplayPaused,
+    getCurrentLevel,
+    parseLevelNumber,
+    onCameraModeChanged: (firstPerson) => {
+      document.dispatchEvent(new CustomEvent("slice3d:cameraModeChanged", { detail: { firstPerson } }));
+    },
+    FIRST_PERSON_EYE_ABOVE_FEET,
+  });
+  camera = cameraSystem.topDownCamera;
+  firstPersonCamera = cameraSystem.fpCamera;
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const geometryWorker: Worker = new Worker(
     new URL("../../workers/geometry.worker.ts", import.meta.url),
@@ -2820,6 +2785,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       window.__slice3dChunkStreaming = stats as typeof window.__slice3dChunkStreaming;
     },
   });
+  cameraSystem.heroBillboard = heroBillboard;
+  cameraSystem.heroShadow = heroShadow;
+  cameraSystem.chunkClearAll = () => chunkSystem.clearAll();
+  cameraSystem.chunkTick = (dt) => chunkSystem.tick(dt);
+  cameraSystem.invalidateVerticalVisibilityCache = invalidateVerticalVisibilityCache;
+  cameraSystem.setEnemyScalesDefault = () => {
+    enemies.forEach((enemy) => enemy.meshRoot.scaling.set(1, 1, 1));
+  };
+  cameraSystem.getSelectedEnemyUid = () => selectedEnemyUid;
+  cameraSystem.getEnemyWorldPos = (uid) => enemies.get(uid)?.worldPos ?? null;
+  cameraSystem.getIsEnemyDead = (uid) => enemies.get(uid)?.isDead ?? true;
   const ensureDebugSandboxStarterLoadout = (mapData: SliceMapData) => {
     if (!mapData.config?.debugSandbox) {
       return;
@@ -4013,9 +3989,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
         worldBootstrapReady = true;
         setPlayerAvatarVisible(true);
-        camera.setTarget(
-          new Vector3(player.position.x, player.position.y, player.position.z),
-        );
+        cameraSystem.updateTopDownTarget(player.position);
 
         resolveWorldReady?.();
         document.dispatchEvent(
@@ -4097,116 +4071,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
 
 
-  const setCameraMode = (
-    firstPerson: boolean,
-    shouldRequestPointerLock = false,
-  ) => {
-    isFirstPerson = firstPerson;
-    projectileSystem.setFirstPersonMode(firstPerson);
-    if (!firstPerson) {
-      fpCombatCameraState = createFirstPersonCombatCameraState();
-      firstPersonCamera.fov = FP_CAMERA_FOV;
-      enemies.forEach((enemy) => {
-        enemy.meshRoot.scaling.set(1, 1, 1);
-      });
-    }
-
-    if (parseLevelNumber(getCurrentLevel()) < 0) {
-      chunkSystem.clearAll();
-      invalidateVerticalVisibilityCache();
-      chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
-    }
-    // S7-FP1: notify React overlay (crosshair) of camera mode change
-    document.dispatchEvent(
-      new CustomEvent("slice3d:cameraModeChanged", { detail: { firstPerson } }),
-    );
-
-    if (isFirstPerson) {
-      heroBillboard.setEnabled(false);
-      camera.detachControl();
-      firstPersonCamera.position.set(
-        player.position.x,
-        player.position.y + FIRST_PERSON_EYE_ABOVE_FEET,
-        player.position.z,
-      );
-      firstPersonCamera.rotation.y = bmsDirectionToFirstPersonYaw(heroDirection);
-      scene.activeCamera = firstPersonCamera;
-      topDownCaptureSuspendedForMenu = false;
-      if (gameplayPaused) {
-        fpCaptureSuspendedForMenu = true;
-      } else {
-        fpCaptureSuspendedForMenu = false;
-        firstPersonCamera.attachControl(canvas, true);
-        if (shouldRequestPointerLock) {
-          inputManager.requestPointerLockIfPossible();
-        }
-      }
-      return;
-    }
-
-    firstPersonCamera.detachControl();
-    document.exitPointerLock?.();
-    heroBillboard.setEnabled(true);
-    setHeroDirection(
-      firstPersonYawToBmsDirection(
-        firstPersonCamera.rotation.y,
-        heroDirection,
-      ),
-    );
-    scene.activeCamera = camera;
-    fpCaptureSuspendedForMenu = false;
-    if (gameplayPaused) {
-      topDownCaptureSuspendedForMenu = true;
-    } else {
-      topDownCaptureSuspendedForMenu = false;
-      camera.attachControl(canvas, true);
-    }
-  };
-
   const setCanvasGameplayInputEnabled = (enabled: boolean) => {
     canvas.style.pointerEvents = enabled ? "auto" : "none";
-    if (!enabled) {
-      canvas.blur();
-    }
-  };
-
-  const suspendCameraCaptureForMenu = () => {
-    setCanvasGameplayInputEnabled(false);
-    if (isFirstPerson) {
-      document.exitPointerLock?.();
-      firstPersonCamera.detachControl();
-      fpCaptureSuspendedForMenu = true;
-      topDownCaptureSuspendedForMenu = false;
-      return;
-    }
-    camera.detachControl();
-    topDownCaptureSuspendedForMenu = true;
-    fpCaptureSuspendedForMenu = false;
-  };
-
-  const resumeCameraCaptureAfterMenu = () => {
-    setCanvasGameplayInputEnabled(true);
-    if (isFirstPerson && fpCaptureSuspendedForMenu) {
-      fpCaptureSuspendedForMenu = false;
-      scene.activeCamera = firstPersonCamera;
-      firstPersonCamera.attachControl(canvas, true);
-      return;
-    }
-    if (!isFirstPerson && topDownCaptureSuspendedForMenu) {
-      topDownCaptureSuspendedForMenu = false;
-      scene.activeCamera = camera;
-      camera.attachControl(canvas, true);
-    }
+    if (!enabled) canvas.blur();
   };
 
   const handleGameplayPauseChanged = (paused: boolean) => {
     gameplayPaused = paused;
     inputManager?.clearPressedKeys();
     if (paused) {
-      suspendCameraCaptureForMenu();
+      cameraSystem.suspend();
+      setCanvasGameplayInputEnabled(false);
       return;
     }
-    resumeCameraCaptureAfterMenu();
+    setCanvasGameplayInputEnabled(true);
+    cameraSystem.resume();
   };
 
   playerState.on("gameplayPauseChanged", handleGameplayPauseChanged);
@@ -4417,7 +4296,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     inputManager.clearPressedKeys();
     setSelectedEnemy(null);
     if (isFirstPerson) {
-      setCameraMode(false, false);
+      cameraSystem.setMode(false, false);
+      isFirstPerson = false;
     }
     heroBillboard.setEnabled(true);
     heroShadow.setEnabled(true);
@@ -4434,7 +4314,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   // Activate first-person mode if URL contains ?fp=1
   if (searchParams.get("fp") === "1") {
-    setCameraMode(true, false);
+    cameraSystem.setMode(true, false);
+    isFirstPerson = true;
   }
 
   // S8-T2: dispatch rune slot state to React HUD
@@ -4534,17 +4415,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     },
     onToggleCameraMode: (newFP: boolean) => {
       if (newFP) {
-        // eslint-disable-next-line no-console
         console.warn(
           "[DEBUG] Entering first-person mode — debug-only camera. Top-down is the product view.",
         );
       }
-      setCameraMode(newFP, newFP);
+      cameraSystem.setMode(newFP, newFP);
+      isFirstPerson = cameraSystem.isFirstPerson;
     },
     onCycleCameraPreset: () => {
-      const nextPreset: TopDownCameraPreset =
-        activeTopDownCameraPreset === "safe" ? "cinematic" : "safe";
-      applyTopDownCameraPreset(nextPreset);
+      cameraSystem.cycleTopDownPreset();
     },
     onToggleFallSafety: () => {
       const safetyEnabled = playerState.toggleFallSafety();
@@ -5273,25 +5152,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (isFirstPerson) {
       heroBillboard.setEnabled(false);
       heroShadow.setEnabled(false);
-
-      let combatTargetPos: Vector3 | null = null;
-      if (selectedEnemyUid) {
-        const focused = enemies.get(selectedEnemyUid);
-        if (focused && !focused.isDead) {
-          combatTargetPos = focused.worldPos;
-        }
-      }
-      const fpCamera = updateFirstPersonCombatCamera(
-        firstPersonCamera.rotation.y,
-        player.position,
-        FIRST_PERSON_EYE_ABOVE_FEET,
-        combatTargetPos,
-        deltaSeconds,
-        fpCombatCameraState,
-      );
-      fpCombatCameraState = fpCamera.state;
-      firstPersonCamera.position.copyFrom(fpCamera.position);
-      firstPersonCamera.fov = fpCamera.fov;
+      cameraSystem.updateCombatCamera(deltaSeconds);
 
       playerState.exploreArea(
         getRenderLevel(),
