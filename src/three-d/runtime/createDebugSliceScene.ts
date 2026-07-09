@@ -23,7 +23,6 @@ import {
   PlayerState,
 } from "../../game/entities/Player/PlayerState";
 import { t_game } from "../../game/i18n/translations";
-import { AudioManager } from "../../game/systems/AudioManager";
 import { PathfindingManager } from "../../game/systems/PathfindingManager";
 import { WorldMapService } from "../../services/WorldMapService";
 import { registerDefaultMagics } from "../../game/entities/EnemyMagicRegistry";
@@ -143,6 +142,7 @@ import { StreamOrchestrator } from "./StreamOrchestrator";
 import { DoorSystem } from "./DoorSystem";
 import { ChunkStreamSystem } from "./ChunkStreamSystem";
 import { NavigationSystem } from "./NavigationSystem";
+import { AudioSystem } from "./AudioSystem";
 import type {
   GeometryWorkerRequest,
   GeometryWorkerResponse,
@@ -406,7 +406,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   preloadRespawnGlowTextures(scene);
   const playerState = PlayerState.getInstance();
   playerState.setPerspectiveMode("3D");
-  const audioManager = AudioManager.getInstance();
+  const audioSystem = new AudioSystem();
+  const audioManager = audioSystem.manager;
   const startingPosition = playerState.getPosition();
   const searchParams = new URLSearchParams(window.location.search);
   const sliceMapName =
@@ -2819,18 +2820,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       window.__slice3dChunkStreaming = stats as typeof window.__slice3dChunkStreaming;
     },
   });
-  let isAudioReady = false;
-
-  const ensureAudioReady = async () => {
-    if (isAudioReady) return;
-    try {
-      await audioManager.init();
-      isAudioReady = true;
-    } catch (error) {
-      console.warn("[3D Slice] Audio init failed:", error);
-    }
-  };
-
   const ensureDebugSandboxStarterLoadout = (mapData: SliceMapData) => {
     if (!mapData.config?.debugSandbox) {
       return;
@@ -4531,7 +4520,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     isPaused: () => gameplayPaused,
     isPlayerDeathSequenceActive: () => isPlayerDeathSequenceActive,
     isFirstPerson: () => isFirstPerson,
-    ensureAudioReady: () => ensureAudioReady(),
+    ensureAudioReady: () => audioSystem.ensureReady(),
     onCastRune: () => sliceCombatSystem.castRune3d(),
     onCycleRuneSlot: () => {
       activeRuneSlotIndex = (activeRuneSlotIndex + 1) % 3;
