@@ -23,14 +23,10 @@ import {
   PlayerState,
 } from "../../game/entities/Player/PlayerState";
 import { t_game } from "../../game/i18n/translations";
-import { ItemType } from "../../config/ItemConstants";
 import { AudioManager } from "../../game/systems/AudioManager";
 import { PathfindingManager } from "../../game/systems/PathfindingManager";
 import { WorldMapService } from "../../services/WorldMapService";
-import {
-  EnemyMagicRegistry,
-  registerDefaultMagics,
-} from "../../game/entities/EnemyMagicRegistry";
+import { registerDefaultMagics } from "../../game/entities/EnemyMagicRegistry";
 import { ItemRegistry } from "../../core/registries/ItemRegistry";
 import { WeaponRegistry } from "../../core/registries/WeaponRegistry";
 import { ContainerRegistry } from "../../core/registries/ContainerRegistry";
@@ -50,9 +46,7 @@ import {
 } from "./ThreeDEnemyVisualRegistry";
 import {
   Projectile3DSystem,
-  resolveProjectile3DProfile,
   type Projectile3DGridContext,
-  type ProjectileEnemyTarget,
 } from "./Projectile3DSystem";
 import {
   resolveBmsDirectionFromWorldDelta,
@@ -66,7 +60,6 @@ import {
   getHeroFirstPersonEyeHeight,
   HERO_COLLISION_HEIGHT,
   getGeneratedDeathDurationMs,
-  getGeneratedAttackDurationMs,
   type HeroAnimState,
   type HeroBmsDirection,
   type HeroSpriteMaterial,
@@ -80,6 +73,7 @@ import { configureBillboardSpriteMesh } from "./BillboardDepthConfig";
 import { SliceInputManager } from "./SliceInputManager";
 import type { SliceSceneContext } from "./SliceSceneContext";
 import { SliceEnemySystem } from "./SliceEnemySystem";
+import { SliceCombatSystem } from "./SliceCombatSystem";
 import {
   createFirstPersonCombatCameraState,
   FP_CAMERA_FOV,
@@ -141,7 +135,6 @@ import {
 import { disposeAllPooledSpriteTexturesForScene } from "./SpriteTexturePool";
 import type { SliceTileDefinition, MapEntity, SliceLevelData, SliceMapData } from "./SliceTileTypes";
 import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
-import { RuneRegistry } from "../../core/magic/RuneRegistry";
 import { SaveSystem } from "../../core/systems/SaveSystem";
 import { PropStreamSystem } from "./PropStreamSystem";
 import { EnemyStreamSystem, type SliceEnemy, type EnemySpawnData } from "./EnemyStreamSystem";
@@ -389,10 +382,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
 function worldToGrid(value: number, gridOrigin: number): number {
   return Math.floor(value + gridOrigin);
 }
@@ -410,7 +399,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   });
   const scene = new Scene(engine);
   const sceneInstrumentation = new SceneInstrumentation(scene);
-  (sceneInstrumentation as any).captureDrawCalls = true;
+  (sceneInstrumentation as unknown as { captureDrawCalls: boolean }).captureDrawCalls = true;
   scene.clearColor.set(0.67, 0.8, 0.96, 1);
   preloadRespawnGlowTextures(scene);
   const playerState = PlayerState.getInstance();
@@ -803,9 +792,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
   let selectedEnemyUid: string | null = null;
   let lastFocusedCombatHealthSyncAt = 0;
-  let lastPlayerAttackAt = 0;
   let activeRuneSlotIndex = 0;
-  let lastRuneCastAt = 0;
   // S11-T1: rune targeting mode (Opção A parity)
   let runeTargetingMode = false;
   let targetingRuneId: string | null = null;
@@ -3846,25 +3833,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const emitCombatEnemyHit = (enemy: SliceEnemy, damage: number) => {
-    if (damage <= 0) {
-      return;
-    }
-    playerState.emit("combatEnemyHit", {
-      uid: enemy.uid,
-      enemyType: enemy.enemyType,
-      health: enemy.health,
-      maxHealth: enemy.maxHealth,
-      damage,
-      isFocused: enemy.uid === selectedEnemyUid,
-    });
-    playerState.emit("combatEnemyHealthChanged", {
-      uid: enemy.uid,
-      health: enemy.health,
-      maxHealth: enemy.maxHealth,
-    });
-  };
-
   const grantEnemyLoot = (enemy: SliceEnemy) => {
     const loot = EnemyRegistry.generateLoot(enemy.enemyType);
     loot.forEach((drop) => {
@@ -4031,54 +3999,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     audioManager.playEnemyDeath(enemy.enemyType);
   };
 
-  const applyRuneDamageToEnemy = (
-    enemy: SliceEnemy,
-    damage: number,
-    runeId: string,
-  ) => {
-    if (enemy.isDead) {
-      return;
-    }
-
-    const rune = RuneRegistry.getRune(runeId);
-    const element = rune?.damage.element;
-    const initialHp = enemy.health;
-
-    enemy.health = Math.max(0, enemy.health - damage);
-    enemy.isProvoked = true;
-
-    playerState.emit("floatingText", {
-      x: enemy.worldPos.x,
-      y: enemy.worldPos.y,
-      z: enemy.worldPos.z,
-      damage: -damage,
-      isCritical: false,
-    });
-
-    playerState.log(
-      "combat_damage_dealt",
-      { damage, target: enemy.enemyType },
-      "#ffffff",
-    );
-
-    emitCombatEnemyHit(enemy, damage);
-
-    // Apply Intelligence XP
-    const actualDamageDealt = Math.min(damage, initialHp);
-    const xpGain = actualDamageDealt > 0 ? (100 + actualDamageDealt) : 10;
-    playerState.gainIntelligenceExperience(xpGain);
-    playerState.log(
-      "combat_gained_skill_xp",
-      { skill: "Intelligence", amount: xpGain },
-      "#34d399",
-    );
-
-    if (enemy.health <= 0) {
-      const isFireKill = element === "fire";
-      destroyEnemy(enemy, { finishingDamage: damage, isFireKill });
-    }
-  };
-
   const emitPlayerDamagePopup = (
     sourceKey: string,
     rawDamage: number,
@@ -4147,488 +4067,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (lockMs > 0) {
       enemy.animLockedUntil = now + lockMs;
     }
-  };
-
-  const gainCombatExperience3d = (damageDealt: number = 0): void => {
-    const totalXp = damageDealt > 0 ? (100 + damageDealt) : 10;
-    const isFireAttack = playerState.getEquippedWeapon()?.element === "fire";
-    const equippedWeapon = playerState.getEquippedWeapon();
-
-    if (isFireAttack) {
-      playerState.gainIntelligenceExperience(totalXp);
-      playerState.log(
-        "combat_gained_skill_xp",
-        { skill: "Intelligence", amount: totalXp },
-        "#34d399",
-      );
-    } else if (
-      !equippedWeapon ||
-      equippedWeapon.type === ItemType.SWORD ||
-      equippedWeapon.type === ItemType.AXE ||
-      equippedWeapon.type === ItemType.CLUB
-    ) {
-      playerState.gainStrengthExperience(totalXp);
-      playerState.log(
-        "combat_gained_skill_xp",
-        { skill: "Strength", amount: totalXp },
-        "#34d399",
-      );
-    } else if (equippedWeapon.type === ItemType.DISTANCE) {
-      playerState.gainDexterityExperience(totalXp);
-      playerState.log(
-        "combat_gained_skill_xp",
-        { skill: "Dexterity", amount: totalXp },
-        "#34d399",
-      );
-    } else {
-      playerState.gainStrengthExperience(totalXp);
-      playerState.log(
-        "combat_gained_skill_xp",
-        { skill: "Strength", amount: totalXp },
-        "#34d399",
-      );
-    }
-  };
-
-  const applyPlayerAttackToEnemy = (enemy: SliceEnemy) => {
-    const equippedWeapon = playerState.getEquippedWeapon();
-    const isFireAttack = equippedWeapon?.element === "fire";
-    const maxAttack = equippedWeapon
-      ? Math.max(1, Math.floor(playerState.getTotalAttack()))
-      : 5;
-    const attackRoll = randomInt(1, maxAttack);
-    const enemyDefense = Math.max(1, enemy.definition.defense || 1);
-    const defenseRoll = randomInt(1, enemyDefense);
-
-    let damageMitigation = 0;
-    if (attackRoll <= defenseRoll) {
-      if (isFireAttack) {
-        damageMitigation = 0.5; // partial block
-        playerState.emit("floatingText", {
-          x: enemy.worldPos.x,
-          y: enemy.worldPos.y,
-          z: enemy.worldPos.z,
-          message: "🛡️",
-          customColor: "#00FFFF",
-        });
-        playerState.log(
-          "combat_partially_blocked",
-          { target: enemy.enemyType },
-          "#aaaaaa",
-        );
-        if (damageMitigation >= 1) {
-          audioManager.playBlock();
-          gainCombatExperience3d(0);
-          return;
-        }
-      } else {
-        playerState.emit("floatingText", {
-          x: enemy.worldPos.x,
-          y: enemy.worldPos.y,
-          z: enemy.worldPos.z,
-          message: "🛡️",
-          customColor: "#00FFFF",
-        });
-        playerState.log(
-          "combat_blocked_enemy",
-          { target: enemy.enemyType },
-          "#aaaaaa",
-        );
-        audioManager.playBlock();
-        gainCombatExperience3d(0);
-        return;
-      }
-    }
-
-    const initialDamage = randomInt(1, maxAttack);
-    const armor = Math.max(0, enemy.definition.armor || 0);
-    const minReduction = armor > 0 ? Math.max(1, Math.ceil(armor * 0.1)) : 0;
-    const armorReduction =
-      armor > 0 ? randomInt(minReduction, Math.max(minReduction, armor)) : 0;
-
-    let damage = Math.max(0, Math.floor(initialDamage - armorReduction));
-    if (damageMitigation > 0) {
-      damage = Math.max(1, Math.round(damage * (1 - damageMitigation)));
-    }
-
-    if (damage <= 0) {
-      playerState.emit("floatingText", {
-        x: enemy.worldPos.x,
-        y: enemy.worldPos.y,
-        z: enemy.worldPos.z,
-        message: "🛡️",
-        customColor: "#C0C0C0",
-      });
-      playerState.log(
-        "combat_blocked_armor_enemy",
-        { target: enemy.enemyType },
-        "#aaaaaa",
-      );
-      audioManager.playBlock();
-      gainCombatExperience3d(0);
-      return;
-    }
-
-    if (isFireAttack) {
-      const fireRes = Math.max(
-        -0.95,
-        Math.min(0.95, enemy.definition.resistances?.fire ?? 0),
-      );
-      damage = Math.max(1, Math.round(damage * (1 - fireRes)));
-    }
-
-    const critChance = playerState.getCriticalChance();
-    const isCritical = Math.random() * 100 <= critChance;
-    if (isCritical) {
-      const critMult = Math.max(0, playerState.getCriticalDamageMultiplier());
-      const minCrit = maxAttack;
-      const maxCrit = Math.max(minCrit, Math.floor(maxAttack * (1 + critMult)));
-      damage = randomInt(minCrit, maxCrit);
-      playerState.gainStrengthExperience(100);
-      playerState.gainDexterityExperience(100);
-      audioManager.playCritical();
-      playerState.log("combat_critical_hit", { damage }, "#ff00ff");
-    } else {
-      audioManager.playAttack();
-    }
-
-    const initialEnemyHp = enemy.health;
-    enemy.health = Math.max(0, enemy.health - damage);
-    enemy.isProvoked = true;
-
-    playerState.emit("floatingText", {
-      x: enemy.worldPos.x,
-      y: enemy.worldPos.y,
-      z: enemy.worldPos.z,
-      damage: -damage,
-      isCritical: isCritical,
-    });
-
-    playerState.log(
-      "combat_damage_dealt",
-      { damage, target: enemy.enemyType },
-      "#ffffff",
-    );
-
-    emitCombatEnemyHit(enemy, damage);
-
-    const effectiveDamage = Math.max(0, Math.min(damage, initialEnemyHp));
-    gainCombatExperience3d(effectiveDamage);
-
-    if (enemy.health <= 0) {
-      destroyEnemy(enemy, {
-        finishingDamage: damage,
-        isFireKill: isFireAttack,
-      });
-      return;
-    }
-  };
-
-  const applyEnemyAttackToPlayer = (enemy: SliceEnemy, now: number) => {
-    const cooldown = Math.max(0, enemy.definition.cooldown || 1000);
-    if (now - enemy.lastAttackAt < cooldown) {
-      return;
-    }
-
-    enemy.lastAttackAt = now;
-    const attackLockMs = getGeneratedAttackDurationMs(enemy.enemyType);
-    setEnemyAnimState(enemy, "attack", attackLockMs);
-
-    const isFireAttack =
-      enemy.enemyType === "dragon" ||
-      Boolean(
-        enemy.definition.magicAttacks?.some((magicId) =>
-          magicId.toLowerCase().includes("fire"),
-        ),
-      );
-    // S10-T2: Use full StatManager defense (shield + weapon def + level/reflex bonuses) — 2D parity.
-    const defenseRollMax = Math.max(1, playerState.getTotalDefense());
-    const attackDamage = Math.max(1, enemy.definition.damage);
-    const attackRoll = randomInt(1, attackDamage);
-    const defenseRoll = randomInt(1, defenseRollMax);
-    let damageMitigation = 0;
-
-    const totalReflexXp = 100 + attackRoll;
-
-    if (defenseRoll >= attackRoll) {
-      playerState.gainReflexExperience(totalReflexXp);
-
-      if (isFireAttack) {
-        damageMitigation =
-          playerState.getEquippedShield()?.defenseResistances?.fire || 0;
-        playerState.emit("floatingText", {
-          x: player.position.x,
-          y: player.position.y,
-          z: player.position.z,
-          message: "🛡️",
-          customColor: "#00FFFF",
-        });
-        playerState.log(
-          "combat_blocked_player",
-          { target: enemy.enemyType, xp: totalReflexXp },
-          "#aaaaff",
-        );
-        if (damageMitigation >= 1) {
-          audioManager.playBlock();
-          return;
-        }
-      } else {
-        playerState.emit("floatingText", {
-          x: player.position.x,
-          y: player.position.y,
-          z: player.position.z,
-          message: "🛡️",
-          customColor: "#00FFFF",
-        });
-        playerState.log(
-          "combat_blocked_player",
-          { target: enemy.enemyType, xp: totalReflexXp },
-          "#aaaaff",
-        );
-        audioManager.playBlock();
-        return;
-      }
-    } else {
-      playerState.gainReflexExperience(10);
-      playerState.log(
-        "combat_gained_skill_xp",
-        { skill: "Reflex", amount: 10 },
-        "#34d399",
-      );
-    }
-
-    // Keep 2D parity: physical attack is always a roll in [1..maxAttack].
-    let finalDamage = Math.max(1, attackRoll - Math.floor(defenseRoll / 2));
-    if (damageMitigation > 0) {
-      finalDamage = Math.max(
-        1,
-        Math.round(finalDamage * (1 - damageMitigation)),
-      );
-    }
-
-    const armor = Math.max(0, playerState.getTotalArmor());
-    const minReduction = armor > 0 ? Math.max(1, Math.ceil(armor * 0.1)) : 0;
-    const armorReduction =
-      armor > 0 ? randomInt(minReduction, Math.max(minReduction, armor)) : 0;
-    finalDamage = Math.max(0, finalDamage - armorReduction);
-
-    if (finalDamage <= 0) {
-      playerState.emit("floatingText", {
-        x: player.position.x,
-        y: player.position.y,
-        z: player.position.z,
-        message: "🛡️",
-        customColor: "#C0C0C0",
-      });
-      playerState.log(
-        "combat_blocked_armor_player",
-        { target: enemy.enemyType },
-        "#aaaaaa",
-      );
-      audioManager.playBlock();
-      return;
-    }
-
-    const playerDied = playerState.takeDamage(finalDamage);
-
-    emitPlayerDamagePopup(`${enemy.uid}:melee`, finalDamage);
-
-    playerState.log(
-      "combat_damage_taken",
-      { damage: finalDamage, target: enemy.enemyType },
-      "#ff4444",
-    );
-    audioManager.playAttack();
-
-    if (playerDied) {
-      triggerPlayerDeathSequence();
-    }
-  };
-
-  const tryEnemyMagicAttack = (enemy: SliceEnemy, now: number): boolean => {
-    const magicIds = enemy.definition.magicAttacks || [];
-    if (!magicIds.length) {
-      return false;
-    }
-
-    const hpRatio = enemy.maxHealth > 0 ? enemy.health / enemy.maxHealth : 1;
-    const distanceToPlayerPx =
-      Vector3.Distance(enemy.worldPos, player.position) * 32;
-
-    for (const magicId of magicIds) {
-      const magicDef = EnemyMagicRegistry.getMagic(magicId);
-      if (!magicDef) {
-        continue;
-      }
-
-      const lastCastAt = enemy.magicCooldowns.get(magicId) || 0;
-      if (now - lastCastAt < magicDef.cooldown) {
-        continue;
-      }
-
-      if (
-        magicDef.minHpPercentage !== undefined &&
-        hpRatio < magicDef.minHpPercentage
-      ) {
-        continue;
-      }
-
-      if (
-        magicDef.maxHpPercentage !== undefined &&
-        hpRatio > magicDef.maxHpPercentage
-      ) {
-        continue;
-      }
-
-      if (distanceToPlayerPx > magicDef.range) {
-        continue;
-      }
-
-      if (!hasLineOfSight(enemy.worldPos, player.position)) {
-        continue;
-      }
-
-      if (Math.random() > magicDef.chance) {
-        continue;
-      }
-
-      enemy.magicCooldowns.set(magicId, now);
-      enemy.lastAttackAt = now;
-      setEnemyAnimState(
-        enemy,
-        "attack",
-        getGeneratedAttackDurationMs(enemy.enemyType),
-      );
-
-      const spellDamage = randomInt(magicDef.minDamage, magicDef.maxDamage);
-      const playerDied = playerState.takeDamage(spellDamage);
-
-      playerState.emit("floatingText", {
-        x: enemy.worldPos.x,
-        y: enemy.worldPos.y,
-        z: enemy.worldPos.z,
-        message: "🔥",
-        customColor: "#FF4500",
-        isAmbient: true,
-      });
-
-      emitPlayerDamagePopup(
-        `${enemy.uid}:magic:${magicId}`,
-        spellDamage,
-        "🔥",
-        "#FF4500",
-      );
-
-      playerState.log(
-        "combat_damage_taken",
-        { damage: spellDamage, target: enemy.enemyType },
-        "#ff4444",
-      );
-      audioManager.playFireHit();
-
-      if (playerDied) {
-        triggerPlayerDeathSequence();
-      }
-
-      return true;
-    }
-
-    return false;
-  };
-
-  const getPlayerAttackRangeUnits = () => {
-    const equippedWeapon = playerState.getEquippedWeapon();
-    const weaponRange = equippedWeapon?.range || 50;
-    return Math.max(1, weaponRange / 32);
-  };
-
-  const getPlayerAttackCooldownMs = () => {
-    const equippedWeapon = playerState.getEquippedWeapon();
-    return Math.max(0, equippedWeapon?.cooldown ?? 1000);
-  };
-
-  const firePlayerWeaponProjectile = (aimEnemy: SliceEnemy): boolean => {
-    const equippedWeapon = playerState.getEquippedWeapon();
-    if (!equippedWeapon || equippedWeapon.type !== ItemType.DISTANCE) {
-      return false;
-    }
-
-    const origin = player.position.clone();
-    origin.y += 0.52;
-
-    const targetPos = aimEnemy.worldPos.clone();
-    targetPos.y = origin.y;
-    const direction = targetPos.subtract(origin);
-    if (direction.lengthSquared() < 0.0001) {
-      return false;
-    }
-
-    const enemyTargets: ProjectileEnemyTarget[] = [];
-    enemies.forEach((enemy) => {
-      if (enemy.isDead) {
-        return;
-      }
-      enemyTargets.push({
-        uid: enemy.uid,
-        worldPos: enemy.worldPos.clone(),
-        isDead: enemy.isDead,
-      });
-    });
-
-    audioManager.playRangedWeaponShot(equippedWeapon.id);
-
-    return projectileSystem.fire({
-      origin,
-      direction,
-      maxRange: getPlayerAttackRangeUnits(),
-      profile: resolveProjectile3DProfile(equippedWeapon.id),
-      enemies: enemyTargets,
-      onEnemyHit: (hit) => {
-        const enemy = enemies.get(hit.uid);
-        if (enemy && !enemy.isDead) {
-          applyPlayerAttackToEnemy(enemy);
-        }
-      },
-    });
-  };
-
-  const tryAutoPlayerAttack = (now: number) => {
-    if (!selectedEnemyUid) {
-      return;
-    }
-
-    const enemy = enemies.get(selectedEnemyUid);
-    if (!enemy || enemy.isDead) {
-      setSelectedEnemy(null);
-      return;
-    }
-
-    const cooldownMs = getPlayerAttackCooldownMs();
-    if (now - lastPlayerAttackAt < cooldownMs) {
-      return;
-    }
-
-    const attackRangeUnits = getPlayerAttackRangeUnits();
-    const distance = Vector3.Distance(player.position, enemy.worldPos);
-    if (distance > attackRangeUnits) {
-      return;
-    }
-
-    if (!hasLineOfSight(player.position, enemy.worldPos)) {
-      return;
-    }
-
-    lastPlayerAttackAt = now;
-    setHeroAnimState("attack", 320);
-
-    const equippedWeapon = playerState.getEquippedWeapon();
-    if (equippedWeapon?.type === ItemType.DISTANCE) {
-      firePlayerWeaponProjectile(enemy);
-      return;
-    }
-
-    triggerPlayerAttackSlashEffect(enemy);
-    applyPlayerAttackToEnemy(enemy);
   };
 
   const requestEnemyPath = async (
@@ -4877,7 +4315,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         playerState.openContainer(
           item.itemId,
           containerDef.id,
-          t_game(containerDef.name as any),
+          t_game(containerDef.name as Parameters<typeof t_game>[0]),
           { x: item.x, y: item.y, level: getCurrentLevel() },
         );
         return true;
@@ -4912,7 +4350,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     const def = WeaponRegistry.getWeaponDefinition(item.weaponId);
-    const itemName = def ? t_game(`item_${def.id}` as any) : item.weaponId;
+    const itemName = def ? t_game(`item_${def.id}` as Parameters<typeof t_game>[0]) : item.weaponId;
     playerState.emit("uiNotification", {
       type: "pickup",
       message: t_game("notif_item_get")
@@ -5130,6 +4568,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let inputManager: SliceInputManager;
   let ctx: SliceSceneContext;
   let sliceEnemySystem: SliceEnemySystem;
+  let sliceCombatSystem: SliceCombatSystem;
 
   // Physics state — PlayerContext is the single source of truth
   const playerCtx = createPlayerContext(player.position.x, player.position.y, player.position.z);
@@ -5524,251 +4963,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
   };
 
-  // S8-T2: 3D rune projectile cast — fires at selectedEnemy or forward if no target
-  const castRune3d = () => {
-    const now = Date.now();
-    if (now - lastRuneCastAt < 1000) return; // 1s cooldown
-
-    const slots = playerState.getEquippedRuneSlots();
-    const runeId = slots[activeRuneSlotIndex];
-    if (!runeId) return;
-
-    const def = RuneRegistry.getRune(runeId);
-    if (!def) return;
-
-    // Find target enemy
-    let targetEnemy: SliceEnemy | null = null;
-    if (selectedEnemyUid) {
-      targetEnemy = enemies.get(selectedEnemyUid) || null;
-      if (targetEnemy?.isDead) targetEnemy = null;
-    }
-    if (!targetEnemy) {
-      // pick nearest alive enemy within 8 units
-      let nearestDist = 8;
-      enemies.forEach((e) => {
-        if (e.isDead) return;
-        const d = Vector3.Distance(player.position, e.worldPos);
-        if (d < nearestDist) {
-          nearestDist = d;
-          targetEnemy = e;
-        }
-      });
-    }
-    if (!targetEnemy) return; // no valid target
-
-    lastRuneCastAt = now;
-
-    // Build projectile mesh
-    const hexColor = def.effect3d?.color ?? "#ff5500";
-    const projMat = new StandardMaterial("rune_proj_mat_" + now, scene);
-    projMat.emissiveColor = Color3.FromHexString(hexColor);
-    projMat.disableLighting = true;
-
-    const proj = MeshBuilder.CreateSphere(
-      "rune_proj_" + now,
-      { diameter: 0.18, segments: 4 },
-      scene,
-    );
-    proj.material = projMat;
-    proj.position = player.position.clone();
-    proj.position.y += 0.3;
-
-    const speed = def.effect3d?.speed ?? 14;
-    const impactRadius = def.effect3d?.radius ?? 1.0;
-
-    // Animate projectile frame-by-frame using onBeforeRender
-    const finalTarget = targetEnemy; // capture in closure
-    const removeObs = scene.onBeforeRenderObservable.add(() => {
-      const dt = scene.getEngine().getDeltaTime() / 1000;
-      const toTarget = finalTarget.worldPos.subtract(proj.position);
-      const dist = toTarget.length();
-      if (dist < 0.2) {
-        if (finalTarget.isDead) {
-          proj.dispose();
-          projMat.dispose();
-          scene.onBeforeRenderObservable.remove(removeObs);
-          playerState.gainIntelligenceExperience(10);
-          playerState.log(
-            "combat_gained_skill_xp",
-            { skill: "Intelligence", amount: 10 },
-            "#34d399",
-          );
-          return;
-        }
-
-        // Impact: apply damage
-        const playerInt = playerState.getIntelligenceData().level;
-        const dmg = RuneRegistry.calculateDamage(
-          runeId,
-          playerState.getLevel(),
-          playerInt,
-        );
-        const damage = Math.max(
-          1,
-          dmg.min + Math.floor(Math.random() * (dmg.max - dmg.min + 1)),
-        );
-        applyRuneDamageToEnemy(finalTarget, damage, runeId);
-
-        // Impact flash: scale-up then dispose
-        const flashMat = new StandardMaterial("rune_flash_" + now, scene);
-        flashMat.emissiveColor = Color3.FromHexString(hexColor);
-        flashMat.wireframe = true;
-        const flash = MeshBuilder.CreateSphere(
-          "rune_flash_mesh_" + now,
-          { diameter: impactRadius * 2, segments: 4 },
-          scene,
-        );
-        flash.material = flashMat;
-        flash.position = finalTarget.worldPos.clone();
-        let flashAge = 0;
-        const flashObs = scene.onBeforeRenderObservable.add(() => {
-          flashAge += scene.getEngine().getDeltaTime() / 1000;
-          flash.scaling.setAll(1 + flashAge * 4);
-          const alpha = Math.max(0, 1 - flashAge / 0.3);
-          flashMat.emissiveColor = Color3.FromHexString(hexColor).scale(alpha);
-          if (flashAge > 0.3) {
-            flash.dispose();
-            flashMat.dispose();
-            scene.onBeforeRenderObservable.remove(flashObs);
-          }
-        });
-
-        proj.dispose();
-        projMat.dispose();
-        scene.onBeforeRenderObservable.remove(removeObs);
-        return;
-      }
-
-      const step = speed * dt;
-      proj.position.addInPlace(
-        toTarget.normalize().scale(Math.min(step, dist)),
-      );
-    });
-
-    playerState.log("action_cast_rune", { runeId }, "#ff8800");
-  };
-
-  // S11-T1: Cast rune at specific target (from targeting mode)
-  const castRuneAtTarget = (targetEnemyUid: string) => {
-    if (!targetingRuneId) return;
-
-    const runeId = targetingRuneId;
-    runeTargetingMode = false;
-    targetingRuneId = null;
-    const def = RuneRegistry.getRune(runeId);
-    if (!def) return;
-
-    const now = Date.now();
-    if (now - lastRuneCastAt < 1000) {
-      playerState.emit("message", t_game("msg_rune_cooldown_active"));
-      return;
-    }
-
-    const targetEnemy = enemies.get(targetEnemyUid);
-    if (!targetEnemy || targetEnemy.isDead) return;
-
-    lastRuneCastAt = now;
-
-    // Build projectile mesh (same as castRune3d)
-    const hexColor = def.effect3d?.color ?? "#ff5500";
-    const projMat = new StandardMaterial("rune_proj_mat_" + now, scene);
-    projMat.emissiveColor = Color3.FromHexString(hexColor);
-    projMat.disableLighting = true;
-
-    const proj = MeshBuilder.CreateSphere(
-      "rune_proj_" + now,
-      { diameter: 0.18, segments: 4 },
-      scene,
-    );
-    proj.material = projMat;
-    proj.position = player.position.clone();
-    proj.position.y += 0.3;
-
-    const speed = def.effect3d?.speed ?? 14;
-    const impactRadius = def.effect3d?.radius ?? 1.0;
-
-    // Animate projectile
-    const finalTarget = targetEnemy;
-    const removeObs = scene.onBeforeRenderObservable.add(() => {
-      const dt = scene.getEngine().getDeltaTime() / 1000;
-      const toTarget = finalTarget.worldPos.subtract(proj.position);
-      const dist = toTarget.length();
-      if (dist < 0.2) {
-        if (finalTarget.isDead) {
-          proj.dispose();
-          projMat.dispose();
-          scene.onBeforeRenderObservable.remove(removeObs);
-          playerState.gainIntelligenceExperience(10);
-          playerState.log(
-            "combat_gained_skill_xp",
-            { skill: "Intelligence", amount: 10 },
-            "#34d399",
-          );
-          return;
-        }
-
-        // Impact: apply damage
-        const playerInt = playerState.getIntelligenceData().level;
-        const dmg = RuneRegistry.calculateDamage(
-          runeId,
-          playerState.getLevel(),
-          playerInt,
-        );
-
-        const damage = Math.max(
-          1,
-          dmg.min + Math.floor(Math.random() * (dmg.max - dmg.min + 1)),
-        );
-        applyRuneDamageToEnemy(finalTarget, damage, runeId);
-
-        // Impact flash
-        const flashMat = new StandardMaterial("rune_flash_" + now, scene);
-        flashMat.emissiveColor = Color3.FromHexString(hexColor);
-        flashMat.wireframe = true;
-        const flash = MeshBuilder.CreateSphere(
-          "rune_flash_mesh_" + now,
-          { diameter: impactRadius * 2, segments: 4 },
-          scene,
-        );
-        flash.material = flashMat;
-        flash.position = finalTarget.worldPos.clone();
-        let flashAge = 0;
-        const flashObs = scene.onBeforeRenderObservable.add(() => {
-          flashAge += scene.getEngine().getDeltaTime() / 1000;
-          flash.scaling.setAll(1 + flashAge * 4);
-          const alpha = Math.max(0, 1 - flashAge / 0.3);
-          flashMat.emissiveColor = Color3.FromHexString(hexColor).scale(alpha);
-          if (flashAge > 0.3) {
-            flash.dispose();
-            flashMat.dispose();
-            scene.onBeforeRenderObservable.remove(flashObs);
-          }
-        });
-
-        // Remove rune from inventory
-        const rune = playerState
-          .getEnchantedRunes()
-          .find((r) => r.runeId === runeId);
-        if (rune && rune.count > 0) {
-          rune.count--;
-        }
-        playerState.emit("runesUpdated");
-
-        proj.dispose();
-        projMat.dispose();
-        scene.onBeforeRenderObservable.remove(removeObs);
-      } else {
-        const step = speed * dt;
-        proj.position.addInPlace(
-          toTarget.normalize().scale(Math.min(step, dist)),
-        );
-      }
-    });
-
-    playerState.emit("runeCasted");
-    playerState.log("action_cast_rune", { runeId }, "#ff8800");
-  };
-
   ctx = {
     get engine() { return engine; },
     get scene() { return scene; },
@@ -5798,12 +4992,34 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     setSelectedEnemy(v) { setSelectedEnemy(v); },
     get activeRuneSlotIndex() { return activeRuneSlotIndex; },
     set activeRuneSlotIndex(v) { activeRuneSlotIndex = v; },
+    get runeTargetingMode() { return runeTargetingMode; },
+    set runeTargetingMode(v) { runeTargetingMode = v; },
+    get targetingRuneId() { return targetingRuneId; },
+    set targetingRuneId(v) { targetingRuneId = v; },
   };
+
+  sliceCombatSystem = new SliceCombatSystem({
+    ctx,
+    projectileSystem,
+    destroyEnemy,
+    emitBloodBurst,
+    emitPlayerDamagePopup,
+    triggerPlayerDeathSequence,
+    hasLineOfSight,
+    onPlayerAttackStarted: (enemy, isRanged) => {
+      setHeroAnimState("attack", 320);
+      if (!isRanged) {
+        triggerPlayerAttackSlashEffect(enemy);
+      }
+    },
+  });
 
   sliceEnemySystem = new SliceEnemySystem({
     ctx,
-    applyEnemyAttackToPlayer: (enemy, now) => applyEnemyAttackToPlayer(enemy, now),
-    tryEnemyMagicAttack: (enemy, now) => tryEnemyMagicAttack(enemy, now),
+    applyEnemyAttackToPlayer: (enemy, now) =>
+      sliceCombatSystem.applyEnemyAttackToPlayer(enemy, now),
+    tryEnemyMagicAttack: (enemy, now) =>
+      sliceCombatSystem.tryEnemyMagicAttack(enemy, now),
     requestEnemyPath: (enemy, targetPos) => requestEnemyPath(enemy, targetPos),
     advanceEnemyPath: (enemy, deltaSeconds) => advanceEnemyPath(enemy, deltaSeconds),
     applyActorAquaticY: (worldPos, level) => applyActorAquaticY(worldPos, level),
@@ -5821,7 +5037,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     isPlayerDeathSequenceActive: () => isPlayerDeathSequenceActive,
     isFirstPerson: () => isFirstPerson,
     ensureAudioReady: () => ensureAudioReady(),
-    onCastRune: () => castRune3d(),
+    onCastRune: () => sliceCombatSystem.castRune3d(),
     onCycleRuneSlot: () => {
       activeRuneSlotIndex = (activeRuneSlotIndex + 1) % 3;
       dispatchRuneSlotUpdate();
@@ -5941,7 +5157,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       if (enemyUid) {
         const targetEnemy = enemies.get(enemyUid);
         if (targetEnemy && !targetEnemy.isDead) {
-          castRuneAtTarget(targetEnemy.uid);
+          sliceCombatSystem.castRuneAtTarget(targetEnemy.uid);
           return;
         }
       }
@@ -6232,7 +5448,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (!gameplayPaused) {
       projectileSystem.update(deltaSeconds);
     }
-    tryAutoPlayerAttack(Date.now());
+    sliceCombatSystem.tryAutoPlayerAttack(Date.now());
     physicsTimeAccum += performance.now() - tStart;
 
     perfPublishTimer += deltaSeconds;

@@ -30,4 +30,7 @@ export interface SliceSceneContext {
   selectedEnemyUid: string | null;
   setSelectedEnemy: (uid: string | null) => void;
   activeRuneSlotIndex: number;
+
+  runeTargetingMode: boolean;
+  targetingRuneId: string | null;
 }
