@@ -133,9 +133,10 @@ export interface RenderSystemDeps {
   }>;
   enemies: Map<string, any>;
   enemySpawnCatalog: Map<string, any>;
-  mapDataCache: SliceMapData | null;
-  currentMapWidth: number;
-  currentMapHeight: number;
+  /** Live refs — map loads async after RenderSystem is constructed. */
+  getMapDataCache: () => SliceMapData | null;
+  getCurrentMapWidth: () => number;
+  getCurrentMapHeight: () => number;
 
   sliceMapName: string;
   audioManager: {
@@ -210,6 +211,24 @@ export class RenderSystem {
     e.runRenderLoop(() => this.runRenderLoop());
   }
 
+  /** Monolith may move player mesh / mirror vars outside tickPhysics — sync before sim. */
+  private syncPlayerCtxFromScene(): void {
+    const { playerCtx, player, state } = this.deps;
+    playerCtx.position.x = player.position.x;
+    playerCtx.position.y = player.position.y;
+    playerCtx.position.z = player.position.z;
+    playerCtx.verticalVelocity = state.verticalVelocity;
+    playerCtx.isGrounded = state.isGrounded;
+    playerCtx.holeFallLandingLevel = state.holeFallLandingLevel;
+    playerCtx.holeFallFloorCount = state.holeFallFloorCount;
+    playerCtx.fallOriginFootY = state.fallOriginFootY;
+    playerCtx.wasOnVoidWithSafety = state.wasOnVoidWithSafety;
+    playerCtx.lastSafePositionX = state.lastSafePlayerX;
+    playerCtx.lastSafePositionZ = state.lastSafePlayerZ;
+    playerCtx.lastGroundedFootY = state.lastGroundedFootY;
+    playerCtx.levelTransitionCooldown = state.levelTransitionCooldown;
+  }
+
   private tick(): void {
     const {
       state, scene, engine, camera, firstPersonCamera,
@@ -219,7 +238,7 @@ export class RenderSystem {
       sliceCombatSystem, collisionWorld, inputManager, saveSystem,
       player, playerCtx, heroSpriteMat, heroShadowMat, heroBillboard,
       heroShadow, heroAquaticTint, audioManager, sceneInstrumentation,
-      activeSlashtrails, enemies, enemySpawnCatalog, mapDataCache,
+      activeSlashtrails, enemies, enemySpawnCatalog,
       runtimeLog,
       getCurrentLevel, getRenderLevel, getElapsedSec, getMapTileAt,
       checkLevelDrift, setHeroDirection, setHeroAnimState,
@@ -324,6 +343,8 @@ export class RenderSystem {
 
     // ── Physics tick ───────────────────────────────────────────────────────
     {
+      this.syncPlayerCtxFromScene();
+
       let worldDx = 0;
       let worldDz = 0;
       if (isMoving) {
@@ -381,12 +402,16 @@ export class RenderSystem {
 
       tickPhysics(playerCtx, physicsInput, collisionWorld, {
         getMapTileAt,
-        getTileDef: (symbol: string | null) =>
-          symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-        hasLevel: (level: string) => Boolean(mapDataCache?.levels?.[level]),
-        allLevels: () => Object.keys(mapDataCache?.levels ?? {}),
-        getMapWidth: () => this.deps.currentMapWidth,
-        getMapHeight: () => this.deps.currentMapHeight,
+        getTileDef: (symbol: string | null) => {
+          const mapData = this.deps.getMapDataCache();
+          return symbol ? mapData?.tileDefinitions?.[symbol] : undefined;
+        },
+        hasLevel: (level: string) =>
+          Boolean(this.deps.getMapDataCache()?.levels?.[level]),
+        allLevels: () =>
+          Object.keys(this.deps.getMapDataCache()?.levels ?? {}),
+        getMapWidth: () => this.deps.getCurrentMapWidth(),
+        getMapHeight: () => this.deps.getCurrentMapHeight(),
         parseLevelNumber,
       }, {
         onFallSafetyActive: (_ctx: any) => {
@@ -793,8 +818,8 @@ export class RenderSystem {
         Math.floor(player.position.x),
         Math.floor(player.position.z),
         8,
-        this.deps.currentMapWidth,
-        this.deps.currentMapHeight,
+        this.deps.getCurrentMapWidth(),
+        this.deps.getCurrentMapHeight(),
       );
       playerState.recordPlayerPosition(
         getCurrentLevel(),
@@ -838,8 +863,8 @@ export class RenderSystem {
       Math.floor(player.position.x),
       Math.floor(player.position.z),
       8,
-      this.deps.currentMapWidth,
-      this.deps.currentMapHeight,
+      this.deps.getCurrentMapWidth(),
+      this.deps.getCurrentMapHeight(),
     );
 
     playerState.recordPlayerPosition(

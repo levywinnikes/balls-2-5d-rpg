@@ -114,10 +114,6 @@ import {
    isFloorLevelRamp,
    resolveTileHeight,
 } from "./TileWorldY";
-import {
-  DEFAULT_OCCLUSION_SCAN_RADIUS,
-  resolveVerticalVisibleLevels,
-} from "./VerticalLevelVisibility3D";
 import { findFirstBlockingTileOnWorldLine } from "./WallRevealLos";
 import {
   probeHoleLevelTransition,
@@ -129,6 +125,7 @@ import {
   isKnownPropId,
 } from "./PropBillboardFactory";
 import { QualitySystem, type QualityPreset } from "./QualitySystem";
+import { VisibilitySystem } from "./VisibilitySystem";
 import { disposeAllPooledSpriteTexturesForScene } from "./SpriteTexturePool";
 import type { SliceTileDefinition, MapEntity, SliceLevelData, SliceMapData } from "./SliceTileTypes";
 import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
@@ -935,15 +932,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const tileMaterials = new Map<string, StandardMaterial>();
   const tileMaterialLRU: string[] = []; // insertion-order keys (legacy; not evicted)
   const levelBinaryCache = new Map<string, Uint8Array>();
-  const meshLevelByMesh = new Map<Mesh, string>();
-  const levelMeshes = new Map<string, Set<Mesh>>();
-
-  // Wall tile index: "${levelKey}::${tx}_${tz}" → Mesh (for per-tile wall occlusion)
-  const wallTileIndex = new Map<string, Mesh>();
-  // Previously hidden wall meshes — must be restored before next frame's check
-  const hiddenWallMeshes = new Set<Mesh>();
-  // Cached occlusion result from findUpperOcclusionLevel (set in syncVerticalLevelVisibility)
-  let occlusionStartLevel: number | null = null;
 
   const LOG_SAMPLE_INTERVAL = 1.0;
   const LOG_PERSIST_INTERVAL = 5.0;
@@ -1925,11 +1913,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (natural) {
-      invalidateVerticalVisibilityCache();
+      visibilitySystem.invalidateCache();
       chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
     } else {
       chunkSystem.clearAll();
-      invalidateVerticalVisibilityCache();
+      visibilitySystem.invalidateCache();
       snapPlayerFootToActiveLevel();
     }
     const mapData = mapDataCache;
@@ -2323,372 +2311,23 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   // Build (or skip) one 16×16-tile chunk at chunk-grid position (cx, cy).
   // lod 0 = full detail, 1 = walls-only, 2 = ground-only
-  // Caching variables for visible levels and occlusion checks
-  let cachedRenderableLevels: string[] = [];
-  let lastCachedTileX = -9999;
-  let lastCachedTileZ = -9999;
-  let lastCachedActiveLevel = "";
-  let lastCachedIsFirstPerson = false;
-  let lastCachedVerticalStackRadius = -1;
+  let visibilitySystem: VisibilitySystem;
 
-  const invalidateVerticalVisibilityCache = () => {
-    lastCachedTileX = -9999;
-    lastCachedTileZ = -9999;
-    lastCachedActiveLevel = "";
-    lastCachedVerticalStackRadius = -1;
-    cachedRenderableLevels = [];
-  };
-
-  const resolveVerticalStackRadiusTiles = () => {
-    return chunkSystem.resolveVerticalStackRadiusTiles();
-  };
-
-  const getRenderableLevels = (): string[] => {
-    const tileX = Math.floor(player.position.x);
-    const tileZ = Math.floor(player.position.z);
-    const verticalStackRadius = resolveVerticalStackRadiusTiles();
-    const renderLevel = getRenderLevel();
-
-    if (
-      tileX === lastCachedTileX &&
-      tileZ === lastCachedTileZ &&
-      renderLevel === lastCachedActiveLevel &&
-      isFirstPerson === lastCachedIsFirstPerson &&
-      verticalStackRadius === lastCachedVerticalStackRadius &&
-      cachedRenderableLevels.length > 0
-    ) {
-      return cachedRenderableLevels;
-    }
-
-    lastCachedTileX = tileX;
-    lastCachedTileZ = tileZ;
-    lastCachedActiveLevel = renderLevel;
-    lastCachedIsFirstPerson = isFirstPerson;
-    lastCachedVerticalStackRadius = verticalStackRadius;
-
-    const mapData = mapDataCache;
-    if (!mapData?.levels) {
-      cachedRenderableLevels = [renderLevel];
-      return cachedRenderableLevels;
-    }
-
-    const stack = resolveVerticalVisibleLevels(
-      renderLevel,
-      tileX,
-      tileZ,
-      Object.keys(mapData.levels),
-      getMapTileAt,
-      (symbol) =>
-        symbol ? mapData.tileDefinitions?.[symbol] : undefined,
-      { parseLevelNumber, columnRadius: verticalStackRadius },
-    );
-    const merged = new Set<string>(stack);
-    merged.add(renderLevel);
-    const n = parseLevelNumber(renderLevel);
-    const below = String(n - 1);
-    const above = String(n + 1);
-    if (mapData.levels[below]) {
-      merged.add(below);
-    }
-    if (mapData.levels[above]) {
-      merged.add(above);
-    }
-    cachedRenderableLevels = Object.keys(mapData.levels)
-      .filter((key) => merged.has(key))
-      .sort((a, b) => parseLevelNumber(a) - parseLevelNumber(b));
-    return cachedRenderableLevels;
-  };
-
-  const syncVerticalLevelVisibility = (deltaSeconds: number) => {
-    const mapData = mapDataCache;
-    const verticallyVisible = new Set(getRenderableLevels());
-    occlusionStartLevel = findUpperOcclusionLevel();
-    const lerpFactor = Math.min(1, deltaSeconds * 8);
-
-    if (isFirstPerson && levelMeshes.size > 0) {
-      const showLevels = mapData?.levels
-        ? new Set(Object.keys(mapData.levels))
-        : new Set([getCurrentLevel()]);
-      if (holeFallLandingLevel) {
-        showLevels.add(holeFallLandingLevel);
-      }
-
-      levelMeshes.forEach((meshes, levelKey) => {
-        const showLevel = showLevels.has(levelKey);
-        meshes.forEach((mesh) => {
-          if (!mesh || mesh.isDisposed()) {
-            return;
-          }
-          if (!showLevel) {
-            if (mesh.visibility !== 0) {
-              mesh.visibility = 0;
-            }
-            if (mesh.isEnabled()) {
-              mesh.setEnabled(false);
-            }
-            return;
-          }
-          if (mesh.visibility !== 1) {
-            mesh.visibility = 1;
-          }
-          if (!mesh.isEnabled()) {
-            mesh.setEnabled(true);
-          }
-        });
-      });
-    } else if (!isFirstPerson && levelMeshes.size > 0) {
-      levelMeshes.forEach((meshes, levelKey) => {
-        const levelNum = parseLevelNumber(levelKey);
-        const inVerticalColumn = verticallyVisible.has(levelKey);
-
-        meshes.forEach((mesh) => {
-          if (!mesh || mesh.isDisposed()) {
-            return;
-          }
-
-          if (!inVerticalColumn) {
-            if (mesh.visibility !== 0) {
-              mesh.visibility = 0;
-            }
-            if (mesh.isEnabled()) {
-              mesh.setEnabled(false);
-            }
-            return;
-          }
-
-          // R1: hide entire occluded levels (all chunks) — partial occlusion
-          // produces a "bitten" look where only the hero's chunk disappears.
-          const occluded =
-            occlusionStartLevel !== null &&
-            levelNum >= occlusionStartLevel;
-
-          if (occluded) {
-            if (mesh.visibility !== 0) {
-              mesh.visibility = 0;
-            }
-            if (mesh.isEnabled()) {
-              mesh.setEnabled(false);
-            }
-            return;
-          }
-
-          if (mesh.visibility !== 1) {
-            const next = mesh.visibility + (1 - mesh.visibility) * lerpFactor;
-            const targetVisibility = next >= 0.99 ? 1 : next;
-            if (mesh.visibility !== targetVisibility) {
-              mesh.visibility = targetVisibility;
-            }
-            if (!mesh.isEnabled() && targetVisibility > 0.01) {
-              mesh.setEnabled(true);
-            }
-            return;
-          }
-
-          if (!mesh.isEnabled()) {
-            mesh.setEnabled(true);
-          }
-        });
-      });
-    }
-
-    waterEffectSystem.updateOcclusion(occlusionStartLevel, deltaSeconds);
-
-    window.__slice3dVerticalVisibility = {
-      currentLevel: getCurrentLevel(),
-      visibleLevels: Array.from(verticallyVisible),
-      occludedFromLevel: occlusionStartLevel,
-      occlusionScanRadius: DEFAULT_OCCLUSION_SCAN_RADIUS,
-      verticalStackRadiusTiles: resolveVerticalStackRadiusTiles(),
-      firstPersonCeilingLevel: null,
-      totalLevels: mapData?.levels ? Object.keys(mapData.levels).length : 1,
-      columnRadius: resolveVerticalStackRadiusTiles(),
-      playerTile: {
-        x: Math.floor(player.position.x),
-        y: Math.floor(player.position.z),
-      },
-      ts: Date.now(),
-    };
-  };
-
-  const registerMeshForLevel = (levelKey: string, mesh: Mesh) => {
-    let set = levelMeshes.get(levelKey);
-    if (!set) {
-      set = new Set<Mesh>();
-      levelMeshes.set(levelKey, set);
-    }
-    set.add(mesh);
-    meshLevelByMesh.set(mesh, levelKey);
-  };
-
-  // ── 2D Digital Differential Analyzer ──
-  // Walk integer grid tiles along a ray segment from (x0,z0) to (x1,z1) in world space,
-  // invoking callback for each tile the line passes through.
-  const ddaWalk = (
-    x0: number,
-    z0: number,
-    x1: number,
-    z1: number,
-    callback: (tx: number, tz: number) => void,
-  ): void => {
-    const dx = x1 - x0;
-    const dz = z1 - z0;
-    const absDx = Math.abs(dx);
-    const absDz = Math.abs(dz);
-    const stepX = dx >= 0 ? 1 : -1;
-    const stepZ = dz >= 0 ? 1 : -1;
-
-    let tx = Math.floor(x0);
-    let tz = Math.floor(z0);
-    const endTx = Math.floor(x1);
-    const endTz = Math.floor(z1);
-
-    callback(tx, tz);
-    if (tx === endTx && tz === endTz) return;
-    if (absDx < 0.001 && absDz < 0.001) return;
-
-    const tMaxStepX = absDx > 0.001 ? 1.0 / absDx : 1e9;
-    const tMaxStepZ = absDz > 0.001 ? 1.0 / absDz : 1e9;
-
-    const nextBoundaryX = stepX > 0 ? Math.floor(x0) + 1 : Math.floor(x0);
-    const nextBoundaryZ = stepZ > 0 ? Math.floor(z0) + 1 : Math.floor(z0);
-    let tMaxX = absDx > 0.001 ? Math.abs((nextBoundaryX - x0) / dx) : 1e9;
-    let tMaxZ = absDz > 0.001 ? Math.abs((nextBoundaryZ - z0) / dz) : 1e9;
-
-    while (tx !== endTx || tz !== endTz) {
-      if (tMaxX < tMaxZ) {
-        tMaxX += tMaxStepX;
-        tx += stepX;
-      } else {
-        tMaxZ += tMaxStepZ;
-        tz += stepZ;
-      }
-      callback(tx, tz);
-    }
-  };
-
-  // ── Wall occlusion on camera-to-hero ray ──
-  // For each visible upper level below the occlusion start, walk tiles along the
-  // camera→hero ray and hide wall meshes that intersect the line of sight.
-  const hideWallsOnRay = (): void => {
-    if (isFirstPerson) return;
-    if (occlusionStartLevel === null) return;
-
-    const mapData = mapDataCache;
-    if (!mapData?.levels) return;
-
-    const camPos = camera.position;
-    const heroPos = player.position;
-    const dy = heroPos.y - camPos.y;
-    if (Math.abs(dy) < 0.001) return;
-
-    const currentNum = parseLevelNumber(getRenderLevel());
-    const dir = heroPos.subtract(camPos);
-    const toHide = new Set<Mesh>();
-
-    for (const levelKey of Object.keys(mapData.levels)) {
-      const levelNum = parseLevelNumber(levelKey);
-      if (levelNum <= currentNum) continue;
-      if (occlusionStartLevel !== null && levelNum >= occlusionStartLevel) continue;
-
-      const floorY = levelToWorldY(levelNum) + WALK_SURFACE;
-      const ceilingY = levelToWorldY(levelNum) + LEVEL_HEIGHT;
-
-      const tFloor = (floorY - camPos.y) / dy;
-      const tCeil = (ceilingY - camPos.y) / dy;
-      const t0 = Math.max(0, Math.min(tFloor, tCeil));
-      const t1 = Math.min(1, Math.max(tFloor, tCeil));
-      if (t0 >= t1) continue;
-
-      const x0 = camPos.x + t0 * dir.x;
-      const z0 = camPos.z + t0 * dir.z;
-      const x1 = camPos.x + t1 * dir.x;
-      const z1 = camPos.z + t1 * dir.z;
-
-      ddaWalk(x0, z0, x1, z1, (tx, tz) => {
-        const sym = getMapTileAt(levelKey, tx, tz);
-        if (!sym || sym === "..." || !isStaticTileBlocking(sym, mapData.tileDefinitions?.[sym])) return;
-
-        const idxKey = `${levelKey}::${tx}_${tz}`;
-        const mesh = wallTileIndex.get(idxKey);
-        if (mesh && !mesh.isDisposed()) {
-          toHide.add(mesh);
-        }
-      });
-    }
-
-    // Restore previously hidden meshes that are no longer on the ray,
-    // but NOT if the mesh's level is now fully occluded (syncVerticalLevelVisibility handles it).
-    hiddenWallMeshes.forEach((mesh) => {
-      if (!toHide.has(mesh) && !mesh.isDisposed()) {
-        const lk = meshLevelByMesh.get(mesh);
-        if (lk) {
-          const ln = parseLevelNumber(lk);
-          if (occlusionStartLevel !== null && ln >= occlusionStartLevel) return;
-        }
-        mesh.visibility = 1;
-        mesh.setEnabled(true);
-      }
-    });
-
-    // Hide wall meshes currently on the ray
-    toHide.forEach((mesh) => {
-      if (!mesh.isDisposed()) {
-        mesh.visibility = 0;
-        mesh.setEnabled(false);
-      }
-    });
-
-    hiddenWallMeshes.clear();
-    toHide.forEach((mesh) => {
-      hiddenWallMeshes.add(mesh);
-    });
-  };
-
-  const findUpperOcclusionLevel = (): number | null => {
-    const mapData = mapDataCache;
-    if (!mapData?.levels) return null;
-
-    const footLevel = getRenderLevel();
-    if (isGradedWalkAt(player.position.x, player.position.z, footLevel)) {
-      return null;
-    }
-
-    const camPos = camera.position;
-    const heroPos = player.position;
-    const dir = heroPos.subtract(camPos);
-    const currentNum = parseLevelNumber(footLevel);
-
-    const upperLevels = Object.keys(mapData.levels)
-      .filter((key) => parseLevelNumber(key) > currentNum)
-      .sort((a, b) => parseLevelNumber(a) - parseLevelNumber(b));
-
-    for (const levelKey of upperLevels) {
-      const levelNum = parseLevelNumber(levelKey);
-      const floorY = levelToWorldY(levelNum) + WALK_SURFACE;
-
-      // t along ray from camera (0) to hero (1) where Y = floorY
-      const t = (floorY - camPos.y) / (heroPos.y - camPos.y);
-      if (t < 0 || t >= 1) continue;
-
-      const tileX = Math.floor(camPos.x + t * dir.x);
-      const tileZ = Math.floor(camPos.z + t * dir.z);
-
-      const sym = getMapTileAt(levelKey, tileX, tileZ);
-      if (sym && sym !== "...") {
-        const upperFloorY = levelToWorldY(levelNum) + WALK_SURFACE;
-        const headY = heroPos.y + HERO_BODY_HEIGHT * 0.92;
-        if (headY >= upperFloorY - 0.15) return null;
-        return levelNum;
-      }
-    }
-
-    return null;
-  };
-
-  /** @deprecated Use syncVerticalLevelVisibility — kept as alias for chunk register. */
-  const updateUpperLevelVisibility = (deltaSeconds: number) => {
-    syncVerticalLevelVisibility(deltaSeconds);
-  };
+  visibilitySystem = new VisibilitySystem({
+    getMapDataCache: () => mapDataCache,
+    getMapTileAt,
+    getPlayerPosition: () => player.position,
+    getCamera: () => camera!,
+    getIsFirstPerson: () => isFirstPerson,
+    getRenderLevel,
+    getCurrentLevel,
+    getHoleFallLandingLevel: () => holeFallLandingLevel,
+    parseLevelNumber,
+    isGradedWalkAt,
+    isStaticTileBlocking,
+    levelToWorldY,
+    waterEffectSystem,
+  });
 
   const resolvePoolFloorMaterial = (
     level: string,
@@ -2732,9 +2371,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     LEVEL_HEIGHT,
     WALL_HEIGHT,
     WALK_SURFACE,
-    levelMeshes,
-    meshLevelByMesh,
-    wallTileIndex,
+    levelMeshes: visibilitySystem.levelMeshes,
+    meshLevelByMesh: visibilitySystem.meshLevelByMesh,
+    wallTileIndex: visibilitySystem.wallTileIndex,
     levelBinaryCache,
     tileMaterials,
     tileMaterialLRU,
@@ -2745,8 +2384,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     resolvePoolFloorMaterial,
     isBlockingTile,
     isDownHoleTile: (symbol, tileDef) => isDownHoleTile(tileDef ?? null),
-    getRenderableLevels,
-    registerMeshForLevel,
+    getRenderableLevels: () => visibilitySystem.getRenderableLevels(),
+    registerMeshForLevel: (levelKey, mesh) =>
+      visibilitySystem.registerMeshForLevel(levelKey, mesh),
     parseLevelNumber: (level) => parseLevelNumber(level),
     levelToWorldY,
     isFirstPerson: () => isFirstPerson,
@@ -2755,16 +2395,20 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     getFirstPersonDrawRadiusChunks: () => qualitySystem.firstPersonDrawRadiusChunks,
     getTopDownChunkBuildBudgetPerTick: () => qualitySystem.topDownChunkBuildBudgetPerTick,
     getFirstPersonChunkBuildBudgetPerTick: () => qualitySystem.firstPersonChunkBuildBudgetPerTick,
-    findUpperOcclusionLevel: () => findUpperOcclusionLevel(),
+    findUpperOcclusionLevel: () => visibilitySystem.findUpperOcclusionLevel(),
     onDiagnostics: (stats) => {
       window.__slice3dChunkStreaming = stats as typeof window.__slice3dChunkStreaming;
     },
   });
+  visibilitySystem.bindVerticalStackRadius(() =>
+    chunkSystem.resolveVerticalStackRadiusTiles(),
+  );
   cameraSystem.heroBillboard = heroBillboard;
   cameraSystem.heroShadow = heroShadow;
   cameraSystem.chunkClearAll = () => chunkSystem.clearAll();
   cameraSystem.chunkTick = (dt) => chunkSystem.tick(dt);
-  cameraSystem.invalidateVerticalVisibilityCache = invalidateVerticalVisibilityCache;
+  cameraSystem.invalidateVerticalVisibilityCache = () =>
+    visibilitySystem.invalidateCache();
   cameraSystem.setEnemyScalesDefault = () => {
     enemies.forEach((enemy) => enemy.meshRoot.scaling.set(1, 1, 1));
   };
@@ -4625,9 +4269,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     activeSlashtrails,
     enemies,
     enemySpawnCatalog,
-    mapDataCache,
-    currentMapWidth,
-    currentMapHeight,
+    getMapDataCache: () => mapDataCache,
+    getCurrentMapWidth: () => currentMapWidth,
+    getCurrentMapHeight: () => currentMapHeight,
     sliceMapName,
     audioManager: audioManager!,
     sceneInstrumentation: sceneInstrumentation!,
@@ -4645,8 +4289,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     isPlayerOverVoidAtLevel,
     getGroundSurfaceY,
     syncLevelSideEffects,
-    syncVerticalLevelVisibility,
-    hideWallsOnRay,
+    syncVerticalLevelVisibility: (dt) =>
+      visibilitySystem.syncVerticalLevelVisibility(dt),
+    hideWallsOnRay: () => visibilitySystem.hideWallsOnRay(),
     updateEnemyAI,
     updatePlayerDebugMesh,
     collectInteractableRevealTargets,
