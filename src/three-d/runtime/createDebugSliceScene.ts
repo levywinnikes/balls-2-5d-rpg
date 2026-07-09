@@ -47,6 +47,7 @@ import {
   Projectile3DSystem,
   type Projectile3DGridContext,
 } from "./Projectile3DSystem";
+import { RenderSystem, type RenderState } from "./RenderSystem";
 import {
   resolveBmsDirectionFromWorldDelta,
   bmsDirectionToFirstPersonYaw,
@@ -155,7 +156,7 @@ type SliceRuntime = {
   dispose: () => void;
 };
 
-type Slice3DLogSample = {
+export type Slice3DLogSample = {
   ts: number;
   elapsedSec: number;
   currentLevel: string;
@@ -218,7 +219,7 @@ type Slice3DLogEvent = {
   payload?: Record<string, unknown>;
 };
 
-type Slice3DSessionLog = {
+export type Slice3DSessionLog = {
   version: 1;
   mapName: string;
   startedAt: string;
@@ -542,7 +543,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   heroBillboard.setEnabled(true);
 
   const heroAquaticTint = attachAquaticShaderTint(heroSpriteMat);
-  let lastPlayerAquaticMode: AquaticSample["mode"] = "dry";
+  const lastPlayerAquaticMode: { mode: AquaticSample["mode"] } = { mode: "dry" };
 
   const heroShadowMat = new StandardMaterial("slice-player-shadow-mat", scene);
   heroShadowMat.diffuseColor = Color3.Black();
@@ -954,17 +955,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const LOG_PATH_WINDOW_MAX = 600;
   const LOG_HEAP_WINDOW_SECONDS = 300;
   const LOG_UNLOAD_RECOVERY_GRACE_SECONDS = 25;
-  const LOG_FILE_FLUSH_INTERVAL = 10;
-  let telemetryLogTimer = 0;
-  let telemetryPersistTimer = 0;
-  let telemetryFileFlushTimer = 0;
-  let telemetryEnabled = true;
+  const telemetryEnabled = { value: true };
   let telemetryFileFlushInFlight = false;
   let lastRuntimeLogFilePath: string | null = null;
-  let previousHeapUsedMb: number | undefined;
-  // drawCalls is cumulative in Babylon.js — track delta to get per-frame count.
-  let prevDrawCallsTotal = 0;
   const runtimeStartedAt = Date.now();
+  let previousHeapUsedMb: number | undefined;
+  let prevDrawCallsTotal = 0;
   const frameMsWindow: number[] = [];
   const pathMsWindow: number[] = [];
   const heapHistory: Array<{ elapsedSec: number; usedMb: number }> = [];
@@ -1203,7 +1199,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const pushLogEvent = (type: string, payload?: Record<string, unknown>) => {
-    if (!telemetryEnabled) return;
+    if (!telemetryEnabled.value) return;
     if (runtimeLog.events.length >= LOG_MAX_EVENTS) {
       runtimeLog.events.shift();
       runtimeLog.counters.eventsDropped += 1;
@@ -1311,10 +1307,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       });
     },
     setEnabled: (value: boolean) => {
-      telemetryEnabled = !!value;
-      pushLogEvent("log.enabled", { value: telemetryEnabled });
+      telemetryEnabled.value = !!value;
+      pushLogEvent("log.enabled", { value: telemetryEnabled.value });
     },
-    isEnabled: () => telemetryEnabled,
+    isEnabled: () => telemetryEnabled.value,
     getLastFilePath: () => lastRuntimeLogFilePath,
     flushToFile: () => flushRuntimeLogsToFile(true),
     storageKey: LOG_STORAGE_KEY,
@@ -4036,7 +4032,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const CHUNK_UPDATE_INTERVAL = 0.2;
   const PERF_PUBLISH_INTERVAL = 0.25;
   // navigation timer managed internally by NavigationSystem
-  let perfPublishTimer = 0;
 
 
 
@@ -4547,681 +4542,130 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     setSelectedEnemy(null);
   });
 
-  scene.onBeforeRenderObservable.add(() => {
-    if (gameplayPaused) {
-      return;
-    }
-    if (isPlayerDeathSequenceActive) {
-      return;
-    }
-
-    const deltaSeconds = engine.getDeltaTime() / 1000;
-
-    if (!worldBootstrapReady) {
-      chunkSystem.tick(deltaSeconds);
-      return;
-    }
-
-    const tFrameStart = performance.now();
-    let mapTimeAccum = 0;
-    let enemyTimeAccum = 0;
-    let physicsTimeAccum = 0;
-
-    let tStart = tFrameStart;
-
-    checkLevelDrift();
-    tStart = performance.now();
-    orchestrator.tick(deltaSeconds);
-
-    navigationSystem.tick(deltaSeconds);
-    mapTimeAccum += performance.now() - tStart;
-
-    // Animate active slash trails
-    const deltaMs = engine.getDeltaTime();
-    for (let i = activeSlashtrails.length - 1; i >= 0; i--) {
-      const slash = activeSlashtrails[i];
-      slash.elapsed += deltaMs;
-      const ratio = slash.elapsed / slash.duration;
-      if (ratio >= 1) {
-        slash.mesh.dispose();
-        slash.material.dispose();
-        slash.texture.dispose();
-        activeSlashtrails.splice(i, 1);
-      } else {
-        const currentScale = slash.startScale + (slash.endScale - slash.startScale) * ratio;
-        slash.mesh.scaling.set(currentScale, currentScale, currentScale);
-        slash.mesh.visibility = 1.0 - ratio;
-      }
-    }
-
-    // S10-T1: Parity with 2D — tick PlayerState for hunger decay, HP regen and buff timers.
-    playerState.update(performance.now(), engine.getDeltaTime());
-
-    // Chunk streaming: update at most every CHUNK_UPDATE_INTERVAL seconds
-    chunkSystem.tick(deltaSeconds);
-
-    const chunkStats = window.__slice3dChunkStreaming || {};
-    const unloadedThisTick = chunkStats.unloadedThisTick || 0;
-    if (unloadedThisTick > 0 && previousHeapUsedMb !== undefined) {
-      unloadCheckpoints.push({
-        atSec: getElapsedSec(),
-        heapMb: previousHeapUsedMb,
-        resolved: false,
-        succeeded: false,
-      });
-      if (unloadCheckpoints.length > 100) {
-        unloadCheckpoints.shift();
-      }
-    }
-
-    const movementInput = inputManager.getMovementInput();
-    let moveForward = movementInput.moveForward;
-    let moveRight = movementInput.moveRight;
-    mapTimeAccum += performance.now() - tStart;
-
-    tStart = performance.now();
-    const aquaticSample = getAquaticSampleAt(
-      player.position.x,
-      player.position.z,
-      getCurrentLevel(),
-    );
-    const speed = 4.5 * aquaticSample.speedMultiplier;
-
-
-
-
-
-
-
-
-    const isMoving = moveForward !== 0 || moveRight !== 0;
-    const movementStartX = player.position.x;
-    const movementStartZ = player.position.z;
-    const nowMs = Date.now();
-    if (nowMs >= heroAnimLockedUntil) {
-      if (isMoving) {
-        setHeroDirection(
-          resolveHeroBmsDirection(moveForward, moveRight, heroDirection),
-        );
-        setHeroAnimState("walk");
-      } else {
-        setHeroAnimState("idle");
-      }
-    }
-
-    // ── Physics tick ───────────────────────────────────────────────────────
-    {
-      // Compute world-space movement direction from camera-relative input
-      let worldDx = 0;
-      let worldDz = 0;
-      if (isMoving) {
-        let movement = Vector3.Zero();
-        if (isFirstPerson) {
-          const yaw = firstPersonCamera.rotation.y;
-          const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-          const right = new Vector3(forward.z, 0, -forward.x);
-          movement = forward.scale(moveForward).add(right.scale(moveRight));
-        } else {
-          const engineRef = scene.getEngine();
-          const viewport = camera.viewport.toGlobal(
-            engineRef.getRenderWidth(),
-            engineRef.getRenderHeight(),
-          );
-          const origin = player.position.clone();
-          const screenOrigin = Vector3.Project(origin, Matrix.Identity(), scene.getTransformMatrix(), viewport);
-          const screenX = Vector3.Project(origin.add(new Vector3(1, 0, 0)), Matrix.Identity(), scene.getTransformMatrix(), viewport);
-          const screenZ = Vector3.Project(origin.add(new Vector3(0, 0, 1)), Matrix.Identity(), scene.getTransformMatrix(), viewport);
-          const basisX = new Vector2(screenX.x - screenOrigin.x, screenX.y - screenOrigin.y);
-          const basisZ = new Vector2(screenZ.x - screenOrigin.x, screenZ.y - screenOrigin.y);
-          const desired = new Vector2(moveRight, -moveForward);
-          const det = basisX.x * basisZ.y - basisX.y * basisZ.x;
-          if (Math.abs(det) > 1e-6) {
-            const wdx = (desired.x * basisZ.y - desired.y * basisZ.x) / det;
-            const wdz = (basisX.x * desired.y - basisX.y * desired.x) / det;
-            movement = new Vector3(wdx, 0, wdz);
-          } else {
-            const cameraForward = camera.target.subtract(camera.position);
-            cameraForward.y = 0;
-            if (cameraForward.lengthSquared() > 1e-6) {
-              cameraForward.normalize();
-              const cameraRight = new Vector3(cameraForward.z, 0, -cameraForward.x);
-              movement = cameraForward.scale(moveForward).add(cameraRight.scale(moveRight));
-            }
-          }
-        }
-        const len = movement.length();
-        if (len > 0.001) {
-          worldDx = movement.x / len;
-          worldDz = movement.z / len;
-        }
-      }
-
-      // Sync fall-safety from PlayerState to physics context
-      playerCtx.isFallSafetyEnabled = playerState.isFallSafetyEnabled();
-
-      const physicsInput: PhysicsInput = {
-        moveX: worldDx,
-        moveZ: worldDz,
-        deltaSeconds,
-        jumpPressed: inputManager.consumeJumpRequested(),
-        sprintHeld: inputManager.isKeyPressed("shift"),
-        speedMultiplier: aquaticSample.speedMultiplier,
-      };
-
-
-      tickPhysics(playerCtx, physicsInput, collisionWorld, {
-        getMapTileAt,
-        getTileDef: (symbol: string | null) =>
-          symbol ? mapDataCache?.tileDefinitions?.[symbol] : undefined,
-        hasLevel: (level: string) => Boolean(mapDataCache?.levels?.[level]),
-        allLevels: () => Object.keys(mapDataCache?.levels ?? {}),
-        getMapWidth: () => currentMapWidth,
-        getMapHeight: () => currentMapHeight,
-        parseLevelNumber,
-      }, {
-        onFallSafetyActive: (_ctx) => {
-          playerState.emit("uiNotification", {
-            type: "warning",
-            message: t_game("fall_safety_active"),
-          });
-        },
-        onHoleTransition: (_fromLevel, toLevel, transition) => {
-          applyActiveLevelChange(toLevel, transition);
-        },
-        onNaturalLevelTransition: (toLevel) => {
-          applyActiveLevelChange(toLevel, undefined, { natural: true });
-        },
-        onGrounded: (_ctx, impactSpeed) => {
-          finishAirborneLanding(
-            getCurrentLevel(),
-            playerCtx.position.y,
-            impactSpeed,
-            playerCtx.holeFallFloorCount,
-          );
-        },
-        onJump: () => {
-          audioManager.playJump();
-        },
-      });
-
-      // Sync player mesh position
-      player.position.x = playerCtx.position.x;
-      player.position.y = playerCtx.position.y;
-      player.position.z = playerCtx.position.z;
-
-      // Sync local mirrors for non-physics code
-      verticalVelocity = playerCtx.verticalVelocity;
-      isGrounded = playerCtx.isGrounded;
-      holeFallLandingLevel = playerCtx.holeFallLandingLevel;
-      holeFallFloorCount = playerCtx.holeFallFloorCount;
-      fallOriginFootY = playerCtx.fallOriginFootY;
-      wasOnVoidWithSafety = playerCtx.wasOnVoidWithSafety;
-      lastSafePlayerX = playerCtx.lastSafePositionX;
-      lastSafePlayerZ = playerCtx.lastSafePositionZ;
-      lastGroundedFootY = playerCtx.lastGroundedFootY;
-      levelTransitionCooldown = playerCtx.levelTransitionCooldown;
-    }
-    physicsTimeAccum += performance.now() - tStart;
-
-    const consumeFootstep = (heroSpriteMat as HeroSpriteMaterial)._consumeFootstepTick;
-    if (typeof consumeFootstep === "function" && consumeFootstep()) {
-      audioManager.playFootstep("floor", true);
-    }
-
-    physicsTimeAccum += performance.now() - tStart;
-
-    tStart = performance.now();
-    updateEnemyAI(deltaSeconds);
-    enemyTimeAccum += performance.now() - tStart;
-
-    tStart = performance.now();
-    if (!gameplayPaused) {
-      projectileSystem.update(deltaSeconds);
-    }
-    sliceCombatSystem.tryAutoPlayerAttack(Date.now());
-    physicsTimeAccum += performance.now() - tStart;
-
-    perfPublishTimer += deltaSeconds;
-    if (perfPublishTimer >= PERF_PUBLISH_INTERVAL) {
-      perfPublishTimer = 0;
-
-      const drawCalls = sceneInstrumentation.drawCallsCounter.current;
-      const activeMeshes = scene.getActiveMeshes().length;
-      const totalMeshes = scene.meshes.length;
-      const totalMaterials = scene.materials.length;
-      const totalTextures = scene.textures.length;
-      const totalVertices = scene.getTotalVertices();
-
-      const perfMem = performance.memory;
-      const usedHeapMb = perfMem
-        ? Math.round((perfMem.usedJSHeapSize / (1024 * 1024)) * 10) / 10
-        : undefined;
-      const totalHeapMb = perfMem
-        ? Math.round((perfMem.totalJSHeapSize / (1024 * 1024)) * 10) / 10
-        : undefined;
-
-      const chunkStats = window.__slice3dChunkStreaming || {};
-
-      playerState.updatePerfMetrics({
-        fps: Math.round(engine.getFps()),
-        totalUpdateTime: Math.round((mapTimeAccum + enemyTimeAccum + physicsTimeAccum) * 10) / 10,
-        mapTime: Math.round(mapTimeAccum * 10) / 10,
-        enemyTime: Math.round(enemyTimeAccum * 10) / 10,
-        physicsTime: Math.round(physicsTimeAccum * 10) / 10,
-        activeEnemies: Array.from(enemies.values()).filter(
-          (e) => !e.isDead && Math.abs(levelToWorldY(e.level) - levelToWorldY(getCurrentLevel())) <= LEVEL_HEIGHT && Vector3.Distance(e.worldPos, player.position) <= ENEMY_AI_RADIUS_UNITS,
-        ).length,
-        renderedTiles: chunkSystem.loadedChunks.size * CHUNK_SIZE * CHUNK_SIZE,
-        totalObjects: activeMeshes,
-        poolSize: chunkSystem.loadedChunks.size,
-        drawCalls,
-        activeMeshes,
-        totalMeshes,
-        totalMaterials,
-        totalTextures,
-        totalVertices,
-        jsHeapUsedMb: usedHeapMb,
-        jsHeapTotalMb: totalHeapMb,
-        chunkLoaded: chunkStats.loadedChunks || chunkSystem.loadedChunks.size,
-        chunkLoading: chunkStats.loadingChunks || chunkSystem.loadingChunks.size,
-      });
-
-      window.__slice3dPerfDiagnostics = {
-        fps: Math.round(engine.getFps()),
-        frameMs: Math.round(engine.getDeltaTime() * 10) / 10,
-        drawCalls,
-        activeMeshes,
-        totalMeshes,
-        totalMaterials,
-        totalTextures,
-        totalVertices,
-        jsHeapUsedMb: usedHeapMb,
-        jsHeapTotalMb: totalHeapMb,
-        chunkLoaded: chunkStats.loadedChunks || chunkSystem.loadedChunks.size,
-        chunkLoading: chunkStats.loadingChunks || chunkSystem.loadingChunks.size,
-        pendingChunkCandidates: chunkStats.pendingCandidates || 0,
-        pendingChunkUnloads: chunkStats.pendingUnloads || 0,
-        streamedDroppedItems: dropSystem.droppedItemMeshes.size,
-        streamedEnemies: enemies.size,
-        catalogedEnemies: enemySpawnCatalog.size,
-        streamedProps: propSystem.getProps().size,
-        catalogedProps: propSystem.getDebugInfo().cataloged,
-        navWindowTiles: navigationSystem.gridSize,
-        currentLevel: getCurrentLevel(),
-        qualityPreset: playerState.getDisplaySettings().qualityPreset,
-        topDownDrawRadiusChunks: qualitySystem.topDownDrawRadiusChunks,
-        enemyStreamRadiusUnits: enemySystem.enemyStreamRadiusUnits,
-        propStreamRadiusUnits: propSystem.propStreamRadiusUnits,
-        ts: Date.now(),
-      };
-      window.__slice3dPerf = window.__slice3dPerfDiagnostics;
-    }
-
-    telemetryLogTimer += deltaSeconds;
-    telemetryPersistTimer += deltaSeconds;
-    if (telemetryEnabled && telemetryLogTimer >= LOG_SAMPLE_INTERVAL) {
-      telemetryLogTimer = 0;
-
-      const chunkStats = window.__slice3dChunkStreaming || {};
-      const perfMem = performance.memory;
-      const usedHeapMb = perfMem
-        ? Math.round((perfMem.usedJSHeapSize / (1024 * 1024)) * 10) / 10
-        : undefined;
-      const totalHeapMb = perfMem
-        ? Math.round((perfMem.totalJSHeapSize / (1024 * 1024)) * 10) / 10
-        : undefined;
-      const heapDeltaMb =
-        usedHeapMb !== undefined && previousHeapUsedMb !== undefined
-          ? Math.round((usedHeapMb - previousHeapUsedMb) * 10) / 10
-          : undefined;
-      previousHeapUsedMb = usedHeapMb;
-
-      const drawCalls = sceneInstrumentation.drawCallsCounter.current;
-
-      let activeEnemies = 0;
-      let visibleEnemies = 0;
-      let aiActiveEnemies = 0;
-      enemies.forEach((enemy) => {
-        if (enemy.isDead || Math.abs(levelToWorldY(enemy.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) return;
-        const distance = Vector3.Distance(enemy.worldPos, player.position);
-        if (distance <= ENEMY_AI_RADIUS_UNITS) {
-          activeEnemies += 1;
-        }
-        if (distance <= ENEMY_VISIBILITY_RADIUS_UNITS) {
-          visibleEnemies += 1;
-        }
-        if (distance <= ENEMY_AI_RADIUS_UNITS) {
-          aiActiveEnemies += 1;
-        }
-      });
-
-      const sample: Slice3DLogSample = {
-        ts: Date.now(),
-        elapsedSec: getElapsedSec(),
-        currentLevel: getCurrentLevel(),
-        player: {
-          x: Math.round(player.position.x * 100) / 100,
-          y: Math.round(player.position.y * 100) / 100,
-          z: Math.round(player.position.z * 100) / 100,
-          tileX: Math.floor(player.position.x),
-          tileZ: Math.floor(player.position.z),
-          chunkX: Math.floor(player.position.x / CHUNK_SIZE),
-          chunkZ: Math.floor(player.position.z / CHUNK_SIZE),
-        },
-        perf: {
-          fps: Math.round(engine.getFps()),
-          frameMs: Math.round(engine.getDeltaTime() * 10) / 10,
-          drawCalls,
-          activeMeshes: scene.getActiveMeshes().length,
-          totalMeshes: scene.meshes.length,
-          totalTextures: scene.textures.length,
-          totalVertices: scene.getTotalVertices(),
-          jsHeapUsedMb: usedHeapMb,
-          jsHeapTotalMb: totalHeapMb,
-          heapDeltaMb,
-        },
-        chunks: {
-          loaded: chunkStats.loadedChunks || chunkSystem.loadedChunks.size,
-          loading: chunkStats.loadingChunks || chunkSystem.loadingChunks.size,
-          pendingCandidates: chunkStats.pendingCandidates || 0,
-          pendingUnloads: chunkStats.pendingUnloads || 0,
-          builtThisTick: chunkStats.builtThisTick || 0,
-          unloadedThisTick: chunkStats.unloadedThisTick || 0,
-        },
-        enemies: {
-          activeOnLevel: activeEnemies,
-          visibleOnLevel: visibleEnemies,
-          aiActiveOnLevel: aiActiveEnemies,
-          selectedEnemyUid,
-        },
-        items: {
-          streamedDroppedItems: dropSystem.droppedItemMeshes.size,
-          hasRealDroppedItems: dropSystem.hasRealDroppedItems,
-        },
-        pathfinding: {
-          requests: pathMetrics.requests,
-          success: pathMetrics.success,
-          failed: pathMetrics.failed,
-          errors: pathMetrics.errors,
-          inFlight: pathMetrics.inFlight,
-          avgMs:
-            pathMetrics.requests > 0
-              ? Math.round((pathMetrics.totalMs / pathMetrics.requests) * 100) /
-                100
-              : 0,
-          maxMs: Math.round(pathMetrics.maxMs * 100) / 100,
-          lastMs: pathMetrics.lastMs,
-          lastPathLen: pathMetrics.lastPathLen,
-        },
-      };
-
-      if (runtimeLog.samples.length >= LOG_MAX_SAMPLES) {
-        runtimeLog.samples.shift();
-        runtimeLog.counters.samplesDropped += 1;
-      }
-      runtimeLog.samples.push(sample);
-
-      pushBounded(frameMsWindow, sample.perf.frameMs, LOG_FRAME_WINDOW_MAX);
-      if (sample.pathfinding.lastMs > 0) {
-        pushBounded(
-          pathMsWindow,
-          sample.pathfinding.lastMs,
-          LOG_PATH_WINDOW_MAX,
-        );
-      }
-
-      if (sample.perf.jsHeapUsedMb !== undefined) {
-        heapHistory.push({
-          elapsedSec: sample.elapsedSec,
-          usedMb: sample.perf.jsHeapUsedMb,
-        });
-        const cutoff = sample.elapsedSec - LOG_HEAP_WINDOW_SECONDS;
-        while (heapHistory.length && heapHistory[0].elapsedSec < cutoff) {
-          heapHistory.shift();
-        }
-
-        unloadCheckpoints.forEach((checkpoint) => {
-          if (checkpoint.resolved) {
-            return;
-          }
-
-          const elapsedSinceUnload = sample.elapsedSec - checkpoint.atSec;
-          const droppedEnough =
-            sample.perf.jsHeapUsedMb! <= checkpoint.heapMb - 1;
-          if (droppedEnough) {
-            checkpoint.resolved = true;
-            checkpoint.succeeded = true;
-            return;
-          }
-
-          if (elapsedSinceUnload >= LOG_UNLOAD_RECOVERY_GRACE_SECONDS) {
-            checkpoint.resolved = true;
-            checkpoint.succeeded = false;
-            chunkUnloadRecoveryFailures += 1;
-            pushLogEvent("memory.unload-recovery-failed", {
-              atSec: checkpoint.atSec,
-              baselineHeapMb: checkpoint.heapMb,
-              currentHeapMb: sample.perf.jsHeapUsedMb,
-              elapsedSec: Math.round(elapsedSinceUnload * 100) / 100,
-            });
-          }
-        });
-      }
-
-      const chunkKey = `${sample.currentLevel}:${sample.player.chunkX}_${sample.player.chunkZ}`;
-      const chunkEntry = chunkHotspots.get(chunkKey) || {
-        level: sample.currentLevel,
-        chunkX: sample.player.chunkX,
-        chunkZ: sample.player.chunkZ,
-        samples: 0,
-        frameMsAcc: 0,
-        drawCallsAcc: 0,
-        activeMeshesAcc: 0,
-        verticesAcc: 0,
-        maxHeapUsedMb: 0,
-        maxPathMs: 0,
-      };
-      chunkEntry.samples += 1;
-      chunkEntry.frameMsAcc += sample.perf.frameMs;
-      chunkEntry.drawCallsAcc += sample.perf.drawCalls;
-      chunkEntry.activeMeshesAcc += sample.perf.activeMeshes;
-      chunkEntry.verticesAcc += sample.perf.totalVertices;
-      chunkEntry.maxHeapUsedMb = Math.max(
-        chunkEntry.maxHeapUsedMb,
-        sample.perf.jsHeapUsedMb || 0,
-      );
-      chunkEntry.maxPathMs = Math.max(
-        chunkEntry.maxPathMs,
-        sample.pathfinding.lastMs,
-      );
-      chunkHotspots.set(chunkKey, chunkEntry);
-
-      if ((sample.perf.heapDeltaMb || 0) <= -8) {
-        pushLogEvent("memory.gc-like-drop", {
-          heapDeltaMb: sample.perf.heapDeltaMb,
-          usedMb: sample.perf.jsHeapUsedMb,
-        });
-      }
-
-      if (sample.chunks.pendingCandidates > 16) {
-        pushLogEvent("chunk.backlog", {
-          pendingCandidates: sample.chunks.pendingCandidates,
-          loaded: sample.chunks.loaded,
-          loading: sample.chunks.loading,
-        });
-      }
-
-      window.__slice3dLogsData = {
-        latestSample: sample,
-        totalSamples: runtimeLog.samples.length,
-        totalEvents: runtimeLog.events.length,
-        counters: runtimeLog.counters,
-        summary: buildSummary(),
-        topHotspots: buildHotspots(5),
-      };
-    }
-
-    if (telemetryEnabled && telemetryPersistTimer >= LOG_PERSIST_INTERVAL) {
-      telemetryPersistTimer = 0;
-      persistRuntimeLogs();
-    }
-
-    if (telemetryEnabled) {
-      telemetryFileFlushTimer += deltaSeconds;
-      if (telemetryFileFlushTimer >= LOG_FILE_FLUSH_INTERVAL) {
-        telemetryFileFlushTimer = 0;
-        void flushRuntimeLogsToFile(false);
-      }
-    }
-
-    // Target highlight: warm sprite + amber floor spot + head chevron.
-    enemyHighlightPulseT += deltaSeconds;
-    if (selectedEnemyUid) {
-      const selectedEnemy = enemies.get(selectedEnemyUid);
-      if (!selectedEnemy || selectedEnemy.isDead) {
-        setSelectedEnemy(null);
-      } else {
-        const pulse =
-          (Math.sin(enemyHighlightPulseT * Math.PI * 1.8) * 0.5 + 0.5) * 0.22;
-        applyEnemyTargetVisual(selectedEnemy.meshRoot, pulse, {
-          current: selectedEnemy.health,
-          max: selectedEnemy.maxHealth,
-        });
-
-        const nowMs = Date.now();
-        if (nowMs - lastFocusedCombatHealthSyncAt >= 250) {
-          lastFocusedCombatHealthSyncAt = nowMs;
-          playerState.emit("combatEnemyHealthChanged", {
-            uid: selectedEnemy.uid,
-            health: selectedEnemy.health,
-            maxHealth: selectedEnemy.maxHealth,
-          });
-        }
-      }
-    }
-
-    // Keep-alive: sync side effects to current level (handled by events, but safe backstop)
-    if (isGrounded && !holeFallLandingLevel && !isPlayerOverVoidAtLevel(getCurrentLevel())) {
-      syncLevelSideEffects();
-    }
-
-    const playerAquatic = getAquaticSampleAt(
-      player.position.x,
-      player.position.z,
-      getCurrentLevel(),
-    );
-    heroAquaticTint.update(playerAquatic);
-    if (
-      playerAquatic.mode !== "dry" &&
-      lastPlayerAquaticMode === "dry"
-    ) {
-      audioManager.playSplash();
-    }
-    lastPlayerAquaticMode = playerAquatic.mode;
-    const aquaticPreset = getAquaticVisualPreset(playerAquatic.mode);
-    heroShadowMat.alpha = aquaticPreset
-      ? 0.32 * aquaticPreset.shadowScale
-      : 0.32;
-
-    // R1/R2: after movement — hide upper floors covering the hero.
-    syncVerticalLevelVisibility(deltaSeconds);
-    // Hide wall meshes on visible levels that intersect the camera→hero ray.
-    hideWallsOnRay();
-
-    if (isFirstPerson) {
-      heroBillboard.setEnabled(false);
-      heroShadow.setEnabled(false);
-      cameraSystem.updateCombatCamera(deltaSeconds);
-
-      playerState.exploreArea(
-        getRenderLevel(),
-        Math.floor(player.position.x),
-        Math.floor(player.position.z),
-        8,
-        currentMapWidth,
-        currentMapHeight,
-      );
-      playerState.recordPlayerPosition(
-        getCurrentLevel(),
-        player.position.x * 32,
-        player.position.z * 32,
-      );
-      return;
-    }
-
-    wallRevealSystem.update(
-      true,
-      player.position,
-      getRenderLevel(),
-      collectInteractableRevealTargets(),
-      (fromWorldX, fromWorldZ, toWorldX, toWorldZ) =>
-        findFirstBlockingTileOnWorldLine(
-          fromWorldX,
-          fromWorldZ,
-          toWorldX,
-          toWorldZ,
-          isTileBlockedForGameplay,
-          { skipStart: true },
-        ) === null,
-      deltaSeconds,
-      WALK_SURFACE + 0.025,
-    );
-
-    heroBillboard.setEnabled(true);
-    heroShadow.setEnabled(true);
-    heroShadow.position.set(
-      player.position.x,
-      getGroundSurfaceY(player.position.x, player.position.z, getRenderLevel()) +
-        0.01,
-      player.position.z,
-    );
-
-    // Top-down product mode: hero stays screen-centered (Diablo/PoE-style).
-    // Lazy lerp made fast movement feel like the character "outruns" the camera.
-    camera.setTarget(
-      new Vector3(player.position.x, player.position.y, player.position.z),
-    );
-
-    const currentLevel = getCurrentLevel();
-    playerState.exploreArea(
-      currentLevel,
-      Math.floor(player.position.x),
-      Math.floor(player.position.z),
-      8,
-      currentMapWidth,
-      currentMapHeight,
-    );
-
-    playerState.recordPlayerPosition(
-      currentLevel,
-      player.position.x * 32,
-      player.position.z * 32,
-    );
-
-    updatePlayerDebugMesh();
-  });
-
-  // ── Fase 2 (2.2): SaveSystem instance for 3D save/load ─────────────────────
+  // ── RenderSystem: owns onBeforeRender + runRenderLoop ─────────────────
   const saveSystem = new SaveSystem();
-  let autoSaveTimer = 0;
-  const AUTO_SAVE_INTERVAL = 60; // seconds
+  const renderState: RenderState = {
+    get isFirstPerson() { return isFirstPerson; },
+    set isFirstPerson(v) { isFirstPerson = v; },
+    get gameplayPaused() { return gameplayPaused; },
+    set gameplayPaused(v) { gameplayPaused = v; },
+    get isPlayerDeathSequenceActive() { return isPlayerDeathSequenceActive; },
+    set isPlayerDeathSequenceActive(v) { isPlayerDeathSequenceActive = v; },
+    get playerDeathTimeoutId() { return playerDeathTimeoutId; },
+    set playerDeathTimeoutId(v) { playerDeathTimeoutId = v; },
+    get verticalVelocity() { return verticalVelocity; },
+    set verticalVelocity(v) { verticalVelocity = v; },
+    get isGrounded() { return isGrounded; },
+    set isGrounded(v) { isGrounded = v; },
+    get holeFallLandingLevel() { return holeFallLandingLevel; },
+    set holeFallLandingLevel(v) { holeFallLandingLevel = v; },
+    get holeFallFloorCount() { return holeFallFloorCount; },
+    set holeFallFloorCount(v) { holeFallFloorCount = v; },
+    get fallOriginFootY() { return fallOriginFootY; },
+    set fallOriginFootY(v) { fallOriginFootY = v; },
+    get wasOnVoidWithSafety() { return wasOnVoidWithSafety; },
+    set wasOnVoidWithSafety(v) { wasOnVoidWithSafety = v; },
+    get lastSafePlayerX() { return lastSafePlayerX; },
+    set lastSafePlayerX(v) { lastSafePlayerX = v; },
+    get lastSafePlayerZ() { return lastSafePlayerZ; },
+    set lastSafePlayerZ(v) { lastSafePlayerZ = v; },
+    get lastGroundedFootY() { return lastGroundedFootY; },
+    set lastGroundedFootY(v) { lastGroundedFootY = v; },
+    get levelTransitionCooldown() { return levelTransitionCooldown; },
+    set levelTransitionCooldown(v) { levelTransitionCooldown = v; },
+    get heroAnimLockedUntil() { return heroAnimLockedUntil; },
+    set heroAnimLockedUntil(v) { heroAnimLockedUntil = v; },
+    get selectedEnemyUid() { return selectedEnemyUid; },
+    set selectedEnemyUid(v) { selectedEnemyUid = v; },
+    get worldBootstrapReady() { return worldBootstrapReady; },
+    set worldBootstrapReady(v) { worldBootstrapReady = v; },
+  };
 
-  // Periodic auto-save (2.4)
-  scene.onBeforeRenderObservable.add(() => {
-    autoSaveTimer += engine.getDeltaTime() / 1000;
-    if (autoSaveTimer >= AUTO_SAVE_INTERVAL) {
-      autoSaveTimer = 0;
-      void saveSystem.saveGameDirect({
-        map: sliceMapName,
-        currentLevel: getCurrentLevel(),
-        playerPos: {
-          x: Math.round(player.position.x * 32 * 100) / 100,
-          y: Math.round(player.position.z * 32 * 100) / 100,
-        },
-        playerY: Math.round(player.position.y * 1000) / 1000,
-      });
-    }
+  const renderSystem = new RenderSystem({
+    scene,
+    engine,
+    camera: camera!,
+    firstPersonCamera: firstPersonCamera!,
+    state: renderState,
+    td: {
+      previousHeapUsedMb,
+      frameMsWindow,
+      pathMsWindow,
+      heapHistory,
+      chunkHotspots,
+      unloadCheckpoints,
+      chunkUnloadRecoveryFailures,
+      pathMetrics,
+    },
+    chunkSystem,
+    orchestrator,
+    navigationSystem,
+    cameraSystem,
+    qualitySystem,
+    doorSystem,
+    propSystem,
+    dropSystem,
+    enemySystem,
+    playerState,
+    projectileSystem,
+    wallRevealSystem,
+    waterEffectSystem: waterEffectSystem!,
+    sliceCombatSystem: sliceCombatSystem!,
+    collisionWorld: collisionWorld!,
+    inputManager: inputManager!,
+    player,
+    playerCtx,
+    heroSpriteMat: heroSpriteMat as any,
+    heroShadowMat,
+    heroBillboard,
+    heroShadow,
+    heroAquaticTint,
+    lastPlayerAquaticMode,
+    telemetryEnabledRef: telemetryEnabled,
+    activeSlashtrails,
+    enemies,
+    enemySpawnCatalog,
+    mapDataCache,
+    currentMapWidth,
+    currentMapHeight,
+    sliceMapName,
+    audioManager: audioManager!,
+    sceneInstrumentation: sceneInstrumentation!,
+    runtimeLog,
+    getCurrentLevel,
+    getRenderLevel,
+    getElapsedSec,
+    getMapTileAt,
+    checkLevelDrift,
+    setHeroDirection,
+    setHeroAnimState,
+    resolveHeroBmsDirection,
+    setSelectedEnemy,
+    finishAirborneLanding,
+    isPlayerOverVoidAtLevel,
+    getGroundSurfaceY,
+    syncLevelSideEffects,
+    syncVerticalLevelVisibility,
+    hideWallsOnRay,
+    updateEnemyAI,
+    updatePlayerDebugMesh,
+    collectInteractableRevealTargets,
+    applyActiveLevelChange,
+    applyEnemyTargetVisual,
+    restoreEnemyTargetVisual,
+    getAquaticSampleAt,
+    findFirstBlockingTileOnWorldLine,
+    isTileBlockedForGameplay,
+    pushLogEvent,
+    persistRuntimeLogs,
+    flushRuntimeLogsToFile,
+    buildSummary,
+    buildHotspots,
+    pushBounded,
+    getNearestPickupItemDistance,
+    saveSystem,
   });
+  renderSystem.attach();
 
   // ── save() — callable from UI (F5, system menu) ──────────────────────────────
   const save = () =>
@@ -5234,20 +4678,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       },
       playerY: Math.round(player.position.y * 1000) / 1000,
     });
-
-  let fpsTargetMinFrameMs = 0;
-  let lastRenderAt = 0;
-
-  engine.runRenderLoop(() => {
-    if (fpsTargetMinFrameMs > 0) {
-      const now = performance.now();
-      if (now - lastRenderAt < fpsTargetMinFrameMs) {
-        return;
-      }
-      lastRenderAt = now;
-    }
-    scene.render();
-  });
 
   // ─── Display Settings bridge (PlayerState → Babylon engine) ─────────────
   // Render scale: setHardwareScalingLevel(1/scale) lowers internal resolution
@@ -5285,10 +4715,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         break;
     }
 
-    fpsTargetMinFrameMs =
+    renderSystem.setFpsTargetMinFrameMs(
       settings.fpsTarget && settings.fpsTarget > 0
         ? 1000 / settings.fpsTarget
-        : 0;
+        : 0,
+    );
   };
   applyDisplaySettings(playerState.getDisplaySettings());
   const handleDisplaySettings = (

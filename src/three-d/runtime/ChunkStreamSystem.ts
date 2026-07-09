@@ -276,7 +276,14 @@ export class ChunkStreamSystem {
     this.loadingChunks.add(key);
 
     const tiles: TileDescriptor[] = [];
+    const matByKey = new Map<string, { mat: StandardMaterial; levelKey: string }>();
     const waterTiles: Array<{ x: number; y: number; tileId: string; levelOffsetY: number; levelKey: string }> = [];
+
+    const addMat = (materialKey: string, mat: StandardMaterial, levelKey: string) => {
+      if (!matByKey.has(materialKey)) {
+        matByKey.set(materialKey, { mat, levelKey });
+      }
+    };
 
     for (const level of allLevels) {
       if (!cfg.levelBinaryCache.has(level)) continue;
@@ -305,14 +312,15 @@ export class ChunkStreamSystem {
                 )
               : 0;
             const poolFloorMat = isWater ? cfg.resolvePoolFloorMaterial(level, tx, tz) : null;
-            const poolFloorMaterial = poolFloorMat ? poolFloorMat.name : "";
+            const waterMatKey = poolFloorMat ? `${level}::${poolFloorMat.name}` : "wall";
+            if (poolFloorMat) addMat(waterMatKey, poolFloorMat, level);
 
             tiles.push({
               x: tx, y: tz, symbol, tileId,
               height: cfg.WALL_HEIGHT,
               levelOffsetY,
               isBlocking,
-              materialKey: poolFloorMat ? `${level}::${poolFloorMat.name}` : "wall",
+              materialKey: waterMatKey,
               geometryProfile: "water-hole",
               pitDepth: waterPitDepth,
               pitWallMask: waterPitWallMask,
@@ -333,12 +341,14 @@ export class ChunkStreamSystem {
             }
             const levelOffsetY = cfg.levelToWorldY(level);
             const mat = cfg.getTileMaterial(symbol, tileDef ?? undefined);
+            const matKey = `${level}::${mat.name}`;
+            addMat(matKey, mat, level);
             tiles.push({
               x: tx, y: tz, symbol, tileId,
               height: cfg.WALL_HEIGHT,
               levelOffsetY,
               isBlocking: true,
-              materialKey: `${level}::${mat.name}`,
+              materialKey: matKey,
               geometryProfile: tileDef?.geometryProfile as TileDescriptor["geometryProfile"],
               stairDir: tileDef?.stairDir,
             });
@@ -348,12 +358,14 @@ export class ChunkStreamSystem {
           const levelOffsetY = cfg.levelToWorldY(level);
           const resolved = resolveTileHeight(cfg.parseLevelNumber(level), cfg.LEVEL_HEIGHT, cfg.WALK_SURFACE, tileDef ?? undefined);
           const mat = cfg.getTileMaterial(symbol, tileDef ?? undefined);
+          const matKey = `${level}::${mat.name}`;
+          addMat(matKey, mat, level);
           tiles.push({
             x: tx, y: tz, symbol, tileId,
             height: resolved.height,
             levelOffsetY: resolved.levelOffsetY,
             isBlocking: false,
-            materialKey: `${level}::${mat.name}`,
+            materialKey: matKey,
             geometryProfile: tileDef?.geometryProfile as TileDescriptor["geometryProfile"],
             stairDir: tileDef?.stairDir,
           });
@@ -369,17 +381,6 @@ export class ChunkStreamSystem {
       this.loadingChunks.delete(key);
       cfg.waterEffectSystem.syncChunk(key, waterTileDescs, cfg.findUpperOcclusionLevel());
       return;
-    }
-
-    const matByKey = new Map<string, { mat: StandardMaterial; levelKey: string }>();
-    for (const tile of tiles) {
-      if (!matByKey.has(tile.materialKey)) {
-        const levelKey = tile.materialKey.split("::")[0];
-        const mat = cfg.tileMaterials.get(tile.materialKey);
-        if (mat) {
-          matByKey.set(tile.materialKey, { mat, levelKey });
-        }
-      }
     }
 
     this.pendingRequests.set(key, (response: GeometryWorkerResponse) => {
