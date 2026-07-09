@@ -141,6 +141,7 @@ import { EnemyStreamSystem, type SliceEnemy, type EnemySpawnData } from "./Enemy
 import { DropStreamSystem, type SliceDroppedItem } from "./DropStreamSystem";
 import { StreamOrchestrator } from "./StreamOrchestrator";
 import { DoorSystem } from "./DoorSystem";
+import { ChunkStreamSystem } from "./ChunkStreamSystem";
 import type {
   GeometryWorkerRequest,
   GeometryWorkerResponse,
@@ -972,35 +973,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let gameplayPaused = playerState.isGameplayPaused();
   let fpCaptureSuspendedForMenu = false;
   let topDownCaptureSuspendedForMenu = false;
-  const chunkMeshes = new Map<string, Mesh[]>();
-  const chunkLodByKey = new Map<string, 0 | 1 | 2>();
-  const chunkLoading = new Set<string>();
-
-  // ─── Geometry Worker ────────────────────────────────────────────────────────
-  // Chunk geometry is computed off the main thread to eliminate frame stalls.
-  // The worker returns transferable Float32Array/Uint32Array buffers; the main
-  // thread only creates Mesh objects and uploads to GPU (<1ms per chunk).
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const geometryWorker: Worker = new Worker(
     new URL("../../workers/geometry.worker.ts", import.meta.url),
   );
-  // Pending requests: requestId → resolve callback
-  const pendingChunkRequests = new Map<
-    string,
-    (response: GeometryWorkerResponse) => void
-  >();
-  geometryWorker.onmessage = (evt: MessageEvent<GeometryWorkerResponse>) => {
-    const { requestId } = evt.data;
-    const resolve = pendingChunkRequests.get(requestId);
-    if (resolve) {
-      pendingChunkRequests.delete(requestId);
-      resolve(evt.data);
-    }
-  };
-  geometryWorker.onerror = (e) => {
-    console.error("[GeometryWorker] Error:", e);
-  };
-  // ────────────────────────────────────────────────────────────────────────────
 
   // Tile material cache — distinct materials are bounded by `kind × baseHex`,
   // which for the current tile atlas resolves to at most ~30 entries. We keep
@@ -2002,11 +1978,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     if (natural) {
       invalidateVerticalVisibilityCache();
-      chunkUpdateTimer = 0;
+      chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
     } else {
-      clearAllChunks();
+      chunkSystem.clearAll();
       invalidateVerticalVisibilityCache();
-      chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
       snapPlayerFootToActiveLevel();
     }
     const mapData = mapDataCache;
@@ -2016,7 +1991,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           snapPlayerFootToActiveLevel();
         }
         reanchorWorldContentOnLevel(newLevel);
-        updateChunks();
+        chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
       });
     }
     // Escada/rampa natural: andares ±1 já estão nos chunks (vertical stack).
@@ -2195,52 +2170,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return isStaticTileBlocking(symbol, tileDef);
   };
 
-  const clearChunk = (key: string) => {
-    waterEffectSystem.clearChunk(key);
-    // Cancel any pending worker response for this key so the response
-    // handler doesn't recreate the chunk after it was explicitly cleared.
-    pendingChunkRequests.delete(key);
-    chunkLoading.delete(key);
-    chunkLodByKey.delete(key);
-    const meshes = chunkMeshes.get(key);
-    if (meshes) {
-      meshes.forEach((m) => {
-        const levelKey = meshLevelByMesh.get(m);
-        if (levelKey) {
-          const set = levelMeshes.get(levelKey);
-          set?.delete(m);
-          if (set && set.size === 0) {
-            levelMeshes.delete(levelKey);
-          }
-          meshLevelByMesh.delete(m);
-        }
-        m.dispose();
-      });
-      chunkMeshes.delete(key);
-    }
-  };
-
-  const clearAllChunks = () => {
-    pendingChunkRequests.clear();
-    chunkMeshes.forEach((meshes) =>
-      meshes.forEach((m) => {
-        const levelKey = meshLevelByMesh.get(m);
-        if (levelKey) {
-          const set = levelMeshes.get(levelKey);
-          set?.delete(m);
-          if (set && set.size === 0) {
-            levelMeshes.delete(levelKey);
-          }
-          meshLevelByMesh.delete(m);
-        }
-        m.dispose();
-      }),
-    );
-    chunkMeshes.clear();
-    chunkLoading.clear();
-    chunkLodByKey.clear();
-  };
-
   let navigationGridLevel: string | null = null;
   let lastChunkRenderLevel: string | null = null;
   let navWindowMinTileX = 0;
@@ -2323,13 +2252,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     rebuildNavigationGrid(level);
     // Chunks are multi-level (vertical stack). Only wipe on first map draw.
     if (lastChunkRenderLevel === null) {
-      clearAllChunks();
+      chunkSystem.clearAll();
     }
     lastChunkRenderLevel = level;
 
-    // Tiles are rendered lazily via chunk streaming (updateChunks in the render loop)
-    // Trigger an immediate first chunk load so the player doesn't see empty map on spawn
-    updateChunks();
+    chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
   };
 
   // ---------------------------------------------------------------------------
@@ -2525,11 +2452,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const resolveVerticalStackRadiusTiles = () => {
-    const drawRadiusChunks = isFirstPerson
-      ? firstPersonDrawRadiusChunks
-      : topDownDrawRadiusChunks;
-    // Align vertical stack with chunk streaming (Chebyshev + unload margin).
-    return CHUNK_SIZE * (drawRadiusChunks + 1);
+    return chunkSystem.resolveVerticalStackRadiusTiles();
   };
 
   const getRenderableLevels = (): string[] => {
@@ -2910,395 +2833,45 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return getTileMaterial("cob", cobDef, "#9ca3af");
   };
 
-  /**
-   * Collect tile descriptors for a chunk and post them to the geometry worker.
-   * Returns immediately — the worker applies the geometry asynchronously and
-   * the chunk meshes are registered once the response arrives.
-   *
-   * This replaces the previous synchronous buildChunk which blocked the main
-   * thread for up to 1600ms per tick (confirmed by runtime logs 2026-05-01).
-   */
-  const buildChunk = (cx: number, cy: number, lod: 0 | 1 | 2): void => {
-    const key = `${cx}_${cy}`;
-    if (chunkMeshes.has(key) || chunkLoading.has(key)) {
-      return;
-    }
 
-    const mapData = mapDataCache;
-    if (!mapData || !mapData.width || !mapData.height) {
-      return;
-    }
-
-    const renderableLevels = getRenderableLevels().filter((levelKey) =>
-      levelBinaryCache.has(levelKey),
-    );
-    if (renderableLevels.length === 0) {
-      return;
-    }
-
-    const startX = cx * CHUNK_SIZE;
-    const startY = cy * CHUNK_SIZE;
-
-    if (startX >= mapData.width || startY >= mapData.height) {
-      return;
-    }
-
-    const endX = Math.min(startX + CHUNK_SIZE, mapData.width);
-    const endY = Math.min(startY + CHUNK_SIZE, mapData.height);
-
-    chunkLoading.add(key);
-
-    // ── Collect tile descriptors (main thread reads tile data; no Babylon calls) ──
-    // We compute materialKey here so the worker doesn't need tile definitions.
-    const tiles: GeometryWorkerRequest["tiles"] = [];
-    const waterZoneTiles: Array<{
-      x: number;
-      y: number;
-      tileId: string;
-      levelOffsetY: number;
-      levelKey: string;
-    }> = [];
-
-    for (const renderLevel of renderableLevels) {
-      if (lod >= 2) continue; // lod 2 = ground-only (skipped entirely for now)
-
-      const levelOffsetY = levelToWorldY(renderLevel);
-
-      for (let y = startY; y < endY; y++) {
-        for (let x = startX; x < endX; x++) {
-          const symbol = getMapTileAt(renderLevel, x, y);
-          if (!symbol || symbol === "...") continue;
-
-          const tileDef = mapData.tileDefinitions?.[symbol];
-          const blocking = isBlockingTile(symbol, tileDef);
-
-          if (!blocking && lod === 1) continue; // lod 1: walls only
-
-          const tileId = (tileDef?.id || symbol || "").toLowerCase();
-
-          if (isWaterTileId(tileId)) {
-            waterZoneTiles.push({
-              x,
-              y,
-              tileId,
-              levelOffsetY,
-              levelKey: renderLevel,
-            });
-
-            const pitDepth = waterHoleDepthForTileId(tileId);
-            const pitWallMask = computeWaterPitWallMask(
-              renderLevel,
-              x,
-              y,
-              getMapTileAt,
-              (sym) => mapData.tileDefinitions?.[sym ?? ""],
-            );
-            const floorMat = resolvePoolFloorMaterial(renderLevel, x, y);
-            const materialKey = `${renderLevel}::${floorMat.name}`;
-
-            tiles.push({
-              x,
-              y,
-              symbol,
-              tileId,
-              isBlocking: false,
-              geometryProfile: "water-hole",
-              isStair: false,
-              height: 0,
-              levelOffsetY,
-              materialKey,
-              pitDepth,
-              pitWallMask,
-            });
-            continue;
-          }
-
-          if (isDownHoleTile(tileDef)) {
-            const pitDepth = Math.max(0.45, LEVEL_HEIGHT * 0.82);
-            const pitWallMask = 0x0f;
-            const holeMat = getTileMaterial(symbol, tileDef, "#111827");
-            const materialKey = `${renderLevel}::${holeMat.name}`;
-
-            tiles.push({
-              x,
-              y,
-              symbol,
-              tileId,
-              isBlocking: false,
-              geometryProfile: "water-hole",
-              isStair: false,
-              height: 0,
-              levelOffsetY,
-              materialKey,
-              pitDepth,
-              pitWallMask,
-            });
-            continue;
-          }
-
-          // Skip floor tiles that sit directly above a ramp on the level below.
-          // The ramp geometry already fills that vertical space; a floor mesh at
-          // the same XY would block the player's view and cause z-fighting.
-          if (
-            !blocking &&
-            tileDef?.renderAs !== "block" &&
-            renderLevel !== undefined
-          ) {
-            const levelNum = parseLevelNumber(renderLevel);
-            const belowLevel = String(levelNum - 1);
-            if (mapData.levels?.[belowLevel]) {
-              const belowSymbol = getMapTileAt(belowLevel, x, y);
-              if (belowSymbol && belowSymbol !== "...") {
-                const belowDef = mapData.tileDefinitions?.[belowSymbol];
-                if (belowDef?.geometryProfile?.startsWith("ramp-") && isFloorLevelRamp(belowDef, LEVEL_HEIGHT)) {
-                  continue;
-                }
-              }
-            }
-          }
-
-          const inferredStair = tileDef?.stairDir !== undefined;
-          const geometryProfile =
-            tileDef?.geometryProfile ?? (inferredStair ? "stair" : "box");
-
-           // CLAMP any explicit tileDef.height to WALL_HEIGHT: map heights
-           // were authored for the 2D renderer and can exceed 2.0 (e.g. "wal":4.5),
-           // causing level 0 tiles to visually invade level 1 in 3D.
-           const DEFAULT_WALL_H = WALL_HEIGHT;
-          const tileHeight = blocking
-            ? Math.min(
-                Math.max(0.4, tileDef?.height ?? DEFAULT_WALL_H),
-                DEFAULT_WALL_H,
-              )
-            : Math.max(
-                WALK_SURFACE,
-                tileDef?.height ?? WALK_SURFACE,
-              );
-
-          // Resolve material key on main thread (getTileMaterial caches anyway)
-          const fallbackHex =
-            geometryProfile === "stair" ? "#c4a07a" : "#6a9f36";
-          const mat = getTileMaterial(symbol, tileDef, fallbackHex);
-          const materialKey = `${renderLevel}::${mat.name}`;
-
-          const renderLevelNum = renderLevel !== undefined ? parseLevelNumber(renderLevel) : 0;
-          const resolved = resolveTileHeight(renderLevelNum, LEVEL_HEIGHT, WALK_SURFACE, tileDef, tileHeight);
-          tiles.push({
-            x,
-            y,
-            symbol,
-            tileId,
-            isBlocking: blocking,
-            geometryProfile,
-            isStair: geometryProfile === "stair",
-            stairDir: tileDef?.stairDir,
-            height: resolved.height,
-            levelOffsetY: resolved.levelOffsetY,
-            materialKey,
-          });
-        }
-      }
-    }
-
-    const syncWaterForChunk = () => {
-      const waterTiles = collectWaterEffectTiles(
-        waterZoneTiles,
-        LEVEL_HEIGHT,
-      );
-      waterEffectSystem.syncChunk(
-        key,
-        waterTiles,
-        findUpperOcclusionLevel(),
-      );
-    };
-
-    if (tiles.length === 0) {
-      syncWaterForChunk();
-      chunkLoading.delete(key);
-      chunkLodByKey.set(key, lod);
-      chunkMeshes.set(key, []);
-      return;
-    }
-
-    // ── Build a materialKey → { mat, levelKey } lookup for the response handler ──
-    const matByKey = new Map<
-      string,
-      { mat: StandardMaterial; levelKey: string }
-    >();
-    for (const t of tiles) {
-      if (!matByKey.has(t.materialKey)) {
-        const fallbackHex = t.isStair ? "#c4a07a" : "#6a9f36";
-        const mat = getTileMaterial(
-          t.symbol,
-          mapData.tileDefinitions?.[t.symbol],
-          fallbackHex,
-        );
-        // renderLevel is encoded in materialKey as the prefix before "::"
-        const levelKey = t.materialKey.split("::")[0];
-        matByKey.set(t.materialKey, { mat, levelKey });
-      }
-    }
-
-    // ── Register pending request and post to worker ──
-    pendingChunkRequests.set(key, (response: GeometryWorkerResponse) => {
-      // If the chunk was already cleared while the worker was running, discard.
-      if (!chunkLoading.has(key)) return;
-
-      const meshes: Mesh[] = [];
-
-      for (const group of response.groups as GeometryGroupBuffer[]) {
-        const entry = matByKey.get(group.materialKey);
-        if (!entry || group.positions.length === 0) continue;
-
-        const meshName = group.tileKey
-          ? `chunk-${key}@@${group.tileKey}-${group.materialKey}`
-          : `chunk-${key}-${group.materialKey}`;
-        const mesh = new Mesh(meshName, scene);
-        mesh.parent = mapRoot;
-
-        const vd = new VertexData();
-        vd.positions = group.positions;
-        vd.indices = group.indices;
-        vd.normals = group.normals;
-        vd.uvs = group.uvs;
-        vd.applyToMesh(mesh);
-
-        mesh.material = entry.mat;
-        mesh.metadata = { chunkCx: cx, chunkCy: cy };
-        registerMeshForLevel(entry.levelKey, mesh);
-
-        if (group.tileKey) {
-          wallTileIndex.set(`${entry.levelKey}::${group.tileKey}`, mesh);
-        }
-
-        meshes.push(mesh);
-      }
-
-      chunkMeshes.set(key, meshes);
-      chunkLodByKey.set(key, lod);
-      chunkLoading.delete(key);
-
-      syncWaterForChunk();
-    });
-
-    const request: GeometryWorkerRequest = { requestId: key, tiles };
-    geometryWorker.postMessage(request);
-  };
-
-  // Determine which chunks should be active around the player, load new ones,
-  // unload distant ones. Called every CHUNK_UPDATE_INTERVAL seconds.
-  const updateChunks = () => {
-    if (!mapDataCache || !mapDataCache.width || !mapDataCache.height) {
-      return;
-    }
-
-    const drawRadiusChunks = isFirstPerson
-      ? firstPersonDrawRadiusChunks
-      : topDownDrawRadiusChunks;
-    const chunkBuildBudgetPerTick = isFirstPerson
-      ? firstPersonChunkBuildBudgetPerTick
-      : topDownChunkBuildBudgetPerTick;
-
-    const playerCX = Math.floor(player.position.x / CHUNK_SIZE);
-    const playerCY = Math.floor(player.position.z / CHUNK_SIZE);
-    const maxCX = Math.ceil(mapDataCache.width / CHUNK_SIZE);
-    const maxCY = Math.ceil(mapDataCache.height / CHUNK_SIZE);
-
-    // Collect chunks to unload (outside draw radius) — budget-limited, farthest first
-    const toUnload: Array<{ key: string; dist: number }> = [];
-    chunkMeshes.forEach((_, key) => {
-      const parts = key.split("_");
-      const cx = Number(parts[0]);
-      const cy = Number(parts[1]);
-      const dist = Math.max(Math.abs(cx - playerCX), Math.abs(cy - playerCY));
-      if (dist > drawRadiusChunks + 1) {
-        toUnload.push({ key, dist });
-      }
-    });
-    const unloadBatch = toUnload
-      .sort((a, b) => b.dist - a.dist)
-      .slice(0, CHUNK_UNLOAD_BUDGET_PER_TICK);
-    unloadBatch.forEach((entry) => clearChunk(entry.key));
-    const unloadedThisTick = unloadBatch.length;
-    const pendingUnloads = Math.max(0, toUnload.length - unloadedThisTick);
-
-    // Queue load for nearby chunks (near-first, budget-limited)
-    const chunkCandidates: Array<{
-      cx: number;
-      cy: number;
-      dist: number;
-      lod: 0 | 1 | 2;
-    }> = [];
-
-    const resolveDesiredChunkLod = (dist: number): 0 | 1 | 2 => {
-      if (isFirstPerson) {
-        // FP: full detail up close; walls-only silhouette at distance (never lod 2 hole).
-        if (dist <= 1) {
-          return 0;
-        }
-        return 1;
-      }
-      return dist <= 2 ? 0 : dist <= 4 ? 1 : 2;
-    };
-
-    for (let dy = -drawRadiusChunks; dy <= drawRadiusChunks; dy++) {
-      for (let dx = -drawRadiusChunks; dx <= drawRadiusChunks; dx++) {
-        const cx = playerCX + dx;
-        const cy = playerCY + dy;
-        if (cx < 0 || cy < 0 || cx >= maxCX || cy >= maxCY) {
-          continue;
-        }
-
-        const dist = Math.max(Math.abs(dx), Math.abs(dy));
-        const desiredLod = resolveDesiredChunkLod(dist);
-        const key = `${cx}_${cy}`;
-
-        // If the chunk is already loaded with a coarser LOD, force rebuild
-        // so floor tiles and full materials are restored when the player
-        // returns near that area.
-        const loadedLod = chunkLodByKey.get(key);
-        if (
-          loadedLod !== undefined &&
-          loadedLod > desiredLod &&
-          !chunkLoading.has(key)
-        ) {
-          clearChunk(key);
-        }
-
-        if (!chunkMeshes.has(key) && !chunkLoading.has(key)) {
-          chunkCandidates.push({ cx, cy, dist, lod: desiredLod });
-        }
-      }
-    }
-
-    chunkCandidates.sort((a, b) => a.dist - b.dist);
-
-    let builtThisTick = 0;
-    for (const candidate of chunkCandidates) {
-      if (builtThisTick >= chunkBuildBudgetPerTick) {
-        break;
-      }
-
-      buildChunk(candidate.cx, candidate.cy, candidate.lod);
-      builtThisTick += 1;
-    }
-
-    // Lightweight runtime metrics for Sprint 1 tuning.
-    window.__slice3dChunkStreaming = {
-      playerChunk: { x: playerCX, y: playerCY },
-      loadedChunks: chunkMeshes.size,
-      loadingChunks: chunkLoading.size,
-      builtThisTick,
-      drawRadiusChunks,
-      chunkBuildBudgetPerTick,
-      firstPersonLod: isFirstPerson,
-      pendingCandidates: Math.max(0, chunkCandidates.length - builtThisTick),
-      unloadedThisTick,
-      pendingUnloads,
-      visibleLevels: getRenderableLevels(),
-      ts: Date.now(),
-    };
-  };
+  const chunkSystem = new ChunkStreamSystem({
+    scene,
+    mapRoot,
+    geometryWorker,
+    waterEffectSystem,
+    StandardMaterial: StandardMaterial as typeof StandardMaterial,
+    CHUNK_SIZE,
+    LEVEL_HEIGHT,
+    WALL_HEIGHT,
+    WALK_SURFACE,
+    levelMeshes,
+    meshLevelByMesh,
+    wallTileIndex,
+    levelBinaryCache,
+    tileMaterials,
+    tileMaterialLRU,
+    getMapData: () => mapDataCache,
+    getMapTileAt,
+    getTileDef: (symbol) => symbol ? mapDataCache?.tileDefinitions?.[symbol] ?? null : null,
+    getTileMaterial,
+    resolvePoolFloorMaterial,
+    isBlockingTile,
+    isDownHoleTile: (symbol, tileDef) => isDownHoleTile(tileDef ?? null),
+    getRenderableLevels,
+    registerMeshForLevel,
+    parseLevelNumber: (level) => parseLevelNumber(level),
+    levelToWorldY,
+    isFirstPerson: () => isFirstPerson,
+    getPlayerPosition: () => ({ x: player.position.x, z: player.position.z }),
+    getTopDownDrawRadiusChunks: () => topDownDrawRadiusChunks,
+    getFirstPersonDrawRadiusChunks: () => firstPersonDrawRadiusChunks,
+    getTopDownChunkBuildBudgetPerTick: () => topDownChunkBuildBudgetPerTick,
+    getFirstPersonChunkBuildBudgetPerTick: () => firstPersonChunkBuildBudgetPerTick,
+    findUpperOcclusionLevel: () => findUpperOcclusionLevel(),
+    onDiagnostics: (stats) => {
+      window.__slice3dChunkStreaming = stats as typeof window.__slice3dChunkStreaming;
+    },
+  });
   let isAudioReady = false;
 
   const ensureAudioReady = async () => {
@@ -4466,31 +4039,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const waitForSpawnChunkReady = (timeoutMs = 12000): Promise<boolean> =>
-    new Promise((resolve) => {
-      const cx = Math.floor(player.position.x / CHUNK_SIZE);
-      const cy = Math.floor(player.position.z / CHUNK_SIZE);
-      const key = `${cx}_${cy}`;
-      const deadline = performance.now() + timeoutMs;
-
-      const poll = () => {
-        if (chunkMeshes.has(key)) {
-          resolve(true);
-          return;
-        }
-        if (performance.now() >= deadline) {
-          console.warn("[3D Slice] Spawn chunk timed out", key);
-          resolve(false);
-          return;
-        }
-        if (!chunkMeshes.has(key) && !chunkLoading.has(key)) {
-          buildChunk(cx, cy, 0);
-        }
-        requestAnimationFrame(poll);
-      };
-
-      updateChunks();
-      poll();
-    });
+    chunkSystem.waitForSpawnChunkReady(timeoutMs);
 
   const bootstrapWorldSession = async (retries = 3, baseDelayMs = 2000) => {
     pushLogEvent("world.bootstrap.start", { map: sliceMapName, level: getCurrentLevel() });
@@ -4586,7 +4135,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let lastSafePlayerZ = playerCtx.lastSafePositionZ;
   let lastGroundedFootY = playerCtx.lastGroundedFootY;
   let levelTransitionCooldown = playerCtx.levelTransitionCooldown;
-  let chunkUpdateTimer = 0;
   let isPlayerDeathSequenceActive = false;
   let playerDeathTimeoutId: number | null = null;
   let verticalTransitionGuard: {
@@ -4628,9 +4176,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (parseLevelNumber(getCurrentLevel()) < 0) {
-      clearAllChunks();
+      chunkSystem.clearAll();
       invalidateVerticalVisibilityCache();
-      chunkUpdateTimer = CHUNK_UPDATE_INTERVAL;
+      chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
     }
     // S7-FP1: notify React overlay (crosshair) of camera mode change
     document.dispatchEvent(
@@ -5216,11 +4764,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const deltaSeconds = engine.getDeltaTime() / 1000;
 
     if (!worldBootstrapReady) {
-      chunkUpdateTimer += deltaSeconds;
-      if (chunkUpdateTimer >= CHUNK_UPDATE_INTERVAL) {
-        chunkUpdateTimer = 0;
-        updateChunks();
-      }
+      chunkSystem.tick(deltaSeconds);
       return;
     }
 
@@ -5264,23 +4808,19 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerState.update(performance.now(), engine.getDeltaTime());
 
     // Chunk streaming: update at most every CHUNK_UPDATE_INTERVAL seconds
-    chunkUpdateTimer += deltaSeconds;
-    if (chunkUpdateTimer >= CHUNK_UPDATE_INTERVAL) {
-      chunkUpdateTimer = 0;
-      updateChunks();
+    chunkSystem.tick(deltaSeconds);
 
-      const chunkStats = window.__slice3dChunkStreaming || {};
-      const unloadedThisTick = chunkStats.unloadedThisTick || 0;
-      if (unloadedThisTick > 0 && previousHeapUsedMb !== undefined) {
-        unloadCheckpoints.push({
-          atSec: getElapsedSec(),
-          heapMb: previousHeapUsedMb,
-          resolved: false,
-          succeeded: false,
-        });
-        if (unloadCheckpoints.length > 100) {
-          unloadCheckpoints.shift();
-        }
+    const chunkStats = window.__slice3dChunkStreaming || {};
+    const unloadedThisTick = chunkStats.unloadedThisTick || 0;
+    if (unloadedThisTick > 0 && previousHeapUsedMb !== undefined) {
+      unloadCheckpoints.push({
+        atSec: getElapsedSec(),
+        heapMb: previousHeapUsedMb,
+        resolved: false,
+        succeeded: false,
+      });
+      if (unloadCheckpoints.length > 100) {
+        unloadCheckpoints.shift();
       }
     }
 
@@ -5481,9 +5021,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         activeEnemies: Array.from(enemies.values()).filter(
           (e) => !e.isDead && Math.abs(levelToWorldY(e.level) - levelToWorldY(getCurrentLevel())) <= LEVEL_HEIGHT && Vector3.Distance(e.worldPos, player.position) <= ENEMY_AI_RADIUS_UNITS,
         ).length,
-        renderedTiles: chunkMeshes.size * CHUNK_SIZE * CHUNK_SIZE,
+        renderedTiles: chunkSystem.loadedChunks.size * CHUNK_SIZE * CHUNK_SIZE,
         totalObjects: activeMeshes,
-        poolSize: chunkMeshes.size,
+        poolSize: chunkSystem.loadedChunks.size,
         drawCalls,
         activeMeshes,
         totalMeshes,
@@ -5492,8 +5032,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         totalVertices,
         jsHeapUsedMb: usedHeapMb,
         jsHeapTotalMb: totalHeapMb,
-        chunkLoaded: chunkStats.loadedChunks || chunkMeshes.size,
-        chunkLoading: chunkStats.loadingChunks || chunkLoading.size,
+        chunkLoaded: chunkStats.loadedChunks || chunkSystem.loadedChunks.size,
+        chunkLoading: chunkStats.loadingChunks || chunkSystem.loadingChunks.size,
       });
 
       window.__slice3dPerfDiagnostics = {
@@ -5507,8 +5047,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         totalVertices,
         jsHeapUsedMb: usedHeapMb,
         jsHeapTotalMb: totalHeapMb,
-        chunkLoaded: chunkStats.loadedChunks || chunkMeshes.size,
-        chunkLoading: chunkStats.loadingChunks || chunkLoading.size,
+        chunkLoaded: chunkStats.loadedChunks || chunkSystem.loadedChunks.size,
+        chunkLoading: chunkStats.loadingChunks || chunkSystem.loadingChunks.size,
         pendingChunkCandidates: chunkStats.pendingCandidates || 0,
         pendingChunkUnloads: chunkStats.pendingUnloads || 0,
         streamedDroppedItems: dropSystem.droppedItemMeshes.size,
@@ -5591,8 +5131,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           heapDeltaMb,
         },
         chunks: {
-          loaded: chunkStats.loadedChunks || chunkMeshes.size,
-          loading: chunkStats.loadingChunks || chunkLoading.size,
+          loaded: chunkStats.loadedChunks || chunkSystem.loadedChunks.size,
+          loading: chunkStats.loadingChunks || chunkSystem.loadingChunks.size,
           pendingCandidates: chunkStats.pendingCandidates || 0,
           pendingUnloads: chunkStats.pendingUnloads || 0,
           builtThisTick: chunkStats.builtThisTick || 0,
@@ -6021,7 +5561,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
       scene.onPointerObservable.remove(pointerObserver);
       document.exitPointerLock?.();
-      clearAllChunks();
+      chunkSystem.clearAll();
       wallRevealSystem.dispose();
       waterEffectSystem.dispose();
       heroAquaticTint.dispose();
