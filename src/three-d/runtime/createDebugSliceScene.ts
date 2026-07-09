@@ -102,6 +102,7 @@ import {
   type PlayerContext,
   type PhysicsInput,
   createPlayerContext,
+  STEP_UP_LIMIT,
 } from "./PlayerContext";
 import {
   tickPhysics,
@@ -1992,8 +1993,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
    * A void tile directly above a floor-level ramp on the level below is NOT
    * a true void — the ramp geometry fills that space. */
   const isPlayerOverVoidAtLevel = (level: string) => {
-    const groundBelow = getHighestGroundBelow(player.position.x, player.position.z, player.position.y);
-    return !groundBelow || groundBelow.kind === "void";
+    const mapData = mapDataCache;
+    const levelKeys = mapData?.levels ? Object.keys(mapData.levels) : [level];
+    return !collisionWorld.queryFloor(
+      player.position.x,
+      player.position.z,
+      player.position.y - 0.5,
+      player.position.y + HERO_BODY_HEIGHT,
+      [level],
+      player.position.y + STEP_UP_LIMIT,
+    );
   };
 
   const isDownHoleTile = (tileDef?: SliceTileDefinition | null) => {

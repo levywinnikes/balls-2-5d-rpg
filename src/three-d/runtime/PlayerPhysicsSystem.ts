@@ -1,5 +1,5 @@
 import { CollisionWorld, isGradedWalkTile } from "./CollisionWorld";
-import { evaluateVoidSafety } from "./FallSafetySystem";
+import { evaluateVoidSafety, isStandingOnVoidAtLevel } from "./FallSafetySystem";
 import { probeHoleTransition } from "./LevelTransitionSystem";
 import {
   type PlayerContext,
@@ -273,7 +273,7 @@ function blocked(
 }
 
 function overVoid(x: number, z: number, footY: number, cw: CollisionWorld, all: string[]): boolean {
-  return !cw.queryFloor(x, z, -999, footY + HERO_BODY_HEIGHT, all);
+  return isStandingOnVoidAtLevel(cw, x, z, footY, all);
 }
 
 function snapY(x: number, z: number, footY: number, cw: CollisionWorld, all: string[]): number | null {

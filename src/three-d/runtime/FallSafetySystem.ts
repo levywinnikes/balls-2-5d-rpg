@@ -1,6 +1,5 @@
-import { CollisionWorld, isGradedWalkTile } from "./CollisionWorld";
-import { LEVEL_HEIGHT } from "../../constants/World";
-import { type PlayerContext, HERO_BODY_HEIGHT, inferLevelFromFootY } from "./PlayerContext";
+import { CollisionWorld } from "./CollisionWorld";
+import { type PlayerContext, HERO_BODY_HEIGHT, inferLevelFromFootY, STEP_UP_LIMIT } from "./PlayerContext";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +19,27 @@ export type FallSafetyAction =
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
+/** True when there is no walkable surface on the player's current BMS level at (x,z). */
+export function isStandingOnVoidAtLevel(
+  cw: CollisionWorld,
+  x: number,
+  z: number,
+  footY: number,
+  allLevels: string[],
+): boolean {
+  const curLevel = inferLevelFromFootY(footY, allLevels);
+  const headY = footY + HERO_BODY_HEIGHT;
+  const floor = cw.queryFloor(
+    x,
+    z,
+    footY - 0.5,
+    headY,
+    [curLevel],
+    footY + STEP_UP_LIMIT,
+  );
+  return !floor;
+}
+
 /**
  * Evaluate whether the player is standing on void and what
  * the fall-safety system should do about it.
@@ -33,8 +53,13 @@ export function evaluateVoidSafety(
   footY: number,
   deps: FallSafetyDeps,
 ): FallSafetyAction {
-  const onVoid = !deps.collisionWorld.queryFloor(
-    x, z, -999, footY + HERO_BODY_HEIGHT, deps.allLevels(),
+  const allLevels = deps.allLevels();
+  const onVoid = isStandingOnVoidAtLevel(
+    deps.collisionWorld,
+    x,
+    z,
+    footY,
+    allLevels,
   );
 
   // Not on void — track safe position, no action
@@ -85,12 +110,19 @@ function probeVoidLanding(
   deps: FallSafetyDeps,
 ): { landingLevel: string; floors: number } | null {
   const base = deps.parseLevelNumber(curLevel);
+  const worldX = tx + 0.5;
+  const worldZ = tz + 0.5;
   for (let i = 1; i <= 5; i++) {
     const below = String(base - i);
     if (!deps.hasLevel(below)) continue;
-    const sym = deps.getMapTileAt(below, tx, tz);
-    const def = sym && sym !== "..." ? deps.getTileDef(sym) : undefined;
-    if (def && isGradedWalkTile(def, LEVEL_HEIGHT)) {
+    const floor = deps.collisionWorld.queryFloor(
+      worldX,
+      worldZ,
+      -999,
+      999,
+      [below],
+    );
+    if (floor) {
       return { landingLevel: below, floors: i };
     }
   }
