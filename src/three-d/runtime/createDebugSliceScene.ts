@@ -142,6 +142,7 @@ import { DropStreamSystem, type SliceDroppedItem } from "./DropStreamSystem";
 import { StreamOrchestrator } from "./StreamOrchestrator";
 import { DoorSystem } from "./DoorSystem";
 import { ChunkStreamSystem } from "./ChunkStreamSystem";
+import { NavigationSystem } from "./NavigationSystem";
 import type {
   GeometryWorkerRequest,
   GeometryWorkerResponse,
@@ -821,7 +822,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     resolveWorldAnchorY: (worldX: number, worldZ: number, level: string, restOffset?: number) =>
       resolveWorldAnchorY(worldX, worldZ, level, restOffset),
     loadMapDataAsync: () => loadMapData(),
-    onNavigationRebuild: (level: string) => rebuildNavigationWindow(level),
+    onNavigationRebuild: (level: string) => navigationSystem.rebuildWindow(level),
   });
   // Chunk streaming constants (visual profile depends on camera mode; gameplay state remains global)
   const CHUNK_SIZE = 16; // tiles per chunk side
@@ -922,7 +923,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     isStaticTileBlocking: (symbol: string | null, tileDef?: any) => isStaticTileBlocking(symbol, tileDef),
     loadMapDataAsync: () => loadMapData(),
     safeTileColor: (hex: string | undefined, fallback: string) => safeTileColor(hex, fallback),
-    rebuildNavigationGrid: (level: string) => rebuildNavigationGrid(level),
+    rebuildNavigationGrid: (level: string) => navigationSystem.rebuildGrid(level),
     resetLevelEnemyPaths: (level: string) => {
       enemies.forEach((enemy: any) => {
         if (enemy.level !== level) return;
@@ -1386,19 +1387,25 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let currentMapWidth = 24;
   let currentMapHeight = 24;
 
-  let navigationGridSize = 48;
-  let navigationGridOrigin = 0;
   const pathfindingManager = PathfindingManager.getInstance();
-
-  let navigationGrid: number[][] = Array.from(
-    { length: navigationGridSize },
-    () => Array(navigationGridSize).fill(0),
-  );
+  const navigationSystem = new NavigationSystem({
+    getCurrentLevel,
+    getPlayerPosition: () => ({ x: player.position.x, z: player.position.z }),
+    getMapData: () => mapDataCache,
+    isTileBlocked: (tx, ty) => isTileBlockedForGameplay(tx, ty),
+    onGridUpdate: (grid, size, origin) => {
+      pathfindingManager.updateGrid(grid);
+      projectileGridContext.grid = grid;
+      projectileGridContext.gridSize = size;
+      projectileGridContext.gridOrigin = origin;
+    },
+    NAV_WINDOW_RADIUS,
+  });
 
   const projectileGridContext: Projectile3DGridContext = {
-    grid: navigationGrid,
-    gridSize: navigationGridSize,
-    gridOrigin: navigationGridOrigin,
+    grid: navigationSystem.grid,
+    gridSize: navigationSystem.gridSize,
+    gridOrigin: navigationSystem.gridOrigin,
     worldToGrid,
   };
   const projectileSystem = new Projectile3DSystem(scene, projectileGridContext);
@@ -1999,7 +2006,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     if (!natural) {
       void ensureMapLevelReady(newLevel);
     } else {
-      rebuildNavigationWindow(newLevel);
+      navigationSystem.rebuildWindow(newLevel);
     }
     void doorSystem.ensureLevelSeeded(newLevel);
     orchestrator.seedLevel(newLevel);
@@ -2170,66 +2177,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return isStaticTileBlocking(symbol, tileDef);
   };
 
-  let navigationGridLevel: string | null = null;
   let lastChunkRenderLevel: string | null = null;
-  let navWindowMinTileX = 0;
-  let navWindowMinTileY = 0;
-
-  const rebuildNavigationWindow = (level: string, force = false) => {
-    const mapData = mapDataCache;
-    if (!mapData?.width || !mapData.height) {
-      return;
-    }
-
-    const centerX = Math.floor(player.position.x);
-    const centerZ = Math.floor(player.position.z);
-    const winSize = NAV_WINDOW_RADIUS * 2;
-
-    if (
-      !force &&
-      navigationGridLevel === level &&
-      Math.abs(centerX - (navWindowMinTileX + NAV_WINDOW_RADIUS)) < 18 &&
-      Math.abs(centerZ - (navWindowMinTileY + NAV_WINDOW_RADIUS)) < 18
-    ) {
-      return;
-    }
-
-    navWindowMinTileX = Math.max(
-      0,
-      Math.min(centerX - NAV_WINDOW_RADIUS, mapData.width - winSize),
-    );
-    navWindowMinTileY = Math.max(
-      0,
-      Math.min(centerZ - NAV_WINDOW_RADIUS, mapData.height - winSize),
-    );
-
-    navigationGridLevel = level;
-    navigationGridSize = winSize;
-    navigationGridOrigin = -navWindowMinTileX;
-
-    navigationGrid = Array.from({ length: winSize }, () =>
-      Array(winSize).fill(0),
-    );
-
-    for (let ly = 0; ly < winSize; ly += 1) {
-      for (let lx = 0; lx < winSize; lx += 1) {
-        const tileX = navWindowMinTileX + lx;
-        const tileY = navWindowMinTileY + ly;
-        if (isTileBlockedForGameplay(tileX, tileY)) {
-          navigationGrid[ly][lx] = 1;
-        }
-      }
-    }
-
-    pathfindingManager.updateGrid(navigationGrid);
-    projectileGridContext.grid = navigationGrid;
-    projectileGridContext.gridSize = navigationGridSize;
-    projectileGridContext.gridOrigin = navigationGridOrigin;
-  };
-
-  const rebuildNavigationGrid = (level: string) => {
-    rebuildNavigationWindow(level, true);
-  };
 
   const renderMapLevel = async (level: string) => {
     const mapData = mapDataCache;
@@ -2249,8 +2197,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     mapMaxX = Math.max(0.5, currentMapWidth - 0.5);
     mapMaxZ = Math.max(0.5, currentMapHeight - 0.5);
 
-    rebuildNavigationGrid(level);
-    // Chunks are multi-level (vertical stack). Only wipe on first map draw.
+    navigationSystem.rebuildGrid(level);
     if (lastChunkRenderLevel === null) {
       chunkSystem.clearAll();
     }
@@ -3649,21 +3596,21 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const pathRequestStartedAt = performance.now();
     pathMetrics.requests += 1;
     pathMetrics.inFlight += 1;
-    rebuildNavigationWindow(enemy.level);
-    const startX = Math.floor(enemy.worldPos.x) - navWindowMinTileX;
-    const startY = Math.floor(enemy.worldPos.z) - navWindowMinTileY;
-    const endX = Math.floor(targetPosition.x) - navWindowMinTileX;
-    const endY = Math.floor(targetPosition.z) - navWindowMinTileY;
+    navigationSystem.rebuildWindow(enemy.level);
+    const startX = navigationSystem.worldToGridX(enemy.worldPos.x);
+    const startY = navigationSystem.worldToGridZ(enemy.worldPos.z);
+    const endX = navigationSystem.worldToGridX(targetPosition.x);
+    const endY = navigationSystem.worldToGridZ(targetPosition.z);
 
     if (
       startX < 0 ||
       startY < 0 ||
       endX < 0 ||
       endY < 0 ||
-      startX >= navigationGridSize ||
-      startY >= navigationGridSize ||
-      endX >= navigationGridSize ||
-      endY >= navigationGridSize
+      startX >= navigationSystem.gridSize ||
+      startY >= navigationSystem.gridSize ||
+      endX >= navigationSystem.gridSize ||
+      endY >= navigationSystem.gridSize
     ) {
       pathMetrics.failed += 1;
       pathMetrics.inFlight = Math.max(0, pathMetrics.inFlight - 1);
@@ -3735,9 +3682,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
     const waypoint = enemy.currentPath[enemy.currentPathIndex];
     const target = new Vector3(
-      waypoint.x + navWindowMinTileX + 0.5,
-      enemy.worldPos.y, // preserve enemy's current level Y — fixes floating in underground levels
-      waypoint.y + navWindowMinTileY + 0.5,
+      navigationSystem.gridToWorldX(waypoint.x),
+      enemy.worldPos.y,
+      navigationSystem.gridToWorldZ(waypoint.y),
     );
 
     const toTarget = target.subtract(enemy.worldPos);
@@ -4146,7 +4093,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   } | null = null;
   const CHUNK_UPDATE_INTERVAL = 0.2;
   const PERF_PUBLISH_INTERVAL = 0.25;
-  let navWindowTimer = 0;
+  // navigation timer managed internally by NavigationSystem
   let perfPublishTimer = 0;
 
 
@@ -4779,11 +4726,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     tStart = performance.now();
     orchestrator.tick(deltaSeconds);
 
-    navWindowTimer += deltaSeconds;
-    if (navWindowTimer >= 0.45) {
-      navWindowTimer = 0;
-      rebuildNavigationWindow(getCurrentLevel());
-    }
+    navigationSystem.tick(deltaSeconds);
     mapTimeAccum += performance.now() - tStart;
 
     // Animate active slash trails
@@ -5056,7 +4999,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         catalogedEnemies: enemySpawnCatalog.size,
         streamedProps: propSystem.getProps().size,
         catalogedProps: propSystem.getDebugInfo().cataloged,
-        navWindowTiles: navigationGridSize,
+        navWindowTiles: navigationSystem.gridSize,
         currentLevel: getCurrentLevel(),
         qualityPreset: playerState.getDisplaySettings().qualityPreset,
         topDownDrawRadiusChunks,
