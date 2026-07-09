@@ -127,10 +127,7 @@ import {
   createPropBillboard,
   isKnownPropId,
 } from "./PropBillboardFactory";
-import {
-  computeStreamRadiiUnits,
-  resolveQualityStreamConfig,
-} from "./SliceQualityRuntime";
+import { QualitySystem, type QualityPreset } from "./QualitySystem";
 import { disposeAllPooledSpriteTexturesForScene } from "./SpriteTexturePool";
 import type { SliceTileDefinition, MapEntity, SliceLevelData, SliceMapData } from "./SliceTileTypes";
 import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
@@ -784,20 +781,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
   const ENEMY_AI_RADIUS_UNITS = 18;
   const WALL_REVEAL_TARGET_RADIUS_UNITS = 22;
-  let qualityStreamConfig = resolveQualityStreamConfig(
-    playerState.getDisplaySettings().qualityPreset,
-  );
-  let streamRadiiUnits = computeStreamRadiiUnits(CHUNK_SIZE, qualityStreamConfig);
-  let topDownDrawRadiusChunks = qualityStreamConfig.topDownDrawRadiusChunks;
-  let firstPersonDrawRadiusChunks =
-    qualityStreamConfig.firstPersonDrawRadiusChunks;
-  let topDownChunkBuildBudgetPerTick =
-    qualityStreamConfig.topDownChunkBuildBudgetPerTick;
-  let firstPersonChunkBuildBudgetPerTick =
-    qualityStreamConfig.firstPersonChunkBuildBudgetPerTick;
-  propSystem.propStreamRadiusUnits = streamRadiiUnits.propStreamRadiusUnits;
-  propSystem.propStreamRadiusUnitsFirstPerson = streamRadiiUnits.propStreamRadiusUnitsFirstPerson;
-  propSystem.propDespawnRadiusUnits = streamRadiiUnits.propDespawnRadiusUnits;
+  const qualitySystem = new QualitySystem({
+    CHUNK_SIZE,
+    initialPreset: playerState.getDisplaySettings().qualityPreset as QualityPreset,
+  });
+  const initialRadii = qualitySystem.getStreamRadii();
+  propSystem.propStreamRadiusUnits = initialRadii.propStreamRadiusUnits;
+  propSystem.propStreamRadiusUnitsFirstPerson = initialRadii.propStreamRadiusUnitsFirstPerson;
+  propSystem.propDespawnRadiusUnits = initialRadii.propDespawnRadiusUnits;
   const enemySystem = new EnemyStreamSystem({
     scene,
     mapRoot,
@@ -843,8 +834,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const ENEMY_RESPAWN_MS = enemySystem.ENEMY_RESPAWN_MS;
   const pendingEnemyRespawns = enemySystem.pendingEnemyRespawns;
   const enemySpawnCatalog = enemySystem.spawnCatalog;
-  enemySystem.enemyStreamRadiusUnits = streamRadiiUnits.enemyStreamRadiusUnits;
-  enemySystem.enemyDespawnRadiusUnits = streamRadiiUnits.enemyDespawnRadiusUnits;
+  const initialRadii2 = qualitySystem.getStreamRadii();
+  enemySystem.enemyStreamRadiusUnits = initialRadii2.enemyStreamRadiusUnits;
+  enemySystem.enemyDespawnRadiusUnits = initialRadii2.enemyDespawnRadiusUnits;
   const seededLevels = new Set<string>();
   const dropSystem = new DropStreamSystem({
     scene,
@@ -866,7 +858,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       playerState.addItemToContainer(containerUid, itemId, count),
     logWarn: (msg: string) => console.warn(msg),
   });
-  dropSystem.droppedItemStreamRadiusUnits = streamRadiiUnits.droppedItemStreamRadiusUnits;
+  const initialRadii3 = qualitySystem.getStreamRadii();
+  dropSystem.droppedItemStreamRadiusUnits = initialRadii3.droppedItemStreamRadiusUnits;
   const doorSystem = new DoorSystem({
     scene,
     getCurrentLevel: () => getCurrentLevel(),
@@ -907,21 +900,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       pushLogEvent: (event: string, data: any) => pushLogEvent(event, data),
     },
   );
-
-  const applyQualityStreamConfig = (
-    preset: ReturnType<typeof playerState.getDisplaySettings>["qualityPreset"],
-  ) => {
-    qualityStreamConfig = resolveQualityStreamConfig(preset);
-    streamRadiiUnits = computeStreamRadiiUnits(CHUNK_SIZE, qualityStreamConfig);
-    topDownDrawRadiusChunks = qualityStreamConfig.topDownDrawRadiusChunks;
-    firstPersonDrawRadiusChunks =
-      qualityStreamConfig.firstPersonDrawRadiusChunks;
-    topDownChunkBuildBudgetPerTick =
-      qualityStreamConfig.topDownChunkBuildBudgetPerTick;
-    firstPersonChunkBuildBudgetPerTick =
-      qualityStreamConfig.firstPersonChunkBuildBudgetPerTick;
-    orchestrator.setStreamRadii(streamRadiiUnits);
-  };
+  qualitySystem.orchestrator = orchestrator;
   let isFirstPerson = false;
   let gameplayPaused = playerState.isGameplayPaused();
   const cameraSystem = new CameraSystem({
@@ -2776,10 +2755,10 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     levelToWorldY,
     isFirstPerson: () => isFirstPerson,
     getPlayerPosition: () => ({ x: player.position.x, z: player.position.z }),
-    getTopDownDrawRadiusChunks: () => topDownDrawRadiusChunks,
-    getFirstPersonDrawRadiusChunks: () => firstPersonDrawRadiusChunks,
-    getTopDownChunkBuildBudgetPerTick: () => topDownChunkBuildBudgetPerTick,
-    getFirstPersonChunkBuildBudgetPerTick: () => firstPersonChunkBuildBudgetPerTick,
+    getTopDownDrawRadiusChunks: () => qualitySystem.topDownDrawRadiusChunks,
+    getFirstPersonDrawRadiusChunks: () => qualitySystem.firstPersonDrawRadiusChunks,
+    getTopDownChunkBuildBudgetPerTick: () => qualitySystem.topDownChunkBuildBudgetPerTick,
+    getFirstPersonChunkBuildBudgetPerTick: () => qualitySystem.firstPersonChunkBuildBudgetPerTick,
     findUpperOcclusionLevel: () => findUpperOcclusionLevel(),
     onDiagnostics: (stats) => {
       window.__slice3dChunkStreaming = stats as typeof window.__slice3dChunkStreaming;
@@ -4870,7 +4849,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         navWindowTiles: navigationSystem.gridSize,
         currentLevel: getCurrentLevel(),
         qualityPreset: playerState.getDisplaySettings().qualityPreset,
-        topDownDrawRadiusChunks,
+        topDownDrawRadiusChunks: qualitySystem.topDownDrawRadiusChunks,
         enemyStreamRadiusUnits: enemySystem.enemyStreamRadiusUnits,
         propStreamRadiusUnits: propSystem.propStreamRadiusUnits,
         ts: Date.now(),
@@ -5284,7 +5263,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       console.warn("[3D] Failed to apply renderScale", err);
     }
 
-    applyQualityStreamConfig(settings.qualityPreset);
+    qualitySystem.applyConfig(settings.qualityPreset as QualityPreset);
 
     // Quality preset → light + scene tuning + streaming radii (see SliceQualityRuntime).
     switch (settings.qualityPreset) {
