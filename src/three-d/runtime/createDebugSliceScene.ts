@@ -900,7 +900,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     waterEffectSystem,
   });
 
-  const resolvePoolFloorMaterial = (l: string, x: number, y: number) => resolvePoolFloor({ mapDataCache: mapDataCache as any, getMapTileAt, tileMaterialSystem, isWaterTileId }, l, x, y) as any;
+  const resolvePoolFloorMaterial = (l: string, x: number, y: number) => resolvePoolFloor({ mapDataCache: mapDataCache as any, getMapTileAt, tileMaterialSystem }, l, x, y);
   const chunkSystem = new ChunkStreamSystem({
     scene,
     mapRoot,

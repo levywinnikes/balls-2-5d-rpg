@@ -1,3 +1,4 @@
+import type { StandardMaterial } from "@babylonjs/core";
 import { isWaterTileId } from "./WaterProfile";
 
 export function resolvePoolFloorMaterial(
@@ -5,32 +6,26 @@ export function resolvePoolFloorMaterial(
     mapDataCache: any;
     getMapTileAt: (level: string, x: number, z: number) => string | null;
     tileMaterialSystem: any;
-    isWaterTileId: (id: string) => boolean;
   },
   level: string,
   tileX: number,
   tileY: number,
-): string {
+): StandardMaterial {
   const mapData = deps.mapDataCache;
-  if (!mapData?.levels?.[level]) return "unknown";
-  const symbol = deps.getMapTileAt(level, tileX, tileY);
-  if (!symbol) return "unknown";
-  if (!isWaterTileId(symbol)) return "unknown";
-  const width = mapData.width ?? 0;
-  const height = mapData.height ?? 0;
-  for (let radius = 1; radius <= 8; radius++) {
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
+  const maxRadius = 20;
+  const fallback = deps.tileMaterialSystem.getTileMaterial("stone", undefined, "#9ca3af") as StandardMaterial;
+  for (let radius = 1; radius <= maxRadius; radius += 1) {
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
         if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-        const nx = tileX + dx;
-        const ny = tileY + dy;
-        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-        const neighborId = deps.getMapTileAt(level, nx, ny);
-        if (!neighborId || neighborId === "...") continue;
+        const symbol = deps.getMapTileAt(level, tileX + dx, tileY + dy);
+        if (!symbol || symbol === "...") continue;
+        const tileDef = mapData?.tileDefinitions?.[symbol];
+        const neighborId = (tileDef?.id || symbol || "").toLowerCase();
         if (isWaterTileId(neighborId)) continue;
-        return deps.tileMaterialSystem.resolveMaterialIdForTile(neighborId, level, nx, ny);
+        return deps.tileMaterialSystem.getTileMaterial(symbol, tileDef, "#9ca3af") as StandardMaterial;
       }
     }
   }
-  return "unknown";
+  return fallback;
 }
