@@ -1,14 +1,23 @@
 import { WorldMapService } from "../../services/WorldMapService";
-
-console.log("[MapDataLoader] MODULE LOADED");
 import type { GameContext } from "./GameContext";
 import type { SliceMapData } from "./SliceTileTypes";
+
+console.log("[MapDataLoader] MODULE LOADED");
 
 export interface MapDataLoaderConfig {
   readonly ctx: GameContext;
   levelBinaryCache: Map<string, Uint8Array>;
   readonly collisionWorld: any;
   readonly rebuildDebugMeshes: () => void;
+}
+
+function rebuildCollision(cfg: MapDataLoaderConfig, data: SliceMapData): void {
+  const levelKeys = data.levels ? Object.keys(data.levels) : [];
+  const mapWidth = data.width ?? 0;
+  const mapHeight = data.height ?? 0;
+  if (levelKeys.length > 0 && mapWidth > 0 && mapHeight > 0) {
+    cfg.collisionWorld.rebuild(levelKeys, mapWidth, mapHeight);
+  }
 }
 
 export async function loadLevelBinary(
@@ -52,13 +61,9 @@ export async function loadMapData(
 
     if (data.levels) {
       for (const level of Object.keys(data.levels)) {
-        const binary = await loadLevelBinary(cfg, level, data);
-        console.log("[MapDataLoader] level:", level, "binary loaded:", !!binary, "collisionWorld:", !!cfg.collisionWorld, "volumes before:", cfg.collisionWorld.volumes?.length);
-        if (binary) {
-          cfg.collisionWorld.rebuild(level, binary);
-          console.log("[MapDataLoader] after rebuild, volumes:", cfg.collisionWorld.volumes?.length);
-        }
+        await loadLevelBinary(cfg, level, data);
       }
+      rebuildCollision(cfg, data);
     }
     cfg.rebuildDebugMeshes();
     return data;
@@ -78,9 +83,9 @@ export async function ensureWorldMapReady(
 
   const levels = Object.keys(mapData.levels ?? {});
   for (const level of levels) {
-    const binary = await loadLevelBinary(cfg, level, mapData);
-    if (binary) cfg.collisionWorld.rebuild(level, binary);
+    await loadLevelBinary(cfg, level, mapData);
   }
+  rebuildCollision(cfg, mapData);
 
   WorldMapService.ensureLevelBuffer(ctx.getCurrentLevel());
   cfg.rebuildDebugMeshes();

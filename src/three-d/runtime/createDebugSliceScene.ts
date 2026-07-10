@@ -607,7 +607,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const mapLoaderCfg = { get ctx() { return ctx; }, levelBinaryCache, get collisionWorld() { return collisionWorld; }, get rebuildDebugMeshes() { return () => rebuildDebugColliderMeshes(); } };
   const loadLevelBinary = (level: string, mapData: SliceMapData) => loadLevelBinaryImpl(mapLoaderCfg, level, mapData);
-  const loadMapData = () => { console.log("[DEBUG] loadMapData wrapper called"); return loadMapDataImpl(mapLoaderCfg, sliceMapName); };
+  const loadMapData = () => loadMapDataImpl(mapLoaderCfg, sliceMapName);
   const ensureWorldMapReady = (mapData: SliceMapData) => ensureWorldMapReadyImpl(mapLoaderCfg, mapData);
 
   const runtimeStartedAt = Date.now();
@@ -1172,7 +1172,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   handleDropItem = dropPickup.handleDropItem;
   handleRequestPickup = dropPickup.handleRequestPickup;
 
-  console.log("[DEBUG] About to call bootstrapWorldSession, ctx exists:", !!ctx);
   void bootstrapWorldSession();
 
   inputManager = new SliceInputManager({

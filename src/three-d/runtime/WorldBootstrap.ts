@@ -1,7 +1,5 @@
 import type { GameContext } from "./GameContext";
 
-console.log("[WorldBootstrap] MODULE LOADED");
-
 export interface WorldBootstrapDeps {
   ctx: GameContext;
   sliceMapName: string;
