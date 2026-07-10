@@ -78,6 +78,8 @@ import { createRuneCastSystem } from "./RuneCastSystem";
 import { createDropPickupSystem } from "./DropPickupSystem";
 import { createDamagePopupSystem } from "./DamagePopupSystem";
 import { createGroundQuerySystem } from "./GroundQuerySystem";
+import { loadLevelBinary as loadLevelBinaryImpl, loadMapData as loadMapDataImpl, ensureWorldMapReady as ensureWorldMapReadyImpl } from "./MapDataLoader";
+import { ensureDebugSandboxStarterLoadout as ensureDebugLoadout } from "./DebugSandboxSetup";
 import { createGameContext } from "./createGameContext";
 import { triggerPlayerAttackSlashEffect as createSlashTrail, getDeterministicRotation, getWeaponSlashColor, type ActiveSlash } from "./SlashTrailEffect";
 import { destroyEnemy as destroyEnemyImpl, grantEnemyLoot as grantEnemyLootImpl, setSelectedEnemy as setSelectedEnemyImpl } from "./EnemyDeathHandler";
@@ -592,6 +594,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const tileMaterialSystem = new TileMaterialSystem(scene);
   const levelBinaryCache = new Map<string, Uint8Array>();
 
+
+  const mapLoaderCfg = { get ctx() { return ctx; }, levelBinaryCache, get collisionWorld() { return collisionWorld; }, get rebuildDebugMeshes() { return () => rebuildDebugColliderMeshes(); } };
+  const loadLevelBinary = (level: string, mapData: SliceMapData) => loadLevelBinaryImpl(mapLoaderCfg, level, mapData);
+  const loadMapData = () => loadMapDataImpl(mapLoaderCfg, sliceMapName);
+  const ensureWorldMapReady = (mapData: SliceMapData) => ensureWorldMapReadyImpl(mapLoaderCfg, mapData);
+
   const runtimeStartedAt = Date.now();
   const telemetryLogger = new TelemetryLogger({
     sliceMapName,
@@ -675,35 +683,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         { skipStart: true },
       ) === null
     );
-  };
-
-  const loadLevelBinary = async (
-    level: string,
-    mapData: SliceMapData,
-  ): Promise<Uint8Array | null> => {
-    const cached = levelBinaryCache.get(level);
-    if (cached) {
-      return cached;
-    }
-
-    const binFile = mapData.levels?.[level]?.binFile;
-    if (!binFile) {
-      return null;
-    }
-
-    try {
-      const response = await fetch(`/maps/${binFile}`);
-      if (!response.ok) {
-        console.warn(`[3D Slice] Level binary fetch failed for ${level} (${response.status})`);
-        return null;
-      }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      levelBinaryCache.set(level, bytes);
-      return bytes;
-    } catch (error) {
-      console.warn(`[3D Slice] Level binary fetch error for ${level}`, error);
-      return null;
-    }
   };
 
   const getMapTileAt = (
@@ -1051,44 +1030,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   cameraSystem.getSelectedEnemyUid = () => selectedEnemyUid;
   cameraSystem.getEnemyWorldPos = (uid) => enemies.get(uid)?.worldPos ?? null;
   cameraSystem.getIsEnemyDead = (uid) => enemies.get(uid)?.isDead ?? true;
-  const ensureDebugSandboxStarterLoadout = (mapData: SliceMapData) => {
-    if (!mapData.config?.debugSandbox) {
-      return;
-    }
-
-    let grantedSomething = false;
-
-    const fireBurstCharges =
-      playerState
-        .getEnchantedRunes()
-        .find((rune) => rune.runeId === "fire_burst_rune")?.count || 0;
-    if (fireBurstCharges < 10) {
-      playerState.addEnchantedRune("fire_burst_rune", 10 - fireBurstCharges, 2);
-      grantedSomething = true;
-    }
-
-    const equippedRuneSlots = playerState.getEquippedRuneSlots();
-    if (!equippedRuneSlots.includes("fire_burst_rune")) {
-      playerState.setEquippedRuneSlot(0, "fire_burst_rune");
-      grantedSomething = true;
-    }
-
-    const magicRuneCount = playerState
-      .getInventory()
-      .filter((item) => item.itemId === "magic_rune")
-      .reduce((total, item) => total + (item.count || 0), 0);
-    if (magicRuneCount < 5) {
-      playerState.addItem("magic_rune", 5 - magicRuneCount);
-      grantedSomething = true;
-    }
-
-    if (grantedSomething) {
-      playerState.emit("uiNotification", {
-        type: "info",
-        message: "Debug sandbox: runas e cargas liberadas para teste.",
-      });
-    }
-  };
+  const ensureDebugSandboxStarterLoadout = (mapData: SliceMapData) => ensureDebugLoadout(playerState, mapData);
 
   const pointerPickingSystem = new PointerPickingSystem({
     scene,
@@ -1224,62 +1166,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerDebugMesh.position.x = player.position.x;
     playerDebugMesh.position.y = player.position.y + HERO_BODY_HEIGHT / 2;
     playerDebugMesh.position.z = player.position.z;
-  };
-
-  const loadMapData = async (): Promise<SliceMapData | null> => {
-    if (mapDataCache) {
-      return mapDataCache;
-    }
-
-    try {
-      const response = await fetch(`/maps/${sliceMapName}.json`);
-      if (!response.ok) {
-        throw new Error(`Map metadata missing (${response.status})`);
-      }
-      mapDataCache = (await response.json()) as SliceMapData;
-      if (mapDataCache && mapDataCache.width && mapDataCache.height) {
-        collisionWorld.rebuild(
-          Object.keys(mapDataCache.levels || {}),
-          mapDataCache.width,
-          mapDataCache.height,
-        );
-        rebuildDebugColliderMeshes();
-      }
-      return mapDataCache;
-    } catch (error) {
-      console.warn(
-        `[3D Slice] Failed to read map metadata for ${sliceMapName}`,
-        error,
-      );
-      return null;
-    }
-  };
-
-  const ensureWorldMapReady = async (mapData: SliceMapData) => {
-    if (worldMapReady || !mapData.levels) {
-      return;
-    }
-
-    const binaryLevels = new Map<string, Uint8Array>();
-    const levelKeys = Object.keys(mapData.levels);
-
-    await Promise.all(
-      levelKeys.map(async (levelKey) => {
-        const binData = await loadLevelBinary(levelKey, mapData);
-        if (binData) {
-          binaryLevels.set(levelKey, binData);
-        }
-      }),
-    );
-
-    WorldMapService.bootstrapMinimap(mapData, binaryLevels, getCurrentLevel());
-    collisionWorld.rebuild(
-      levelKeys,
-      mapData.width ?? 0,
-      mapData.height ?? 0,
-    );
-    rebuildDebugColliderMeshes();
-    worldMapReady = true;
   };
 
   const ensureMapLevelReady = async (requestedLevel: string) => {
