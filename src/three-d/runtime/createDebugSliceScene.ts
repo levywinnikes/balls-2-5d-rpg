@@ -26,15 +26,6 @@ import {
 import { t_game } from "../../game/i18n/translations";
 import { PathfindingManager } from "../../game/systems/PathfindingManager";
 import { WorldMapService } from "../../services/WorldMapService";
-export type {
-  SliceRuntime,
-  Slice3DLogSample,
-  Slice3DLogEvent,
-  Slice3DSessionLog,
-  Slice3DHotspot,
-  Slice3DSummary,
-} from "./Slice3DTypes";
-import type { SliceRuntime, Slice3DLogSample, Slice3DLogEvent, Slice3DSessionLog, Slice3DHotspot, Slice3DSummary } from "./Slice3DTypes";
 import { registerDefaultMagics } from "../../game/entities/EnemyMagicRegistry";
 import { ItemRegistry } from "../../core/registries/ItemRegistry";
 import { WeaponRegistry } from "../../core/registries/WeaponRegistry";
@@ -181,6 +172,16 @@ import type {
 
 import { createMaterial, worldToSliceCoord, clamp, worldToGrid, gridToWorld } from "./SliceRuntimeUtils";
 import type { TopDownCameraPreset } from "./Slice3DTypes";
+export type {
+  SliceRuntime,
+  Slice3DLogSample,
+  Slice3DLogEvent,
+  Slice3DSessionLog,
+  Slice3DHotspot,
+  Slice3DSummary,
+} from "./Slice3DTypes";
+import type { SliceRuntime, Slice3DLogSample, Slice3DLogEvent, Slice3DSessionLog, Slice3DHotspot, Slice3DSummary } from "./Slice3DTypes";
+
 export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   registerDefaultMagics();
 
