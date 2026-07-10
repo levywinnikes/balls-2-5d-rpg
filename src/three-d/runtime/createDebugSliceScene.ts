@@ -87,6 +87,7 @@ import { createDebugColliderVisuals } from "./DebugColliderVisuals";
 import { isStaticTileBlocking as staticBlock, isBlockingTile as blockingTile } from "./TileBlocking";
 import { resolvePoolFloorMaterial as resolvePoolFloor } from "./PoolFloorResolver";
 import { collectInteractableRevealTargets as collectRevealTargets } from "./RevealTargetCollector";
+import { renderMapLevel as renderMap } from "./MapRenderer";
 import { createGameContext } from "./createGameContext";
 import { triggerPlayerAttackSlashEffect as createSlashTrail, getDeterministicRotation, getWeaponSlashColor, type ActiveSlash } from "./SlashTrailEffect";
 import { destroyEnemy as destroyEnemyImpl, grantEnemyLoot as grantEnemyLootImpl, setSelectedEnemy as setSelectedEnemyImpl } from "./EnemyDeathHandler";
@@ -847,41 +848,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const isStaticTileBlocking = (s: string | null, d?: SliceTileDefinition) => staticBlock(s, d);
   const isBlockingTile = (s: string | null, d?: SliceTileDefinition, o?: { level?: string; tileX?: number; tileY?: number }) => blockingTile({ doorSystem, propSystem }, s, d, o);
-  const renderMapLevel = async (level: string) => {
-    const mapData = mapDataCache;
-    if (!mapData || !mapData.width || !mapData.height) {
-      return;
-    }
-
-    const binData = await loadLevelBinary(level, mapData);
-    if (!binData) {
-      return;
-    }
-
-    currentMapWidth = mapData.width;
-    currentMapHeight = mapData.height;
-    mapMinX = 0;
-    mapMinZ = 0;
-    mapMaxX = Math.max(0.5, currentMapWidth - 0.5);
-    mapMaxZ = Math.max(0.5, currentMapHeight - 0.5);
-
-    navigationSystem.rebuildGrid(level);
-    if (lastChunkRenderLevel === null) {
-      chunkSystem.clearAll();
-    }
-    lastChunkRenderLevel = level;
-
-    chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
-  };
-
-  // ---------------------------------------------------------------------------
-  // Chunk streaming helpers
-  // ---------------------------------------------------------------------------
-
-  // buildRoofMesh and buildStairMesh moved to ChunkGeometryBuilder
-
-  // Build (or skip) one 16×16-tile chunk at chunk-grid position (cx, cy).
-  // lod 0 = full detail, 1 = walls-only, 2 = ground-only
+  const renderMapLevel = (level: string) => renderMap({ ctx, loadLevelBinary }, level);
   let visibilitySystem: VisibilitySystem;
 
   visibilitySystem = new VisibilitySystem({
