@@ -1,4 +1,6 @@
 import { WorldMapService } from "../../services/WorldMapService";
+
+console.log("[MapDataLoader] MODULE LOADED");
 import type { GameContext } from "./GameContext";
 import type { SliceMapData } from "./SliceTileTypes";
 
@@ -51,8 +53,10 @@ export async function loadMapData(
     if (data.levels) {
       for (const level of Object.keys(data.levels)) {
         const binary = await loadLevelBinary(cfg, level, data);
+        console.log("[MapDataLoader] level:", level, "binary loaded:", !!binary, "collisionWorld:", !!cfg.collisionWorld, "volumes before:", cfg.collisionWorld.volumes?.length);
         if (binary) {
           cfg.collisionWorld.rebuild(level, binary);
+          console.log("[MapDataLoader] after rebuild, volumes:", cfg.collisionWorld.volumes?.length);
         }
       }
     }
