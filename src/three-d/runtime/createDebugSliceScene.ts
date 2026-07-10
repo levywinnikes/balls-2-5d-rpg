@@ -71,13 +71,14 @@ import { isWaterTileId, sampleAquaticFromTile, type AquaticSample } from "./Wate
 import { attachAquaticShaderTint } from "./AquaticSpriteShader";
 import { configureBillboardSpriteMesh } from "./BillboardDepthConfig";
 import { SliceInputManager } from "./SliceInputManager";
-import type { GameContext } from "./GameContext";
+import type { GameContext, MutableStateBox } from "./GameContext";
 import { createPlayerFallSystem, type PlayerFallSystem } from "./PlayerFallSystem";
 import { createLevelTransitionSystem } from "./LevelTransitionSystem";
 import { createRuneCastSystem } from "./RuneCastSystem";
 import { createDropPickupSystem } from "./DropPickupSystem";
 import { createDamagePopupSystem } from "./DamagePopupSystem";
 import { createGroundQuerySystem } from "./GroundQuerySystem";
+import { createGameContext } from "./createGameContext";
 import { SliceEnemySystem } from "./SliceEnemySystem";
 import { SliceCombatSystem } from "./SliceCombatSystem";
 import {
@@ -2145,147 +2146,54 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   // S8-T2: rune slot dispatch moved to RuneCastSystem
 
-  ctx = {
-    // ── System references (read-only) ──
-    get engine() { return engine; },
-    get scene() { return scene; },
-    get canvas() { return canvas; },
-    get audioManager() { return audioManager; },
-    get collisionWorld() { return collisionWorld; },
-    get enemies() { return enemies; },
-    get audioSystem() { return audioSystem; },
-    get saveSystem() { return saveSystem; },
-    get checkLevelDrift() { return checkLevelDrift; },
-    get telemetryEnabledRef() { return telemetryLogger.telemetryEnabledRef; },
-    get sceneInstrumentation() { return sceneInstrumentation; },
-    get chunkSystem() { return chunkSystem; },
-    get orchestrator() { return orchestrator; },
-    get navigationSystem() { return navigationSystem; },
-    get cameraSystem() { return cameraSystem; },
-    get qualitySystem() { return qualitySystem; },
-    get doorSystem() { return doorSystem; },
-    get propSystem() { return propSystem; },
-    get dropSystem() { return dropSystem; },
-    get enemySystem() { return enemySystem; },
-    get wallRevealSystem() { return wallRevealSystem; },
-    get waterEffectSystem() { return waterEffectSystem; },
-    get projectileSystem() { return projectileSystem; },
-    get sliceCombatSystem() { return sliceCombatSystem; },
-    get sliceEnemySystem() { return sliceEnemySystem; },
-    get inputManager() { return inputManager; },
-    get visibilitySystem() { return visibilitySystem; },
-    get tileMaterialSystem() { return tileMaterialSystem; },
-    get pointerPickingSystem() { return pointerPickingSystem; },
-    get telemetryLogger() { return telemetryLogger; },
+  const box = <T,>(get: () => T, set: (v: T) => void): MutableStateBox<T> => ({ get, set });
 
-    // ── Mesh / camera references (read-only) ──
-    get player() { return player; },
-    get playerCtx() { return playerCtx; },
-    get playerState() { return playerState; },
-    get camera() { return camera; },
-    get firstPersonCamera() { return firstPersonCamera; },
-    get heroSpriteMat() { return heroSpriteMat; },
-    get heroBillboard() { return heroBillboard; },
-    get heroShadow() { return heroShadow; },
-
-    // ── Mutable: gameplay flags ──
-    get isFirstPerson() { return isFirstPerson; },
-    set isFirstPerson(v) { isFirstPerson = v; },
-    get gameplayPaused() { return gameplayPaused; },
-    set gameplayPaused(v) { gameplayPaused = v; },
-    get debugCollidersVisible() { return debugCollidersVisible; },
-    set debugCollidersVisible(v) { debugCollidersVisible = v; },
-
-    // ── Mutable: map / world ──
-    get mapDataCache() { return mapDataCache; },
-    set mapDataCache(v) { mapDataCache = v; },
-    get currentMapWidth() { return currentMapWidth; },
-    set currentMapWidth(v) { currentMapWidth = v; },
-    get currentMapHeight() { return currentMapHeight; },
-    set currentMapHeight(v) { currentMapHeight = v; },
-    get sliceMapName() { return sliceMapName; },
-    get mapMinX() { return mapMinX; },
-    set mapMinX(v) { mapMinX = v; },
-    get mapMaxX() { return mapMaxX; },
-    set mapMaxX(v) { mapMaxX = v; },
-    get mapMinZ() { return mapMinZ; },
-    set mapMinZ(v) { mapMinZ = v; },
-    get mapMaxZ() { return mapMaxZ; },
-    set mapMaxZ(v) { mapMaxZ = v; },
-    get lastChunkRenderLevel() { return lastChunkRenderLevel; },
-    set lastChunkRenderLevel(v) { lastChunkRenderLevel = v; },
-    get worldMapReady() { return worldMapReady; },
-    set worldMapReady(v) { worldMapReady = v; },
-    get worldBootstrapReady() { return worldBootstrapReady; },
-    set worldBootstrapReady(v) { worldBootstrapReady = v; },
-
-    // ── Mutable: combat / enemy ──
-    get selectedEnemyUid() { return selectedEnemyUid; },
-    set selectedEnemyUid(v) { selectedEnemyUid = v; },
-    setSelectedEnemy(v) { setSelectedEnemy(v); },
-    get activeRuneSlotIndex() { return activeRuneSlotIndex; },
-    set activeRuneSlotIndex(v) { activeRuneSlotIndex = v; },
-    get runeTargetingMode() { return runeTargetingMode; },
-    set runeTargetingMode(v) { runeTargetingMode = v; },
-    get targetingRuneId() { return targetingRuneId; },
-    set targetingRuneId(v) { targetingRuneId = v; },
-    get enemyHighlightPulseT() { return enemyHighlightPulseT; },
-    set enemyHighlightPulseT(v) { enemyHighlightPulseT = v; },
-
-    // ── Mutable: vertical / physics state (delegates to PlayerContext) ──
-    get verticalVelocity() { return playerCtx.verticalVelocity; },
-    set verticalVelocity(v) { playerCtx.verticalVelocity = v; },
-    get isGrounded() { return playerCtx.isGrounded; },
-    set isGrounded(v) { playerCtx.isGrounded = v; },
-    get holeFallLandingLevel() { return playerCtx.holeFallLandingLevel; },
-    set holeFallLandingLevel(v) { playerCtx.holeFallLandingLevel = v; },
-    get holeFallFloorCount() { return playerCtx.holeFallFloorCount; },
-    set holeFallFloorCount(v) { playerCtx.holeFallFloorCount = v; },
-    get fallOriginFootY() { return playerCtx.fallOriginFootY; },
-    set fallOriginFootY(v) { playerCtx.fallOriginFootY = v; },
-    get wasOnVoidWithSafety() { return playerCtx.wasOnVoidWithSafety; },
-    set wasOnVoidWithSafety(v) { playerCtx.wasOnVoidWithSafety = v; },
-    get lastSafePlayerX() { return playerCtx.lastSafePositionX; },
-    set lastSafePlayerX(v) { playerCtx.lastSafePositionX = v; },
-    get lastSafePlayerZ() { return playerCtx.lastSafePositionZ; },
-    set lastSafePlayerZ(v) { playerCtx.lastSafePositionZ = v; },
-    get lastGroundedFootY() { return playerCtx.lastGroundedFootY; },
-    set lastGroundedFootY(v) { playerCtx.lastGroundedFootY = v; },
-    get levelTransitionCooldown() { return playerCtx.levelTransitionCooldown; },
-    set levelTransitionCooldown(v) { playerCtx.levelTransitionCooldown = v; },
-    get verticalTransitionGuard() { return verticalTransitionGuard; },
-    set verticalTransitionGuard(v) { verticalTransitionGuard = v; },
-
-    // ── Mutable: hero visual ──
-    get heroAnimLockedUntil() { return heroAnimLockedUntil; },
-    set heroAnimLockedUntil(v) { heroAnimLockedUntil = v; },
-
-    // ── Mutable: death / respawn ──
-    get isPlayerDeathSequenceActive() { return isPlayerDeathSequenceActive; },
-    set isPlayerDeathSequenceActive(v) { isPlayerDeathSequenceActive = v; },
-    get playerDeathTimeoutId() { return playerDeathTimeoutId; },
-    set playerDeathTimeoutId(v) { playerDeathTimeoutId = v; },
-
-    // ── Callback functions ──
-    get getCurrentLevel() { return getCurrentLevel; },
-    get getRenderLevel() { return getRenderLevel; },
-    get getMapTileAt() { return getMapTileAt; },
-    get setHeroDirection() { return setHeroDirection; },
-    get setHeroAnimState() { return setHeroAnimState; },
-    get resolveHeroBmsDirection() { return resolveHeroBmsDirection; },
-    get isPlayerOverVoidAtLevel() { return isPlayerOverVoidAtLevel; },
-    get getGroundSurfaceY() { return getGroundSurfaceY; },
-    get syncLevelSideEffects() { return syncLevelSideEffects; },
-    get applyActiveLevelChange() { return applyActiveLevelChange; },
-    get isTileBlockedForGameplay() { return isTileBlockedForGameplay; },
-    get updateEnemyAI() { return updateEnemyAI; },
-    get finishAirborneLanding() { return fallSystem.finishAirborneLanding; },
-    get applyEnemyTargetVisual() { return applyEnemyTargetVisual; },
-    get restoreEnemyTargetVisual() { return restoreEnemyTargetVisual; },
-    get getAquaticSampleAt() { return getAquaticSampleAt; },
-    get findFirstBlockingTileOnWorldLine() { return findFirstBlockingTileOnWorldLine; },
-  };
-
+  ctx = createGameContext({
+    engine, scene, canvas, audioManager, audioSystem: box(() => audioSystem, (v) => { (audioSystem as any) = v; }), camera, firstPersonCamera,
+    collisionWorld, enemies,
+    chunkSystem, orchestrator, navigationSystem, cameraSystem,
+    qualitySystem, doorSystem, propSystem, dropSystem, enemySystem,
+    wallRevealSystem, waterEffectSystem, projectileSystem,
+    sliceCombatSystem: box(() => sliceCombatSystem, (v) => { (sliceCombatSystem as any) = v; }),
+    sliceEnemySystem: box(() => sliceEnemySystem, (v) => { (sliceEnemySystem as any) = v; }),
+    inputManager: box(() => inputManager, (v) => { (inputManager as any) = v; }),
+    visibilitySystem, tileMaterialSystem, pointerPickingSystem, telemetryLogger,
+    saveSystem: box(() => saveSystem, (v) => { (saveSystem as any) = v; }), sceneInstrumentation,
+    player, playerCtx, playerState, heroSpriteMat, heroBillboard, heroShadow,
+    checkLevelDrift: box(() => checkLevelDrift, (v) => { (checkLevelDrift as any) = v; }),
+    isFirstPerson: box(() => isFirstPerson, (v) => { isFirstPerson = v; }),
+    gameplayPaused: box(() => gameplayPaused, (v) => { gameplayPaused = v; }),
+    debugCollidersVisible: box(() => debugCollidersVisible, (v) => { debugCollidersVisible = v; }),
+    mapDataCache: box(() => mapDataCache, (v) => { mapDataCache = v; }),
+    currentMapWidth: box(() => currentMapWidth, (v) => { currentMapWidth = v; }),
+    currentMapHeight: box(() => currentMapHeight, (v) => { currentMapHeight = v; }),
+    sliceMapName,
+    mapMinX: box(() => mapMinX, (v) => { mapMinX = v; }),
+    mapMaxX: box(() => mapMaxX, (v) => { mapMaxX = v; }),
+    mapMinZ: box(() => mapMinZ, (v) => { mapMinZ = v; }),
+    mapMaxZ: box(() => mapMaxZ, (v) => { mapMaxZ = v; }),
+    lastChunkRenderLevel: box(() => lastChunkRenderLevel, (v) => { lastChunkRenderLevel = v; }),
+    worldMapReady: box(() => worldMapReady, (v) => { worldMapReady = v; }),
+    worldBootstrapReady: box(() => worldBootstrapReady, (v) => { worldBootstrapReady = v; }),
+    selectedEnemyUid: box(() => selectedEnemyUid, (v) => { selectedEnemyUid = v; }),
+    setSelectedEnemy,
+    activeRuneSlotIndex: box(() => activeRuneSlotIndex, (v) => { activeRuneSlotIndex = v; }),
+    runeTargetingMode: box(() => runeTargetingMode, (v) => { runeTargetingMode = v; }),
+    targetingRuneId: box(() => targetingRuneId, (v) => { targetingRuneId = v; }),
+    enemyHighlightPulseT: box(() => enemyHighlightPulseT, (v) => { enemyHighlightPulseT = v; }),
+    heroAnimLockedUntil: box(() => heroAnimLockedUntil, (v) => { heroAnimLockedUntil = v; }),
+    isPlayerDeathSequenceActive: box(() => isPlayerDeathSequenceActive, (v) => { isPlayerDeathSequenceActive = v; }),
+    playerDeathTimeoutId: box(() => playerDeathTimeoutId, (v) => { playerDeathTimeoutId = v; }),
+    verticalTransitionGuard: box(() => verticalTransitionGuard, (v) => { verticalTransitionGuard = v; }),
+    getCurrentLevel, getRenderLevel, getMapTileAt,
+    setHeroDirection, setHeroAnimState, resolveHeroBmsDirection,
+    isPlayerOverVoidAtLevel, getGroundSurfaceY, syncLevelSideEffects: box(() => syncLevelSideEffects, (v) => { (syncLevelSideEffects as any) = v; }),
+    applyActiveLevelChange: box(() => applyActiveLevelChange, (v) => { (applyActiveLevelChange as any) = v; }), isTileBlockedForGameplay,
+    updateEnemyAI,
+    applyEnemyTargetVisual, restoreEnemyTargetVisual,
+    getAquaticSampleAt, findFirstBlockingTileOnWorldLine,
+    fallSystem: box(() => fallSystem, (v) => { (fallSystem as any) = v; }) as any,
+  });
   lt = createLevelTransitionSystem({
     ctx,
     ensureMapLevelReady: (level) => ensureMapLevelReady(level),
