@@ -79,6 +79,9 @@ import { createDropPickupSystem } from "./DropPickupSystem";
 import { createDamagePopupSystem } from "./DamagePopupSystem";
 import { createGroundQuerySystem } from "./GroundQuerySystem";
 import { createGameContext } from "./createGameContext";
+import { triggerPlayerAttackSlashEffect as createSlashTrail, getDeterministicRotation, getWeaponSlashColor, type ActiveSlash } from "./SlashTrailEffect";
+import { destroyEnemy as destroyEnemyImpl, grantEnemyLoot as grantEnemyLootImpl, setSelectedEnemy as setSelectedEnemyImpl } from "./EnemyDeathHandler";
+import { requestEnemyPath as requestEnemyPathImpl, advanceEnemyPath as advanceEnemyPathImpl } from "./EnemyPathfinding";
 import { SliceEnemySystem } from "./SliceEnemySystem";
 import { SliceCombatSystem } from "./SliceCombatSystem";
 import {
@@ -403,125 +406,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   pickupOrb.material = pickupMaterial;
   let fallbackPickupConsumed = false;
 
-  const getDeterministicRotation = (id: string): number => {
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-      hash = id.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return (Math.abs(hash) % 360) * (Math.PI / 180);
-  };
-
-  type ActiveSlash = {
-    mesh: Mesh;
-    material: StandardMaterial;
-    texture: DynamicTexture;
-    elapsed: number;
-    duration: number;
-    startScale: number;
-    endScale: number;
-  };
   const activeSlashtrails: ActiveSlash[] = [];
 
-  const getWeaponSlashColor = (weaponId: string | null): Color3 => {
-    if (!weaponId) return Color3.FromHexString("#ffffff");
-    const wId = weaponId.toLowerCase();
-    if (wId.includes("dragon") || wId.includes("fire") || wId.includes("light_torch")) {
-      return Color3.FromHexString("#ff6b35");
-    }
-    if (wId.includes("poison") || wId.includes("venom") || wId.includes("decay")) {
-      return Color3.FromHexString("#06d6a0");
-    }
-    if (wId.includes("magic") || wId.includes("rune") || wId.includes("energy")) {
-      return Color3.FromHexString("#118ab2");
-    }
-    return Color3.FromHexString("#ffffff");
-  };
-
-  const triggerPlayerAttackSlashEffect = (enemy: SliceEnemy) => {
-    const delta = enemy.worldPos.subtract(player.position);
-    delta.y = 0;
-    if (delta.lengthSquared() < 0.001) {
-      return;
-    }
-    const dir = delta.normalize();
-
-    const slashPos = player.position.clone();
-    slashPos.y = player.position.y + 0.05;
-    slashPos.addInPlace(dir.scale(0.5));
-
-    const slashMesh = MeshBuilder.CreatePlane(
-      `player-slash-trail-${performance.now()}`,
-      { width: 0.8, height: 0.4 },
-      scene,
-    );
-    slashMesh.position.copyFrom(slashPos);
-    slashMesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
-
-    const angle = Math.atan2(dir.x, dir.z);
-    slashMesh.rotation.z = -angle - Math.PI / 2;
-
-    const canvasWidth = 128;
-    const canvasHeight = 64;
-    const dynTex = new DynamicTexture(
-      `slash-trail-tex-${performance.now()}`,
-      { width: canvasWidth, height: canvasHeight },
-      scene,
-      false
-    );
-    const ctx = dynTex.getContext();
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-    const weaponId = playerState.equippedWeaponId;
-    const slashColor = getWeaponSlashColor(weaponId);
-
-    const grad = ctx.createLinearGradient(0, 0, canvasWidth, 0);
-    grad.addColorStop(0, "rgba(255, 255, 255, 0)");
-    
-    const r = Math.round(slashColor.r * 255);
-    const g = Math.round(slashColor.g * 255);
-    const b = Math.round(slashColor.b * 255);
-    grad.addColorStop(0.3, `rgba(${r}, ${g}, ${b}, 0.8)`);
-    grad.addColorStop(0.5, "rgba(255, 255, 255, 1.0)");
-    grad.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, 0.8)`);
-    grad.addColorStop(1, "rgba(255, 255, 255, 0)");
-
-    ctx.fillStyle = grad;
-
-    ctx.beginPath();
-    ctx.moveTo(10, canvasHeight - 10);
-    ctx.quadraticCurveTo(canvasWidth / 2, 8, canvasWidth - 10, canvasHeight - 10);
-    ctx.quadraticCurveTo(canvasWidth / 2, 22, 10, canvasHeight - 10);
-    ctx.closePath();
-    ctx.fill();
-    dynTex.update();
-
-    const slashMat = new StandardMaterial(`slash-trail-mat-${performance.now()}`, scene);
-    slashMat.diffuseTexture = dynTex;
-    slashMat.opacityTexture = dynTex;
-    slashMat.useAlphaFromDiffuseTexture = true;
-    slashMat.backFaceCulling = false;
-    slashMat.disableLighting = true;
-    slashMat.emissiveColor = Color3.White();
-
-    slashMesh.material = slashMat;
-    slashMesh.isPickable = false;
-
-    activeSlashtrails.push({
-      mesh: slashMesh,
-      material: slashMat,
-      texture: dynTex,
-      elapsed: 0,
-      duration: 250,
-      startScale: 0.8,
-      endScale: 1.1,
-    });
-  };
   let selectedEnemyUid: string | null = null;
   let lastFocusedCombatHealthSyncAt = 0;
   let activeRuneSlotIndex = 0;
   // S11-T1: rune targeting mode (Opção A parity)
   let runeTargetingMode = false;
   let targetingRuneId: string | null = null;
+  const triggerPlayerAttackSlashEffect = (enemy: SliceEnemy): void => { createSlashTrail({ player, scene, getEquippedWeaponId: () => playerState.equippedWeaponId, activeSlashtrails, getWeaponColor: getWeaponSlashColor }, enemy); };
   let mapDataCache: SliceMapData | null = null;
   let worldMapReady = false;
 
@@ -1531,139 +1424,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   let lt: ReturnType<typeof createLevelTransitionSystem>;
 
-  const setSelectedEnemy = (enemyUid: string | null) => {
-    if (selectedEnemyUid && selectedEnemyUid !== enemyUid) {
-      const prev = enemies.get(selectedEnemyUid);
-      if (prev) {
-        restoreEnemyTargetVisual(prev.meshRoot);
-      }
-    }
-    selectedEnemyUid = enemyUid;
-    if (!enemyUid) {
-      playerState.emit("combatFocusChanged", { uid: null });
-      return;
-    }
-
-    const enemy = enemies.get(enemyUid);
-    if (!enemy || enemy.isDead) {
-      selectedEnemyUid = null;
-      playerState.emit("combatFocusChanged", { uid: null });
-      return;
-    }
-
-    playerState.emit("combatFocusChanged", {
-      uid: enemy.uid,
-      enemyType: enemy.enemyType,
-      health: enemy.health,
-      maxHealth: enemy.maxHealth,
-    });
-  };
-
-  const grantEnemyLoot = (enemy: SliceEnemy) => {
-    const loot = EnemyRegistry.generateLoot(enemy.enemyType);
-    loot.forEach((drop) => {
-      playerState.addPersistentDroppedItem(getCurrentLevel(), {
-        itemId: playerState.generateUID(),
-        weaponId: drop.itemId,
-        x: enemy.worldPos.x * 32,
-        y: enemy.worldPos.z * 32,
-        createdAt: Date.now(),
-        count: drop.count || 1,
-        stars: drop.stars || 0,
-        attributes: [...(drop.attributes || [])],
-      });
-    });
-  };
-
-  const destroyEnemy = (
-    enemy: SliceEnemy,
-    context?: { finishingDamage?: number; isFireKill?: boolean },
-  ) => {
-    if (enemy.isDead) {
-      return;
-    }
-
-    const bloodEnabled = localStorage.getItem("tgs_settings_blood") !== "false";
-    const maxHp = Math.max(1, enemy.definition.health || 100);
-    const finishingDamage = Math.max(0, context?.finishingDamage || 0);
-    const overkill = finishingDamage > maxHp * 0.5;
-    const isFireKill = !!context?.isFireKill;
-
-    if (bloodEnabled) {
-      if (overkill) {
-        emitBloodBurst(
-          enemy.worldPos.clone().add(new Vector3(0, 0.35, 0)),
-          isFireKill ? "#ff7a33" : "#aa1e1e",
-          22,
-          1.6,
-          1.2,
-        );
-        ctx.audioManager.playSplash();
-      } else if (!isFireKill) {
-        emitBloodBurst(
-          enemy.worldPos.clone().add(new Vector3(0, 0.25, 0)),
-          "#7a1010",
-          8,
-          0.45,
-          0.8,
-        );
-      }
-    }
-
-    enemy.isDead = true;
-    setEnemyAnimState(enemy, "death", 60_000);
-
-    const deathMs = getGeneratedDeathDurationMs(enemy.enemyType);
-    window.setTimeout(() => {
-      if (enemy.meshRoot.isDisposed()) {
-        return;
-      }
-      enemy.meshRoot.dispose();
-      ctx.enemies.delete(enemy.uid);
-    }, deathMs);
-
-    const catalogEntry = enemySpawnCatalog.get(enemy.spawnKey);
-    if (catalogEntry) {
-      pendingEnemyRespawns.set(enemy.spawnKey, {
-        level: catalogEntry.level,
-        spawn: catalogEntry.spawn,
-        index: catalogEntry.index,
-        elapsedMs: 0,
-        respawnTimeMs: ENEMY_RESPAWN_MS,
-      });
-    }
-    ctx.playerState.markEnemy3dDead(enemy.level, enemy.spawnKey);
-
-    if (ctx.selectedEnemyUid === enemy.uid) {
-      setSelectedEnemy(null);
-    }
-
-    ctx.playerState.emit("combatEnemyRemoved", { uid: enemy.uid });
-
-    grantEnemyLoot(enemy);
-    ctx.playerState.gainExperience(enemy.definition.exp);
-
-    ctx.playerState.emit("floatingText", {
-      x: enemy.worldPos.x,
-      y: enemy.worldPos.y,
-      z: enemy.worldPos.z,
-      message: enemy.definition.exp.toString(),
-      icon: "★",
-      customColor: "#F6E05E",
-      isAmbient: true,
-    });
-
-    ctx.playerState.log("combat_killed", { target: enemy.enemyType }, "#ffaa00");
-    ctx.playerState.log(
-      "combat_gained_xp",
-      { xp: enemy.definition.exp },
-      "#ffff00",
-    );
-    ctx.audioManager.playEnemyDeath(enemy.enemyType);
-  };  // end destroyEnemy
-
-
-
+  const setSelectedEnemy = (enemyUid: string | null) => { setSelectedEnemyImpl(ctx, enemyUid); };
+  const grantEnemyLoot = (enemy: SliceEnemy) => { grantEnemyLootImpl(ctx, enemy); };
+  const destroyEnemy = (enemy: SliceEnemy, context?: { finishingDamage?: number; isFireKill?: boolean }) => { destroyEnemyImpl({ ctx, enemySpawnCatalog, pendingEnemyRespawns, ENEMY_RESPAWN_MS, emitBloodBurst, setEnemyAnimState, getGeneratedDeathDurationMs }, enemy, context); };
   const setEnemyAnimState = (
     enemy: SliceEnemy,
     nextState: EnemyVisualAnimState,
@@ -1686,157 +1449,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
 
   const LOG_SLOW_PATH_MS = 100;
-  const requestEnemyPath = async (
-    enemy: SliceEnemy,
-    targetPosition: Vector3,
-  ) => {
-    const pathRequestStartedAt = performance.now();
-    telemetryLogger.pathMetrics.requests += 1;
-    telemetryLogger.pathMetrics.inFlight += 1;
-    navigationSystem.rebuildWindow(enemy.level);
-    const startX = navigationSystem.worldToGridX(enemy.worldPos.x);
-    const startY = navigationSystem.worldToGridZ(enemy.worldPos.z);
-    const endX = navigationSystem.worldToGridX(targetPosition.x);
-    const endY = navigationSystem.worldToGridZ(targetPosition.z);
-
-    if (
-      startX < 0 ||
-      startY < 0 ||
-      endX < 0 ||
-      endY < 0 ||
-      startX >= navigationSystem.gridSize ||
-      startY >= navigationSystem.gridSize ||
-      endX >= navigationSystem.gridSize ||
-      endY >= navigationSystem.gridSize
-    ) {
-      telemetryLogger.pathMetrics.failed += 1;
-      telemetryLogger.pathMetrics.inFlight = Math.max(0, telemetryLogger.pathMetrics.inFlight - 1);
-      return;
-    }
-
-    try {
-      const path = await pathfindingManager.requestPath(
-        startX,
-        startY,
-        endX,
-        endY,
-      );
-      const tookMs = performance.now() - pathRequestStartedAt;
-      telemetryLogger.pathMetrics.lastMs = Math.round(tookMs * 100) / 100;
-      telemetryLogger.pathMetrics.maxMs = Math.max(telemetryLogger.pathMetrics.maxMs, telemetryLogger.pathMetrics.lastMs);
-      telemetryLogger.pathMetrics.totalMs += tookMs;
-
-      if (!path || path.length === 0 || enemy.isDead) {
-        telemetryLogger.pathMetrics.failed += 1;
-        if (tookMs >= LOG_SLOW_PATH_MS) {
-          telemetryLogger.pushLogEvent("pathfinding.slow-empty", {
-            enemyUid: enemy.uid,
-            tookMs: telemetryLogger.pathMetrics.lastMs,
-            startX,
-            startY,
-            endX,
-            endY,
-          });
-        }
-        return;
-      }
-
-      telemetryLogger.pathMetrics.success += 1;
-      telemetryLogger.pathMetrics.lastPathLen = path.length;
-
-      if (tookMs >= LOG_SLOW_PATH_MS) {
-        telemetryLogger.pushLogEvent("pathfinding.slow", {
-          enemyUid: enemy.uid,
-          tookMs: telemetryLogger.pathMetrics.lastMs,
-          pathLength: path.length,
-          startX,
-          startY,
-          endX,
-          endY,
-        });
-      }
-
-      enemy.currentPath = path;
-      enemy.currentPathIndex = 0;
-    } catch (error) {
-      telemetryLogger.pathMetrics.errors += 1;
-      telemetryLogger.pushLogEvent("pathfinding.error", {
-        enemyUid: enemy.uid,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      telemetryLogger.pathMetrics.inFlight = Math.max(0, telemetryLogger.pathMetrics.inFlight - 1);
-    }
-  };
-
-  const advanceEnemyPath = (enemy: SliceEnemy, deltaSeconds: number) => {
-    if (
-      !enemy.currentPath.length ||
-      enemy.currentPathIndex >= enemy.currentPath.length
-    ) {
-      return;
-    }
-
-    const waypoint = enemy.currentPath[enemy.currentPathIndex];
-    const target = new Vector3(
-      navigationSystem.gridToWorldX(waypoint.x),
-      enemy.worldPos.y,
-      navigationSystem.gridToWorldZ(waypoint.y),
-    );
-
-    const toTarget = target.subtract(enemy.worldPos);
-    const distance = toTarget.length();
-    if (distance < 0.1) {
-      enemy.currentPathIndex += 1;
-      return;
-    }
-
-    const direction = toTarget.normalize();
-    const speedUnits = Math.max(1, enemy.definition.speed / 32) * 0.35;
-    const step = speedUnits * deltaSeconds;
-    const movement = direction.scale(Math.min(step, distance));
-
-    enemy.worldPos.addInPlace(movement);
-    enemy.worldPos.x = clamp(enemy.worldPos.x, mapMinX + 0.5, mapMaxX);
-    enemy.worldPos.z = clamp(enemy.worldPos.z, mapMinZ + 0.5, mapMaxZ);
-    applyActorAquaticY(enemy.worldPos, enemy.level);
-    enemy.meshRoot.position = enemy.worldPos;
-  };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  const enemyPathfindingCfg = { get ctx() { return ctx; }, pathfindingManager, applyActorAquaticY };
+  const requestEnemyPath = (enemy: SliceEnemy, targetPos: Vector3) => requestEnemyPathImpl(enemyPathfindingCfg, enemy, targetPos);
+  const advanceEnemyPath = (enemy: SliceEnemy, deltaSeconds: number) => advanceEnemyPathImpl(enemyPathfindingCfg, enemy, deltaSeconds);
   const updateEnemyAI = (deltaSeconds: number) => {
     sliceEnemySystem.update(deltaSeconds);
   };
