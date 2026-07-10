@@ -2,7 +2,7 @@
 export const LEVEL_HEIGHT = 2.0;
 
 /** Thickness of floor slabs and walk surface offset from level base. */
-export const FLOOR_THICKNESS = 0.5;
+export const FLOOR_THICKNESS = 0.32;
 
 /** Shorthand alias for FLOOR_THICKNESS. */
 export const WALK_SURFACE = FLOOR_THICKNESS;
