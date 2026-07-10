@@ -1,4 +1,4 @@
-  let lastChunkRenderLevel: string | null = null;
+import type { SliceRuntime, Slice3DLogSample, Slice3DLogEvent, Slice3DSessionLog, Slice3DHotspot, Slice3DSummary } from "./Slice3DTypes";
 
 import {
   ArcRotateCamera,
@@ -182,7 +182,6 @@ export type {
   Slice3DHotspot,
   Slice3DSummary,
 } from "./Slice3DTypes";
-import type { SliceRuntime, Slice3DLogSample, Slice3DLogEvent, Slice3DSessionLog, Slice3DHotspot, Slice3DSummary } from "./Slice3DTypes";
 
 export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   registerDefaultMagics();
@@ -845,6 +844,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       getTileDefAt(level, Math.floor(worldX), Math.floor(worldZ)),
       LEVEL_HEIGHT,
     );
+  let lastChunkRenderLevel: string | null = null;
 
 
   const isStaticTileBlocking = (s: string | null, d?: SliceTileDefinition) => staticBlock(s, d);
