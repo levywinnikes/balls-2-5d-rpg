@@ -1528,97 +1528,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return targets;
   };
 
-  const tryPickupPersistentItem = (
-    item: DroppedItemData,
-    requestedCount?: number,
-  ): boolean => {
-    const potentialContainerDef = WeaponRegistry.getWeaponDefinition(
-      item.weaponId,
-    );
-    if (
-      potentialContainerDef &&
-      (potentialContainerDef.type === "container" ||
-        ContainerRegistry.getContainer(potentialContainerDef.id))
-    ) {
-      const containerDef = ContainerRegistry.getContainer(
-        potentialContainerDef.id,
-      );
-      if (containerDef) {
-        playerState.openContainer(
-          item.itemId,
-          containerDef.id,
-          t_game(containerDef.name as Parameters<typeof t_game>[0]),
-          { x: item.x, y: item.y, level: getCurrentLevel() },
-        );
-        return true;
-      }
-    }
-
-    const availableCount = item.count || 1;
-    const pickupCount = Math.max(
-      1,
-      Math.min(requestedCount || availableCount, availableCount),
-    );
-    const added = playerState.addItem(
-      item.weaponId,
-      pickupCount,
-      item.itemId,
-      item.stars || 0,
-      [...(item.attributes || [])],
-    );
-
-    if (!added) {
-      return false;
-    }
-
-    if (availableCount > pickupCount) {
-      const persistent = playerState.getPersistentDroppedItems(getCurrentLevel());
-      const target = persistent.find((entry) => entry.itemId === item.itemId);
-      if (target) {
-        target.count = availableCount - pickupCount;
-      }
-    } else {
-      playerState.removePersistentDroppedItem(getCurrentLevel(), item.itemId);
-    }
-
-    const def = WeaponRegistry.getWeaponDefinition(item.weaponId);
-    const itemName = def ? t_game(`item_${def.id}` as Parameters<typeof t_game>[0]) : item.weaponId;
-    playerState.emit("uiNotification", {
-      type: "pickup",
-      message: t_game("notif_item_get")
-        .replace("{amount}", pickupCount.toString())
-        .replace("{item}", itemName),
-    });
-    audioManager.playPickup();
-    playerState.log("action_pickup");
-    return true;
-  };
-
-  const tryPickupNearestItem = (): boolean => {
-    const pickupRange = playerState.pickupRange / 32;
-    let nearestItem: DroppedItemData | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-
-    dropSystem.droppedItemMeshes.forEach((mesh) => {
-      if (!mesh.isEnabled()) return;
-
-      const item = mesh.metadata as SliceDroppedItem | undefined;
-      if (!item) return;
-
-      const distance = Vector3.Distance(player.position, mesh.position);
-      if (distance <= pickupRange && distance < nearestDistance) {
-        nearestItem = item;
-        nearestDistance = distance;
-      }
-    });
-
-    if (nearestItem) {
-      return tryPickupPersistentItem(nearestItem);
-    }
-
-    return false;
-  };
-
+  const tryPickupPersistentItem = (item: DroppedItemData, requestedCount?: number) => dropPickup.tryPickupPersistentItem(item, requestedCount);
+  const tryPickupNearestItem = (): boolean => dropPickup.tryPickupNearestItem();
   let dropPickup: ReturnType<typeof createDropPickupSystem>;
 
   const waitForSpawnChunkReady = (timeoutMs = 12000): Promise<boolean> =>
@@ -1872,7 +1783,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     getSelectedEnemy: () => ctx.selectedEnemyUid,
   });
 
-  dropPickup = createDropPickupSystem({ ctx, tryPickupPersistentItem });
+  dropPickup = createDropPickupSystem({ ctx });
   addDroppedItemFromEvent = dropPickup.addDroppedItemFromEvent;
   handleDropItem = dropPickup.handleDropItem;
   handleRequestPickup = dropPickup.handleRequestPickup;
