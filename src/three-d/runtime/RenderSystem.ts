@@ -32,6 +32,8 @@ import "./FallSafetySystem";
 
 const parseLevelNumber = (level: string) => Number.parseInt(level, 10) || 0;
 
+import { WALK_SURFACE } from "../../constants/World";
+
 const CHUNK_SIZE = 16;
 const CHUNK_UPDATE_INTERVAL = 0.2;
 const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
@@ -47,7 +49,6 @@ const LOG_HEAP_WINDOW_SECONDS = 300;
 const LOG_UNLOAD_RECOVERY_GRACE_SECONDS = 25;
 const LOG_FILE_FLUSH_INTERVAL = 10;
 const AUTO_SAVE_INTERVAL = 60;
-const WALK_SURFACE = 0.01;
 
 export interface TelemetryData {
   previousHeapUsedMb: number | undefined;
