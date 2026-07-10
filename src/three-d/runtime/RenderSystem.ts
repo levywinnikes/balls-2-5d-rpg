@@ -71,7 +71,6 @@ export interface TelemetryData {
 
 export interface RenderSystemDeps {
   ctx: GameContext;
-  td: TelemetryData;
 
   heroShadowMat: StandardMaterial;
   heroAquaticTint: AquaticShaderHandle;
@@ -87,22 +86,10 @@ export interface RenderSystemDeps {
   }>;
   enemySpawnCatalog: Map<string, SpawnCatalogEntry>;
 
-  sceneInstrumentation: {
-    drawCallsCounter: { current: number };
-  };
-  runtimeLog: Slice3DSessionLog;
-
-  getElapsedSec: () => number;
   syncVerticalLevelVisibility: (dt: number) => void;
   hideWallsOnRay: () => void;
   updatePlayerDebugMesh: () => void;
   collectInteractableRevealTargets: () => InteractableRevealTarget[];
-  pushLogEvent: (event: string, data?: Record<string, unknown>) => void;
-  persistRuntimeLogs: () => void;
-  flushRuntimeLogsToFile: (wait: boolean) => void;
-  buildSummary: () => Record<string, unknown>;
-  buildHotspots: (n: number) => Record<string, unknown>[];
-  pushBounded: (arr: number[], val: number, max: number) => void;
 }
 
 export class RenderSystem {
@@ -142,12 +129,8 @@ export class RenderSystem {
       ctx,
       heroShadowMat, heroAquaticTint, lastPlayerAquaticMode,
       activeSlashtrails, enemySpawnCatalog,
-      sceneInstrumentation, runtimeLog,
-      getElapsedSec,
       syncVerticalLevelVisibility, hideWallsOnRay,
       updatePlayerDebugMesh, collectInteractableRevealTargets,
-      pushLogEvent, persistRuntimeLogs, flushRuntimeLogsToFile,
-      buildSummary, buildHotspots, pushBounded,
     } = this.deps;
 
     const {
@@ -216,15 +199,15 @@ export class RenderSystem {
 
     const chunkStats = (window as any).__slice3dChunkStreaming || {};
     const unloadedThisTick = chunkStats.unloadedThisTick || 0;
-    if (unloadedThisTick > 0 && this.deps.td.previousHeapUsedMb !== undefined) {
-      this.deps.td.unloadCheckpoints.push({
-        atSec: getElapsedSec(),
-        heapMb: this.deps.td.previousHeapUsedMb,
+    if (unloadedThisTick > 0 && this.deps.ctx.telemetryLogger.previousHeapUsedMb !== undefined) {
+      this.deps.ctx.telemetryLogger.unloadCheckpoints.push({
+        atSec: this.deps.ctx.telemetryLogger.getElapsedSec(),
+        heapMb: this.deps.ctx.telemetryLogger.previousHeapUsedMb,
         resolved: false,
         succeeded: false,
       });
-      if (this.deps.td.unloadCheckpoints.length > 100) {
-        this.deps.td.unloadCheckpoints.shift();
+      if (this.deps.ctx.telemetryLogger.unloadCheckpoints.length > 100) {
+        this.deps.ctx.telemetryLogger.unloadCheckpoints.shift();
       }
     }
 
@@ -382,7 +365,7 @@ export class RenderSystem {
     if (this.perfPublishTimer >= PERF_PUBLISH_INTERVAL) {
       this.perfPublishTimer = 0;
 
-      const drawCalls = sceneInstrumentation.drawCallsCounter.current;
+      const drawCalls = this.deps.ctx.sceneInstrumentation.drawCallsCounter.current;
       const activeMeshes = scene.getActiveMeshes().length;
       const totalMeshes = scene.meshes.length;
       const totalMaterials = scene.materials.length;
@@ -468,12 +451,12 @@ export class RenderSystem {
         ? Math.round((perfMem.totalJSHeapSize / (1024 * 1024)) * 10) / 10
         : undefined;
       const heapDeltaMb =
-        usedHeapMb !== undefined && this.deps.td.previousHeapUsedMb !== undefined
-          ? Math.round((usedHeapMb - this.deps.td.previousHeapUsedMb) * 10) / 10
+        usedHeapMb !== undefined && this.deps.ctx.telemetryLogger.previousHeapUsedMb !== undefined
+          ? Math.round((usedHeapMb - this.deps.ctx.telemetryLogger.previousHeapUsedMb) * 10) / 10
           : undefined;
-      this.deps.td.previousHeapUsedMb = usedHeapMb;
+      this.deps.ctx.telemetryLogger.previousHeapUsedMb = usedHeapMb;
 
-      const drawCalls = sceneInstrumentation.drawCallsCounter.current;
+      const drawCalls = this.deps.ctx.sceneInstrumentation.drawCallsCounter.current;
 
       let activeEnemies = 0;
       let visibleEnemies = 0;
@@ -494,7 +477,7 @@ export class RenderSystem {
 
       const sample: Slice3DLogSample = {
         ts: Date.now(),
-        elapsedSec: getElapsedSec(),
+        elapsedSec: this.deps.ctx.telemetryLogger.getElapsedSec(),
         currentLevel: getCurrentLevel(),
         player: {
           x: Math.round(player.position.x * 100) / 100,
@@ -536,47 +519,47 @@ export class RenderSystem {
           hasRealDroppedItems: dropSystem.hasRealDroppedItems,
         },
         pathfinding: {
-          requests: this.deps.td.pathMetrics.requests,
-          success: this.deps.td.pathMetrics.success,
-          failed: this.deps.td.pathMetrics.failed,
-          errors: this.deps.td.pathMetrics.errors,
-          inFlight: this.deps.td.pathMetrics.inFlight,
+          requests: this.deps.ctx.telemetryLogger.pathMetrics.requests,
+          success: this.deps.ctx.telemetryLogger.pathMetrics.success,
+          failed: this.deps.ctx.telemetryLogger.pathMetrics.failed,
+          errors: this.deps.ctx.telemetryLogger.pathMetrics.errors,
+          inFlight: this.deps.ctx.telemetryLogger.pathMetrics.inFlight,
           avgMs:
-            this.deps.td.pathMetrics.requests > 0
-              ? Math.round((this.deps.td.pathMetrics.totalMs / this.deps.td.pathMetrics.requests) * 100) / 100
+            this.deps.ctx.telemetryLogger.pathMetrics.requests > 0
+              ? Math.round((this.deps.ctx.telemetryLogger.pathMetrics.totalMs / this.deps.ctx.telemetryLogger.pathMetrics.requests) * 100) / 100
               : 0,
-          maxMs: Math.round(this.deps.td.pathMetrics.maxMs * 100) / 100,
-          lastMs: this.deps.td.pathMetrics.lastMs,
-          lastPathLen: this.deps.td.pathMetrics.lastPathLen,
+          maxMs: Math.round(this.deps.ctx.telemetryLogger.pathMetrics.maxMs * 100) / 100,
+          lastMs: this.deps.ctx.telemetryLogger.pathMetrics.lastMs,
+          lastPathLen: this.deps.ctx.telemetryLogger.pathMetrics.lastPathLen,
         },
       };
 
-      if (runtimeLog.samples.length >= LOG_MAX_SAMPLES) {
-        runtimeLog.samples.shift();
-        runtimeLog.counters.samplesDropped += 1;
+      if (this.deps.ctx.telemetryLogger.runtimeLog.samples.length >= LOG_MAX_SAMPLES) {
+        this.deps.ctx.telemetryLogger.runtimeLog.samples.shift();
+        this.deps.ctx.telemetryLogger.runtimeLog.counters.samplesDropped += 1;
       }
-      runtimeLog.samples.push(sample);
+      this.deps.ctx.telemetryLogger.runtimeLog.samples.push(sample);
 
-      pushBounded(this.deps.td.frameMsWindow, sample.perf.frameMs, LOG_FRAME_WINDOW_MAX);
+      this.deps.ctx.telemetryLogger.pushBounded(this.deps.ctx.telemetryLogger.frameMsWindow, sample.perf.frameMs, LOG_FRAME_WINDOW_MAX);
       if (sample.pathfinding.lastMs > 0) {
-        pushBounded(
-          this.deps.td.pathMsWindow,
+        this.deps.ctx.telemetryLogger.pushBounded(
+          this.deps.ctx.telemetryLogger.pathMsWindow,
           sample.pathfinding.lastMs,
           LOG_PATH_WINDOW_MAX,
         );
       }
 
       if (sample.perf.jsHeapUsedMb !== undefined) {
-        this.deps.td.heapHistory.push({
+        this.deps.ctx.telemetryLogger.heapHistory.push({
           elapsedSec: sample.elapsedSec,
           usedMb: sample.perf.jsHeapUsedMb,
         });
         const cutoff = sample.elapsedSec - LOG_HEAP_WINDOW_SECONDS;
-        while (this.deps.td.heapHistory.length && this.deps.td.heapHistory[0].elapsedSec < cutoff) {
-          this.deps.td.heapHistory.shift();
+        while (this.deps.ctx.telemetryLogger.heapHistory.length && this.deps.ctx.telemetryLogger.heapHistory[0].elapsedSec < cutoff) {
+          this.deps.ctx.telemetryLogger.heapHistory.shift();
         }
 
-        this.deps.td.unloadCheckpoints.forEach((checkpoint) => {
+        this.deps.ctx.telemetryLogger.unloadCheckpoints.forEach((checkpoint) => {
           if (checkpoint.resolved) return;
           const elapsedSinceUnload = sample.elapsedSec - checkpoint.atSec;
           const droppedEnough = sample.perf.jsHeapUsedMb! <= checkpoint.heapMb - 1;
@@ -588,8 +571,8 @@ export class RenderSystem {
           if (elapsedSinceUnload >= LOG_UNLOAD_RECOVERY_GRACE_SECONDS) {
             checkpoint.resolved = true;
             checkpoint.succeeded = false;
-            this.deps.td.chunkUnloadRecoveryFailures += 1;
-            pushLogEvent("memory.unload-recovery-failed", {
+            this.deps.ctx.telemetryLogger.chunkUnloadRecoveryFailures += 1;
+            this.deps.ctx.telemetryLogger.pushLogEvent("memory.unload-recovery-failed", {
               atSec: checkpoint.atSec,
               baselineHeapMb: checkpoint.heapMb,
               currentHeapMb: sample.perf.jsHeapUsedMb,
@@ -600,7 +583,7 @@ export class RenderSystem {
       }
 
       const chunkKey = `${sample.currentLevel}:${sample.player.chunkX}_${sample.player.chunkZ}`;
-      const chunkEntry = this.deps.td.chunkHotspots.get(chunkKey) || {
+      const chunkEntry = this.deps.ctx.telemetryLogger.chunkHotspots.get(chunkKey) || {
         level: sample.currentLevel,
         chunkX: sample.player.chunkX,
         chunkZ: sample.player.chunkZ,
@@ -625,17 +608,17 @@ export class RenderSystem {
         chunkEntry.maxPathMs,
         sample.pathfinding.lastMs,
       );
-      this.deps.td.chunkHotspots.set(chunkKey, chunkEntry);
+      this.deps.ctx.telemetryLogger.chunkHotspots.set(chunkKey, chunkEntry);
 
       if ((sample.perf.heapDeltaMb || 0) <= -8) {
-        pushLogEvent("memory.gc-like-drop", {
+        this.deps.ctx.telemetryLogger.pushLogEvent("memory.gc-like-drop", {
           heapDeltaMb: sample.perf.heapDeltaMb,
           usedMb: sample.perf.jsHeapUsedMb,
         });
       }
 
       if (sample.chunks.pendingCandidates > 16) {
-        pushLogEvent("chunk.backlog", {
+        this.deps.ctx.telemetryLogger.pushLogEvent("chunk.backlog", {
           pendingCandidates: sample.chunks.pendingCandidates,
           loaded: sample.chunks.loaded,
           loading: sample.chunks.loading,
@@ -644,24 +627,24 @@ export class RenderSystem {
 
       (window as any).__slice3dLogsData = {
         latestSample: sample,
-        totalSamples: runtimeLog.samples.length,
-        totalEvents: runtimeLog.events.length,
-        counters: runtimeLog.counters,
-        summary: buildSummary(),
-        topHotspots: buildHotspots(5),
+        totalSamples: this.deps.ctx.telemetryLogger.runtimeLog.samples.length,
+        totalEvents: this.deps.ctx.telemetryLogger.runtimeLog.events.length,
+        counters: this.deps.ctx.telemetryLogger.runtimeLog.counters,
+        summary: this.deps.ctx.telemetryLogger.buildSummary(),
+        topHotspots: this.deps.ctx.telemetryLogger.buildHotspots(5),
       };
     }
 
     if (ctx.telemetryEnabledRef.value && this.telemetryPersistTimer >= LOG_PERSIST_INTERVAL) {
       this.telemetryPersistTimer = 0;
-      persistRuntimeLogs();
+      this.deps.ctx.telemetryLogger.persistRuntimeLogs();
     }
 
     if (ctx.telemetryEnabledRef.value) {
       this.telemetryFileFlushTimer += deltaSeconds;
       if (this.telemetryFileFlushTimer >= LOG_FILE_FLUSH_INTERVAL) {
         this.telemetryFileFlushTimer = 0;
-        void flushRuntimeLogsToFile(false);
+        void this.deps.ctx.telemetryLogger.flushRuntimeLogsToFile(false);
       }
     }
 

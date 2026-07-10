@@ -2389,6 +2389,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     get saveSystem() { return saveSystem; },
     get checkLevelDrift() { return checkLevelDrift; },
     get telemetryEnabledRef() { return telemetryLogger.telemetryEnabledRef; },
+    get sceneInstrumentation() { return sceneInstrumentation; },
     get chunkSystem() { return chunkSystem; },
     get orchestrator() { return orchestrator; },
     get navigationSystem() { return navigationSystem; },
@@ -2734,35 +2735,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   saveSystem = new SaveSystem();
   const renderSystem = new RenderSystem({
     ctx,
-    td: {
-      previousHeapUsedMb: telemetryLogger.previousHeapUsedMb,
-      frameMsWindow: telemetryLogger.frameMsWindow,
-      pathMsWindow: telemetryLogger.pathMsWindow,
-      heapHistory: telemetryLogger.heapHistory,
-      chunkHotspots: telemetryLogger.chunkHotspots,
-      unloadCheckpoints: telemetryLogger.unloadCheckpoints,
-      chunkUnloadRecoveryFailures: telemetryLogger.chunkUnloadRecoveryFailures,
-      pathMetrics: telemetryLogger.pathMetrics,
-    },
     heroShadowMat,
     heroAquaticTint,
     lastPlayerAquaticMode,
     activeSlashtrails,
     enemySpawnCatalog,
-    sceneInstrumentation: sceneInstrumentation!,
-    runtimeLog: telemetryLogger.runtimeLog,
-    getElapsedSec: telemetryLogger.getElapsedSec.bind(telemetryLogger),
     syncVerticalLevelVisibility: (dt) =>
       visibilitySystem.syncVerticalLevelVisibility(dt),
     hideWallsOnRay: () => visibilitySystem.hideWallsOnRay(),
     updatePlayerDebugMesh,
     collectInteractableRevealTargets,
-    pushLogEvent: telemetryLogger.pushLogEvent.bind(telemetryLogger),
-    persistRuntimeLogs: telemetryLogger.persistRuntimeLogs.bind(telemetryLogger),
-    flushRuntimeLogsToFile: telemetryLogger.flushRuntimeLogsToFile.bind(telemetryLogger),
-    buildSummary: telemetryLogger.buildSummary.bind(telemetryLogger),
-    buildHotspots: telemetryLogger.buildHotspots.bind(telemetryLogger),
-    pushBounded: telemetryLogger.pushBounded.bind(telemetryLogger),
   });
   renderSystem.attach();
 

@@ -108,6 +108,7 @@ export interface GameContext extends SliceSceneContext {
 
   checkLevelDrift: () => void;
   telemetryEnabledRef: { value: boolean };
+  sceneInstrumentation: SceneInstrumentation;
 
   // ── Callback functions (moved from RenderSystemDeps for universal access) ──
   getCurrentLevel: () => string;
