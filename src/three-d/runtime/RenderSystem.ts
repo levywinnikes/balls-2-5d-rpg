@@ -25,7 +25,7 @@ import type { PlayerContext } from "./PlayerContext";
 import { tickPhysics } from "./PlayerPhysicsSystem";
 import type { AquaticSample } from "./WaterProfile";
 import type { SliceMapData } from "./SliceTileTypes";
-import type { Slice3DSessionLog, Slice3DLogSample } from "./createDebugSliceScene";
+import type { Slice3DSessionLog, Slice3DLogSample } from "./createSliceScene";
 import type { GameContext } from "./GameContext";
 import "./WaterHoleConfig";
 import "./FallSafetySystem";

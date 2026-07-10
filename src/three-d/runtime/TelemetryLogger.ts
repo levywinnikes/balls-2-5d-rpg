@@ -1,4 +1,4 @@
-import type { Slice3DSessionLog, Slice3DLogSample, Slice3DLogEvent, Slice3DHotspot, Slice3DSummary } from "./createDebugSliceScene";
+import type { Slice3DSessionLog, Slice3DLogSample, Slice3DLogEvent, Slice3DHotspot, Slice3DSummary } from "./createSliceScene";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 

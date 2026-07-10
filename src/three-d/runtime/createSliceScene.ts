@@ -183,7 +183,7 @@ export type {
   Slice3DSummary,
 } from "./Slice3DTypes";
 
-export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
+export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   registerDefaultMagics();
 
   const engine = new Engine(canvas, true, {

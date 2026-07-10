@@ -7,7 +7,7 @@ import { LevelUpNotification } from "../../ui/components/LevelUpNotification";
 import { ThreeDFloatingText } from "../runtime/ThreeDFloatingText";
 import { useWindowSystem } from "../../ui/components/window/WindowContext";
 import { PlayerState } from "../../game/entities/Player/PlayerState";
-import { createDebugSliceScene } from "../runtime/createDebugSliceScene";
+import { createSliceScene } from "../runtime/createSliceScene";
 import { MainMenuUI } from "../../ui/screens/MainMenuUI";
 import { t_game } from "../../game/i18n/translations";
 import { PerfMonitor } from "../../ui/components/PerfMonitor";
@@ -19,7 +19,7 @@ const DEFAULT_3D_MAP = "city_3d_mundi_p1";
 
 export function ThreeDSliceView() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const runtimeRef = useRef<ReturnType<typeof createDebugSliceScene> | null>(
+  const runtimeRef = useRef<ReturnType<typeof createSliceScene> | null>(
     null,
   );
   const [isInGame, setIsInGame] = useState(false);
@@ -152,7 +152,7 @@ export function ThreeDSliceView() {
       return;
     }
 
-    const runtime = createDebugSliceScene(canvas);
+    const runtime = createSliceScene(canvas);
     runtimeRef.current = runtime;
     setRuntimeBridge({ engine: runtime.engine, scene: runtime.scene });
     const handleResize = () => runtime.engine.resize();
