@@ -81,6 +81,7 @@ import { createGroundQuerySystem } from "./GroundQuerySystem";
 import { loadLevelBinary as loadLevelBinaryImpl, loadMapData as loadMapDataImpl, ensureWorldMapReady as ensureWorldMapReadyImpl } from "./MapDataLoader";
 import { ensureDebugSandboxStarterLoadout as ensureDebugLoadout } from "./DebugSandboxSetup";
 import { ensureMapLevelReady as ensureMapLevelReadyImpl } from "./LevelBootstrap";
+import { bootstrapWorldSession as bootstrapWorld } from "./WorldBootstrap";
 import { createGameContext } from "./createGameContext";
 import { triggerPlayerAttackSlashEffect as createSlashTrail, getDeterministicRotation, getWeaponSlashColor, type ActiveSlash } from "./SlashTrailEffect";
 import { destroyEnemy as destroyEnemyImpl, grantEnemyLoot as grantEnemyLootImpl, setSelectedEnemy as setSelectedEnemyImpl } from "./EnemyDeathHandler";
@@ -1283,73 +1284,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const waitForSpawnChunkReady = (timeoutMs = 12000): Promise<boolean> =>
     chunkSystem.waitForSpawnChunkReady(timeoutMs);
 
-  const bootstrapWorldSession = async (retries = 3, baseDelayMs = 2000) => {
-    telemetryLogger.pushLogEvent("world.bootstrap.start", { map: sliceMapName, level: getCurrentLevel() });
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        if (attempt > 0) {
-          const delay = baseDelayMs * Math.pow(2, attempt - 1);
-          console.warn(`[3D Slice] Bootstrap attempt ${attempt + 1}/${retries + 1} after ${delay}ms`);
-          await new Promise((r) => setTimeout(r, delay));
-        }
-
-        await ensureMapLevelReady(getCurrentLevel());
-        snapPlayerFootToActiveLevel();
-        await waitForSpawnChunkReady();
-        snapPlayerFootToActiveLevel();
-
-        const tileX = Math.floor(player.position.x);
-        const tileZ = Math.floor(player.position.z);
-        const supportSymbol = getMapTileAt(getCurrentLevel(), tileX, tileZ);
-        if (isVoidSymbol(supportSymbol)) {
-          throw new Error(
-            `[3D Slice] Invalid spawn tile (${tileX},${tileZ}) on level ${getCurrentLevel()}`,
-          );
-        }
-
-        ctx.lastGroundedFootY = player.position.y;
-        ctx.fallOriginFootY = player.position.y;
-        ctx.isGrounded = true;
-        ctx.holeFallLandingLevel = null;
-        ctx.holeFallFloorCount = 0;
-        ctx.verticalVelocity = 0;
-
-        reanchorWorldContentOnLevel(getRenderLevel());
-        propSystem.syncStream(true);
-
-        worldBootstrapReady = true;
-        setPlayerAvatarVisible(true);
-        cameraSystem.updateTopDownTarget(player.position);
-
-        resolveWorldReady?.();
-        document.dispatchEvent(
-          new CustomEvent("slice3d:worldBootstrap", {
-            detail: { ready: true, map: sliceMapName, level: getCurrentLevel() },
-          }),
-        );
-        telemetryLogger.pushLogEvent("world.bootstrap.ready", {
-          x: Math.round(player.position.x * 100) / 100,
-          y: Math.round(player.position.y * 100) / 100,
-          z: Math.round(player.position.z * 100) / 100,
-        });
-        return;
-      } catch (error) {
-        console.error(`[3D Slice] World bootstrap failed (attempt ${attempt + 1})`, error);
-        if (attempt >= retries) {
-          document.dispatchEvent(
-            new CustomEvent("slice3d:worldBootstrap", {
-              detail: { ready: false, map: sliceMapName, error: String(error) },
-            }),
-          );
-          telemetryLogger.pushLogEvent("world.bootstrap.failed", { error: String(error), attempts: attempt + 1 });
-          return;
-        }
-      }
-    }
-  };
+  const bootstrapWorldSession = (retries = 3, baseDelayMs = 2000) => bootstrapWorld({ ctx, sliceMapName, ensureMapLevelReady, snapPlayerFootToActiveLevel, waitForSpawnChunkReady: () => waitForSpawnChunkReady(), player, getMapTileAt, isVoidSymbol, reanchorWorldContentOnLevel, propSystem, setPlayerAvatarVisible: (v: boolean) => setPlayerAvatarVisible(v), cameraSystem: cameraSystem as any, resolveWorldReady: resolveWorldReady ?? undefined, getRenderLevel }, retries, baseDelayMs);
 
   void bootstrapWorldSession();
-  // Seed all levels at bootstrap so content is available when Y-position changes levels.
   const seedLevelKeys = Object.keys((mapDataCache as SliceMapData | null)?.levels ?? {});
   void orchestrator.seedAllLevels(seedLevelKeys);
   orchestrator.dropSystem.syncStream(true);
@@ -1360,7 +1297,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let sliceEnemySystem: SliceEnemySystem;
   let sliceCombatSystem: SliceCombatSystem;
 
-  // Physics state — PlayerContext is the single source of truth
   const playerCtx = createPlayerContext(player.position.x, player.position.y, player.position.z);
 
   let isPlayerDeathSequenceActive = false;
@@ -1374,19 +1310,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   } | null = null;
   const CHUNK_UPDATE_INTERVAL = 0.2;
   const PERF_PUBLISH_INTERVAL = 0.25;
-  // navigation timer managed internally by NavigationSystem
-
-
-
-
-
-
-
-
-
-
-
-
 
   const setCanvasGameplayInputEnabled = (enabled: boolean) => {
     canvas.style.pointerEvents = enabled ? "auto" : "none";
