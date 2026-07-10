@@ -1,6 +1,8 @@
-import type { Scene, Engine, ArcRotateCamera, UniversalCamera, Mesh, StandardMaterial } from "@babylonjs/core";
+import type { Scene, Engine, ArcRotateCamera, UniversalCamera, Mesh, StandardMaterial, TransformNode, DynamicTexture } from "@babylonjs/core";
 import { Vector3, Matrix, Vector2 } from "@babylonjs/core";
 import type { HeroSpriteMaterial } from "./TwoDParitySpriteFactory";
+import type { SliceEnemy } from "./EnemyStreamSystem";
+import type { InteractableRevealTarget } from "./InteractableWallRevealSystem";
 import type { ChunkStreamSystem } from "./ChunkStreamSystem";
 import type { StreamOrchestrator } from "./StreamOrchestrator";
 import type { NavigationSystem } from "./NavigationSystem";
@@ -9,7 +11,7 @@ import type { QualitySystem } from "./QualitySystem";
 import type { DoorSystem } from "./DoorSystem";
 import type { PropStreamSystem } from "./PropStreamSystem";
 import type { DropStreamSystem } from "./DropStreamSystem";
-import type { EnemyStreamSystem } from "./EnemyStreamSystem";
+import type { EnemyStreamSystem, SpawnCatalogEntry } from "./EnemyStreamSystem";
 import type { PlayerState } from "../../game/entities/Player/PlayerState";
 import type { Projectile3DSystem } from "./Projectile3DSystem";
 import type { InteractableWallRevealSystem } from "./InteractableWallRevealSystem";
@@ -24,6 +26,7 @@ import { tickPhysics } from "./PlayerPhysicsSystem";
 import type { AquaticSample } from "./WaterProfile";
 import type { SliceMapData } from "./SliceTileTypes";
 import type { Slice3DSessionLog, Slice3DLogSample } from "./createDebugSliceScene";
+import type { GameContext } from "./GameContext";
 import "./WaterHoleConfig";
 import "./FallSafetySystem";
 
@@ -46,26 +49,6 @@ const LOG_FILE_FLUSH_INTERVAL = 10;
 const AUTO_SAVE_INTERVAL = 60;
 const WALK_SURFACE = 0.01;
 
-export interface RenderState {
-  isFirstPerson: boolean;
-  gameplayPaused: boolean;
-  isPlayerDeathSequenceActive: boolean;
-  playerDeathTimeoutId: number | null;
-  verticalVelocity: number;
-  isGrounded: boolean;
-  holeFallLandingLevel: string | null;
-  holeFallFloorCount: number;
-  fallOriginFootY: number;
-  wasOnVoidWithSafety: boolean;
-  lastSafePlayerX: number;
-  lastSafePlayerZ: number;
-  lastGroundedFootY: number;
-  levelTransitionCooldown: number;
-  heroAnimLockedUntil: number;
-  selectedEnemyUid: string | null;
-  worldBootstrapReady: boolean;
-}
-
 export interface TelemetryData {
   previousHeapUsedMb: number | undefined;
   frameMsWindow: number[];
@@ -87,104 +70,42 @@ export interface TelemetryData {
 }
 
 export interface RenderSystemDeps {
-  scene: Scene;
-  engine: Engine;
-  camera: ArcRotateCamera;
-  firstPersonCamera: UniversalCamera;
-  state: RenderState;
+  ctx: GameContext;
   td: TelemetryData;
 
-  chunkSystem: ChunkStreamSystem;
-  orchestrator: StreamOrchestrator;
-  navigationSystem: NavigationSystem;
-  cameraSystem: CameraSystem;
-  qualitySystem: QualitySystem;
-  doorSystem: DoorSystem;
-  propSystem: PropStreamSystem;
-  dropSystem: DropStreamSystem;
-  enemySystem: EnemyStreamSystem;
-  playerState: PlayerState;
-  projectileSystem: Projectile3DSystem;
-  wallRevealSystem: InteractableWallRevealSystem;
-  waterEffectSystem: WaterEffectSystem;
-  sliceCombatSystem: SliceCombatSystem;
-  collisionWorld: CollisionWorld;
-  inputManager: SliceInputManager;
   saveSystem: SaveSystem;
-
-  player: Mesh;
-  playerCtx: PlayerContext;
-  heroSpriteMat: StandardMaterial & HeroSpriteMaterial;
   heroShadowMat: StandardMaterial;
-  heroBillboard: Mesh;
-  heroShadow: Mesh;
   heroAquaticTint: AquaticShaderHandle;
   lastPlayerAquaticMode: { mode: AquaticSample["mode"] };
-
   telemetryEnabledRef: { value: boolean };
   activeSlashtrails: Array<{
     mesh: Mesh;
     material: StandardMaterial;
-    texture: any;
+    texture: DynamicTexture;
     elapsed: number;
     duration: number;
     startScale: number;
     endScale: number;
   }>;
-  enemies: Map<string, any>;
-  enemySpawnCatalog: Map<string, any>;
-  /** Live refs — map loads async after RenderSystem is constructed. */
-  getMapDataCache: () => SliceMapData | null;
-  getCurrentMapWidth: () => number;
-  getCurrentMapHeight: () => number;
+  enemySpawnCatalog: Map<string, SpawnCatalogEntry>;
 
-  sliceMapName: string;
-  audioManager: {
-    playJump: () => void;
-    playFootstep: (surface: string, isRight: boolean) => void;
-    playSplash: () => void;
-  };
   sceneInstrumentation: {
     drawCallsCounter: { current: number };
   };
-
   runtimeLog: Slice3DSessionLog;
 
-  getCurrentLevel: () => string;
-  getRenderLevel: () => string;
   getElapsedSec: () => number;
-  getMapTileAt: (level: string, tx: number, tz: number) => any;
   checkLevelDrift: () => void;
-  setHeroDirection: (dir: any) => void;
-  setHeroAnimState: (state: any, lockMs?: number) => void;
-  resolveHeroBmsDirection: (...args: any[]) => any;
-  setSelectedEnemy: (uid: string | null) => void;
-  finishAirborneLanding: (level: string, y: number, impactSpeed: number, floorCount: number) => void;
-  isPlayerOverVoidAtLevel: (level: string) => boolean;
-  getGroundSurfaceY: (x: number, z: number, level: string) => number;
-  syncLevelSideEffects: () => void;
   syncVerticalLevelVisibility: (dt: number) => void;
   hideWallsOnRay: () => void;
-  updateEnemyAI: (dt: number) => void;
   updatePlayerDebugMesh: () => void;
-  collectInteractableRevealTargets: () => any[];
-  applyActiveLevelChange: (level: string, transition?: any, opts?: { natural?: boolean }) => void;
-  applyEnemyTargetVisual: (root: Mesh, pulse: number, health: { current: number; max: number }) => void;
-  restoreEnemyTargetVisual: (root: Mesh) => void;
-  getAquaticSampleAt: (x: number, z: number, level: string) => AquaticSample;
-  findFirstBlockingTileOnWorldLine: (
-    fromWorldX: number, fromWorldZ: number, toWorldX: number, toWorldZ: number,
-    isBlocked: (tileX: number, tileY: number) => boolean,
-    options?: { skipStart?: boolean; skipEnd?: boolean },
-  ) => any;
-  isTileBlockedForGameplay: (tileX: number, tileY: number) => boolean;
-  pushLogEvent: (event: string, data?: any) => void;
+  collectInteractableRevealTargets: () => InteractableRevealTarget[];
+  pushLogEvent: (event: string, data?: Record<string, unknown>) => void;
   persistRuntimeLogs: () => void;
   flushRuntimeLogsToFile: (wait: boolean) => void;
-  buildSummary: () => any;
-  buildHotspots: (n: number) => any;
+  buildSummary: () => Record<string, unknown>;
+  buildHotspots: (n: number) => Record<string, unknown>[];
   pushBounded: (arr: number[], val: number, max: number) => void;
-  getNearestPickupItemDistance: () => number;
 }
 
 export class RenderSystem {
@@ -203,8 +124,8 @@ export class RenderSystem {
   }
 
   attach(): void {
-    const s = this.deps.scene;
-    const e = this.deps.engine;
+    const s = this.deps.ctx.scene;
+    const e = this.deps.ctx.engine;
 
     s.onBeforeRenderObservable.add(() => this.tick());
     s.onBeforeRenderObservable.add(() => this.tickAutoSave());
@@ -213,52 +134,51 @@ export class RenderSystem {
 
   /** Monolith may move player mesh / mirror vars outside tickPhysics — sync before sim. */
   private syncPlayerCtxFromScene(): void {
-    const { playerCtx, player, state } = this.deps;
+    const { playerCtx, player } = this.deps.ctx;
     playerCtx.position.x = player.position.x;
     playerCtx.position.y = player.position.y;
     playerCtx.position.z = player.position.z;
-    playerCtx.verticalVelocity = state.verticalVelocity;
-    playerCtx.isGrounded = state.isGrounded;
-    playerCtx.holeFallLandingLevel = state.holeFallLandingLevel;
-    playerCtx.holeFallFloorCount = state.holeFallFloorCount;
-    playerCtx.fallOriginFootY = state.fallOriginFootY;
-    playerCtx.wasOnVoidWithSafety = state.wasOnVoidWithSafety;
-    playerCtx.lastSafePositionX = state.lastSafePlayerX;
-    playerCtx.lastSafePositionZ = state.lastSafePlayerZ;
-    playerCtx.lastGroundedFootY = state.lastGroundedFootY;
-    playerCtx.levelTransitionCooldown = state.levelTransitionCooldown;
   }
 
   private tick(): void {
     const {
-      state, scene, engine, camera, firstPersonCamera,
+      ctx,
+      saveSystem,
+      heroShadowMat, heroAquaticTint, lastPlayerAquaticMode,
+      telemetryEnabledRef, activeSlashtrails, enemySpawnCatalog,
+      sceneInstrumentation, runtimeLog,
+      getElapsedSec,
+      checkLevelDrift,
+      syncVerticalLevelVisibility, hideWallsOnRay,
+      updatePlayerDebugMesh, collectInteractableRevealTargets,
+      pushLogEvent, persistRuntimeLogs, flushRuntimeLogsToFile,
+      buildSummary, buildHotspots, pushBounded,
+    } = this.deps;
+
+    const {
+      scene, engine, camera, firstPersonCamera,
       chunkSystem, orchestrator, navigationSystem, cameraSystem,
       qualitySystem, doorSystem, propSystem, dropSystem, enemySystem,
       playerState, projectileSystem, wallRevealSystem, waterEffectSystem,
-      sliceCombatSystem, collisionWorld, inputManager, saveSystem,
-      player, playerCtx, heroSpriteMat, heroShadowMat, heroBillboard,
-      heroShadow, heroAquaticTint, audioManager, sceneInstrumentation,
-      activeSlashtrails, enemies, enemySpawnCatalog,
-      runtimeLog,
-      getCurrentLevel, getRenderLevel, getElapsedSec, getMapTileAt,
-      checkLevelDrift, setHeroDirection, setHeroAnimState,
+      sliceCombatSystem, collisionWorld, inputManager,
+      player, playerCtx, heroSpriteMat, heroBillboard, heroShadow,
+      audioManager, enemies,
+      getCurrentLevel, getRenderLevel, getMapTileAt,
+      setHeroDirection, setHeroAnimState,
       resolveHeroBmsDirection, setSelectedEnemy, finishAirborneLanding,
       isPlayerOverVoidAtLevel, getGroundSurfaceY, syncLevelSideEffects,
-      syncVerticalLevelVisibility, hideWallsOnRay, updateEnemyAI,
-      updatePlayerDebugMesh, collectInteractableRevealTargets,
+      updateEnemyAI,
       applyActiveLevelChange, applyEnemyTargetVisual,
       restoreEnemyTargetVisual, getAquaticSampleAt,
       findFirstBlockingTileOnWorldLine, isTileBlockedForGameplay,
-      pushLogEvent, persistRuntimeLogs, flushRuntimeLogsToFile,
-      buildSummary, buildHotspots, pushBounded, getNearestPickupItemDistance,
-    } = this.deps;
+    } = ctx;
 
-    if (state.gameplayPaused) return;
-    if (state.isPlayerDeathSequenceActive) return;
+    if (ctx.gameplayPaused) return;
+    if (ctx.isPlayerDeathSequenceActive) return;
 
     const deltaSeconds = engine.getDeltaTime() / 1000;
 
-    if (!this.deps.state.worldBootstrapReady) {
+    if (!ctx.worldBootstrapReady) {
       chunkSystem.tick(deltaSeconds);
       return;
     }
@@ -330,10 +250,10 @@ export class RenderSystem {
     const movementStartX = player.position.x;
     const movementStartZ = player.position.z;
     const nowMs = Date.now();
-    if (nowMs >= state.heroAnimLockedUntil) {
+    if (nowMs >= ctx.heroAnimLockedUntil) {
       if (isMoving) {
         setHeroDirection(
-          resolveHeroBmsDirection(moveForward, moveRight, 0),
+          resolveHeroBmsDirection(moveForward, moveRight, "south"),
         );
         setHeroAnimState("walk");
       } else {
@@ -349,7 +269,7 @@ export class RenderSystem {
       let worldDz = 0;
       if (isMoving) {
         let movement = Vector3.Zero();
-        if (state.isFirstPerson) {
+        if (ctx.isFirstPerson) {
           const yaw = firstPersonCamera.rotation.y;
           const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
           const right = new Vector3(forward.z, 0, -forward.x);
@@ -403,30 +323,30 @@ export class RenderSystem {
       tickPhysics(playerCtx, physicsInput, collisionWorld, {
         getMapTileAt,
         getTileDef: (symbol: string | null) => {
-          const mapData = this.deps.getMapDataCache();
+          const mapData = this.deps.ctx.mapDataCache;
           return symbol ? mapData?.tileDefinitions?.[symbol] : undefined;
         },
         hasLevel: (level: string) =>
-          Boolean(this.deps.getMapDataCache()?.levels?.[level]),
+          Boolean(this.deps.ctx.mapDataCache?.levels?.[level]),
         allLevels: () =>
-          Object.keys(this.deps.getMapDataCache()?.levels ?? {}),
-        getMapWidth: () => this.deps.getCurrentMapWidth(),
-        getMapHeight: () => this.deps.getCurrentMapHeight(),
+          Object.keys(this.deps.ctx.mapDataCache?.levels ?? {}),
+        getMapWidth: () => this.deps.ctx.currentMapWidth,
+        getMapHeight: () => this.deps.ctx.currentMapHeight,
         parseLevelNumber,
       }, {
-        onFallSafetyActive: (_ctx: any) => {
+        onFallSafetyActive: () => {
           playerState.emit("uiNotification", {
             type: "warning",
             message: "fall_safety_active",
           });
         },
-        onHoleTransition: (_fromLevel: string, toLevel: string, transition: any) => {
+        onHoleTransition: (_fromLevel: string, toLevel: string, transition: { tileX: number; tileZ: number; landingLocalZ: number; guardMs: number }) => {
           applyActiveLevelChange(toLevel, transition);
         },
         onNaturalLevelTransition: (toLevel: string) => {
           applyActiveLevelChange(toLevel, undefined, { natural: true });
         },
-        onGrounded: (_ctx: any, impactSpeed: number) => {
+        onGrounded: (_ctx: PlayerContext, impactSpeed: number) => {
           finishAirborneLanding(
             getCurrentLevel(),
             playerCtx.position.y,
@@ -442,17 +362,6 @@ export class RenderSystem {
       player.position.x = playerCtx.position.x;
       player.position.y = playerCtx.position.y;
       player.position.z = playerCtx.position.z;
-
-      state.verticalVelocity = playerCtx.verticalVelocity;
-      state.isGrounded = playerCtx.isGrounded;
-      state.holeFallLandingLevel = playerCtx.holeFallLandingLevel;
-      state.holeFallFloorCount = playerCtx.holeFallFloorCount;
-      state.fallOriginFootY = playerCtx.fallOriginFootY;
-      state.wasOnVoidWithSafety = playerCtx.wasOnVoidWithSafety;
-      state.lastSafePlayerX = playerCtx.lastSafePositionX;
-      state.lastSafePlayerZ = playerCtx.lastSafePositionZ;
-      state.lastGroundedFootY = playerCtx.lastGroundedFootY;
-      state.levelTransitionCooldown = playerCtx.levelTransitionCooldown;
     }
     physicsTimeAccum += performance.now() - tStart;
 
@@ -468,7 +377,7 @@ export class RenderSystem {
     enemyTimeAccum += performance.now() - tStart;
 
     tStart = performance.now();
-    if (!state.gameplayPaused) {
+    if (!ctx.gameplayPaused) {
       projectileSystem.update(deltaSeconds);
     }
     sliceCombatSystem.tryAutoPlayerAttack(Date.now());
@@ -502,7 +411,7 @@ export class RenderSystem {
         enemyTime: Math.round(enemyTimeAccum * 10) / 10,
         physicsTime: Math.round(physicsTimeAccum * 10) / 10,
         activeEnemies: Array.from(enemies.values()).filter(
-          (e: any) => !e.isDead && Math.abs(e.level - parseLevelNumber(getCurrentLevel())) <= 1 && Vector3.Distance(e.worldPos, player.position) <= ENEMY_AI_RADIUS_UNITS,
+          (e) => !e.isDead && Math.abs(Number(e.level) - parseLevelNumber(getCurrentLevel())) <= 1 && Vector3.Distance(e.worldPos, player.position) <= ENEMY_AI_RADIUS_UNITS,
         ).length,
         renderedTiles: chunkSystem.loadedChunks.size * CHUNK_SIZE * CHUNK_SIZE,
         totalObjects: activeMeshes,
@@ -625,7 +534,7 @@ export class RenderSystem {
           activeOnLevel: activeEnemies,
           visibleOnLevel: visibleEnemies,
           aiActiveOnLevel: aiActiveEnemies,
-          selectedEnemyUid: state.selectedEnemyUid,
+          selectedEnemyUid: ctx.selectedEnemyUid,
         },
         items: {
           streamedDroppedItems: dropSystem.droppedItemMeshes.size,
@@ -762,8 +671,8 @@ export class RenderSystem {
     }
 
     this.enemyHighlightPulseT += deltaSeconds;
-    if (state.selectedEnemyUid) {
-      const selectedEnemy = enemies.get(state.selectedEnemyUid);
+    if (ctx.selectedEnemyUid) {
+      const selectedEnemy = enemies.get(ctx.selectedEnemyUid);
       if (!selectedEnemy || selectedEnemy.isDead) {
         setSelectedEnemy(null);
       } else {
@@ -786,7 +695,7 @@ export class RenderSystem {
       }
     }
 
-    if (state.isGrounded && !state.holeFallLandingLevel && !isPlayerOverVoidAtLevel(getCurrentLevel())) {
+    if (ctx.isGrounded && !ctx.holeFallLandingLevel && !isPlayerOverVoidAtLevel(getCurrentLevel())) {
       syncLevelSideEffects();
     }
 
@@ -808,7 +717,7 @@ export class RenderSystem {
     syncVerticalLevelVisibility(deltaSeconds);
     hideWallsOnRay();
 
-    if (state.isFirstPerson) {
+    if (ctx.isFirstPerson) {
       heroBillboard.setEnabled(false);
       heroShadow.setEnabled(false);
       cameraSystem.updateCombatCamera(deltaSeconds);
@@ -818,8 +727,8 @@ export class RenderSystem {
         Math.floor(player.position.x),
         Math.floor(player.position.z),
         8,
-        this.deps.getCurrentMapWidth(),
-        this.deps.getCurrentMapHeight(),
+        this.deps.ctx.currentMapWidth,
+        this.deps.ctx.currentMapHeight,
       );
       playerState.recordPlayerPosition(
         getCurrentLevel(),
@@ -863,8 +772,8 @@ export class RenderSystem {
       Math.floor(player.position.x),
       Math.floor(player.position.z),
       8,
-      this.deps.getCurrentMapWidth(),
-      this.deps.getCurrentMapHeight(),
+      this.deps.ctx.currentMapWidth,
+      this.deps.ctx.currentMapHeight,
     );
 
     playerState.recordPlayerPosition(
@@ -877,12 +786,13 @@ export class RenderSystem {
   }
 
   private tickAutoSave(): void {
-    const { engine, player, saveSystem, getCurrentLevel } = this.deps;
+    const { saveSystem } = this.deps;
+    const { engine, player, getCurrentLevel } = this.deps.ctx;
     this.autoSaveTimer += engine.getDeltaTime() / 1000;
     if (this.autoSaveTimer >= AUTO_SAVE_INTERVAL) {
       this.autoSaveTimer = 0;
       void saveSystem.saveGameDirect({
-        map: this.deps.sliceMapName,
+        map: this.deps.ctx.sliceMapName,
         currentLevel: getCurrentLevel(),
         playerPos: {
           x: Math.round(player.position.x * 32 * 100) / 100,
@@ -899,7 +809,7 @@ export class RenderSystem {
       if (now - this.lastRenderAt < this.fpsTargetMinFrameMs) return;
       this.lastRenderAt = now;
     }
-    this.deps.scene.render();
+    this.deps.ctx.scene.render();
   }
 
   setFpsTargetMinFrameMs(v: number): void {

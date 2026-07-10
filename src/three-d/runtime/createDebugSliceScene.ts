@@ -47,7 +47,7 @@ import {
   Projectile3DSystem,
   type Projectile3DGridContext,
 } from "./Projectile3DSystem";
-import { RenderSystem, type RenderState } from "./RenderSystem";
+import { RenderSystem } from "./RenderSystem";
 import {
   resolveBmsDirectionFromWorldDelta,
   bmsDirectionToFirstPersonYaw,
@@ -71,7 +71,13 @@ import { isWaterTileId, sampleAquaticFromTile, type AquaticSample } from "./Wate
 import { attachAquaticShaderTint } from "./AquaticSpriteShader";
 import { configureBillboardSpriteMesh } from "./BillboardDepthConfig";
 import { SliceInputManager } from "./SliceInputManager";
-import type { SliceSceneContext } from "./SliceSceneContext";
+import type { GameContext } from "./GameContext";
+import { createPlayerFallSystem, type PlayerFallSystem } from "./PlayerFallSystem";
+import { createLevelTransitionSystem } from "./LevelTransitionSystem";
+import { createRuneCastSystem } from "./RuneCastSystem";
+import { createDropPickupSystem } from "./DropPickupSystem";
+import { createDamagePopupSystem } from "./DamagePopupSystem";
+import { createGroundQuerySystem } from "./GroundQuerySystem";
 import { SliceEnemySystem } from "./SliceEnemySystem";
 import { SliceCombatSystem } from "./SliceCombatSystem";
 import {
@@ -80,7 +86,7 @@ import {
   getFirstPersonEnemyProximityScale,
   updateFirstPersonCombatCamera,
 } from "./FirstPersonCombatPresentation";
-import { computeFallDamageMultiplier, getAquaticVisualPreset } from "./AquaticVisualConfig";
+import { getAquaticVisualPreset } from "./AquaticVisualConfig";
 import {
   collectWaterEffectTiles,
   WaterEffectSystem,
@@ -127,6 +133,10 @@ import {
 } from "./PropBillboardFactory";
 import { QualitySystem, type QualityPreset } from "./QualitySystem";
 import { VisibilitySystem } from "./VisibilitySystem";
+import { TileMaterialSystem, safeTileColor } from "./TileMaterialSystem";
+import { buildRoofMesh, buildStairMesh } from "./ChunkGeometryBuilder";
+import { PointerPickingSystem } from "./PointerPickingSystem";
+import { TelemetryLogger } from "./TelemetryLogger";
 import { disposeAllPooledSpriteTexturesForScene } from "./SpriteTexturePool";
 import type { SliceTileDefinition, MapEntity, SliceLevelData, SliceMapData } from "./SliceTileTypes";
 import { resolveCharacterVisualProfile } from "./CharacterVisualProfile";
@@ -210,7 +220,7 @@ export type Slice3DLogSample = {
   };
 };
 
-type Slice3DLogEvent = {
+export type Slice3DLogEvent = {
   ts: number;
   elapsedSec: number;
   type: string;
@@ -231,7 +241,7 @@ export type Slice3DSessionLog = {
   };
 };
 
-type Slice3DHotspot = {
+export type Slice3DHotspot = {
   key: string;
   level: string;
   chunkX: number;
@@ -246,7 +256,7 @@ type Slice3DHotspot = {
   score: number;
 };
 
-type Slice3DSummary = {
+export type Slice3DSummary = {
   sampleCount: number;
   eventCount: number;
   uptimeSec: number;
@@ -412,7 +422,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     searchParams.get("mapName") ||
     "debug_sandbox";
   /** Props / dropped loot sit on walkable surface (not actor foot clearance). */
-  const WORLD_ANCHOR_REST_OFFSET = 0.012;
   // Eye line ~58% of hero body height — chest-level FP view (see HERO_FIRST_PERSON_EYE_BODY_RATIO).
   const FIRST_PERSON_EYE_ABOVE_FEET = getHeroFirstPersonEyeHeight();
   const HERO_BODY_HEIGHT = HERO_COLLISION_HEIGHT;
@@ -434,7 +443,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       typeof level === "number" ? level : parseLevelNumber(level);
     return levelNumber * LEVEL_HEIGHT;
   };
-  let lastSideEffectLevel: string | null = null;
   const getCurrentLevel = (): string => {
     if (!mapDataCache?.levels) return playerState.getCurrentLevel();
     return inferLevelFromFootY(player.position.y, Object.keys(mapDataCache.levels), {
@@ -503,8 +511,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let heroAnimState: HeroAnimState = "idle";
   let heroDirection: HeroBmsDirection = "south";
   let heroAnimLockedUntil = 0;
-  const PLAYER_DEATH_SEQUENCE_MS = 2000;
-
   const setHeroAnimState = (state: HeroAnimState, lockMs = 0) => {
     heroAnimState = state;
     const setter = (heroSpriteMat as HeroSpriteMaterial)._setAnimState;
@@ -749,10 +755,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let targetingRuneId: string | null = null;
   let mapDataCache: SliceMapData | null = null;
   let worldMapReady = false;
-  const recentPlayerDamagePopups = new Map<
-    string,
-    { at: number; value: number }
-  >();
 
   let enemyHighlightPulseT = 0; // accumulator for sine pulse (seconds)
 
@@ -896,7 +898,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       ensureMapLevelReady: (level: string) => ensureMapLevelReady(level),
       ensureLevelDoorsSeeded: (level: string) => doorSystem.ensureLevelSeeded(level),
       setSelectedEnemy: (uid: string | null) => setSelectedEnemy(uid),
-      pushLogEvent: (event: string, data: any) => pushLogEvent(event, data),
+      pushLogEvent: (event: string, data: any) => telemetryLogger.pushLogEvent(event, data),
     },
   );
   qualitySystem.orchestrator = orchestrator;
@@ -924,391 +926,20 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   );
 
   // Tile material cache — distinct materials are bounded by `kind × baseHex`,
-  // which for the current tile atlas resolves to at most ~30 entries. We keep
-  // an LRU array for ordering (used by clear-on-map-change) but DO NOT evict
-  // while the runtime is alive: evicting would dispose() a material that may
-  // still be assigned to chunk meshes built earlier, leaving those meshes
-  // rendered with an invalid/black material until the chunk is unloaded.
-  const TILE_MATERIAL_CACHE_LIMIT = 256;
-  const tileMaterials = new Map<string, StandardMaterial>();
-  const tileMaterialLRU: string[] = []; // insertion-order keys (legacy; not evicted)
+  // same logic for the tile-material system is now inside TileMaterialSystem
+  const tileMaterialSystem = new TileMaterialSystem(scene);
   const levelBinaryCache = new Map<string, Uint8Array>();
 
-  const LOG_SAMPLE_INTERVAL = 1.0;
-  const LOG_PERSIST_INTERVAL = 5.0;
-  const LOG_MAX_SAMPLES = 7200;
-  const LOG_MAX_EVENTS = 3000;
-  const LOG_SLOW_PATH_MS = 100;
-  const LOG_STORAGE_KEY = "slice3d.runtime.logs.latest";
-  const LOG_FRAME_WINDOW_MAX = 600;
-  const LOG_PATH_WINDOW_MAX = 600;
-  const LOG_HEAP_WINDOW_SECONDS = 300;
-  const LOG_UNLOAD_RECOVERY_GRACE_SECONDS = 25;
-  const telemetryEnabled = { value: true };
-  let telemetryFileFlushInFlight = false;
-  let lastRuntimeLogFilePath: string | null = null;
   const runtimeStartedAt = Date.now();
-  let previousHeapUsedMb: number | undefined;
-  let prevDrawCallsTotal = 0;
-  const frameMsWindow: number[] = [];
-  const pathMsWindow: number[] = [];
-  const heapHistory: Array<{ elapsedSec: number; usedMb: number }> = [];
-  const chunkHotspots = new Map<
-    string,
-    {
-      level: string;
-      chunkX: number;
-      chunkZ: number;
-      samples: number;
-      frameMsAcc: number;
-      drawCallsAcc: number;
-      activeMeshesAcc: number;
-      verticesAcc: number;
-      maxHeapUsedMb: number;
-      maxPathMs: number;
-    }
-  >();
-  const unloadCheckpoints: Array<{
-    atSec: number;
-    heapMb: number;
-    resolved: boolean;
-    succeeded: boolean;
-  }> = [];
-  let chunkUnloadRecoveryFailures = 0;
-  const pathMetrics = {
-    requests: 0,
-    success: 0,
-    failed: 0,
-    errors: 0,
-    totalMs: 0,
-    maxMs: 0,
-    lastMs: 0,
-    lastPathLen: 0,
-    inFlight: 0,
-  };
-
-  const runtimeLog: Slice3DSessionLog = {
-    version: 1,
-    mapName: sliceMapName,
-    startedAt: new Date(runtimeStartedAt).toISOString(),
-    sessionId: `${runtimeStartedAt}-${Math.random().toString(36).slice(2, 8)}`,
-    samples: [],
-    events: [],
-    counters: {
-      samplesDropped: 0,
-      eventsDropped: 0,
-      exportCount: 0,
-    },
-  };
-
-  const getElapsedSec = () =>
-    Math.round(((Date.now() - runtimeStartedAt) / 1000) * 100) / 100;
-
-  const pushBounded = (arr: number[], value: number, maxSize: number) => {
-    arr.push(value);
-    if (arr.length > maxSize) {
-      arr.shift();
-    }
-  };
-
-  const getPercentile = (arr: number[], percentile: number): number => {
-    if (!arr.length) return 0;
-    const sorted = [...arr].sort((a, b) => a - b);
-    const rank = (percentile / 100) * (sorted.length - 1);
-    const low = Math.floor(rank);
-    const high = Math.ceil(rank);
-    if (low === high) {
-      return sorted[low];
-    }
-    const weight = rank - low;
-    return sorted[low] * (1 - weight) + sorted[high] * weight;
-  };
-
-  const clampScore = (value: number, min = 0, max = 100) =>
-    Math.max(min, Math.min(max, value));
-
-  const getHeapSlopeMbPerSec = () => {
-    if (heapHistory.length < 6) {
-      return undefined;
-    }
-
-    const points = heapHistory;
-    const n = points.length;
-    let sumX = 0;
-    let sumY = 0;
-    let sumXY = 0;
-    let sumX2 = 0;
-
-    points.forEach((point) => {
-      const x = point.elapsedSec;
-      const y = point.usedMb;
-      sumX += x;
-      sumY += y;
-      sumXY += x * y;
-      sumX2 += x * x;
-    });
-
-    const denominator = n * sumX2 - sumX * sumX;
-    if (Math.abs(denominator) < 1e-6) {
-      return undefined;
-    }
-
-    return (n * sumXY - sumX * sumY) / denominator;
-  };
-
-  const buildHotspots = (limit = 10): Slice3DHotspot[] => {
-    const list: Slice3DHotspot[] = [];
-
-    chunkHotspots.forEach((entry, key) => {
-      if (entry.samples <= 0) {
-        return;
-      }
-
-      const avgFrameMs = entry.frameMsAcc / entry.samples;
-      const avgDrawCalls = entry.drawCallsAcc / entry.samples;
-      const avgActiveMeshes = entry.activeMeshesAcc / entry.samples;
-      const avgVertices = entry.verticesAcc / entry.samples;
-      const score =
-        avgFrameMs * 2.3 +
-        avgDrawCalls * 0.08 +
-        avgActiveMeshes * 0.06 +
-        avgVertices / 50000 +
-        entry.maxHeapUsedMb * 0.12 +
-        entry.maxPathMs * 0.25;
-
-      list.push({
-        key,
-        level: entry.level,
-        chunkX: entry.chunkX,
-        chunkZ: entry.chunkZ,
-        samples: entry.samples,
-        avgFrameMs: Math.round(avgFrameMs * 100) / 100,
-        avgDrawCalls: Math.round(avgDrawCalls * 100) / 100,
-        avgActiveMeshes: Math.round(avgActiveMeshes * 100) / 100,
-        avgVertices: Math.round(avgVertices * 100) / 100,
-        maxHeapUsedMb: Math.round(entry.maxHeapUsedMb * 100) / 100,
-        maxPathMs: Math.round(entry.maxPathMs * 100) / 100,
-        score: Math.round(score * 100) / 100,
-      });
-    });
-
-    return list.sort((a, b) => b.score - a.score).slice(0, limit);
-  };
-
-  const buildSummary = (): Slice3DSummary => {
-    const frameP50 = getPercentile(frameMsWindow, 50);
-    const frameP95 = getPercentile(frameMsWindow, 95);
-    const frameP99 = getPercentile(frameMsWindow, 99);
-    const pathP50 = getPercentile(pathMsWindow, 50);
-    const pathP95 = getPercentile(pathMsWindow, 95);
-    const pathP99 = getPercentile(pathMsWindow, 99);
-    const heapSlope = getHeapSlopeMbPerSec();
-    const currentHeap = heapHistory.length
-      ? heapHistory[heapHistory.length - 1].usedMb
-      : undefined;
-
-    const recentSamples = runtimeLog.samples.slice(-60);
-    const avgPendingCandidates = recentSamples.length
-      ? recentSamples.reduce((acc, s) => acc + s.chunks.pendingCandidates, 0) /
-        recentSamples.length
-      : 0;
-    const avgPendingUnloads = recentSamples.length
-      ? recentSamples.reduce((acc, s) => acc + s.chunks.pendingUnloads, 0) /
-        recentSamples.length
-      : 0;
-
-    const leakReasons: string[] = [];
-    if (heapSlope !== undefined && heapSlope > 0.03) {
-      leakReasons.push(`heap slope positive (${heapSlope.toFixed(3)} MB/s)`);
-    }
-    if (chunkUnloadRecoveryFailures >= 2) {
-      leakReasons.push(
-        `chunk unload recovery failed ${chunkUnloadRecoveryFailures}x`,
-      );
-    }
-
-    let leakRisk: "low" | "medium" | "high" = "low";
-    if (leakReasons.length >= 2) {
-      leakRisk = "high";
-    } else if (leakReasons.length === 1) {
-      leakRisk = "medium";
-    }
-
-    const frameScore = clampScore(100 - (frameP95 - 16.7) * 3.2);
-    const stabilityScore = clampScore(
-      100 - Math.max(0, frameP99 - frameP50) * 2.1,
-    );
-    const pathScore = clampScore(100 - Math.max(0, pathP95 - 25) * 1.8);
-    const backlogScore = clampScore(
-      100 - avgPendingCandidates * 2.2 - avgPendingUnloads * 1.2,
-    );
-    const leakPenalty =
-      leakRisk === "high" ? 30 : leakRisk === "medium" ? 15 : 0;
-
-    const sessionHealthScore = clampScore(
-      frameScore * 0.35 +
-        stabilityScore * 0.2 +
-        pathScore * 0.25 +
-        backlogScore * 0.2 -
-        leakPenalty,
-    );
-
-    return {
-      sampleCount: runtimeLog.samples.length,
-      eventCount: runtimeLog.events.length,
-      uptimeSec: Math.round(getElapsedSec() * 100) / 100,
-      frameMs: {
-        p50: Math.round(frameP50 * 100) / 100,
-        p95: Math.round(frameP95 * 100) / 100,
-        p99: Math.round(frameP99 * 100) / 100,
-      },
-      pathMs: {
-        p50: Math.round(pathP50 * 100) / 100,
-        p95: Math.round(pathP95 * 100) / 100,
-        p99: Math.round(pathP99 * 100) / 100,
-      },
-      heap: {
-        currentMb: currentHeap,
-        slopeMbPerSec:
-          heapSlope !== undefined
-            ? Math.round(heapSlope * 10000) / 10000
-            : undefined,
-        unloadRecoveryFailures: chunkUnloadRecoveryFailures,
-      },
-      chunk: {
-        avgPendingCandidates: Math.round(avgPendingCandidates * 100) / 100,
-        avgPendingUnloads: Math.round(avgPendingUnloads * 100) / 100,
-      },
-      leakRisk: {
-        level: leakRisk,
-        reasons: leakReasons,
-      },
-      sessionHealthScore: Math.round(sessionHealthScore * 100) / 100,
-    };
-  };
-
-  const pushLogEvent = (type: string, payload?: Record<string, unknown>) => {
-    if (!telemetryEnabled.value) return;
-    if (runtimeLog.events.length >= LOG_MAX_EVENTS) {
-      runtimeLog.events.shift();
-      runtimeLog.counters.eventsDropped += 1;
-    }
-    runtimeLog.events.push({
-      ts: Date.now(),
-      elapsedSec: getElapsedSec(),
-      type,
-      payload,
-    });
-  };
-
-  const persistRuntimeLogs = () => {
-    try {
-      localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(runtimeLog));
-    } catch {
-      // Ignore storage errors (quota/private mode); in-memory logs remain available.
-    }
-  };
-
-  const exportRuntimeLogs = () => {
-    runtimeLog.counters.exportCount += 1;
-    const summary = buildSummary();
-    const hotspots = buildHotspots(20);
-    return {
-      ...runtimeLog,
-      exportedAt: new Date().toISOString(),
-      runtime: {
-        currentLevel: getCurrentLevel(),
-        isFirstPerson,
-      },
-      summary,
-      hotspots,
-    };
-  };
-
-  const flushRuntimeLogsToFile = async (force = false) => {
-    const electronAPI = window.electronAPI;
-    if (!electronAPI?.writeRuntimeLog) {
-      return;
-    }
-    if (!force && telemetryFileFlushInFlight) {
-      return;
-    }
-
-    telemetryFileFlushInFlight = true;
-    try {
-      const result = await electronAPI.writeRuntimeLog(exportRuntimeLogs());
-      if (result?.success && result.path) {
-        if (lastRuntimeLogFilePath !== result.path) {
-          pushLogEvent("log.file-path", { path: result.path });
-        }
-        lastRuntimeLogFilePath = result.path;
-      } else if (result?.error) {
-        pushLogEvent("log.file-write-error", { error: result.error });
-      }
-    } catch (error) {
-      pushLogEvent("log.file-write-error", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      telemetryFileFlushInFlight = false;
-    }
-  };
-
-  const downloadRuntimeLogs = () => {
-    const payload = JSON.stringify(exportRuntimeLogs(), null, 2);
-    const blob = new Blob([payload], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `slice3d-runtime-log-${Date.now()}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-    pushLogEvent("log.download");
-  };
-
-  window.__slice3dLogs = {
-    get: () => exportRuntimeLogs(),
-    getSummary: () => buildSummary(),
-    getHotspots: (limit = 10) =>
-      buildHotspots(Math.max(1, Number(limit) || 10)),
-    download: () => downloadRuntimeLogs(),
-    clear: () => {
-      runtimeLog.samples = [];
-      runtimeLog.events = [];
-      runtimeLog.counters.samplesDropped = 0;
-      runtimeLog.counters.eventsDropped = 0;
-      previousHeapUsedMb = undefined;
-      frameMsWindow.length = 0;
-      pathMsWindow.length = 0;
-      heapHistory.length = 0;
-      chunkHotspots.clear();
-      unloadCheckpoints.length = 0;
-      chunkUnloadRecoveryFailures = 0;
-      pushLogEvent("log.clear");
-      persistRuntimeLogs();
-    },
-    mark: (label: string, extra?: Record<string, unknown>) => {
-      pushLogEvent("user.mark", {
-        label,
-        ...(extra || {}),
-      });
-    },
-    setEnabled: (value: boolean) => {
-      telemetryEnabled.value = !!value;
-      pushLogEvent("log.enabled", { value: telemetryEnabled.value });
-    },
-    isEnabled: () => telemetryEnabled.value,
-    getLastFilePath: () => lastRuntimeLogFilePath,
-    flushToFile: () => flushRuntimeLogsToFile(true),
-    storageKey: LOG_STORAGE_KEY,
-  };
-
-  pushLogEvent("session.start", {
-    map: sliceMapName,
-    level: getCurrentLevel(),
+  const telemetryLogger = new TelemetryLogger({
+    sliceMapName,
+    telemetryEnabledRef: { value: true },
+    getCurrentLevel,
+    getElapsedSec: () => Math.round(((Date.now() - runtimeStartedAt) / 1000) * 100) / 100,
+    getIsFirstPerson: () => isFirstPerson,
   });
+  const telemetryEnabled = telemetryLogger.telemetryEnabledRef;
+  const pushLogEvent = telemetryLogger.pushLogEvent.bind(telemetryLogger);
 
   let mapMinX = 0;
   let mapMaxX = 24;
@@ -1382,352 +1013,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         { skipStart: true },
       ) === null
     );
-  };
-
-  const safeTileColor = (hexColor: string | undefined, fallback: string) => {
-    const color = (hexColor || fallback).trim();
-    try {
-      return Color3.FromHexString(color);
-    } catch {
-      return Color3.FromHexString(fallback);
-    }
-  };
-
-  const normalizeTileHexColor = (
-    colorValue: string | number | undefined,
-    fallback: string,
-  ) => {
-    if (typeof colorValue === "number" && Number.isFinite(colorValue)) {
-      return `#${(colorValue >>> 0)
-        .toString(16)
-        .padStart(6, "0")
-        .slice(-6)}`.toLowerCase();
-    }
-
-    if (typeof colorValue === "string") {
-      const trimmed = colorValue.trim();
-      if (!trimmed) {
-        return fallback.toLowerCase();
-      }
-
-      if (trimmed.startsWith("#")) {
-        return trimmed.toLowerCase();
-      }
-
-      if (/^0x[0-9a-f]{6}$/i.test(trimmed)) {
-        return `#${trimmed.slice(2)}`.toLowerCase();
-      }
-
-      if (/^[0-9a-f]{6}$/i.test(trimmed)) {
-        return `#${trimmed}`.toLowerCase();
-      }
-
-      return trimmed.toLowerCase();
-    }
-
-    return fallback.toLowerCase();
-  };
-
-  const color3ToCss = (color: Color3) => {
-    const r = Math.round(color.r * 255);
-    const g = Math.round(color.g * 255);
-    const b = Math.round(color.b * 255);
-    return `rgb(${r}, ${g}, ${b})`;
-  };
-
-  const shadeColor = (color: Color3, factor: number) => {
-    const next = new Color3(
-      Math.max(0, Math.min(1, color.r * factor)),
-      Math.max(0, Math.min(1, color.g * factor)),
-      Math.max(0, Math.min(1, color.b * factor)),
-    );
-    return color3ToCss(next);
-  };
-
-  const inferTileMaterialKind = (
-    symbol: string | null,
-    tileDef?: SliceTileDefinition,
-  ) => {
-    const tileId = (tileDef?.id || symbol || "").toLowerCase();
-    if (tileId.includes("sewer")) return "sewer";
-    if (tileId.includes("roof")) return "roof";
-    // Specific stone/cave/dungeon ids must be checked BEFORE the generic
-    // "floor" pattern, otherwise "dungeon-floor" / "cave-floor" /
-    // "stone-floor" all collapse into the wood material.
-    if (
-      tileId.includes("cob") ||
-      tileId.includes("stone") ||
-      tileId.includes("pave") ||
-      tileId.includes("plaza") ||
-      tileId.includes("dungeon") ||
-      tileId.includes("cave")
-    ) {
-      return "cobblestone";
-    }
-    if (tileId.includes("grass") || tileId.includes("park")) return "grass";
-    if (tileId.includes("water")) return "water";
-    if (tileId.includes("wood") || tileId.includes("floor")) return "wood";
-    if (tileDef?.renderAs === "block" || tileDef?.block) return "wall";
-    return "plain";
-  };
-
-  const drawProceduralTileTexture = (
-    texture: DynamicTexture,
-    kind: string,
-    baseColor: Color3,
-  ) => {
-    const size = 64;
-    const ctx = texture.getContext();
-    ctx.clearRect(0, 0, size, size);
-    ctx.fillStyle = color3ToCss(baseColor);
-    ctx.fillRect(0, 0, size, size);
-
-    if (kind === "grass") {
-      ctx.fillStyle = shadeColor(baseColor, 0.8);
-      for (let index = 0; index < 24; index += 1) {
-        const x = (index * 13) % size;
-        const y = (index * 29) % size;
-        ctx.beginPath();
-        ctx.arc(x + 4, y + 4, 3 + (index % 3), 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.fillStyle = shadeColor(baseColor, 1.15);
-      for (let index = 0; index < 18; index += 1) {
-        const x = (index * 19 + 7) % size;
-        const y = (index * 11 + 5) % size;
-        ctx.fillRect(x, y, 3, 2);
-      }
-    } else if (kind === "cobblestone") {
-      const stones = [
-        [4, 4, 22, 18, 1.18],
-        [30, 6, 24, 16, 0.72],
-        [6, 30, 18, 24, 0.78],
-        [30, 32, 26, 20, 1.16],
-      ];
-      stones.forEach(([sx, sy, width, height, tone]) => {
-        ctx.fillStyle = shadeColor(baseColor, tone as number);
-        ctx.fillRect(
-          sx as number,
-          sy as number,
-          width as number,
-          height as number,
-        );
-        ctx.strokeStyle = shadeColor(baseColor, 0.45);
-        ctx.lineWidth = 2;
-        ctx.strokeRect(
-          sx as number,
-          sy as number,
-          width as number,
-          height as number,
-        );
-      });
-    } else if (kind === "wet-cobble") {
-      const stones = [
-        [4, 4, 22, 18, 0.62],
-        [30, 6, 24, 16, 0.48],
-        [6, 30, 18, 24, 0.52],
-        [30, 32, 26, 20, 0.58],
-      ];
-      stones.forEach(([sx, sy, width, height, tone]) => {
-        ctx.fillStyle = shadeColor(baseColor, tone as number);
-        ctx.fillRect(
-          sx as number,
-          sy as number,
-          width as number,
-          height as number,
-        );
-      });
-      ctx.fillStyle = "rgba(120,180,220,0.22)";
-      ctx.fillRect(0, 0, size, size);
-      ctx.fillStyle = "rgba(255,255,255,0.08)";
-      ctx.fillRect(10, 8, 20, 3);
-      ctx.fillRect(36, 28, 14, 2);
-    } else if (kind === "roof") {
-      // Draw overlapping roof-tile rows (like terracotta/ceramic tiles).
-      // Each "row" is a horizontal band; within each row, tiles are staggered.
-      const tileW = 20;
-      const tileH = 14;
-      const overlap = 4; // how many px each tile overlaps the row below
-      for (let row = 0; row * (tileH - overlap) < size + tileH; row++) {
-        const rowY = row * (tileH - overlap);
-        const offsetX = (row % 2) * (tileW / 2); // stagger every other row
-        for (let col = -1; col * tileW < size + tileW; col++) {
-          const tx = col * tileW + offsetX;
-          // tile body — slightly lighter than base
-          ctx.fillStyle = shadeColor(baseColor, 0.9 + ((row + col) % 3) * 0.07);
-          ctx.fillRect(tx + 1, rowY + 1, tileW - 2, tileH - 1);
-          // bottom-lip highlight (shadow line at bottom edge of tile)
-          ctx.fillStyle = shadeColor(baseColor, 0.55);
-          ctx.fillRect(tx + 1, rowY + tileH - 2, tileW - 2, 2);
-          // top-edge subtle highlight
-          ctx.fillStyle = shadeColor(baseColor, 1.18);
-          ctx.fillRect(tx + 1, rowY + 1, tileW - 2, 2);
-          // grout lines between tiles
-          ctx.fillStyle = shadeColor(baseColor, 0.48);
-          ctx.fillRect(tx, rowY, 1, tileH);
-        }
-      }
-      // Overall border darkening to suggest the slab edge
-      ctx.fillStyle = shadeColor(baseColor, 0.55);
-      ctx.fillRect(0, 0, size, 2);
-      ctx.fillRect(0, size - 2, size, 2);
-      ctx.fillRect(0, 0, 2, size);
-      ctx.fillRect(size - 2, 0, 2, size);
-    } else if (kind === "wood") {
-      ctx.strokeStyle = shadeColor(baseColor, 0.55);
-      ctx.lineWidth = 2;
-      for (let x = 0; x <= size; x += 10) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, size);
-        ctx.stroke();
-      }
-      ctx.strokeStyle = shadeColor(baseColor, 1.12);
-      ctx.lineWidth = 1;
-      for (let row = 0; row < size; row += 8) {
-        const knotX = (row * 7) % (size - 8);
-        ctx.beginPath();
-        ctx.moveTo(0, row + 1);
-        ctx.lineTo(size, row + 1);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(knotX + 4, row + 4, 2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    } else if (kind === "sewer") {
-      ctx.strokeStyle = shadeColor(baseColor, 0.52);
-      ctx.lineWidth = 1.5;
-      for (let y = 0; y <= size; y += 12) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(size, y);
-        ctx.stroke();
-        const offset = y % 24 === 0 ? 0 : 6;
-        for (let x = offset; x <= size; x += 12) {
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(x, y + 12);
-          ctx.stroke();
-        }
-      }
-      ctx.fillStyle = shadeColor(baseColor, 1.18);
-      ctx.fillRect(6, 6, 8, 2);
-      ctx.fillRect(34, 20, 7, 2);
-      ctx.fillRect(20, 44, 10, 2);
-    } else if (kind === "water") {
-      ctx.fillStyle = shadeColor(baseColor, 0.88);
-      ctx.fillRect(0, 0, size, size);
-      ctx.strokeStyle = "rgba(255,255,255,0.45)";
-      ctx.lineWidth = 1.5;
-      for (let wave = 0; wave < 3; wave += 1) {
-        const y = 12 + wave * 16;
-        ctx.beginPath();
-        ctx.moveTo(4, y);
-        ctx.quadraticCurveTo(16, y + 3, 28, y);
-        ctx.quadraticCurveTo(40, y - 3, 60, y);
-        ctx.stroke();
-      }
-      ctx.fillStyle = "rgba(255,255,255,0.12)";
-      ctx.fillRect(8, 6, 14, 4);
-    } else if (kind === "wall") {
-      ctx.strokeStyle = shadeColor(baseColor, 0.48);
-      ctx.lineWidth = 2;
-      ctx.strokeRect(0, 0, size, size);
-      ctx.lineWidth = 1.5;
-      for (let y = 0; y <= size; y += 16) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(size, y);
-        ctx.stroke();
-        const offset = y % 32 === 0 ? 0 : 8;
-        for (let x = offset; x <= size; x += 16) {
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.lineTo(x, y + 16);
-          ctx.stroke();
-        }
-      }
-      ctx.fillStyle = shadeColor(baseColor, 1.08);
-      for (let index = 0; index < 10; index += 1) {
-        const x = (index * 17 + 9) % (size - 6);
-        const y = (index * 13 + 5) % (size - 6);
-        ctx.fillRect(x, y, 3, 3);
-      }
-    } else {
-      ctx.fillStyle = shadeColor(baseColor, 0.96);
-      for (let index = 0; index < 16; index += 1) {
-        const x = (index * 9) % size;
-        const y = (index * 21) % size;
-        ctx.fillRect(x, y, 4, 4);
-      }
-    }
-
-    texture.update(false);
-  };
-
-  const createProceduralTileMaterial = (
-    materialKey: string,
-    kind: string,
-    baseColor: Color3,
-  ) => {
-    const material = new StandardMaterial(materialKey, scene);
-    const texture = new DynamicTexture(
-      `${materialKey}-texture`,
-      { width: 64, height: 64 },
-      scene,
-      false,
-    );
-    drawProceduralTileTexture(texture, kind, baseColor);
-    texture.wrapU = 1;
-    texture.wrapV = 1;
-    material.diffuseTexture = texture;
-    material.diffuseColor = Color3.White();
-    material.specularColor = new Color3(0.06, 0.06, 0.06);
-    material.ambientColor = baseColor.scale(0.35);
-    material.backFaceCulling = false;
-    return material;
-  };
-
-  const getTileMaterial = (
-    symbol: string | null,
-    tileDef?: SliceTileDefinition,
-    fallbackHexColor = "#6a9f36",
-  ) => {
-    const baseHex = normalizeTileHexColor(
-      tileDef?.color as string | number | undefined,
-      fallbackHexColor,
-    );
-    const kind = inferTileMaterialKind(symbol, tileDef);
-    const materialKey = `${kind}:${baseHex}`;
-    const existing = tileMaterials.get(materialKey);
-    if (existing) {
-      // Bump to most-recently-used position
-      const idx = tileMaterialLRU.indexOf(materialKey);
-      if (idx !== -1) tileMaterialLRU.splice(idx, 1);
-      tileMaterialLRU.push(materialKey);
-      return existing;
-    }
-
-    // Evict oldest entry only if we somehow blow past the (generous) limit.
-    // We do NOT dispose() the material here — chunk meshes built in earlier
-    // frames still reference it, and disposing causes them to render with an
-    // invalid/black material. Remove from the cache map only; GC reclaims it
-    // once all referencing meshes are disposed by clearChunk().
-    if (tileMaterials.size >= TILE_MATERIAL_CACHE_LIMIT) {
-      const oldest = tileMaterialLRU.shift();
-      if (oldest) {
-        tileMaterials.delete(oldest);
-      }
-    }
-
-    const material = createProceduralTileMaterial(
-      `slice-tile-${materialKey.replace(/[^a-z0-9:]/gi, "-")}`,
-      kind,
-      safeTileColor(baseHex, fallbackHexColor),
-    );
-    tileMaterials.set(materialKey, material);
-    tileMaterialLRU.push(materialKey);
-    return material;
   };
 
   const loadLevelBinary = async (
@@ -1810,16 +1095,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     { levelHeight: LEVEL_HEIGHT, floorSurfaceY: WALK_SURFACE, feetClearance: FEET_CLEARANCE },
   );
 
-  const getGroundFootY = (worldX: number, worldZ: number, level: string) => {
-    const floor = collisionWorld.queryFloor(
-      worldX,
-      worldZ,
-      levelToWorldY(level),
-      levelToWorldY(level) + LEVEL_HEIGHT,
-      [level],
-    );
-    return floor ? floor.footY : levelToWorldY(level) + WALK_SURFACE + FEET_CLEARANCE;
-  };
+  // LevelTransition callbacks are resolved after their dependencies are created below
+  let applyActiveLevelChange: ReturnType<typeof createLevelTransitionSystem>["applyActiveLevelChange"];
+  let syncLevelSideEffects: ReturnType<typeof createLevelTransitionSystem>["syncLevelSideEffects"];
+  let snapPlayerFootToActiveLevel: ReturnType<typeof createLevelTransitionSystem>["snapPlayerFootToActiveLevel"];
+  let snapFootToGradedSurface: ReturnType<typeof createLevelTransitionSystem>["snapFootToGradedSurface"];
+  let addDroppedItemFromEvent: ReturnType<typeof createDropPickupSystem>["addDroppedItemFromEvent"];
+  let handleDropItem: ReturnType<typeof createDropPickupSystem>["handleDropItem"];
+  let handleRequestPickup: ReturnType<typeof createDropPickupSystem>["handleRequestPickup"];
+  let emitPlayerDamagePopup: ReturnType<typeof createDamagePopupSystem>["emitPlayerDamagePopup"];
+  let emitBloodBurst: ReturnType<typeof createDamagePopupSystem>["emitBloodBurst"];
+  let groundQuery: ReturnType<typeof createGroundQuerySystem>;
 
   const getHighestGroundBelow = (worldX: number, worldZ: number, currentY: number) => {
     const mapData = mapDataCache;
@@ -1847,145 +1133,22 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     };
   };
 
-  const getGroundSurfaceY = (worldX: number, worldZ: number, level: string) => {
-    const floor = collisionWorld.queryFloor(
-      worldX,
-      worldZ,
-      -9999,
-      9999,
-      [level],
-    );
-    return floor ? floor.surfaceY : levelToWorldY(level) + WALK_SURFACE;
-  };
+  const getGroundSurfaceY = (
+    worldX: number,
+    worldZ: number,
+    level: string,
+  ) => groundQuery.getGroundSurfaceY(worldX, worldZ, level);
 
-  /** Surface Y for billboards / loot (feet row at root origin). Includes water sink. */
   const resolveWorldAnchorY = (
     worldX: number,
     worldZ: number,
     level: string,
-    restOffset = WORLD_ANCHOR_REST_OFFSET,
-  ) => {
-    const surfaceY = getGroundSurfaceY(worldX, worldZ, level);
-    const aquatic = getAquaticSampleAt(worldX, worldZ, level);
-    const sink = aquatic.mode === "dry" ? 0 : aquatic.sinkOffset;
-    return surfaceY + sink + restOffset;
-  };
+    restOffset = 0.012,
+  ) => groundQuery.resolveWorldAnchorY(worldX, worldZ, level, restOffset);
 
-  const applyActorAquaticY = (worldPos: Vector3, level: string) => {
-    const sample = getAquaticSampleAt(worldPos.x, worldPos.z, level);
-    const surfaceY = getGroundSurfaceY(worldPos.x, worldPos.z, level);
-    const footY = surfaceY + FEET_CLEARANCE;
-    worldPos.y = footY + sample.sinkOffset;
-  };
+  const applyActorAquaticY = (worldPos: Vector3, level: string) =>
+    groundQuery.applyActorAquaticY(worldPos, level);
 
-  const applyActiveLevelChange = (
-    newLevel: string,
-    transition?: {
-      tileX: number;
-      tileZ: number;
-      landingLocalZ: number;
-      guardMs?: number;
-    },
-    options?: { natural?: boolean },
-  ) => {
-    if (newLevel === lastSideEffectLevel) {
-      return;
-    }
-    const previousLevel = lastSideEffectLevel ?? newLevel;
-    lastSideEffectLevel = newLevel;
-    const natural = options?.natural === true;
-    playerState.setCurrentLevel(newLevel);
-    WorldMapService.ensureLevelBuffer(newLevel);
-
-    if (transition) {
-      console.log("[WARP] applyActiveLevelChange with transition", { from: previousLevel, to: newLevel, tileX: transition.tileX, tileZ: transition.tileZ, landingLocalZ: transition.landingLocalZ });
-      player.position.z = transition.tileZ + transition.landingLocalZ;
-      player.position.x = Math.min(
-        mapMaxX,
-        Math.max(mapMinX + 0.5, transition.tileX + 0.5),
-      );
-      verticalTransitionGuard = {
-        untilMs: performance.now() + (transition.guardMs ?? 2800),
-        tileX: transition.tileX,
-        tileZ: transition.tileZ,
-        fromLevel: previousLevel,
-        toLevel: newLevel,
-      };
-    }
-
-    if (natural) {
-      visibilitySystem.invalidateCache();
-      chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
-    } else {
-      chunkSystem.clearAll();
-      visibilitySystem.invalidateCache();
-      snapPlayerFootToActiveLevel();
-    }
-    const mapData = mapDataCache;
-    if (mapData) {
-      void loadLevelBinary(newLevel, mapData).then(() => {
-        if (!natural) {
-          snapPlayerFootToActiveLevel();
-        }
-        reanchorWorldContentOnLevel(newLevel);
-        chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
-      });
-    }
-    // Escada/rampa natural: andares ±1 já estão nos chunks (vertical stack).
-    // ensureMapLevelReady → renderMapLevel apagava tudo e reconstruía do zero.
-    if (!natural) {
-      void ensureMapLevelReady(newLevel);
-    } else {
-      navigationSystem.rebuildWindow(newLevel);
-    }
-    void doorSystem.ensureLevelSeeded(newLevel);
-    orchestrator.seedLevel(newLevel);
-    orchestrator.seedAdjacentLevels(newLevel);
-    enemySystem.syncStream(true);
-    propSystem.syncStream(true);
-    pushLogEvent("level.change", {
-      from: previousLevel,
-      to: newLevel,
-      playerX: Math.round(player.position.x * 100) / 100,
-      playerZ: Math.round(player.position.z * 100) / 100,
-    });
-  };
-
-  /**
-   * Trigger side effects when Y-derived level changes (no cache, no hysteresis).
-   * Replaces the old syncVerticalLevelFromMovement pattern.
-   */
-  const syncLevelSideEffects = () => {
-    if (!worldBootstrapReady) return;
-    const mapData = mapDataCache;
-    if (!mapData?.levels) return;
-    if (holeFallLandingLevel || isPlayerOverVoidAtLevel(getCurrentLevel())) return;
-    if (levelTransitionCooldown > 0) return;
-
-    const currentLevel = getCurrentLevel();
-    if (currentLevel !== lastSideEffectLevel) {
-      levelTransitionCooldown = 0.35;
-      applyActiveLevelChange(currentLevel, undefined, { natural: true });
-      snapFootToGradedSurface();
-    }
-  };
-
-  const snapPlayerFootToActiveLevel = () => {
-    const currentLevel = getCurrentLevel();
-    const footY = levelBinaryCache.has(currentLevel)
-      ? getGroundFootY(
-          player.position.x,
-          player.position.z,
-          currentLevel,
-        )
-      : levelToWorldY(currentLevel) +
-        WALK_SURFACE +
-        FEET_CLEARANCE;
-    player.position.y = footY;
-    verticalVelocity = 0;
-    isGrounded = true;
-    lastGroundedFootY = footY;
-  };
 
   const isVoidSymbol = (symbol: string | null) => !symbol || symbol === "...";
 
@@ -2030,37 +1193,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       LEVEL_HEIGHT,
     );
 
-  const snapFootToGradedSurface = () => {
-    const mapData = mapDataCache;
-    if (!mapData?.levels) { isGrounded = false; return; }
-    const floor = collisionWorld.queryFloor(
-      player.position.x,
-      player.position.z,
-      player.position.y - 0.45,
-      player.position.y + HERO_BODY_HEIGHT,
-      Object.keys(mapData.levels),
-      player.position.y + 0.45,
-    );
-    if (!floor) {
-      isGrounded = false;
-      return;
-    }
-    // Prevent snapping to a surface too far above the player's current foot
-    // (preserves the step-up constraint from the old getHighestGroundWithinStepLimit).
-    if (floor.footY > player.position.y + 0.45) {
-      isGrounded = false;
-      return;
-    }
-    const aquatic = getAquaticSampleAt(player.position.x, player.position.z, floor.level);
-    if (aquatic.mode === "dry") {
-      player.position.y = floor.footY;
-    } else {
-      player.position.y = floor.footY + aquatic.sinkOffset;
-    }
-    if (floor.level !== getCurrentLevel()) {
-      applyActiveLevelChange(floor.level, undefined, { natural: true });
-    }
-  };
 
   const isStaticTileBlocking = (
     symbol: string | null,
@@ -2148,175 +1280,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   // Chunk streaming helpers
   // ---------------------------------------------------------------------------
 
-  // Build a simple pyramid roof mesh for a single 1×1-tile footprint.
-  // The roof base sits at `baseY` (world Y = top of the wall below it).
-  // Uses 4 triangular faces meeting at the center peak.
-  const buildRoofMesh = (
-    name: string,
-    tx: number,
-    tz: number,
-    baseY: number,
-    ridgeH: number,
-  ): Mesh => {
-    // S12-BUG2: must be Mesh (not TransformNode) so vd.applyToMesh works
-    const group = new Mesh(name, scene);
-
-    const x0 = tx,
-      x1 = tx + 1;
-    const z0 = tz,
-      z1 = tz + 1;
-    const xM = tx + 0.5,
-      zM = tz + 0.5;
-    const yBase = baseY,
-      yRidge = baseY + ridgeH;
-
-    const vd = new VertexData();
-
-    const positions = [
-      x0,
-      yBase,
-      z0, // 0 front-left
-      x1,
-      yBase,
-      z0, // 1 front-right
-      x1,
-      yBase,
-      z1, // 2 back-right
-      x0,
-      yBase,
-      z1, // 3 back-left
-      xM,
-      yRidge,
-      zM, // 4 peak
-    ];
-
-    const indices = [
-      0,
-      4,
-      1, // front
-      1,
-      4,
-      2, // right
-      2,
-      4,
-      3, // back
-      3,
-      4,
-      0, // left
-    ];
-
-    const normals: number[] = new Array(positions.length).fill(0);
-    VertexData.ComputeNormals(positions, indices, normals);
-
-    vd.positions = positions;
-    vd.indices = indices;
-    vd.normals = normals;
-    vd.applyToMesh(group);
-
-    return group;
-  };
-
-  // Build an 8-step staircase mesh for a single 1×1-tile footprint (fallback path).
-  // South (+Z) = entry, north (−Z) = exit. Keep in sync with geometry.worker.ts.
-  const buildStairMesh = (
-    name: string,
-    tx: number,
-    tz: number,
-    baseY: number,
-  ): Mesh => {
-    const mesh = new Mesh(name, scene);
-    const STEP_COUNT = 8;
-    const stepDepth = 1.0 / STEP_COUNT;
-    const stepRise = LEVEL_HEIGHT / STEP_COUNT;
-
-    const allPositions: number[] = [];
-    const allIndices: number[] = [];
-
-    for (let i = 0; i < STEP_COUNT; i++) {
-      const x0 = tx;
-      const x1 = tx + 1;
-      const z0 = tz + (STEP_COUNT - 1 - i) * stepDepth;
-      const z1 = tz + (STEP_COUNT - i) * stepDepth;
-      const y1 = baseY + WALK_SURFACE + (i + 1) * stepRise;
-      const y0 = y1 - stepRise;
-
-      const base = allPositions.length / 3;
-      // 8 vertices — shared per step (ComputeNormals averages them; fine for steps)
-      allPositions.push(
-        x0,
-        y0,
-        z1,
-        x1,
-        y0,
-        z1,
-        x1,
-        y0,
-        z0,
-        x0,
-        y0,
-        z0, // bottom
-        x0,
-        y1,
-        z1,
-        x1,
-        y1,
-        z1,
-        x1,
-        y1,
-        z0,
-        x0,
-        y1,
-        z0, // top
-      );
-      allIndices.push(
-        base + 4,
-        base + 7,
-        base + 6,
-        base + 4,
-        base + 6,
-        base + 5, // top face (visible)
-        base + 0,
-        base + 1,
-        base + 2,
-        base + 0,
-        base + 2,
-        base + 3, // bottom (hidden)
-        base + 0,
-        base + 4,
-        base + 5,
-        base + 0,
-        base + 5,
-        base + 1, // south riser (+Z)
-        base + 3,
-        base + 2,
-        base + 6,
-        base + 3,
-        base + 6,
-        base + 7, // north face
-        base + 1,
-        base + 5,
-        base + 6,
-        base + 1,
-        base + 6,
-        base + 2, // east side
-        base + 0,
-        base + 3,
-        base + 7,
-        base + 0,
-        base + 7,
-        base + 4, // west side
-      );
-    }
-
-    const normals: number[] = new Array(allPositions.length).fill(0);
-    VertexData.ComputeNormals(allPositions, allIndices, normals);
-    const vd2 = new VertexData();
-    vd2.positions = allPositions;
-    vd2.indices = allIndices;
-    vd2.normals = normals;
-    vd2.applyToMesh(mesh);
-    return mesh;
-  };
+  // buildRoofMesh and buildStairMesh moved to ChunkGeometryBuilder
 
   // Build (or skip) one 16×16-tile chunk at chunk-grid position (cx, cy).
   // lod 0 = full detail, 1 = walls-only, 2 = ground-only
@@ -2330,7 +1294,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     getIsFirstPerson: () => isFirstPerson,
     getRenderLevel,
     getCurrentLevel,
-    getHoleFallLandingLevel: () => holeFallLandingLevel,
+    getHoleFallLandingLevel: () => ctx.holeFallLandingLevel,
     parseLevelNumber,
     isGradedWalkAt,
     isStaticTileBlocking,
@@ -2360,13 +1324,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           if (isWaterTileId(neighborId)) {
             continue;
           }
-          return getTileMaterial(symbol, tileDef, "#9ca3af");
+          return tileMaterialSystem.getTileMaterial(symbol, tileDef, "#9ca3af");
         }
       }
     }
 
     const cobDef = mapData?.tileDefinitions?.cob;
-    return getTileMaterial("cob", cobDef, "#9ca3af");
+    return tileMaterialSystem.getTileMaterial("cob", cobDef, "#9ca3af");
   };
 
 
@@ -2384,12 +1348,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     meshLevelByMesh: visibilitySystem.meshLevelByMesh,
     wallTileIndex: visibilitySystem.wallTileIndex,
     levelBinaryCache,
-    tileMaterials,
-    tileMaterialLRU,
+    tileMaterials: tileMaterialSystem.tileMaterials,
+    tileMaterialLRU: tileMaterialSystem.tileMaterialLRU,
     getMapData: () => mapDataCache,
     getMapTileAt,
     getTileDef: (symbol) => symbol ? mapDataCache?.tileDefinitions?.[symbol] ?? null : null,
-    getTileMaterial,
+    getTileMaterial: tileMaterialSystem.getTileMaterial.bind(tileMaterialSystem),
     resolvePoolFloorMaterial,
     isBlockingTile,
     isDownHoleTile: (symbol, tileDef) => isDownHoleTile(tileDef ?? null),
@@ -2463,140 +1427,17 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
   };
 
-  const extractEnemyUidFromMeshChain = (mesh: any): string | undefined => {
-    let currentMesh = mesh;
-    while (currentMesh) {
-      const metadata = currentMesh.metadata as { sliceEnemyUid?: string } | undefined;
-      if (metadata?.sliceEnemyUid) {
-        return metadata.sliceEnemyUid;
-      }
-      currentMesh = currentMesh.parent;
-    }
-    return undefined;
-  };
-
-  const projectPointerToGroundXZ = (pointerX: number, pointerY: number) => {
-    const activeCamera = scene.activeCamera;
-    if (!activeCamera) {
-      return null;
-    }
-    const ray = scene.createPickingRay(
-      pointerX,
-      pointerY,
-      Matrix.Identity(),
-      activeCamera,
-    );
-    const planeY = levelToWorldY(getRenderLevel()) + WALK_SURFACE;
-    if (Math.abs(ray.direction.y) < 1e-5) {
-      return null;
-    }
-    const t = (planeY - ray.origin.y) / ray.direction.y;
-    if (t < 0) {
-      return null;
-    }
-    return {
-      x: ray.origin.x + ray.direction.x * t,
-      z: ray.origin.z + ray.direction.z * t,
-    };
-  };
-
-  /** multiPick + ground fallback for occluded reveal proxies behind walls. */
-  const resolveEnemyUidFromPointer = (
-    pointerX: number,
-    pointerY: number,
-  ): string | undefined => {
-    const multiHits = scene.multiPick(pointerX, pointerY);
-    if (multiHits) {
-      for (const hit of multiHits) {
-        const uid = extractEnemyUidFromMeshChain(hit.pickedMesh);
-        if (uid && enemies.has(uid)) {
-          return uid;
-        }
-      }
-    }
-
-    const singlePick = scene.pick(pointerX, pointerY);
-    const fromSingle = extractEnemyUidFromMeshChain(singlePick?.pickedMesh);
-    if (fromSingle && enemies.has(fromSingle)) {
-      return fromSingle;
-    }
-
-    if (!isFirstPerson) {
-      const ground = projectPointerToGroundXZ(pointerX, pointerY);
-      if (ground) {
-        const occluded = wallRevealSystem.findOccludedTargetNear(
-          ground.x,
-          ground.z,
-          0.95,
-        );
-        const uid = occluded?.pickMetadata.sliceEnemyUid;
-        if (uid && enemies.has(uid)) {
-          return uid;
-        }
-      }
-    }
-
-    return undefined;
-  };
-
-  const resolveDoorUuidFromPointer = (
-    pointerX: number,
-    pointerY: number,
-  ): string | null => {
-    const multiHits = scene.multiPick(pointerX, pointerY);
-    if (multiHits) {
-      for (const hit of multiHits) {
-        const uuid = doorSystem.findDoorUuidFromPick(hit);
-        if (uuid) {
-          return uuid;
-        }
-      }
-    }
-
-    const singlePick = scene.pick(pointerX, pointerY);
-    const fromSingle = doorSystem.findDoorUuidFromPick(singlePick);
-    if (fromSingle) {
-      return fromSingle;
-    }
-
-    if (!isFirstPerson) {
-      const ground = projectPointerToGroundXZ(pointerX, pointerY);
-      if (ground) {
-        const occluded = wallRevealSystem.findOccludedTargetNear(
-          ground.x,
-          ground.z,
-          0.95,
-        );
-        const uuid = occluded?.pickMetadata.sliceDoorUuid;
-        if (uuid && doorSystem.doors.has(uuid)) {
-          return uuid;
-        }
-      }
-    }
-
-    return null;
-  };
-
-  const getNearestPickupItemDistance = (): number => {
-    const pickupRange = playerState.pickupRange / 32;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-
-    dropSystem.droppedItemMeshes.forEach((mesh) => {
-      if (!mesh.isEnabled()) {
-        return;
-      }
-      const item = mesh.metadata as SliceDroppedItem | undefined;
-      if (!item) {
-        return;
-      }
-      const distance = Vector3.Distance(player.position, mesh.position);
-      if (distance <= pickupRange && distance < nearestDistance) {
-        nearestDistance = distance;
-      }
-    });
-
-    return nearestDistance;
-  };
+  const pointerPickingSystem = new PointerPickingSystem({
+    scene,
+    doorSystem,
+    wallRevealSystem,
+    dropSystem,
+    enemies,
+    levelToWorldY,
+    getRenderLevel,
+    getIsFirstPerson: () => isFirstPerson,
+    getPickupRange: () => playerState.pickupRange / 32,
+  });
 
   let debugCollidersVisible = false;
   let debugColliderParent: TransformNode | null = null;
@@ -2918,6 +1759,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return resolvedLevel;
   };
 
+  let lt: ReturnType<typeof createLevelTransitionSystem>;
+
   const setSelectedEnemy = (enemyUid: string | null) => {
     if (selectedEnemyUid && selectedEnemyUid !== enemyUid) {
       const prev = enemies.get(selectedEnemyUid);
@@ -2962,69 +1805,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     });
   };
 
-  const emitBloodBurst = (
-    origin: Vector3,
-    colorHex: string,
-    particleCount: number,
-    spread: number,
-    lifetimeSec: number,
-  ) => {
-    const particles: Mesh[] = [];
-    const velocities: Vector3[] = [];
-    const bloodMat = new StandardMaterial(
-      `slice_blood_mat_${Date.now()}`,
-      scene,
-    );
-    bloodMat.diffuseColor = Color3.FromHexString(colorHex);
-    bloodMat.emissiveColor = Color3.FromHexString(colorHex).scale(0.15);
-    bloodMat.specularColor = Color3.Black();
-
-    for (let i = 0; i < particleCount; i += 1) {
-      const p = MeshBuilder.CreateSphere(
-        `slice_blood_${Date.now()}_${i}`,
-        { diameter: 0.05 + Math.random() * 0.08, segments: 3 },
-        scene,
-      );
-      p.material = bloodMat;
-      p.position = origin.add(
-        new Vector3(
-          (Math.random() - 0.5) * spread,
-          Math.random() * 0.25,
-          (Math.random() - 0.5) * spread,
-        ),
-      );
-      particles.push(p);
-      velocities.push(
-        new Vector3(
-          (Math.random() - 0.5) * 2.5,
-          1.2 + Math.random() * 1.1,
-          (Math.random() - 0.5) * 2.5,
-        ),
-      );
-    }
-
-    let age = 0;
-    const obs = scene.onBeforeRenderObservable.add(() => {
-      const dt = scene.getEngine().getDeltaTime() / 1000;
-      age += dt;
-      const t = Math.min(1, age / lifetimeSec);
-
-      for (let i = 0; i < particles.length; i += 1) {
-        const particle = particles[i];
-        const vel = velocities[i];
-        vel.y -= 5.5 * dt;
-        particle.position.addInPlace(vel.scale(dt));
-        particle.scaling.setAll(Math.max(0.01, 1 - t * 0.85));
-      }
-
-      if (age >= lifetimeSec) {
-        particles.forEach((p) => p.dispose());
-        bloodMat.dispose();
-        scene.onBeforeRenderObservable.remove(obs);
-      }
-    });
-  };
-
   const destroyEnemy = (
     enemy: SliceEnemy,
     context?: { finishingDamage?: number; isFireKill?: boolean },
@@ -3048,7 +1828,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           1.6,
           1.2,
         );
-        audioManager.playSplash();
+        ctx.audioManager.playSplash();
       } else if (!isFireKill) {
         emitBloodBurst(
           enemy.worldPos.clone().add(new Vector3(0, 0.25, 0)),
@@ -3069,7 +1849,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
       enemy.meshRoot.dispose();
-      enemies.delete(enemy.uid);
+      ctx.enemies.delete(enemy.uid);
     }, deathMs);
 
     const catalogEntry = enemySpawnCatalog.get(enemy.spawnKey);
@@ -3082,18 +1862,18 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         respawnTimeMs: ENEMY_RESPAWN_MS,
       });
     }
-    playerState.markEnemy3dDead(enemy.level, enemy.spawnKey);
+    ctx.playerState.markEnemy3dDead(enemy.level, enemy.spawnKey);
 
-    if (selectedEnemyUid === enemy.uid) {
+    if (ctx.selectedEnemyUid === enemy.uid) {
       setSelectedEnemy(null);
     }
 
-    playerState.emit("combatEnemyRemoved", { uid: enemy.uid });
+    ctx.playerState.emit("combatEnemyRemoved", { uid: enemy.uid });
 
     grantEnemyLoot(enemy);
-    playerState.gainExperience(enemy.definition.exp);
+    ctx.playerState.gainExperience(enemy.definition.exp);
 
-    playerState.emit("floatingText", {
+    ctx.playerState.emit("floatingText", {
       x: enemy.worldPos.x,
       y: enemy.worldPos.y,
       z: enemy.worldPos.z,
@@ -3103,61 +1883,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       isAmbient: true,
     });
 
-    playerState.log("combat_killed", { target: enemy.enemyType }, "#ffaa00");
-    playerState.log(
+    ctx.playerState.log("combat_killed", { target: enemy.enemyType }, "#ffaa00");
+    ctx.playerState.log(
       "combat_gained_xp",
       { xp: enemy.definition.exp },
       "#ffff00",
     );
-    audioManager.playEnemyDeath(enemy.enemyType);
-  };
-
-  const emitPlayerDamagePopup = (
-    sourceKey: string,
-    rawDamage: number,
-    icon?: string,
-    customColor?: string,
-  ) => {
-    const damage = Math.max(1, Math.floor(rawDamage));
-    const now = Date.now();
-    const dedupeKey = `${sourceKey}:${icon || "❤"}`;
-    const previous = recentPlayerDamagePopups.get(dedupeKey);
-
-    if (previous && previous.value === damage && now - previous.at < 280) {
-      return;
-    }
-
-    recentPlayerDamagePopups.set(dedupeKey, { at: now, value: damage });
-
-    if (recentPlayerDamagePopups.size > 64) {
-      recentPlayerDamagePopups.forEach((entry, key) => {
-        if (now - entry.at > 1500) {
-          recentPlayerDamagePopups.delete(key);
-        }
-      });
-    }
-
-    // S9-T1: notify React HUD of player taking damage (vignette + heart flash)
-    document.dispatchEvent(
-      new CustomEvent("slice3d:playerHit", { detail: { damage } }),
-    );
-
-    playerState.emit("floatingText", {
-      x: player.position.x,
-      y: player.position.y,
-      z: player.position.z,
-      damage: -damage,
-      isCritical: false,
-      icon,
-      customColor,
-    });
-  };
-
-
-
-
-
-
+    ctx.audioManager.playEnemyDeath(enemy.enemyType);
+  };  // end destroyEnemy
 
 
 
@@ -3182,13 +1915,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
   };
 
+  const LOG_SLOW_PATH_MS = 100;
   const requestEnemyPath = async (
     enemy: SliceEnemy,
     targetPosition: Vector3,
   ) => {
     const pathRequestStartedAt = performance.now();
-    pathMetrics.requests += 1;
-    pathMetrics.inFlight += 1;
+    telemetryLogger.pathMetrics.requests += 1;
+    telemetryLogger.pathMetrics.inFlight += 1;
     navigationSystem.rebuildWindow(enemy.level);
     const startX = navigationSystem.worldToGridX(enemy.worldPos.x);
     const startY = navigationSystem.worldToGridZ(enemy.worldPos.z);
@@ -3205,8 +1939,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       endX >= navigationSystem.gridSize ||
       endY >= navigationSystem.gridSize
     ) {
-      pathMetrics.failed += 1;
-      pathMetrics.inFlight = Math.max(0, pathMetrics.inFlight - 1);
+      telemetryLogger.pathMetrics.failed += 1;
+      telemetryLogger.pathMetrics.inFlight = Math.max(0, telemetryLogger.pathMetrics.inFlight - 1);
       return;
     }
 
@@ -3218,16 +1952,16 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         endY,
       );
       const tookMs = performance.now() - pathRequestStartedAt;
-      pathMetrics.lastMs = Math.round(tookMs * 100) / 100;
-      pathMetrics.maxMs = Math.max(pathMetrics.maxMs, pathMetrics.lastMs);
-      pathMetrics.totalMs += tookMs;
+      telemetryLogger.pathMetrics.lastMs = Math.round(tookMs * 100) / 100;
+      telemetryLogger.pathMetrics.maxMs = Math.max(telemetryLogger.pathMetrics.maxMs, telemetryLogger.pathMetrics.lastMs);
+      telemetryLogger.pathMetrics.totalMs += tookMs;
 
       if (!path || path.length === 0 || enemy.isDead) {
-        pathMetrics.failed += 1;
+        telemetryLogger.pathMetrics.failed += 1;
         if (tookMs >= LOG_SLOW_PATH_MS) {
-          pushLogEvent("pathfinding.slow-empty", {
+          telemetryLogger.pushLogEvent("pathfinding.slow-empty", {
             enemyUid: enemy.uid,
-            tookMs: pathMetrics.lastMs,
+            tookMs: telemetryLogger.pathMetrics.lastMs,
             startX,
             startY,
             endX,
@@ -3237,13 +1971,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
         return;
       }
 
-      pathMetrics.success += 1;
-      pathMetrics.lastPathLen = path.length;
+      telemetryLogger.pathMetrics.success += 1;
+      telemetryLogger.pathMetrics.lastPathLen = path.length;
 
       if (tookMs >= LOG_SLOW_PATH_MS) {
-        pushLogEvent("pathfinding.slow", {
+        telemetryLogger.pushLogEvent("pathfinding.slow", {
           enemyUid: enemy.uid,
-          tookMs: pathMetrics.lastMs,
+          tookMs: telemetryLogger.pathMetrics.lastMs,
           pathLength: path.length,
           startX,
           startY,
@@ -3255,13 +1989,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       enemy.currentPath = path;
       enemy.currentPathIndex = 0;
     } catch (error) {
-      pathMetrics.errors += 1;
-      pushLogEvent("pathfinding.error", {
+      telemetryLogger.pathMetrics.errors += 1;
+      telemetryLogger.pushLogEvent("pathfinding.error", {
         enemyUid: enemy.uid,
         message: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      pathMetrics.inFlight = Math.max(0, pathMetrics.inFlight - 1);
+      telemetryLogger.pathMetrics.inFlight = Math.max(0, telemetryLogger.pathMetrics.inFlight - 1);
     }
   };
 
@@ -3500,89 +2234,13 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     return false;
   };
 
-  const addDroppedItemFromEvent = (data: {
-    itemId?: string;
-    weaponId?: string;
-    count?: number;
-    x?: number;
-    y?: number;
-    stars?: number;
-    attributes?: any[];
-  }) => {
-    const weaponId = data.weaponId || data.itemId;
-    if (!weaponId) return;
-
-    const fallbackX = player.position.x * 32;
-    const fallbackY = player.position.z * 32;
-    const uid = data.itemId || playerState.generateUID();
-
-    playerState.addPersistentDroppedItem(getCurrentLevel(), {
-      itemId: uid,
-      weaponId,
-      x: data.x ?? fallbackX,
-      y: data.y ?? fallbackY,
-      createdAt: Date.now(),
-      count: data.count || 1,
-      stars: data.stars || 0,
-      attributes: [...(data.attributes || [])],
-    });
-  };
-
-  const handleDropItem = (
-    itemId: string,
-    count?: number,
-    worldX?: number,
-    worldY?: number,
-  ) => {
-    let inventoryItem = playerState.getInventoryItem(itemId);
-
-    if (!inventoryItem) {
-      inventoryItem = playerState
-        .getInventory()
-        .find((entry) => entry.itemId === itemId);
-    }
-
-    if (!inventoryItem) return;
-
-    const availableCount = inventoryItem.count;
-    const dropCount = Math.max(
-      1,
-      Math.min(count || availableCount, availableCount),
-    );
-    const droppingAll = dropCount >= availableCount;
-
-    if (droppingAll) {
-      playerState.removeInventoryItem(inventoryItem.uid);
-    } else {
-      inventoryItem.count = availableCount - dropCount;
-      playerState.emit("inventoryUpdated");
-    }
-
-    const dropUid = droppingAll ? inventoryItem.uid : playerState.generateUID();
-
-    addDroppedItemFromEvent({
-      itemId: dropUid,
-      weaponId: inventoryItem.itemId,
-      count: dropCount,
-      x: worldX,
-      y: worldY,
-      stars: inventoryItem.stars,
-      attributes: inventoryItem.attributes,
-    });
-  };
-
-  const handleRequestPickup = (payload: { uid: string; count?: number }) => {
-    const persistent = playerState.getPersistentDroppedItems(getCurrentLevel());
-    const item = persistent.find((entry) => entry.itemId === payload.uid);
-    if (!item) return;
-    tryPickupPersistentItem(item, payload.count);
-  };
+  let dropPickup: ReturnType<typeof createDropPickupSystem>;
 
   const waitForSpawnChunkReady = (timeoutMs = 12000): Promise<boolean> =>
     chunkSystem.waitForSpawnChunkReady(timeoutMs);
 
   const bootstrapWorldSession = async (retries = 3, baseDelayMs = 2000) => {
-    pushLogEvent("world.bootstrap.start", { map: sliceMapName, level: getCurrentLevel() });
+    telemetryLogger.pushLogEvent("world.bootstrap.start", { map: sliceMapName, level: getCurrentLevel() });
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         if (attempt > 0) {
@@ -3605,12 +2263,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           );
         }
 
-        lastGroundedFootY = player.position.y;
-        fallOriginFootY = player.position.y;
-        isGrounded = true;
-        holeFallLandingLevel = null;
-        holeFallFloorCount = 0;
-        verticalVelocity = 0;
+        ctx.lastGroundedFootY = player.position.y;
+        ctx.fallOriginFootY = player.position.y;
+        ctx.isGrounded = true;
+        ctx.holeFallLandingLevel = null;
+        ctx.holeFallFloorCount = 0;
+        ctx.verticalVelocity = 0;
 
         reanchorWorldContentOnLevel(getRenderLevel());
         propSystem.syncStream(true);
@@ -3625,7 +2283,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
             detail: { ready: true, map: sliceMapName, level: getCurrentLevel() },
           }),
         );
-        pushLogEvent("world.bootstrap.ready", {
+        telemetryLogger.pushLogEvent("world.bootstrap.ready", {
           x: Math.round(player.position.x * 100) / 100,
           y: Math.round(player.position.y * 100) / 100,
           z: Math.round(player.position.z * 100) / 100,
@@ -3639,7 +2297,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
               detail: { ready: false, map: sliceMapName, error: String(error) },
             }),
           );
-          pushLogEvent("world.bootstrap.failed", { error: String(error), attempts: attempt + 1 });
+          telemetryLogger.pushLogEvent("world.bootstrap.failed", { error: String(error), attempts: attempt + 1 });
           return;
         }
       }
@@ -3653,26 +2311,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   orchestrator.dropSystem.syncStream(true);
 
   let inputManager: SliceInputManager;
-  let ctx: SliceSceneContext;
+  let ctx: GameContext;
+  let fallSystem: PlayerFallSystem;
   let sliceEnemySystem: SliceEnemySystem;
   let sliceCombatSystem: SliceCombatSystem;
 
   // Physics state — PlayerContext is the single source of truth
   const playerCtx = createPlayerContext(player.position.x, player.position.y, player.position.z);
 
-  const FALL_DAMAGE_MIN_IMPACT_SPEED = 9.5;
-
-  // Mirrors of playerCtx for backward compat with non-physics code
-  let verticalVelocity = playerCtx.verticalVelocity;
-  let isGrounded = playerCtx.isGrounded;
-  let holeFallLandingLevel = playerCtx.holeFallLandingLevel;
-  let holeFallFloorCount = playerCtx.holeFallFloorCount;
-  let fallOriginFootY = playerCtx.fallOriginFootY;
-  let wasOnVoidWithSafety = playerCtx.wasOnVoidWithSafety;
-  let lastSafePlayerX = playerCtx.lastSafePositionX;
-  let lastSafePlayerZ = playerCtx.lastSafePositionZ;
-  let lastGroundedFootY = playerCtx.lastGroundedFootY;
-  let levelTransitionCooldown = playerCtx.levelTransitionCooldown;
   let isPlayerDeathSequenceActive = false;
   let playerDeathTimeoutId: number | null = null;
   let verticalTransitionGuard: {
@@ -3720,224 +2366,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     handleGameplayPauseChanged(true);
   }
 
-  const findVoidFallLanding = (
-    startLevel: string,
-    tileX: number,
-    tileZ: number,
-  ): { landingLevel: string; floors: number } | null => {
-    const mapData = mapDataCache;
-    if (!mapData?.levels) {
-      return null;
-    }
-
-    const levelNumbers = Object.keys(mapData.levels)
-      .map((levelKey) => parseLevelNumber(levelKey))
-      .sort((a, b) => b - a);
-
-    const startNumber = parseLevelNumber(startLevel);
-    let floors = 0;
-
-    for (const levelNumber of levelNumbers) {
-      if (levelNumber >= startNumber) {
-        continue;
-      }
-
-      floors += 1;
-      const candidateLevel = String(levelNumber);
-      const symbol = getMapTileAt(candidateLevel, tileX, tileZ);
-
-      if (!isVoidSymbol(symbol)) {
-        return { landingLevel: candidateLevel, floors };
-      }
-    }
-
-    return null;
-  };
-
-  const calculateFallDamagePercent = (
-    floors: number,
-    impactSpeed: number,
-  ): number => {
-    const perFloor = Math.min(0.72, floors * 0.16);
-    const speedBonus = Math.min(
-      0.18,
-      Math.max(0, Math.abs(impactSpeed) - 9) * 0.012,
-    );
-    return Math.min(0.9, perFloor + speedBonus);
-  };
-
-  const applyFallImpactDamage = (
-    impactSpeed: number,
-    floors: number,
-    landingLevel: string,
-  ) => {
-    if (floors <= 0 && impactSpeed < FALL_DAMAGE_MIN_IMPACT_SPEED) {
-      return;
-    }
-
-    const maxHealth = Math.max(1, playerState.getMaxHealth());
-    let damagePercent = calculateFallDamagePercent(floors, impactSpeed);
-    const landingAquatic = getAquaticSampleAt(
-      player.position.x,
-      player.position.z,
-      landingLevel,
-    );
-    damagePercent *= computeFallDamageMultiplier(landingAquatic);
-    const damage = Math.max(
-      landingAquatic.mode === "swimming" ? 0 : 1,
-      Math.floor(maxHealth * damagePercent),
-    );
-
-    const playerDied = playerState.takeDamage(damage);
-    emitPlayerDamagePopup(
-      `fall:${landingLevel}:${floors}`,
-      damage,
-      "⚠",
-      "#ff5d5d",
-    );
-
-    const percentText = Math.round(damagePercent * 100).toString();
-    playerState.log(
-      "msg_fall_impact",
-      {
-        floors,
-        damage,
-        percent: percentText,
-      },
-      "#ff5d5d",
-    );
-    playerState.emit("uiNotification", {
-      type: "danger",
-      message: t_game("msg_fall_impact")
-        .replace("{floors}", floors.toString())
-        .replace("{damage}", damage.toString())
-        .replace("{percent}", percentText),
-    });
-
-    if (playerDied) {
-      triggerPlayerDeathSequence();
-    }
-  };
-
-  const finishAirborneLanding = (
-    landingLevel: string,
-    landingFootY: number,
-    impactSpeed: number,
-    explicitFloors = 0,
-  ) => {
-    const dropDistance = Math.max(0, fallOriginFootY - landingFootY);
-    const floorsFromDrop = Math.floor(
-      dropDistance / LEVEL_HEIGHT + 0.12,
-    );
-    const floors = Math.max(explicitFloors, floorsFromDrop);
-    if (
-      floors <= 0 &&
-      impactSpeed < FALL_DAMAGE_MIN_IMPACT_SPEED &&
-      dropDistance < 0.55
-    ) {
-      fallOriginFootY = landingFootY;
-      return;
-    }
-    applyFallImpactDamage(impactSpeed, floors, landingLevel);
-    fallOriginFootY = landingFootY;
-  };
-
-  const resolveRespawnSpawn = (): { level: string; x: number; z: number } => {
-    const mapData = mapDataCache;
-    const fallback = { level: "0", x: 6.5, z: 6.5 };
-    if (!mapData?.levels) {
-      return fallback;
-    }
-
-    const levels = mapData.levels;
-    const preferredLevel =
-      mapData.config?.startLevel && levels[mapData.config.startLevel]
-        ? mapData.config.startLevel
-        : levels["0"]
-          ? "0"
-          :           Object.keys(levels).find((level) => levels[level]?.playerPos) ??
-            getCurrentLevel();
-
-    const playerPos = levels[preferredLevel]?.playerPos;
-    if (!playerPos) {
-      return fallback;
-    }
-
-    return {
-      level: preferredLevel,
-      x: worldToSliceCoord(playerPos.x),
-      z: worldToSliceCoord(playerPos.y),
-    };
-  };
-
-  const completePlayerRespawn = async () => {
-    const respawn = resolveRespawnSpawn();
-
-    playerState.respawn();
-    inputManager.clearPressedKeys();
-    setSelectedEnemy(null);
-    projectileSystem.disposeAll();
-    holeFallLandingLevel = null;
-    holeFallFloorCount = 0;
-    verticalVelocity = 0;
-    isGrounded = true;
-    levelTransitionCooldown = 0;
-    verticalTransitionGuard = null;
-
-    if (respawn.level !== getCurrentLevel()) {
-      applyActiveLevelChange(respawn.level, {
-        tileX: Math.floor(respawn.x),
-        tileZ: Math.floor(respawn.z),
-        landingLocalZ: respawn.z - Math.floor(respawn.z),
-        guardMs: 0,
-      });
-      await ensureMapLevelReady(respawn.level);
-    }
-
-    playerState.setCurrentLevel(respawn.level);
-    WorldMapService.ensureLevelBuffer(respawn.level);
-    player.position.x = respawn.x;
-    player.position.z = respawn.z;
-    snapPlayerFootToActiveLevel();
-    lastSafePlayerX = player.position.x;
-    lastSafePlayerZ = player.position.z;
-    lastGroundedFootY = player.position.y;
-    playerState.recordPlayerPosition(
-      respawn.level,
-      player.position.x * 32,
-      player.position.z * 32,
-    );
-    enemySystem.resetLivingForPlayerRespawn();
-    setHeroAnimState("idle");
-    heroAnimLockedUntil = 0;
-    isPlayerDeathSequenceActive = false;
-    playerDeathTimeoutId = null;
-  };
-
-  const triggerPlayerDeathSequence = () => {
-    if (isPlayerDeathSequenceActive) {
-      return;
-    }
-
-    isPlayerDeathSequenceActive = true;
-    inputManager.clearPressedKeys();
-    setSelectedEnemy(null);
-    if (isFirstPerson) {
-      cameraSystem.setMode(false, false);
-      isFirstPerson = false;
-    }
-    heroBillboard.setEnabled(true);
-    heroShadow.setEnabled(true);
-    audioManager.playHeroDeath();
-    setHeroAnimState("death", PLAYER_DEATH_SEQUENCE_MS);
-
-    if (playerDeathTimeoutId !== null) {
-      window.clearTimeout(playerDeathTimeoutId);
-    }
-    playerDeathTimeoutId = window.setTimeout(() => {
-      void completePlayerRespawn();
-    }, PLAYER_DEATH_SEQUENCE_MS);
-  };
+  // PlayerFallSystem handles void fall, death sequence, and respawn logic
 
   // Activate first-person mode if URL contains ?fp=1
   if (searchParams.get("fp") === "1") {
@@ -3945,40 +2374,79 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     isFirstPerson = true;
   }
 
-  // S8-T2: dispatch rune slot state to React HUD
-  const dispatchRuneSlotUpdate = () => {
-    const slots = playerState.getEquippedRuneSlots();
-    document.dispatchEvent(
-      new CustomEvent("slice3d:runeSlotChanged", {
-        detail: { slots, activeIndex: activeRuneSlotIndex },
-      }),
-    );
-  };
+  // S8-T2: rune slot dispatch moved to RuneCastSystem
 
   ctx = {
+    // ── System references (read-only) ──
     get engine() { return engine; },
     get scene() { return scene; },
     get canvas() { return canvas; },
+    get audioManager() { return audioManager; },
+    get collisionWorld() { return collisionWorld; },
+    get enemies() { return enemies; },
+    get audioSystem() { return audioSystem; },
+    get chunkSystem() { return chunkSystem; },
+    get orchestrator() { return orchestrator; },
+    get navigationSystem() { return navigationSystem; },
+    get cameraSystem() { return cameraSystem; },
+    get qualitySystem() { return qualitySystem; },
+    get doorSystem() { return doorSystem; },
+    get propSystem() { return propSystem; },
+    get dropSystem() { return dropSystem; },
+    get enemySystem() { return enemySystem; },
+    get wallRevealSystem() { return wallRevealSystem; },
+    get waterEffectSystem() { return waterEffectSystem; },
+    get projectileSystem() { return projectileSystem; },
+    get sliceCombatSystem() { return sliceCombatSystem; },
+    get sliceEnemySystem() { return sliceEnemySystem; },
+    get inputManager() { return inputManager; },
+    get visibilitySystem() { return visibilitySystem; },
+    get tileMaterialSystem() { return tileMaterialSystem; },
+    get pointerPickingSystem() { return pointerPickingSystem; },
+    get telemetryLogger() { return telemetryLogger; },
+
+    // ── Mesh / camera references (read-only) ──
     get player() { return player; },
     get playerCtx() { return playerCtx; },
     get playerState() { return playerState; },
     get camera() { return camera; },
     get firstPersonCamera() { return firstPersonCamera; },
-    get audioManager() { return audioManager; },
-    get collisionWorld() { return collisionWorld; },
-    get enemies() { return enemies; },
+    get heroSpriteMat() { return heroSpriteMat; },
+    get heroBillboard() { return heroBillboard; },
+    get heroShadow() { return heroShadow; },
+
+    // ── Mutable: gameplay flags ──
     get isFirstPerson() { return isFirstPerson; },
     set isFirstPerson(v) { isFirstPerson = v; },
     get gameplayPaused() { return gameplayPaused; },
     set gameplayPaused(v) { gameplayPaused = v; },
     get debugCollidersVisible() { return debugCollidersVisible; },
     set debugCollidersVisible(v) { debugCollidersVisible = v; },
+
+    // ── Mutable: map / world ──
     get mapDataCache() { return mapDataCache; },
     set mapDataCache(v) { mapDataCache = v; },
     get currentMapWidth() { return currentMapWidth; },
     set currentMapWidth(v) { currentMapWidth = v; },
     get currentMapHeight() { return currentMapHeight; },
     set currentMapHeight(v) { currentMapHeight = v; },
+    get sliceMapName() { return sliceMapName; },
+    get mapMinX() { return mapMinX; },
+    set mapMinX(v) { mapMinX = v; },
+    get mapMaxX() { return mapMaxX; },
+    set mapMaxX(v) { mapMaxX = v; },
+    get mapMinZ() { return mapMinZ; },
+    set mapMinZ(v) { mapMinZ = v; },
+    get mapMaxZ() { return mapMaxZ; },
+    set mapMaxZ(v) { mapMaxZ = v; },
+    get lastChunkRenderLevel() { return lastChunkRenderLevel; },
+    set lastChunkRenderLevel(v) { lastChunkRenderLevel = v; },
+    get worldMapReady() { return worldMapReady; },
+    set worldMapReady(v) { worldMapReady = v; },
+    get worldBootstrapReady() { return worldBootstrapReady; },
+    set worldBootstrapReady(v) { worldBootstrapReady = v; },
+
+    // ── Mutable: combat / enemy ──
     get selectedEnemyUid() { return selectedEnemyUid; },
     set selectedEnemyUid(v) { selectedEnemyUid = v; },
     setSelectedEnemy(v) { setSelectedEnemy(v); },
@@ -3988,7 +2456,92 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     set runeTargetingMode(v) { runeTargetingMode = v; },
     get targetingRuneId() { return targetingRuneId; },
     set targetingRuneId(v) { targetingRuneId = v; },
+    get enemyHighlightPulseT() { return enemyHighlightPulseT; },
+    set enemyHighlightPulseT(v) { enemyHighlightPulseT = v; },
+
+    // ── Mutable: vertical / physics state (delegates to PlayerContext) ──
+    get verticalVelocity() { return playerCtx.verticalVelocity; },
+    set verticalVelocity(v) { playerCtx.verticalVelocity = v; },
+    get isGrounded() { return playerCtx.isGrounded; },
+    set isGrounded(v) { playerCtx.isGrounded = v; },
+    get holeFallLandingLevel() { return playerCtx.holeFallLandingLevel; },
+    set holeFallLandingLevel(v) { playerCtx.holeFallLandingLevel = v; },
+    get holeFallFloorCount() { return playerCtx.holeFallFloorCount; },
+    set holeFallFloorCount(v) { playerCtx.holeFallFloorCount = v; },
+    get fallOriginFootY() { return playerCtx.fallOriginFootY; },
+    set fallOriginFootY(v) { playerCtx.fallOriginFootY = v; },
+    get wasOnVoidWithSafety() { return playerCtx.wasOnVoidWithSafety; },
+    set wasOnVoidWithSafety(v) { playerCtx.wasOnVoidWithSafety = v; },
+    get lastSafePlayerX() { return playerCtx.lastSafePositionX; },
+    set lastSafePlayerX(v) { playerCtx.lastSafePositionX = v; },
+    get lastSafePlayerZ() { return playerCtx.lastSafePositionZ; },
+    set lastSafePlayerZ(v) { playerCtx.lastSafePositionZ = v; },
+    get lastGroundedFootY() { return playerCtx.lastGroundedFootY; },
+    set lastGroundedFootY(v) { playerCtx.lastGroundedFootY = v; },
+    get levelTransitionCooldown() { return playerCtx.levelTransitionCooldown; },
+    set levelTransitionCooldown(v) { playerCtx.levelTransitionCooldown = v; },
+    get verticalTransitionGuard() { return verticalTransitionGuard; },
+    set verticalTransitionGuard(v) { verticalTransitionGuard = v; },
+
+    // ── Mutable: hero visual ──
+    get heroAnimLockedUntil() { return heroAnimLockedUntil; },
+    set heroAnimLockedUntil(v) { heroAnimLockedUntil = v; },
+
+    // ── Mutable: death / respawn ──
+    get isPlayerDeathSequenceActive() { return isPlayerDeathSequenceActive; },
+    set isPlayerDeathSequenceActive(v) { isPlayerDeathSequenceActive = v; },
+    get playerDeathTimeoutId() { return playerDeathTimeoutId; },
+    set playerDeathTimeoutId(v) { playerDeathTimeoutId = v; },
+
+    // ── Callback functions ──
+    get getCurrentLevel() { return getCurrentLevel; },
+    get getRenderLevel() { return getRenderLevel; },
+    get getMapTileAt() { return getMapTileAt; },
+    get setHeroDirection() { return setHeroDirection; },
+    get setHeroAnimState() { return setHeroAnimState; },
+    get resolveHeroBmsDirection() { return resolveHeroBmsDirection; },
+    get isPlayerOverVoidAtLevel() { return isPlayerOverVoidAtLevel; },
+    get getGroundSurfaceY() { return getGroundSurfaceY; },
+    get syncLevelSideEffects() { return syncLevelSideEffects; },
+    get applyActiveLevelChange() { return applyActiveLevelChange; },
+    get isTileBlockedForGameplay() { return isTileBlockedForGameplay; },
+    get updateEnemyAI() { return updateEnemyAI; },
+    get finishAirborneLanding() { return fallSystem.finishAirborneLanding; },
+    get applyEnemyTargetVisual() { return applyEnemyTargetVisual; },
+    get restoreEnemyTargetVisual() { return restoreEnemyTargetVisual; },
+    get getAquaticSampleAt() { return getAquaticSampleAt; },
+    get findFirstBlockingTileOnWorldLine() { return findFirstBlockingTileOnWorldLine; },
   };
+
+  lt = createLevelTransitionSystem({
+    ctx,
+    ensureMapLevelReady: (level) => ensureMapLevelReady(level),
+    loadLevelBinary: (level, mapData) => loadLevelBinary(level, mapData),
+    hasLevelBinary: (level) => levelBinaryCache.has(level),
+  });
+  applyActiveLevelChange = lt.applyActiveLevelChange;
+  syncLevelSideEffects = lt.syncLevelSideEffects;
+  snapPlayerFootToActiveLevel = lt.snapPlayerFootToActiveLevel;
+  snapFootToGradedSurface = lt.snapFootToGradedSurface;
+
+  const damagePopup = createDamagePopupSystem({ ctx, scene });
+  emitPlayerDamagePopup = damagePopup.emitPlayerDamagePopup;
+  emitBloodBurst = damagePopup.emitBloodBurst;
+
+  groundQuery = createGroundQuerySystem({ ctx });
+
+  fallSystem = createPlayerFallSystem({
+    ctx,
+    getCurrentLevel: ctx.getCurrentLevel,
+    setHeroAnimState: ctx.setHeroAnimState,
+    emitPlayerDamagePopup,
+    getAquaticSampleAt: ctx.getAquaticSampleAt,
+    getMapTileAt: ctx.getMapTileAt,
+    isVoidSymbol: (symbol) => isVoidSymbol(symbol),
+    applyActiveLevelChange: ctx.applyActiveLevelChange,
+    ensureMapLevelReady,
+    snapPlayerFootToActiveLevel,
+  });
 
   sliceCombatSystem = new SliceCombatSystem({
     ctx,
@@ -3996,7 +2549,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     destroyEnemy,
     emitBloodBurst,
     emitPlayerDamagePopup,
-    triggerPlayerDeathSequence,
+    triggerPlayerDeathSequence: fallSystem.triggerPlayerDeathSequence,
     hasLineOfSight,
     onPlayerAttackStarted: (enemy, isRanged) => {
       setHeroAnimState("attack", 320);
@@ -4020,25 +2573,30 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     getCurrentLevel: () => getCurrentLevel(),
     hasLineOfSight: (origin, target) => hasLineOfSight(origin, target),
     setSelectedEnemy: (uid) => setSelectedEnemy(uid),
-    getSelectedEnemy: () => selectedEnemyUid,
+    getSelectedEnemy: () => ctx.selectedEnemyUid,
   });
+
+  dropPickup = createDropPickupSystem({ ctx, tryPickupPersistentItem });
+  addDroppedItemFromEvent = dropPickup.addDroppedItemFromEvent;
+  handleDropItem = dropPickup.handleDropItem;
+  handleRequestPickup = dropPickup.handleRequestPickup;
 
   inputManager = new SliceInputManager({
     canvas,
-    isPaused: () => gameplayPaused,
-    isPlayerDeathSequenceActive: () => isPlayerDeathSequenceActive,
-    isFirstPerson: () => isFirstPerson,
-    ensureAudioReady: () => audioSystem.ensureReady(),
-    onCastRune: () => sliceCombatSystem.castRune3d(),
+    isPaused: () => ctx.gameplayPaused,
+    isPlayerDeathSequenceActive: () => ctx.isPlayerDeathSequenceActive,
+    isFirstPerson: () => ctx.isFirstPerson,
+    ensureAudioReady: () => ctx.audioSystem.ensureReady(),
+    onCastRune: () => ctx.sliceCombatSystem.castRune3d(),
     onCycleRuneSlot: () => {
-      activeRuneSlotIndex = (activeRuneSlotIndex + 1) % 3;
-      dispatchRuneSlotUpdate();
+      ctx.activeRuneSlotIndex = (ctx.activeRuneSlotIndex + 1) % 3;
+      runeSystem.dispatchRuneSlotUpdate();
     },
     onToggleDebugColliders: () => {
-      debugCollidersVisible = !debugCollidersVisible;
+      ctx.debugCollidersVisible = !ctx.debugCollidersVisible;
       rebuildDebugColliderMeshes();
       // eslint-disable-next-line no-console
-      console.warn(`[DEBUG] Collision visualization: ${debugCollidersVisible ? "ON" : "OFF"}`);
+      console.warn(`[DEBUG] Collision visualization: ${ctx.debugCollidersVisible ? "ON" : "OFF"}`);
     },
     onToggleCameraMode: (newFP: boolean) => {
       if (newFP) {
@@ -4046,15 +2604,15 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
           "[DEBUG] Entering first-person mode — debug-only camera. Top-down is the product view.",
         );
       }
-      cameraSystem.setMode(newFP, newFP);
-      isFirstPerson = cameraSystem.isFirstPerson;
+      ctx.cameraSystem.setMode(newFP, newFP);
+      ctx.isFirstPerson = ctx.cameraSystem.isFirstPerson;
     },
     onCycleCameraPreset: () => {
-      cameraSystem.cycleTopDownPreset();
+      ctx.cameraSystem.cycleTopDownPreset();
     },
     onToggleFallSafety: () => {
-      const safetyEnabled = playerState.toggleFallSafety();
-      playerState.emit("uiNotification", {
+      const safetyEnabled = ctx.playerState.toggleFallSafety();
+      ctx.playerState.emit("uiNotification", {
         type: safetyEnabled ? "info" : "warning",
         message: t_game(safetyEnabled ? "fall_safety_on" : "fall_safety_off"),
       });
@@ -4062,23 +2620,23 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     onInteract: () => {
       const pickedRealItem = tryPickupNearestItem();
       if (pickedRealItem) {
-        orchestrator.dropSystem.syncStream(true);
+        ctx.orchestrator.dropSystem.syncStream(true);
         return;
       }
 
-      if (doorSystem.tryInteractNearbyDoorRespectingPickup(playerState.pickupRange / 32, getNearestPickupItemDistance())) {
+      if (ctx.doorSystem.tryInteractNearbyDoorRespectingPickup(ctx.playerState.pickupRange / 32, ctx.pointerPickingSystem.getNearestPickupItemDistance())) {
         return;
       }
 
-      if (!dropSystem.hasRealDroppedItems) {
-        const dist = Vector3.Distance(player.position, pickupOrb.position);
+      if (!ctx.dropSystem.hasRealDroppedItems) {
+        const dist = Vector3.Distance(ctx.player.position, pickupOrb.position);
         if (dist <= 1.25) {
-          const added = playerState.addItem("torch", 1);
+          const added = ctx.playerState.addItem("torch", 1);
           if (added) {
             fallbackPickupConsumed = true;
             pickupOrb.setEnabled(false);
-            audioManager.playPickup();
-            playerState.log("action_pickup");
+            ctx.audioManager.playPickup();
+            ctx.playerState.log("action_pickup");
           }
         }
       }
@@ -4094,21 +2652,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   playerState.on("dropItem", handleDropItem);
   playerState.on("requestPickup", handleRequestPickup);
   playerState.on("spawnDroppedItem", addDroppedItemFromEvent);
-  // S11-T1: listen for rune targeting from menu
-  playerState.on("prepareRuneCast", (runeId: string) => {
-    runeTargetingMode = true;
-    targetingRuneId = runeId;
-    playerState.emit("uiNotification", {
-      type: "info",
-      message: t_game("msg_select_target"),
-    });
-  });
-  playerState.on("cancelRuneCast", () => {
-    runeTargetingMode = false;
-    targetingRuneId = null;
-  });
-  // S8-T2: emit initial rune slot state so React HUD can show slots on load
-  dispatchRuneSlotUpdate();
+
+  const runeSystem = createRuneCastSystem({ ctx });
+  runeSystem.dispatchRuneSlotUpdate();
 
 
 
@@ -4124,7 +2670,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
 
   const pointerObserver = scene.onPointerObservable.add((pointerInfo) => {
-    if (gameplayPaused || isPlayerDeathSequenceActive) {
+    if (gameplayPaused || ctx.isPlayerDeathSequenceActive) {
       return;
     }
     if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) {
@@ -4134,26 +2680,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     const isRightClick = pointerInfo.event.button === 2;
     const isLeftClick = pointerInfo.event.button === 0;
 
-    // S11-T1: Handle rune targeting mode (Opção A parity)
-    if (runeTargetingMode && targetingRuneId && isLeftClick) {
-      const pointerX = isFirstPerson
-        ? engine.getRenderWidth() / 2
-        : scene.pointerX;
-      const pointerY = isFirstPerson
-        ? engine.getRenderHeight() / 2
-        : scene.pointerY;
-
-      const enemyUid = resolveEnemyUidFromPointer(pointerX, pointerY);
-      if (enemyUid) {
-        const targetEnemy = enemies.get(enemyUid);
-        if (targetEnemy && !targetEnemy.isDead) {
-          sliceCombatSystem.castRuneAtTarget(targetEnemy.uid);
-          return;
-        }
-      }
-
-      playerState.emit("message", t_game("msg_target_obstructed"));
-      return;
+    // S11-T1: Handle rune targeting mode (delegated to RuneCastSystem)
+    if (isLeftClick) {
+      const px = isFirstPerson ? engine.getRenderWidth() / 2 : scene.pointerX;
+      const py = isFirstPerson ? engine.getRenderHeight() / 2 : scene.pointerY;
+      if (runeSystem.handleRuneTargetClick(px, py)) return;
     }
 
     // S9-T3: in FP mode both left and right click pick from screen center (crosshair aim)
@@ -4171,14 +2702,14 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
       return;
     }
 
-    const enemyUid = resolveEnemyUidFromPointer(pointerX, pointerY);
+    const enemyUid = pointerPickingSystem.resolveEnemyUidFromPointer(pointerX, pointerY);
 
     if (enemyUid && enemies.has(enemyUid)) {
       setSelectedEnemy(enemyUid);
       return;
     }
 
-    const pickedDoorUuid = resolveDoorUuidFromPointer(pointerX, pointerY);
+    const pickedDoorUuid = pointerPickingSystem.resolveDoorUuidFromPointer(pointerX, pointerY);
     if (
       pickedDoorUuid &&
       isRightClick &&
@@ -4188,7 +2719,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     }
 
     if (isRightClick) {
-      doorSystem.tryInteractNearbyDoorRespectingPickup(playerState.pickupRange / 32, getNearestPickupItemDistance());
+      doorSystem.tryInteractNearbyDoorRespectingPickup(playerState.pickupRange / 32, pointerPickingSystem.getNearestPickupItemDistance());
       return;
     }
 
@@ -4197,126 +2728,39 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   // ── RenderSystem: owns onBeforeRender + runRenderLoop ─────────────────
   const saveSystem = new SaveSystem();
-  const renderState: RenderState = {
-    get isFirstPerson() { return isFirstPerson; },
-    set isFirstPerson(v) { isFirstPerson = v; },
-    get gameplayPaused() { return gameplayPaused; },
-    set gameplayPaused(v) { gameplayPaused = v; },
-    get isPlayerDeathSequenceActive() { return isPlayerDeathSequenceActive; },
-    set isPlayerDeathSequenceActive(v) { isPlayerDeathSequenceActive = v; },
-    get playerDeathTimeoutId() { return playerDeathTimeoutId; },
-    set playerDeathTimeoutId(v) { playerDeathTimeoutId = v; },
-    get verticalVelocity() { return verticalVelocity; },
-    set verticalVelocity(v) { verticalVelocity = v; },
-    get isGrounded() { return isGrounded; },
-    set isGrounded(v) { isGrounded = v; },
-    get holeFallLandingLevel() { return holeFallLandingLevel; },
-    set holeFallLandingLevel(v) { holeFallLandingLevel = v; },
-    get holeFallFloorCount() { return holeFallFloorCount; },
-    set holeFallFloorCount(v) { holeFallFloorCount = v; },
-    get fallOriginFootY() { return fallOriginFootY; },
-    set fallOriginFootY(v) { fallOriginFootY = v; },
-    get wasOnVoidWithSafety() { return wasOnVoidWithSafety; },
-    set wasOnVoidWithSafety(v) { wasOnVoidWithSafety = v; },
-    get lastSafePlayerX() { return lastSafePlayerX; },
-    set lastSafePlayerX(v) { lastSafePlayerX = v; },
-    get lastSafePlayerZ() { return lastSafePlayerZ; },
-    set lastSafePlayerZ(v) { lastSafePlayerZ = v; },
-    get lastGroundedFootY() { return lastGroundedFootY; },
-    set lastGroundedFootY(v) { lastGroundedFootY = v; },
-    get levelTransitionCooldown() { return levelTransitionCooldown; },
-    set levelTransitionCooldown(v) { levelTransitionCooldown = v; },
-    get heroAnimLockedUntil() { return heroAnimLockedUntil; },
-    set heroAnimLockedUntil(v) { heroAnimLockedUntil = v; },
-    get selectedEnemyUid() { return selectedEnemyUid; },
-    set selectedEnemyUid(v) { selectedEnemyUid = v; },
-    get worldBootstrapReady() { return worldBootstrapReady; },
-    set worldBootstrapReady(v) { worldBootstrapReady = v; },
-  };
-
   const renderSystem = new RenderSystem({
-    scene,
-    engine,
-    camera: camera!,
-    firstPersonCamera: firstPersonCamera!,
-    state: renderState,
+    ctx,
     td: {
-      previousHeapUsedMb,
-      frameMsWindow,
-      pathMsWindow,
-      heapHistory,
-      chunkHotspots,
-      unloadCheckpoints,
-      chunkUnloadRecoveryFailures,
-      pathMetrics,
+      previousHeapUsedMb: telemetryLogger.previousHeapUsedMb,
+      frameMsWindow: telemetryLogger.frameMsWindow,
+      pathMsWindow: telemetryLogger.pathMsWindow,
+      heapHistory: telemetryLogger.heapHistory,
+      chunkHotspots: telemetryLogger.chunkHotspots,
+      unloadCheckpoints: telemetryLogger.unloadCheckpoints,
+      chunkUnloadRecoveryFailures: telemetryLogger.chunkUnloadRecoveryFailures,
+      pathMetrics: telemetryLogger.pathMetrics,
     },
-    chunkSystem,
-    orchestrator,
-    navigationSystem,
-    cameraSystem,
-    qualitySystem,
-    doorSystem,
-    propSystem,
-    dropSystem,
-    enemySystem,
-    playerState,
-    projectileSystem,
-    wallRevealSystem,
-    waterEffectSystem: waterEffectSystem!,
-    sliceCombatSystem: sliceCombatSystem!,
-    collisionWorld: collisionWorld!,
-    inputManager: inputManager!,
-    player,
-    playerCtx,
-    heroSpriteMat: heroSpriteMat as any,
     heroShadowMat,
-    heroBillboard,
-    heroShadow,
     heroAquaticTint,
     lastPlayerAquaticMode,
-    telemetryEnabledRef: telemetryEnabled,
+    telemetryEnabledRef: telemetryLogger.telemetryEnabledRef,
     activeSlashtrails,
-    enemies,
     enemySpawnCatalog,
-    getMapDataCache: () => mapDataCache,
-    getCurrentMapWidth: () => currentMapWidth,
-    getCurrentMapHeight: () => currentMapHeight,
-    sliceMapName,
-    audioManager: audioManager!,
     sceneInstrumentation: sceneInstrumentation!,
-    runtimeLog,
-    getCurrentLevel,
-    getRenderLevel,
-    getElapsedSec,
-    getMapTileAt,
+    runtimeLog: telemetryLogger.runtimeLog,
+    getElapsedSec: telemetryLogger.getElapsedSec.bind(telemetryLogger),
     checkLevelDrift,
-    setHeroDirection,
-    setHeroAnimState,
-    resolveHeroBmsDirection,
-    setSelectedEnemy,
-    finishAirborneLanding,
-    isPlayerOverVoidAtLevel,
-    getGroundSurfaceY,
-    syncLevelSideEffects,
     syncVerticalLevelVisibility: (dt) =>
       visibilitySystem.syncVerticalLevelVisibility(dt),
     hideWallsOnRay: () => visibilitySystem.hideWallsOnRay(),
-    updateEnemyAI,
     updatePlayerDebugMesh,
     collectInteractableRevealTargets,
-    applyActiveLevelChange,
-    applyEnemyTargetVisual,
-    restoreEnemyTargetVisual,
-    getAquaticSampleAt,
-    findFirstBlockingTileOnWorldLine,
-    isTileBlockedForGameplay,
-    pushLogEvent,
-    persistRuntimeLogs,
-    flushRuntimeLogsToFile,
-    buildSummary,
-    buildHotspots,
-    pushBounded,
-    getNearestPickupItemDistance,
+    pushLogEvent: telemetryLogger.pushLogEvent.bind(telemetryLogger),
+    persistRuntimeLogs: telemetryLogger.persistRuntimeLogs.bind(telemetryLogger),
+    flushRuntimeLogsToFile: telemetryLogger.flushRuntimeLogsToFile.bind(telemetryLogger),
+    buildSummary: telemetryLogger.buildSummary.bind(telemetryLogger),
+    buildHotspots: telemetryLogger.buildHotspots.bind(telemetryLogger),
+    pushBounded: telemetryLogger.pushBounded.bind(telemetryLogger),
     saveSystem,
   });
   renderSystem.attach();
@@ -4383,7 +2827,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   };
   playerState.on("displaySettingsChanged", handleDisplaySettings);
   const handleDoorStatesChanged = () => {
-    doorSystem.handleDoorStatesChanged();
+    ctx.doorSystem.handleDoorStatesChanged();
   };
   playerState.on("doorStatesChanged", handleDoorStatesChanged);
 
@@ -4393,57 +2837,56 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     save,
     whenWorldReady: () => worldReadyPromise,
     dispose: () => {
-      pushLogEvent("session.dispose", {
+      ctx.telemetryLogger.pushLogEvent("session.dispose", {
         currentLevel: getCurrentLevel(),
-        samples: runtimeLog.samples.length,
-        events: runtimeLog.events.length,
+        samples: ctx.telemetryLogger.runtimeLog.samples.length,
+        events: ctx.telemetryLogger.runtimeLog.events.length,
       });
-      inputManager.dispose();
-      persistRuntimeLogs();
-      void flushRuntimeLogsToFile(true);
+      ctx.inputManager.dispose();
+      ctx.telemetryLogger.persistRuntimeLogs();
+      void ctx.telemetryLogger.flushRuntimeLogsToFile(true);
 
 
-      playerState.off("dropItem", handleDropItem);
-      playerState.off("requestPickup", handleRequestPickup);
-      playerState.off("spawnDroppedItem", addDroppedItemFromEvent);
-      playerState.off("equipmentChanged", syncHeroVisualProfile);
-      playerState.off("displaySettingsChanged", handleDisplaySettings);
-      playerState.off("doorStatesChanged", handleDoorStatesChanged);
-      playerState.off("gameplayPauseChanged", handleGameplayPauseChanged);
-      if (playerDeathTimeoutId !== null) {
-        window.clearTimeout(playerDeathTimeoutId);
-        playerDeathTimeoutId = null;
+      ctx.playerState.off("dropItem", handleDropItem);
+      ctx.playerState.off("requestPickup", handleRequestPickup);
+      ctx.playerState.off("spawnDroppedItem", addDroppedItemFromEvent);
+      ctx.playerState.off("equipmentChanged", syncHeroVisualProfile);
+      ctx.playerState.off("displaySettingsChanged", handleDisplaySettings);
+      ctx.playerState.off("doorStatesChanged", handleDoorStatesChanged);
+      ctx.playerState.off("gameplayPauseChanged", handleGameplayPauseChanged);
+      if (ctx.playerDeathTimeoutId !== null) {
+        window.clearTimeout(ctx.playerDeathTimeoutId);
+        ctx.playerDeathTimeoutId = null;
       }
 
 
-      scene.onPointerObservable.remove(pointerObserver);
+      ctx.scene.onPointerObservable.remove(pointerObserver);
       document.exitPointerLock?.();
-      chunkSystem.clearAll();
-      wallRevealSystem.dispose();
-      waterEffectSystem.dispose();
+      ctx.chunkSystem.clearAll();
+      ctx.wallRevealSystem.dispose();
+      ctx.waterEffectSystem.dispose();
       heroAquaticTint.dispose();
       mapRoot.dispose();
-      tileMaterials.forEach((material) => material.dispose());
-      dropSystem.clear();
+      ctx.tileMaterialSystem.dispose();
+      ctx.dropSystem.clear();
       activeSlashtrails.forEach((slash) => {
         slash.mesh.dispose();
         slash.material.dispose();
         slash.texture.dispose();
       });
       activeSlashtrails.length = 0;
-      doorSystem.clear();
-      propSystem.clear();
-      enemySystem.clear();
-      projectileSystem.disposeAll();
-      disposeAllPooledSpriteTexturesForScene(scene);
-      // S7-FP4: torus marker removed — no dispose needed
-      delete window.__slice3dLogs;
+      ctx.doorSystem.clear();
+      ctx.propSystem.clear();
+      ctx.enemySystem.clear();
+      ctx.projectileSystem.disposeAll();
+      disposeAllPooledSpriteTexturesForScene(ctx.scene);
+      ctx.telemetryLogger.dispose();
       delete window.__slice3dLogsData;
       delete window.__slice3dPerf;
       delete window.__slice3dPerfDiagnostics;
       geometryWorker.terminate();
-      scene.dispose();
-      engine.dispose();
+      ctx.scene.dispose();
+      ctx.engine.dispose();
     },
   };
 }
