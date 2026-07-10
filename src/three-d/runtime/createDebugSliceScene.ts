@@ -88,6 +88,7 @@ import { isStaticTileBlocking as staticBlock, isBlockingTile as blockingTile } f
 import { resolvePoolFloorMaterial as resolvePoolFloor } from "./PoolFloorResolver";
 import { collectInteractableRevealTargets as collectRevealTargets } from "./RevealTargetCollector";
 import { renderMapLevel as renderMap } from "./MapRenderer";
+import { applyDisplaySettings as applyDisplaySettingsImpl } from "./DisplaySettings";
 import { createGameContext } from "./createGameContext";
 import { triggerPlayerAttackSlashEffect as createSlashTrail, getDeterministicRotation, getWeaponSlashColor, type ActiveSlash } from "./SlashTrailEffect";
 import { destroyEnemy as destroyEnemyImpl, grantEnemyLoot as grantEnemyLootImpl, setSelectedEnemy as setSelectedEnemyImpl } from "./EnemyDeathHandler";
@@ -1350,51 +1351,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   // ─── Display Settings bridge (PlayerState → Babylon engine) ─────────────
   // Render scale: setHardwareScalingLevel(1/scale) lowers internal resolution
   // without touching camera FOV. Quality preset also tunes chunk/enemy/prop radii.
-  const applyDisplaySettings = (
-    settings: ReturnType<typeof playerState.getDisplaySettings>,
-  ) => {
-    try {
-      const scale = Math.max(0.5, Math.min(1.0, settings.renderScale || 1));
-      // Babylon expects 1/scale (1 = native, 2 = half resolution).
-      engine.setHardwareScalingLevel(1 / scale);
-    } catch (err) {
-      console.warn("[3D] Failed to apply renderScale", err);
-    }
-
-    qualitySystem.applyConfig(settings.qualityPreset as QualityPreset);
-
-    // Quality preset → light + scene tuning + streaming radii (see SliceQualityRuntime).
-    switch (settings.qualityPreset) {
-      case "low":
-        hemiLight.intensity = 0.85;
-        scene.particlesEnabled = false;
-        scene.postProcessesEnabled = false;
-        break;
-      case "mid":
-        hemiLight.intensity = 0.95;
-        scene.particlesEnabled = true;
-        scene.postProcessesEnabled = false;
-        break;
-      case "high":
-      default:
-        hemiLight.intensity = 1.0;
-        scene.particlesEnabled = true;
-        scene.postProcessesEnabled = true;
-        break;
-    }
-
-    renderSystem.setFpsTargetMinFrameMs(
-      settings.fpsTarget && settings.fpsTarget > 0
-        ? 1000 / settings.fpsTarget
-        : 0,
-    );
-  };
-  applyDisplaySettings(playerState.getDisplaySettings());
-  const handleDisplaySettings = (
-    settings: ReturnType<typeof playerState.getDisplaySettings>,
-  ) => {
-    applyDisplaySettings(settings);
-  };
+  const applyDisplaySettings = (s: any) => applyDisplaySettingsImpl({ engine, qualitySystem, hemiLight, scene, renderSystem }, s);
+  const handleDisplaySettings = (s: any) => applyDisplaySettings(s);
   playerState.on("displaySettingsChanged", handleDisplaySettings);
   const handleDoorStatesChanged = () => {
     ctx.doorSystem.handleDoorStatesChanged();
