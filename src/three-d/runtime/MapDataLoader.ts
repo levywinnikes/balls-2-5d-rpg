@@ -1,3 +1,4 @@
+import { WorldMapService } from "../../services/WorldMapService";
 import type { GameContext } from "./GameContext";
 import type { SliceMapData } from "./SliceTileTypes";
 
@@ -80,5 +81,3 @@ export async function ensureWorldMapReady(
   WorldMapService.ensureLevelBuffer(ctx.getCurrentLevel());
   cfg.rebuildDebugMeshes();
 }
-
-import { WorldMapService } from "../../services/WorldMapService";

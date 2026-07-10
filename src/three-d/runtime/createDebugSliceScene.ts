@@ -1,3 +1,14 @@
+export type {
+  SliceRuntime,
+  Slice3DLogSample,
+  Slice3DLogEvent,
+  Slice3DSessionLog,
+  Slice3DHotspot,
+  Slice3DSummary,
+} from "./Slice3DTypes";
+import type { SliceRuntime, Slice3DLogSample, Slice3DLogEvent, Slice3DSessionLog, Slice3DHotspot, Slice3DSummary } from "./Slice3DTypes";
+
+
 import {
   ArcRotateCamera,
   Color3,
@@ -169,15 +180,6 @@ import type {
   GeometryGroupBuffer,
 } from "../../workers/geometry.worker";
 
-export type {
-  SliceRuntime,
-  Slice3DLogSample,
-  Slice3DLogEvent,
-  Slice3DSessionLog,
-  Slice3DHotspot,
-  Slice3DSummary,
-} from "./Slice3DTypes";
-import type { SliceRuntime, Slice3DLogSample, Slice3DLogEvent, Slice3DSessionLog, Slice3DHotspot, Slice3DSummary } from "./Slice3DTypes";
 import { createMaterial, worldToSliceCoord, clamp, worldToGrid, gridToWorld } from "./SliceRuntimeUtils";
 import type { TopDownCameraPreset } from "./Slice3DTypes";
 export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
