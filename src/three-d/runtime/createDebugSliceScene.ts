@@ -80,6 +80,7 @@ import { createDamagePopupSystem } from "./DamagePopupSystem";
 import { createGroundQuerySystem } from "./GroundQuerySystem";
 import { loadLevelBinary as loadLevelBinaryImpl, loadMapData as loadMapDataImpl, ensureWorldMapReady as ensureWorldMapReadyImpl } from "./MapDataLoader";
 import { ensureDebugSandboxStarterLoadout as ensureDebugLoadout } from "./DebugSandboxSetup";
+import { ensureMapLevelReady as ensureMapLevelReadyImpl } from "./LevelBootstrap";
 import { createGameContext } from "./createGameContext";
 import { triggerPlayerAttackSlashEffect as createSlashTrail, getDeterministicRotation, getWeaponSlashColor, type ActiveSlash } from "./SlashTrailEffect";
 import { destroyEnemy as destroyEnemyImpl, grantEnemyLoot as grantEnemyLootImpl, setSelectedEnemy as setSelectedEnemyImpl } from "./EnemyDeathHandler";
@@ -1168,146 +1169,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     playerDebugMesh.position.z = player.position.z;
   };
 
-  const ensureMapLevelReady = async (requestedLevel: string) => {
-    const mapData = await loadMapData();
-    if (!mapData || !mapData.levels) {
-      return null;
-    }
-
-    const availableLevels = Object.keys(mapData.levels);
-    if (availableLevels.length === 0) {
-      return null;
-    }
-
-    const resolvedLevel = mapData.levels[requestedLevel]
-      ? requestedLevel
-      : availableLevels[0];
-
-    await ensureWorldMapReady(mapData);
-    ensureDebugSandboxStarterLoadout(mapData);
-    await doorSystem.ensureLevelSeeded(resolvedLevel);
-
-    if (resolvedLevel !== getCurrentLevel()) {
-      applyActiveLevelChange(resolvedLevel, undefined, { natural: true });
-    }
-
-    await renderMapLevel(resolvedLevel);
-    await propSystem.ensureLevelSeeded(resolvedLevel);
-
-    const mapWidth = mapData.width ?? 0;
-    const mapHeight = mapData.height ?? 0;
-    const initialSpawn = mapData.levels[resolvedLevel]?.playerPos;
-    const isWithinBounds =
-      player.position.x >= 0 &&
-      player.position.z >= 0 &&
-      player.position.x < mapWidth &&
-      player.position.z < mapHeight;
-    const currentTileSymbol = isWithinBounds
-      ? getMapTileAt(
-          resolvedLevel,
-          Math.floor(player.position.x),
-          Math.floor(player.position.z),
-        )
-      : null;
-    const currentTileDef = currentTileSymbol
-      ? mapData.tileDefinitions?.[currentTileSymbol]
-      : undefined;
-    const currentTileBlocked = isBlockingTile(
-      currentTileSymbol,
-      currentTileDef,
-    );
-    const hasInvalidSpawn =
-      !isWithinBounds || isVoidSymbol(currentTileSymbol) || currentTileBlocked;
-
-    if (hasInvalidSpawn) {
-      const findNearestWalkable = (originX: number, originZ: number) => {
-        const maxRadius = 12;
-        const baseX = Math.floor(originX);
-        const baseZ = Math.floor(originZ);
-
-        for (let radius = 0; radius <= maxRadius; radius++) {
-          for (let dz = -radius; dz <= radius; dz++) {
-            for (let dx = -radius; dx <= radius; dx++) {
-              if (
-                radius > 0 &&
-                Math.abs(dx) !== radius &&
-                Math.abs(dz) !== radius
-              ) {
-                continue;
-              }
-
-              const tx = baseX + dx;
-              const tz = baseZ + dz;
-              if (tx < 0 || tz < 0 || tx >= mapWidth || tz >= mapHeight) {
-                continue;
-              }
-
-              const symbol = getMapTileAt(resolvedLevel, tx, tz);
-              if (isVoidSymbol(symbol)) {
-                continue;
-              }
-
-              const tileDef = symbol
-                ? mapData.tileDefinitions?.[symbol]
-                : undefined;
-              if (isBlockingTile(symbol, tileDef)) {
-                continue;
-              }
-
-              return { x: tx + 0.5, z: tz + 0.5 };
-            }
-          }
-        }
-
-        return null;
-      };
-
-      if (initialSpawn) {
-        const targetX = worldToSliceCoord(initialSpawn.x);
-        const targetZ = worldToSliceCoord(initialSpawn.y);
-        const walkable = findNearestWalkable(targetX, targetZ);
-        if (walkable) {
-          player.position.x = walkable.x;
-          player.position.z = walkable.z;
-        } else {
-          player.position.x = Math.min(mapWidth - 0.5, Math.max(0.5, targetX));
-          player.position.z = Math.min(mapHeight - 0.5, Math.max(0.5, targetZ));
-        }
-      } else {
-        const walkable = findNearestWalkable(
-          player.position.x,
-          player.position.z,
-        );
-        if (walkable) {
-          player.position.x = walkable.x;
-          player.position.z = walkable.z;
-        } else {
-          player.position.x = Math.min(
-            mapWidth - 0.5,
-            Math.max(0.5, player.position.x),
-          );
-          player.position.z = Math.min(
-            mapHeight - 0.5,
-            Math.max(0.5, player.position.z),
-          );
-        }
-      }
-    }
-
-    playerState.exploreArea(
-      resolvedLevel,
-      Math.floor(player.position.x),
-      Math.floor(player.position.z),
-      8,
-      currentMapWidth,
-      currentMapHeight,
-    );
-
-    snapPlayerFootToActiveLevel();
-
-    return resolvedLevel;
-  };
-
+  const ensureMapLevelReady = (requestedLevel: string) => ensureMapLevelReadyImpl({ loadMapData: () => loadMapData(), ensureWorldMapReady: (d: any) => ensureWorldMapReady(d), ensureDebugLoadout: (d: any) => ensureDebugSandboxStarterLoadout(d), get doorSystem() { return doorSystem; }, get ctx() { return ctx; }, renderMapLevel: (l: any) => renderMapLevel(l), get propSystem() { return propSystem; }, get player() { return player; }, getMapTileAt: (l: any, x: any, z: any) => getMapTileAt(l, x, z), isBlockingTile: (s: any, d: any, o: any) => isBlockingTile(s, d, o), isVoidSymbol: (s: any) => isVoidSymbol(s), worldToSliceCoord: (v: any) => worldToSliceCoord(v), get currentMapWidth() { return currentMapWidth; }, get currentMapHeight() { return currentMapHeight; }, snapPlayerFootToActiveLevel, get playerState() { return playerState; } }, requestedLevel);
   let lt: ReturnType<typeof createLevelTransitionSystem>;
 
   const setSelectedEnemy = (enemyUid: string | null) => { setSelectedEnemyImpl(ctx, enemyUid); };
