@@ -1,18 +1,10 @@
-import { Vector3 } from "@babylonjs/core";
-
-export interface InteractableRevealTarget {
-  worldPos: Vector3;
-  boundsMin: Vector3;
-  boundsMax: Vector3;
-  pickProxyMode: "door" | "enemy";
-  pickProxyUid: string;
-  pickProxyNode?: any;
-}
+import { Vector3, Mesh } from "@babylonjs/core";
+import type { InteractableRevealTarget } from "./InteractableWallRevealSystem";
 
 export function collectInteractableRevealTargets(
   deps: {
     enemies: Map<string, any>;
-    doorSystem: { doors: Map<string, any> };
+    doorSystem: { doors: Map<string, any>; DOOR_PANEL_HEIGHT?: number };
     player: { position: { x: number; y: number; z: number } };
     getCurrentLevel: () => string;
     levelToWorldY: (level: string | number) => number;
@@ -23,42 +15,45 @@ export function collectInteractableRevealTargets(
 ): InteractableRevealTarget[] {
   const { enemies, doorSystem, player, getCurrentLevel, levelToWorldY, LEVEL_HEIGHT, WALK_SURFACE, WALL_REVEAL_TARGET_RADIUS_UNITS } = deps;
   const targets: InteractableRevealTarget[] = [];
-  const currentLevel = getCurrentLevel();
-  const px = player.position.x;
-  const pz = player.position.z;
-  const radius = WALL_REVEAL_TARGET_RADIUS_UNITS;
 
   enemies.forEach((enemy) => {
-    if (enemy.isDead) return;
-    if (enemy.level !== currentLevel) return;
-    const dx = enemy.worldPos.x - px;
-    const dz = enemy.worldPos.z - pz;
-    if (dx * dx + dz * dz > radius * radius) return;
-    const baseY = levelToWorldY(currentLevel);
-    const h = LEVEL_HEIGHT;
+    if (enemy.isDead || Math.abs(levelToWorldY(enemy.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) return;
+    const dx = enemy.worldPos.x - player.position.x;
+    const dz = enemy.worldPos.z - player.position.z;
+    if (dx * dx + dz * dz > WALL_REVEAL_TARGET_RADIUS_UNITS ** 2) return;
+    const pickProxy = enemy.meshRoot
+      .getChildMeshes()
+      .find((mesh: Mesh) => mesh.name.endsWith("-pick-proxy")) as Mesh | undefined;
+    const pickWidth = pickProxy?.getBoundingInfo().boundingBox.extendSize.x
+      ? pickProxy.getBoundingInfo().boundingBox.extendSize.x * 2 : 1.2;
+    const pickHeight = pickProxy?.getBoundingInfo().boundingBox.extendSize.y
+      ? pickProxy.getBoundingInfo().boundingBox.extendSize.y * 2 : 1.15;
+    const pickCenterY = pickProxy?.position.y ?? 0.55;
     targets.push({
-      worldPos: enemy.worldPos.clone(),
-      boundsMin: new Vector3(enemy.worldPos.x - 0.4, baseY + WALK_SURFACE, enemy.worldPos.z - 0.4),
-      boundsMax: new Vector3(enemy.worldPos.x + 0.4, baseY + h, enemy.worldPos.z + 0.4),
-      pickProxyMode: "enemy",
-      pickProxyUid: enemy.uid,
-      pickProxyNode: enemy.meshRoot,
+      id: enemy.uid,
+      kind: "enemy",
+      level: enemy.level,
+      position: enemy.worldPos.clone(),
+      pickWidth,
+      pickHeight,
+      pickCenterY,
+      pickMetadata: { sliceEnemyUid: enemy.uid },
     });
   });
 
-  doorSystem.doors.forEach((door) => {
-    if (door.level !== currentLevel) return;
-    const dx = door.worldPos.x - px;
-    const dz = door.worldPos.z - pz;
-    if (dx * dx + dz * dz > radius * radius) return;
-    const baseY = levelToWorldY(currentLevel);
-    const h = LEVEL_HEIGHT;
+  doorSystem.doors.forEach((door: any) => {
+    if (Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) return;
+    const feetY = levelToWorldY(door.level);
+    const doorHeight = doorSystem.DOOR_PANEL_HEIGHT ?? 1.5;
     targets.push({
-      worldPos: door.worldPos.clone(),
-      boundsMin: new Vector3(door.worldPos.x - 0.5, baseY + WALK_SURFACE, door.worldPos.z - 0.5),
-      boundsMax: new Vector3(door.worldPos.x + 0.5, baseY + h, door.worldPos.z + 0.5),
-      pickProxyMode: "door",
-      pickProxyUid: door.uid,
+      id: door.uuid,
+      kind: "door",
+      level: door.level,
+      position: new Vector3(door.tileX + 0.5, feetY, door.tileY + 0.5),
+      pickWidth: door.hingeOnX ? 0.92 : 0.22,
+      pickHeight: doorHeight,
+      pickCenterY: WALK_SURFACE + doorHeight / 2,
+      pickMetadata: { sliceDoorUuid: door.uuid },
     });
   });
 

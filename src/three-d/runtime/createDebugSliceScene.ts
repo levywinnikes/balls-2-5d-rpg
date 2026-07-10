@@ -83,8 +83,9 @@ import { ensureDebugSandboxStarterLoadout as ensureDebugLoadout } from "./DebugS
 import { ensureMapLevelReady as ensureMapLevelReadyImpl } from "./LevelBootstrap";
 import { bootstrapWorldSession as bootstrapWorld } from "./WorldBootstrap";
 import { createDebugColliderVisuals } from "./DebugColliderVisuals";
-import { isStaticTileBlocking, isBlockingTile } from "./TileBlocking";
-import { resolvePoolFloorMaterial } from "./PoolFloorResolver";
+import { isStaticTileBlocking as staticBlock, isBlockingTile as blockingTile } from "./TileBlocking";
+import { resolvePoolFloorMaterial as resolvePoolFloor } from "./PoolFloorResolver";
+import { collectInteractableRevealTargets as collectRevealTargets } from "./RevealTargetCollector";
 import { createGameContext } from "./createGameContext";
 import { triggerPlayerAttackSlashEffect as createSlashTrail, getDeterministicRotation, getWeaponSlashColor, type ActiveSlash } from "./SlashTrailEffect";
 import { destroyEnemy as destroyEnemyImpl, grantEnemyLoot as grantEnemyLootImpl, setSelectedEnemy as setSelectedEnemyImpl } from "./EnemyDeathHandler";
@@ -115,6 +116,7 @@ import {
   FEET_CLEARANCE,
 } from "./GroundHeightQuery3D";
 import { CollisionWorld, isGradedWalkTile } from "./CollisionWorld";
+  let lastChunkRenderLevel: string | null = null;
 import {
   type PlayerContext,
   type PhysicsInput,
@@ -841,61 +843,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     );
 
 
-  const isStaticTileBlocking = (
-    symbol: string | null,
-    tileDef?: SliceTileDefinition,
-  ) => {
-    if (isVoidSymbol(symbol)) {
-      return false;
-    }
-
-    const resolvedTileId = tileDef?.id ?? symbol;
-    if (!resolvedTileId) {
-      return false;
-    }
-
-    if (isWaterTileId(resolvedTileId)) {
-      return false;
-    }
-
-    if (tileDef?.renderAs === "floor") {
-      return false;
-    }
-
-    if (tileDef?.renderAs === "block") {
-      return true;
-    }
-
-    return Boolean(tileDef?.block);
-  };
-
-  const isBlockingTile = (
-    symbol: string | null,
-    tileDef?: SliceTileDefinition,
-    options?: { level?: string; tileX?: number; tileY?: number },
-  ) => {
-    if (
-      options?.level !== undefined &&
-      options.tileX !== undefined &&
-      options.tileY !== undefined
-    ) {
-      const door = doorSystem.getDoorAtTile(options.level, options.tileX, options.tileY);
-      if (door) {
-        return !doorSystem.isDoorOpenAtTile(options.level, options.tileX, options.tileY);
-      }
-
-      if (
-        propSystem.isCollidableTile(options.level, options.tileX, options.tileY)
-      ) {
-        return true;
-      }
-    }
-
-    return isStaticTileBlocking(symbol, tileDef);
-  };
-
-  let lastChunkRenderLevel: string | null = null;
-
+  const isStaticTileBlocking = (s: string | null, d?: SliceTileDefinition) => staticBlock(s, d);
+  const isBlockingTile = (s: string | null, d?: SliceTileDefinition, o?: { level?: string; tileX?: number; tileY?: number }) => blockingTile({ doorSystem, propSystem }, s, d, o);
   const renderMapLevel = async (level: string) => {
     const mapData = mapDataCache;
     if (!mapData || !mapData.width || !mapData.height) {
@@ -949,38 +898,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     waterEffectSystem,
   });
 
-  const resolvePoolFloorMaterial = (
-    level: string,
-    tileX: number,
-    tileY: number,
-  ) => {
-    const mapData = mapDataCache;
-    const maxRadius = 20;
-    for (let radius = 1; radius <= maxRadius; radius += 1) {
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) {
-            continue;
-          }
-          const symbol = getMapTileAt(level, tileX + dx, tileY + dy);
-          if (!symbol || symbol === "...") {
-            continue;
-          }
-          const tileDef = mapData?.tileDefinitions?.[symbol];
-          const neighborId = (tileDef?.id || symbol || "").toLowerCase();
-          if (isWaterTileId(neighborId)) {
-            continue;
-          }
-          return tileMaterialSystem.getTileMaterial(symbol, tileDef, "#9ca3af");
-        }
-      }
-    }
-
-    const cobDef = mapData?.tileDefinitions?.cob;
-    return tileMaterialSystem.getTileMaterial("cob", cobDef, "#9ca3af");
-  };
-
-
+  const resolvePoolFloorMaterial = (l: string, x: number, y: number) => resolvePoolFloor({ mapDataCache: mapDataCache as any, getMapTileAt, tileMaterialSystem, isWaterTileId }, l, x, y) as any;
   const chunkSystem = new ChunkStreamSystem({
     scene,
     mapRoot,
@@ -1052,127 +970,12 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let debugCollidersVisible = false;
   let debugColliderParent: TransformNode | null = null;
   let playerDebugMesh: Mesh | null = null;
+  const debugVisualsCfg = { scene, debugCollidersVisible: () => debugCollidersVisible, debugColliderParent: () => debugColliderParent, setDebugParent: (v: any) => { debugColliderParent = v; }, playerDebugMesh: () => playerDebugMesh, setPlayerDebugMesh: (v: any) => { playerDebugMesh = v; }, collisionWorld, player, HERO_BODY_HEIGHT };
+  const debugVisuals = createDebugColliderVisuals(debugVisualsCfg);
 
-  const createWedgeMesh = (v: any, parent: TransformNode) => {
-    const mesh = new Mesh("wedge_" + v.level, scene);
-    mesh.parent = parent;
-
-    const x1 = v.x1, x2 = v.x2;
-    const z1 = v.z1, z2 = v.z2;
-    const baseY = v.baseY, highY = v.highY;
-
-    let y_nw = baseY, y_ne = baseY, y_sw = baseY, y_se = baseY;
-    if (v.direction === "n") {
-      y_nw = highY; y_ne = highY;
-    } else if (v.direction === "s") {
-      y_sw = highY; y_se = highY;
-    } else if (v.direction === "e") {
-      y_ne = highY; y_se = highY;
-    } else if (v.direction === "w") {
-      y_nw = highY; y_sw = highY;
-    }
-
-    const positions = [
-      x1, baseY, z1,
-      x2, baseY, z1,
-      x2, baseY, z2,
-      x1, baseY, z2,
-      x1, y_sw, z1,
-      x2, y_se, z1,
-      x2, y_ne, z2,
-      x1, y_nw, z2,
-    ];
-
-    const indices = [
-      0, 2, 1,  0, 3, 2,
-      4, 5, 6,  4, 6, 7,
-      0, 1, 5,  0, 5, 4,
-      1, 2, 6,  1, 6, 5,
-      2, 3, 7,  2, 7, 6,
-      3, 0, 4,  3, 4, 7
-    ];
-
-    const normals: number[] = [];
-    VertexData.ComputeNormals(positions, indices, normals);
-
-    const vertexData = new VertexData();
-    vertexData.positions = positions;
-    vertexData.indices = indices;
-    vertexData.normals = normals;
-    vertexData.applyToMesh(mesh);
-
-    return mesh;
-  };
-
-  const rebuildDebugColliderMeshes = () => {
-    if (debugColliderParent) {
-      debugColliderParent.dispose();
-      debugColliderParent = null;
-    }
-    if (playerDebugMesh) {
-      playerDebugMesh.dispose();
-      playerDebugMesh = null;
-    }
-    if (!debugCollidersVisible) return;
-
-    debugColliderParent = new TransformNode("debugCollidersParent", scene);
-
-    const matWalkable = new StandardMaterial("matWalkable", scene);
-    matWalkable.diffuseColor = new Color3(0, 1, 0);
-    matWalkable.alpha = 0.3;
-    matWalkable.backFaceCulling = false;
-
-    const matSolid = new StandardMaterial("matSolid", scene);
-    matSolid.diffuseColor = new Color3(1, 0, 0);
-    matSolid.alpha = 0.3;
-    matSolid.backFaceCulling = false;
-
-    for (const v of collisionWorld.volumes) {
-      let mesh: Mesh;
-      if (v.kind === "aabb") {
-        mesh = MeshBuilder.CreateBox("aabb_" + v.level, {
-          width: v.x2 - v.x1,
-          height: v.y2 - v.y1,
-          depth: v.z2 - v.z1,
-        }, scene);
-        mesh.parent = debugColliderParent;
-        mesh.position.set(
-          (v.x1 + v.x2) / 2,
-          (v.y1 + v.y2) / 2,
-          (v.z1 + v.z2) / 2,
-        );
-      } else {
-        mesh = createWedgeMesh(v, debugColliderParent);
-      }
-      mesh.material = v.isWalkable ? matWalkable : matSolid;
-    }
-  };
-
-  const updatePlayerDebugMesh = () => {
-    if (!debugCollidersVisible) {
-      if (playerDebugMesh) {
-        playerDebugMesh.dispose();
-        playerDebugMesh = null;
-      }
-      return;
-    }
-
-    if (!playerDebugMesh) {
-      playerDebugMesh = MeshBuilder.CreateCylinder("playerDebug", {
-        diameter: 0.64,
-        height: HERO_BODY_HEIGHT,
-      }, scene);
-      const mat = new StandardMaterial("playerDebugMat", scene);
-      mat.diffuseColor = new Color3(0, 0, 1);
-      mat.alpha = 0.4;
-      playerDebugMesh.material = mat;
-    }
-
-    playerDebugMesh.position.x = player.position.x;
-    playerDebugMesh.position.y = player.position.y + HERO_BODY_HEIGHT / 2;
-    playerDebugMesh.position.z = player.position.z;
-  };
-
+  const createWedgeMesh = (v: any, p: any) => debugVisuals.createWedgeMesh(v, p);
+  const rebuildDebugColliderMeshes = () => debugVisuals.rebuildDebugColliderMeshes();
+  const updatePlayerDebugMesh = () => debugVisuals.updatePlayerDebugMesh();
   const ensureMapLevelReady = (requestedLevel: string) => ensureMapLevelReadyImpl({ loadMapData: () => loadMapData(), ensureWorldMapReady: (d: any) => ensureWorldMapReady(d), ensureDebugLoadout: (d: any) => ensureDebugSandboxStarterLoadout(d), get doorSystem() { return doorSystem; }, get ctx() { return ctx; }, renderMapLevel: (l: any) => renderMapLevel(l), get propSystem() { return propSystem; }, get player() { return player; }, getMapTileAt: (l: any, x: any, z: any) => getMapTileAt(l, x, z), isBlockingTile: (s: any, d: any, o: any) => isBlockingTile(s, d, o), isVoidSymbol: (s: any) => isVoidSymbol(s), worldToSliceCoord: (v: any) => worldToSliceCoord(v), get currentMapWidth() { return currentMapWidth; }, get currentMapHeight() { return currentMapHeight; }, snapPlayerFootToActiveLevel, get playerState() { return playerState; } }, requestedLevel);
   let lt: ReturnType<typeof createLevelTransitionSystem>;
 
@@ -1217,69 +1020,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     orchestrator.reanchorLevel(level);
   };
 
-  const collectInteractableRevealTargets = (): InteractableRevealTarget[] => {
-    const targets: InteractableRevealTarget[] = [];
-
-    enemies.forEach((enemy) => {
-      if (enemy.isDead || Math.abs(levelToWorldY(enemy.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
-        return;
-      }
-
-      const dx = enemy.worldPos.x - player.position.x;
-      const dz = enemy.worldPos.z - player.position.z;
-      if (dx * dx + dz * dz > WALL_REVEAL_TARGET_RADIUS_UNITS ** 2) {
-        return;
-      }
-
-      const pickProxy = enemy.meshRoot
-        .getChildMeshes()
-        .find((mesh) => mesh.name.endsWith("-pick-proxy")) as Mesh | undefined;
-      const pickWidth = pickProxy?.getBoundingInfo().boundingBox.extendSize.x
-        ? pickProxy.getBoundingInfo().boundingBox.extendSize.x * 2
-        : 1.2;
-      const pickHeight = pickProxy?.getBoundingInfo().boundingBox.extendSize.y
-        ? pickProxy.getBoundingInfo().boundingBox.extendSize.y * 2
-        : 1.15;
-      const pickCenterY = pickProxy?.position.y ?? 0.55;
-
-      targets.push({
-        id: enemy.uid,
-        kind: "enemy",
-        level: enemy.level,
-        position: enemy.worldPos.clone(),
-        pickWidth,
-        pickHeight,
-        pickCenterY,
-        pickMetadata: { sliceEnemyUid: enemy.uid },
-      });
-    });
-
-    doorSystem.doors.forEach((door) => {
-      if (Math.abs(levelToWorldY(door.level) - levelToWorldY(getCurrentLevel())) > LEVEL_HEIGHT) {
-        return;
-      }
-
-      const feetY = levelToWorldY(door.level);
-      const doorHeight = doorSystem.DOOR_PANEL_HEIGHT;
-      targets.push({
-        id: door.uuid,
-        kind: "door",
-        level: door.level,
-        position: new Vector3(
-          door.tileX + 0.5,
-          feetY,
-          door.tileY + 0.5,
-        ),
-        pickWidth: door.hingeOnX ? 0.92 : 0.22,
-        pickHeight: doorHeight,
-        pickCenterY: WALK_SURFACE + doorHeight / 2,
-        pickMetadata: { sliceDoorUuid: door.uuid },
-      });
-    });
-
-    return targets;
-  };
-
+  const collectInteractableRevealTargets = () => collectRevealTargets({ enemies, doorSystem, player, getCurrentLevel, levelToWorldY, LEVEL_HEIGHT, WALK_SURFACE, WALL_REVEAL_TARGET_RADIUS_UNITS });
   const tryPickupPersistentItem = (item: DroppedItemData, requestedCount?: number) => dropPickup.tryPickupPersistentItem(item, requestedCount);
   const tryPickupNearestItem = (): boolean => dropPickup.tryPickupNearestItem();
   let dropPickup: ReturnType<typeof createDropPickupSystem>;
