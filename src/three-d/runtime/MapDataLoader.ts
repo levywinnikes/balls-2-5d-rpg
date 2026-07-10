@@ -1,8 +1,5 @@
 import { WorldMapService } from "../../services/WorldMapService";
 import type { GameContext } from "./GameContext";
-import type { SliceMapData } from "./SliceTileTypes";
-
-console.log("[MapDataLoader] MODULE LOADED");
 
 export interface MapDataLoaderConfig {
   readonly ctx: GameContext;
