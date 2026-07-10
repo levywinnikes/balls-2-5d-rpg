@@ -73,11 +73,9 @@ export interface RenderSystemDeps {
   ctx: GameContext;
   td: TelemetryData;
 
-  saveSystem: SaveSystem;
   heroShadowMat: StandardMaterial;
   heroAquaticTint: AquaticShaderHandle;
   lastPlayerAquaticMode: { mode: AquaticSample["mode"] };
-  telemetryEnabledRef: { value: boolean };
   activeSlashtrails: Array<{
     mesh: Mesh;
     material: StandardMaterial;
@@ -95,7 +93,6 @@ export interface RenderSystemDeps {
   runtimeLog: Slice3DSessionLog;
 
   getElapsedSec: () => number;
-  checkLevelDrift: () => void;
   syncVerticalLevelVisibility: (dt: number) => void;
   hideWallsOnRay: () => void;
   updatePlayerDebugMesh: () => void;
@@ -143,12 +140,10 @@ export class RenderSystem {
   private tick(): void {
     const {
       ctx,
-      saveSystem,
       heroShadowMat, heroAquaticTint, lastPlayerAquaticMode,
-      telemetryEnabledRef, activeSlashtrails, enemySpawnCatalog,
+      activeSlashtrails, enemySpawnCatalog,
       sceneInstrumentation, runtimeLog,
       getElapsedSec,
-      checkLevelDrift,
       syncVerticalLevelVisibility, hideWallsOnRay,
       updatePlayerDebugMesh, collectInteractableRevealTargets,
       pushLogEvent, persistRuntimeLogs, flushRuntimeLogsToFile,
@@ -190,7 +185,7 @@ export class RenderSystem {
 
     let tStart = tFrameStart;
 
-    checkLevelDrift();
+    ctx.checkLevelDrift();
     tStart = performance.now();
     orchestrator.tick(deltaSeconds);
 
@@ -461,7 +456,7 @@ export class RenderSystem {
 
     this.telemetryLogTimer += deltaSeconds;
     this.telemetryPersistTimer += deltaSeconds;
-    if (this.deps.telemetryEnabledRef.value && this.telemetryLogTimer >= LOG_SAMPLE_INTERVAL) {
+    if (ctx.telemetryEnabledRef.value && this.telemetryLogTimer >= LOG_SAMPLE_INTERVAL) {
       this.telemetryLogTimer = 0;
 
       const chunkStats = (window as any).__slice3dChunkStreaming || {};
@@ -657,12 +652,12 @@ export class RenderSystem {
       };
     }
 
-    if (this.deps.telemetryEnabledRef.value && this.telemetryPersistTimer >= LOG_PERSIST_INTERVAL) {
+    if (ctx.telemetryEnabledRef.value && this.telemetryPersistTimer >= LOG_PERSIST_INTERVAL) {
       this.telemetryPersistTimer = 0;
       persistRuntimeLogs();
     }
 
-    if (this.deps.telemetryEnabledRef.value) {
+    if (ctx.telemetryEnabledRef.value) {
       this.telemetryFileFlushTimer += deltaSeconds;
       if (this.telemetryFileFlushTimer >= LOG_FILE_FLUSH_INTERVAL) {
         this.telemetryFileFlushTimer = 0;
@@ -786,8 +781,7 @@ export class RenderSystem {
   }
 
   private tickAutoSave(): void {
-    const { saveSystem } = this.deps;
-    const { engine, player, getCurrentLevel } = this.deps.ctx;
+    const { engine, player, getCurrentLevel, saveSystem } = this.deps.ctx;
     this.autoSaveTimer += engine.getDeltaTime() / 1000;
     if (this.autoSaveTimer >= AUTO_SAVE_INTERVAL) {
       this.autoSaveTimer = 0;

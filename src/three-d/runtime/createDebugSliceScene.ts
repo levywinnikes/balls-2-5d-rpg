@@ -1106,6 +1106,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let emitPlayerDamagePopup: ReturnType<typeof createDamagePopupSystem>["emitPlayerDamagePopup"];
   let emitBloodBurst: ReturnType<typeof createDamagePopupSystem>["emitBloodBurst"];
   let groundQuery: ReturnType<typeof createGroundQuerySystem>;
+  let saveSystem: SaveSystem;
 
   const getHighestGroundBelow = (worldX: number, worldZ: number, currentY: number) => {
     const mapData = mapDataCache;
@@ -2385,6 +2386,9 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     get collisionWorld() { return collisionWorld; },
     get enemies() { return enemies; },
     get audioSystem() { return audioSystem; },
+    get saveSystem() { return saveSystem; },
+    get checkLevelDrift() { return checkLevelDrift; },
+    get telemetryEnabledRef() { return telemetryLogger.telemetryEnabledRef; },
     get chunkSystem() { return chunkSystem; },
     get orchestrator() { return orchestrator; },
     get navigationSystem() { return navigationSystem; },
@@ -2727,7 +2731,7 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   });
 
   // ── RenderSystem: owns onBeforeRender + runRenderLoop ─────────────────
-  const saveSystem = new SaveSystem();
+  saveSystem = new SaveSystem();
   const renderSystem = new RenderSystem({
     ctx,
     td: {
@@ -2743,13 +2747,11 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     heroShadowMat,
     heroAquaticTint,
     lastPlayerAquaticMode,
-    telemetryEnabledRef: telemetryLogger.telemetryEnabledRef,
     activeSlashtrails,
     enemySpawnCatalog,
     sceneInstrumentation: sceneInstrumentation!,
     runtimeLog: telemetryLogger.runtimeLog,
     getElapsedSec: telemetryLogger.getElapsedSec.bind(telemetryLogger),
-    checkLevelDrift,
     syncVerticalLevelVisibility: (dt) =>
       visibilitySystem.syncVerticalLevelVisibility(dt),
     hideWallsOnRay: () => visibilitySystem.hideWallsOnRay(),
@@ -2761,7 +2763,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     buildSummary: telemetryLogger.buildSummary.bind(telemetryLogger),
     buildHotspots: telemetryLogger.buildHotspots.bind(telemetryLogger),
     pushBounded: telemetryLogger.pushBounded.bind(telemetryLogger),
-    saveSystem,
   });
   renderSystem.attach();
 

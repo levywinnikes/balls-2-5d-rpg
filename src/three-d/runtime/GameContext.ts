@@ -19,7 +19,8 @@ import type { TelemetryLogger } from "./TelemetryLogger";
 import type { Projectile3DSystem } from "./Projectile3DSystem";
 import type { SliceInputManager } from "./SliceInputManager";
 import type { AudioSystem } from "./AudioSystem";
-import type { StandardMaterial, Mesh, TransformNode } from "@babylonjs/core";
+import type { SaveSystem } from "../../core/systems/SaveSystem";
+import type { StandardMaterial, Mesh, TransformNode, SceneInstrumentation } from "@babylonjs/core";
 import type { HeroAnimState, HeroBmsDirection } from "./TwoDParitySpriteFactory";
 import type { AquaticSample } from "./WaterProfile";
 import type { GridPoint } from "./WallRevealLos";
@@ -103,6 +104,10 @@ export interface GameContext extends SliceSceneContext {
   pointerPickingSystem: PointerPickingSystem;
   telemetryLogger: TelemetryLogger;
   audioSystem: AudioSystem;
+  saveSystem: SaveSystem;
+
+  checkLevelDrift: () => void;
+  telemetryEnabledRef: { value: boolean };
 
   // ── Callback functions (moved from RenderSystemDeps for universal access) ──
   getCurrentLevel: () => string;
