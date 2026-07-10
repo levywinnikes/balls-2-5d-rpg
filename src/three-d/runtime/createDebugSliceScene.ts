@@ -1,3 +1,4 @@
+  let lastChunkRenderLevel: string | null = null;
 
 import {
   ArcRotateCamera,
@@ -119,7 +120,6 @@ import {
   FEET_CLEARANCE,
 } from "./GroundHeightQuery3D";
 import { CollisionWorld, isGradedWalkTile } from "./CollisionWorld";
-  let lastChunkRenderLevel: string | null = null;
 import {
   type PlayerContext,
   type PhysicsInput,
