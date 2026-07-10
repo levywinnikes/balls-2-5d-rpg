@@ -53,20 +53,17 @@ export async function loadMapData(
 
   try {
     const response = await fetch(`/maps/${sliceMapName}.json`);
-    if (!response.ok) return null;
+    if (!response.ok) throw new Error(`Map metadata missing (${response.status})`);
     const data = await response.json() as SliceMapData;
     ctx.mapDataCache = data;
 
-    if (data.levels) {
-      for (const level of Object.keys(data.levels)) {
-        await loadLevelBinary(cfg, level, data);
-      }
+    if (data.width && data.height) {
       rebuildCollision(cfg, data);
+      cfg.rebuildDebugMeshes();
     }
-    cfg.rebuildDebugMeshes();
     return data;
-  } catch (err) {
-    console.warn("[3D Slice] loadMapData failed", err);
+  } catch (error) {
+    console.warn("[3D Slice] Failed to read map metadata", error);
     return null;
   }
 }
@@ -77,14 +74,19 @@ export async function ensureWorldMapReady(
 ): Promise<void> {
   const ctx = cfg.ctx;
   if (ctx.worldMapReady) return;
-  ctx.worldMapReady = true;
 
-  const levels = Object.keys(mapData.levels ?? {});
-  for (const level of levels) {
-    await loadLevelBinary(cfg, level, mapData);
-  }
+  const binaryLevels = new Map<string, Uint8Array>();
+  const levelKeys = Object.keys(mapData.levels ?? {});
+
+  await Promise.all(
+    levelKeys.map(async (levelKey) => {
+      const binData = await loadLevelBinary(cfg, levelKey, mapData);
+      if (binData) binaryLevels.set(levelKey, binData);
+    }),
+  );
+
+  WorldMapService.bootstrapMinimap(mapData, binaryLevels, ctx.getCurrentLevel());
   rebuildCollision(cfg, mapData);
-
-  WorldMapService.ensureLevelBuffer(ctx.getCurrentLevel());
   cfg.rebuildDebugMeshes();
+  ctx.worldMapReady = true;
 }
