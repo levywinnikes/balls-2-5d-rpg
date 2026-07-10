@@ -82,6 +82,9 @@ import { loadLevelBinary as loadLevelBinaryImpl, loadMapData as loadMapDataImpl,
 import { ensureDebugSandboxStarterLoadout as ensureDebugLoadout } from "./DebugSandboxSetup";
 import { ensureMapLevelReady as ensureMapLevelReadyImpl } from "./LevelBootstrap";
 import { bootstrapWorldSession as bootstrapWorld } from "./WorldBootstrap";
+import { createDebugColliderVisuals } from "./DebugColliderVisuals";
+import { isStaticTileBlocking, isBlockingTile } from "./TileBlocking";
+import { resolvePoolFloorMaterial } from "./PoolFloorResolver";
 import { createGameContext } from "./createGameContext";
 import { triggerPlayerAttackSlashEffect as createSlashTrail, getDeterministicRotation, getWeaponSlashColor, type ActiveSlash } from "./SlashTrailEffect";
 import { destroyEnemy as destroyEnemyImpl, grantEnemyLoot as grantEnemyLootImpl, setSelectedEnemy as setSelectedEnemyImpl } from "./EnemyDeathHandler";
