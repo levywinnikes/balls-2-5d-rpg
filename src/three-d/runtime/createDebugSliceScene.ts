@@ -1032,7 +1032,6 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const bootstrapWorldSession = (retries = 3, baseDelayMs = 2000) => bootstrapWorld({ ctx, sliceMapName, ensureMapLevelReady, snapPlayerFootToActiveLevel, waitForSpawnChunkReady: () => waitForSpawnChunkReady(), player, getMapTileAt, isVoidSymbol, reanchorWorldContentOnLevel, propSystem, setPlayerAvatarVisible: (v: boolean) => setPlayerAvatarVisible(v), cameraSystem: cameraSystem as any, resolveWorldReady: resolveWorldReady ?? undefined, getRenderLevel }, retries, baseDelayMs);
 
-  void bootstrapWorldSession();
   const seedLevelKeys = Object.keys((mapDataCache as SliceMapData | null)?.levels ?? {});
   void orchestrator.seedAllLevels(seedLevelKeys);
   orchestrator.dropSystem.syncStream(true);
@@ -1204,6 +1203,8 @@ export function createDebugSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   addDroppedItemFromEvent = dropPickup.addDroppedItemFromEvent;
   handleDropItem = dropPickup.handleDropItem;
   handleRequestPickup = dropPickup.handleRequestPickup;
+
+  void bootstrapWorldSession();
 
   inputManager = new SliceInputManager({
     canvas,
