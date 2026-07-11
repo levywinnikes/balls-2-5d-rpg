@@ -219,6 +219,7 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
     ctx.playerCtx.position.z = respawn.z;
     ctx.player.position.x = respawn.x;
     ctx.player.position.z = respawn.z;
+    console.trace("[RESPAWN] TRIGGERED at", new Date().toISOString(), "pos:", respawn.x, respawn.z);
     cfg.snapPlayerFootToActiveLevel();
     ctx.player.position.y = ctx.playerCtx.position.y;
     ctx.lastSafePlayerX = ctx.player.position.x;
@@ -257,6 +258,7 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
       window.clearTimeout(ctx.playerDeathTimeoutId);
     }
     ctx.playerDeathTimeoutId = window.setTimeout(() => {
+      console.trace("[DEATH-TIMEOUT] Respawning now");
       void completePlayerRespawn();
     }, PLAYER_DEATH_SEQUENCE_MS);
   };
