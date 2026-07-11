@@ -255,8 +255,6 @@ export class CollisionWorld {
   }
 
   private buildBoxVolume(level: string, baseY: number, tx: number, tz: number, def?: SliceTileDefinition | null): void {
-    // Start the wall at the FLOOR SURFACE (baseY + floorSurfaceY), not the floor bottom.
-    // Clamp to level ceiling so walls don't invade the level above.
     const y1 = baseY + this.floorSurfaceY;
     const rawTop = baseY + (def?.height ?? this.levelHeight);
     const y2 = Math.min(rawTop, baseY + this.levelHeight);
@@ -267,6 +265,15 @@ export class CollisionWorld {
       surfaceY: y2,
       level,
       isWalkable: false,
+    });
+    // True 3D: add walkable floor on top of wall so player can stand on it
+    this.volumes.push({
+      kind: "aabb",
+      x1: tx, y1: y2, z1: tz,
+      x2: tx + 1, y2: y2 + this.floorSurfaceY, z2: tz + 1,
+      surfaceY: y2 + this.floorSurfaceY,
+      level,
+      isWalkable: true,
     });
   }
 
