@@ -59,6 +59,11 @@ export class StreamOrchestrator {
     this.dropSystem.droppedItemStreamRadiusUnits = radii.droppedItemStreamRadiusUnits;
   }
 
+  /**
+   * Lightweight level-change notification. Called every frame from RenderSystem.
+   * ONLY does streaming/UI side effects. Does NOT load levels or move the player.
+   * Heavy bootstrap is handled separately by ensureMapLevelReady (startup only).
+   */
   checkLevelDrift(playerStateLevel: string): boolean {
     const currentLevel = this.config.getCurrentLevel();
     if (playerStateLevel !== currentLevel) {

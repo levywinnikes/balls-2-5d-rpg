@@ -104,6 +104,11 @@ export function createLevelTransitionSystem(cfg: LevelTransitionConfig): LevelTr
     ctx.lastGroundedFootY = footY;
   };
 
+  /**
+   * Streaming/UI side effects for level change. Called during gameplay.
+   * Does NOT modify player position — physics handles movement.
+   * Player level is derived from foot Y, never imposed here.
+   */
   const applyActiveLevelChange = (
     newLevel: string,
     transition?: {

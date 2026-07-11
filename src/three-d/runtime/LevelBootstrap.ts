@@ -23,6 +23,11 @@ export interface LevelBootstrapDeps {
   };
 }
 
+/**
+ * Full level bootstrap. Loads map data, binaries, seeds content, validates spawn.
+ * HEAVY — only call at startup or on explicit respawn. NOT for gameplay level changes.
+ * For gameplay level changes, use applyActiveLevelChange (streaming side effects only).
+ */
 export async function ensureMapLevelReady(
   deps: LevelBootstrapDeps,
   requestedLevel: string,
