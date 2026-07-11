@@ -98,7 +98,7 @@ export function createLevelTransitionSystem(cfg: LevelTransitionConfig): LevelTr
     const footY = hasLevelBinary(currentLevel)
       ? getGroundFootY(ctx.player.position.x, ctx.player.position.z, currentLevel)
       : levelToWorldY(currentLevel) + WALK_SURFACE + FEET_CLEARANCE;
-    ctx.player.position.y = footY;
+    ctx.playerCtx.position.y = footY;
     ctx.verticalVelocity = 0;
     ctx.isGrounded = true;
     ctx.lastGroundedFootY = footY;
@@ -124,8 +124,8 @@ export function createLevelTransitionSystem(cfg: LevelTransitionConfig): LevelTr
     WorldMapService.ensureLevelBuffer(newLevel);
 
     if (transition) {
-      ctx.player.position.z = transition.tileZ + transition.landingLocalZ;
-      ctx.player.position.x = Math.min(
+      ctx.playerCtx.position.z = transition.tileZ + transition.landingLocalZ;
+      ctx.playerCtx.position.x = Math.min(
         ctx.mapMaxX,
         Math.max(ctx.mapMinX + 0.5, transition.tileX + 0.5),
       );
@@ -195,9 +195,9 @@ export function createLevelTransitionSystem(cfg: LevelTransitionConfig): LevelTr
     }
     const aquatic = ctx.getAquaticSampleAt(ctx.player.position.x, ctx.player.position.z, floor.level);
     if (aquatic.mode === "dry") {
-      ctx.player.position.y = floor.footY;
+      ctx.playerCtx.position.y = floor.footY;
     } else {
-      ctx.player.position.y = floor.footY + aquatic.sinkOffset;
+      ctx.playerCtx.position.y = floor.footY + aquatic.sinkOffset;
     }
     if (floor.level !== ctx.getCurrentLevel()) {
       applyActiveLevelChange(floor.level, undefined, { natural: true });

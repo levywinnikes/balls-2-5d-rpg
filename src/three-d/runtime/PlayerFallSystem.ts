@@ -215,9 +215,12 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
 
     ctx.playerState.setCurrentLevel(respawn.level);
     WorldMapService.ensureLevelBuffer(respawn.level);
+    ctx.playerCtx.position.x = respawn.x;
+    ctx.playerCtx.position.z = respawn.z;
     ctx.player.position.x = respawn.x;
     ctx.player.position.z = respawn.z;
     cfg.snapPlayerFootToActiveLevel();
+    ctx.player.position.y = ctx.playerCtx.position.y;
     ctx.lastSafePlayerX = ctx.player.position.x;
     ctx.lastSafePlayerZ = ctx.player.position.z;
     ctx.lastGroundedFootY = ctx.player.position.y;
