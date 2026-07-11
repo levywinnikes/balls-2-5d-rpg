@@ -73,10 +73,10 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
     return null;
   };
 
-  const calculateFallDamagePercent = (
+export function calculateFallDamagePercent(
     floors: number,
     impactSpeed: number,
-  ): number => {
+  ): number {
     const perFloor = Math.min(0.72, floors * 0.16);
     const speedBonus = Math.min(
       0.18,

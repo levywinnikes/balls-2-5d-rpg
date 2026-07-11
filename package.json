@@ -1,141 +1,157 @@
 {
-  "name": "balls-2-5d-rpg",
-  "version": "0.1.0",
-  "description": "An isometric RPG game",
-  "author": "André Levy Scarpim Winnikes",
-  "private": true,
-  "main": "public/electron.js",
-  "homepage": "./",
-  "dependencies": {
-    "@babylonjs/core": "^9.3.1",
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^6.6.4",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "@types/jest": "^27.5.2",
-    "@types/node": "^16.18.126",
-    "@types/react": "^19.1.9",
-    "@types/react-dom": "^19.1.7",
-    "classnames": "^2.5.1",
-    "easystarjs": "^0.4.4",
-    "lucide-react": "^0.562.0",
-    "phaser": "^3.90.0",
-    "phaser3-rex-plugins": "^1.80.20",
-    "pngjs": "^7.0.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-rnd": "^10.5.2",
-    "react-scripts": "5.0.1",
-    "simplex-noise": "^4.0.3",
-    "styled-components": "^6.1.19",
-    "tone": "^15.1.22",
-    "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4"
-  },
-  "scripts": {
-    "start": "npm run electron-dev",
-    "web": "cross-env PORT=4000 react-scripts start",
-    "build": "react-scripts build",
-    "check:bms": "node scripts/check-bms-usage.js",
-    "check:i18n-ui": "node scripts/check-i18n-ui.js",
-    "ci": "npm run check:bms && npm run check:i18n-ui && npm run build",
-    "smoke:test": "node scripts/smoke-test-map.js smoke_test",
-    "benchmark:e2e": "node scripts/run-benchmark-e2e.js",
-    "smoke:full": "npm run smoke:test && npm run benchmark:e2e",
-    "check:world-mundi": "node scripts/check-world-mundi.js city_3d_multi",
-    "check:p1-blueprint": "node scripts/check-p1-blueprint.js",
-    "test:slice3d-perf-budget": "node scripts/test-slice3d-perf-budget.js city_3d_multi",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "electron-dev": "concurrently \"cross-env BROWSER=none npm run web\" \"wait-on http://localhost:4000 && cross-env ELECTRON_START_URL=http://localhost:4000 electron .\"",
-    "dist": "npm run build && electron-builder",
-    "build-installer": "npm run build && electron-builder --win nsis",
-    "editor-server": "node scripts/map-server.js",
-    "editor": "concurrently \"cross-env REACT_APP_EDITOR=true npm run web\" \"npm run editor-server\"",
-    "generate:city-layers": "node scripts/generate-city-layers-map.js",
-    "generate:world-v1": "node scripts/generate-world-v1-map.js",
-    "generate:world-p1-macro": "node scripts/generate-world-p1-macro-map.js",
-    "generate:giant-3d": "node scripts/generate-giant-3d-map.js",
-    "generate:hero-sprite": "node scripts/generate-hero-functional-sprite.js",
-    "generate:pixellab-sprite": "node scripts/generate-pixellab-sprite.js",
-    "generate:pixellab-prop": "node scripts/generate-pixellab-prop.js",
-    "generate:respawn-glow": "node scripts/generate-pixellab-prop.js --spec docs/sprites/vfx/respawn-glow.spec.json",
-    "generate:arrow-projectile": "node scripts/generate-pixellab-prop.js --spec docs/sprites/projectiles/arrow.spec.json",
-    "generate:hair-layer": "node scripts/generate-hair-layer.js",
-    "generate:item-icon": "node scripts/generate-item-icon.js",
-    "generate:item-icons": "node scripts/generate-item-icons-batch.js",
-    "audit:item-icons": "node scripts/audit-item-icons.js",
-    "sync:debug-sandbox": "node scripts/sync-sandbox-manifest.js",
-    "generate:debug-sandbox": "node scripts/sync-sandbox-manifest.js && node scripts/generate-debug-sandbox-map.js",
-    "generate:debug-vertical": "node scripts/generate-debug-vertical-map.js",
-    "generate:debug-forest": "node scripts/generate-debug-forest-map.js",
-    "fix:sprite-east-west": "node scripts/swap-sprite-east-west.js",
-    "audit:sprite-directions": "node scripts/audit-sprite-directions.js",
-    "test:sprite-direction": "node scripts/test-world-bms-direction.js && node scripts/audit-sprite-directions.js",
-    "validate:debug-sandbox": "node scripts/validate-debug-sandbox.js",
-    "play:debug-sandbox": "play-debug-sandbox.bat",
-    "play:debug-vertical": "play-debug-vertical.bat",
-    "play:debug-forest": "play-debug-forest.bat"
-  },
-  "build": {
-    "appId": "com.balls.balls-2-5d-rpg",
-    "productName": "Balls 2.5D RPG",
-    "copyright": "Copyright © 2026",
-    "directories": {
-      "output": "dist_installer",
-      "buildResources": "public"
-    },
-    "files": [
-      "build/**/*",
-      "public/electron.js",
-      "public/preload.js",
-      "public/assets/**/*",
-      "package.json"
-    ],
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "public/favicon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "installerIcon": "public/favicon.ico",
-      "uninstallerIcon": "public/favicon.ico",
-      "uninstallDisplayName": "Balls 2.5D RPG"
-    }
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  },
-  "devDependencies": {
-    "autoprefixer": "^10.4.23",
-    "concurrently": "^9.2.1",
-    "cross-env": "^10.1.0",
-    "electron": "^39.2.7",
-    "electron-builder": "^26.0.12",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.3",
-    "wait-on": "^9.0.3"
-  },
-  "volta": {
-    "node": "20.11.1"
-  }
+    "name":  "balls-2-5d-rpg",
+    "version":  "0.1.0",
+    "description":  "An isometric RPG game",
+    "author":  "André Levy Scarpim Winnikes",
+    "private":  true,
+    "main":  "public/electron.js",
+    "homepage":  "./",
+    "dependencies":  {
+                         "@babylonjs/core":  "^9.3.1",
+                         "@testing-library/dom":  "^10.4.1",
+                         "@testing-library/jest-dom":  "^6.6.4",
+                         "@testing-library/react":  "^16.3.0",
+                         "@testing-library/user-event":  "^13.5.0",
+                         "@types/node":  "^16.18.126",
+                         "@types/react":  "^19.1.9",
+                         "@types/react-dom":  "^19.1.7",
+                         "classnames":  "^2.5.1",
+                         "easystarjs":  "^0.4.4",
+                         "lucide-react":  "^0.562.0",
+                         "phaser":  "^3.90.0",
+                         "phaser3-rex-plugins":  "^1.80.20",
+                         "pngjs":  "^7.0.0",
+                         "react":  "^19.1.1",
+                         "react-dom":  "^19.1.1",
+                         "react-rnd":  "^10.5.2",
+                         "react-scripts":  "5.0.1",
+                         "simplex-noise":  "^4.0.3",
+                         "styled-components":  "^6.1.19",
+                         "tone":  "^15.1.22",
+                         "typescript":  "^4.9.5",
+                         "web-vitals":  "^2.1.4"
+                     },
+    "scripts":  {
+                    "start":  "npm run electron-dev",
+                    "web":  "cross-env PORT=4000 react-scripts start",
+                    "build":  "react-scripts build",
+                    "check:bms":  "node scripts/check-bms-usage.js",
+                    "check:i18n-ui":  "node scripts/check-i18n-ui.js",
+                    "ci":  "npm run check:bms \u0026\u0026 npm run check:i18n-ui \u0026\u0026 npm run build",
+                    "smoke:test":  "node scripts/smoke-test-map.js smoke_test",
+                    "benchmark:e2e":  "node scripts/run-benchmark-e2e.js",
+                    "smoke:full":  "npm run smoke:test \u0026\u0026 npm run benchmark:e2e",
+                    "check:world-mundi":  "node scripts/check-world-mundi.js city_3d_multi",
+                    "check:p1-blueprint":  "node scripts/check-p1-blueprint.js",
+                    "test:slice3d-perf-budget":  "node scripts/test-slice3d-perf-budget.js city_3d_multi",
+                    "eject":  "react-scripts eject",
+                    "electron-dev":  "concurrently \"cross-env BROWSER=none npm run web\" \"wait-on http://localhost:4000 \u0026\u0026 cross-env ELECTRON_START_URL=http://localhost:4000 electron .\"",
+                    "dist":  "npm run build \u0026\u0026 electron-builder",
+                    "build-installer":  "npm run build \u0026\u0026 electron-builder --win nsis",
+                    "editor-server":  "node scripts/map-server.js",
+                    "editor":  "concurrently \"cross-env REACT_APP_EDITOR=true npm run web\" \"npm run editor-server\"",
+                    "generate:city-layers":  "node scripts/generate-city-layers-map.js",
+                    "generate:world-v1":  "node scripts/generate-world-v1-map.js",
+                    "generate:world-p1-macro":  "node scripts/generate-world-p1-macro-map.js",
+                    "generate:giant-3d":  "node scripts/generate-giant-3d-map.js",
+                    "generate:hero-sprite":  "node scripts/generate-hero-functional-sprite.js",
+                    "generate:pixellab-sprite":  "node scripts/generate-pixellab-sprite.js",
+                    "generate:pixellab-prop":  "node scripts/generate-pixellab-prop.js",
+                    "generate:respawn-glow":  "node scripts/generate-pixellab-prop.js --spec docs/sprites/vfx/respawn-glow.spec.json",
+                    "generate:arrow-projectile":  "node scripts/generate-pixellab-prop.js --spec docs/sprites/projectiles/arrow.spec.json",
+                    "generate:hair-layer":  "node scripts/generate-hair-layer.js",
+                    "generate:item-icon":  "node scripts/generate-item-icon.js",
+                    "generate:item-icons":  "node scripts/generate-item-icons-batch.js",
+                    "audit:item-icons":  "node scripts/audit-item-icons.js",
+                    "sync:debug-sandbox":  "node scripts/sync-sandbox-manifest.js",
+                    "generate:debug-sandbox":  "node scripts/sync-sandbox-manifest.js \u0026\u0026 node scripts/generate-debug-sandbox-map.js",
+                    "generate:debug-vertical":  "node scripts/generate-debug-vertical-map.js",
+                    "generate:debug-forest":  "node scripts/generate-debug-forest-map.js",
+                    "fix:sprite-east-west":  "node scripts/swap-sprite-east-west.js",
+                    "audit:sprite-directions":  "node scripts/audit-sprite-directions.js",
+                    "test:sprite-direction":  "node scripts/test-world-bms-direction.js \u0026\u0026 node scripts/audit-sprite-directions.js",
+                    "validate:debug-sandbox":  "node scripts/validate-debug-sandbox.js",
+                    "play:debug-sandbox":  "play-debug-sandbox.bat",
+                    "play:debug-vertical":  "play-debug-vertical.bat",
+                    "play:debug-forest":  "play-debug-forest.bat",
+                    "test":  "jest --no-coverage"
+                },
+    "build":  {
+                  "appId":  "com.balls.balls-2-5d-rpg",
+                  "productName":  "Balls 2.5D RPG",
+                  "copyright":  "Copyright © 2026",
+                  "directories":  {
+                                      "output":  "dist_installer",
+                                      "buildResources":  "public"
+                                  },
+                  "files":  [
+                                "build/**/*",
+                                "public/electron.js",
+                                "public/preload.js",
+                                "public/assets/**/*",
+                                "package.json"
+                            ],
+                  "win":  {
+                              "target":  [
+                                             "nsis"
+                                         ],
+                              "icon":  "public/favicon.ico"
+                          },
+                  "nsis":  {
+                               "oneClick":  false,
+                               "allowToChangeInstallationDirectory":  true,
+                               "createDesktopShortcut":  true,
+                               "installerIcon":  "public/favicon.ico",
+                               "uninstallerIcon":  "public/favicon.ico",
+                               "uninstallDisplayName":  "Balls 2.5D RPG"
+                           }
+              },
+    "eslintConfig":  {
+                         "extends":  [
+                                         "react-app",
+                                         "react-app/jest"
+                                     ]
+                     },
+    "browserslist":  {
+                         "production":  [
+                                            "\u003e0.2%",
+                                            "not dead",
+                                            "not op_mini all"
+                                        ],
+                         "development":  [
+                                             "last 1 chrome version",
+                                             "last 1 firefox version",
+                                             "last 1 safari version"
+                                         ]
+                     },
+    "devDependencies":  {
+                            "@types/jest":  "^30.0.0",
+                            "autoprefixer":  "^10.4.23",
+                            "concurrently":  "^9.2.1",
+                            "cross-env":  "^10.1.0",
+                            "electron":  "^39.2.7",
+                            "electron-builder":  "^26.0.12",
+                            "jest":  "^30.4.2",
+                            "postcss":  "^8.4.38",
+                            "tailwindcss":  "^3.4.3",
+                            "ts-jest":  "^29.4.11",
+                            "ts-node":  "^10.9.2",
+                            "wait-on":  "^9.0.3"
+                        },
+    "volta":  {
+                  "node":  "20.11.1"
+              },
+    "jest":  {
+                 "testEnvironment":  "node",
+                 "testMatch":  [
+                                   "**/*.test.ts"
+                               ],
+                 "preset":  "ts-jest",
+                 "moduleNameMapper":  {
+                                          "^@babylonjs/core$":  "\u003crootDir\u003e/src/__mocks__/babylonjs.ts"
+                                      },
+                 "roots":  [
+                               "\u003crootDir\u003e/src"
+                           ]
+             }
 }
