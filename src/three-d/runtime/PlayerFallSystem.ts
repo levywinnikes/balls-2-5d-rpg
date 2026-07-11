@@ -5,7 +5,8 @@ import { t_game } from "../../game/i18n/translations";
 import { WorldMapService } from "../../services/WorldMapService";
 import { computeFallDamageMultiplier } from "./AquaticVisualConfig";
 
-import { LEVEL_HEIGHT } from "../../constants/World";
+import { LEVEL_HEIGHT, WALK_SURFACE } from "../../constants/World";
+import { levelToWorldY } from "./PlayerContext";
 
 const FALL_DAMAGE_MIN_IMPACT_SPEED = 9.5;
 const PLAYER_DEATH_SEQUENCE_MS = 2000;
@@ -215,6 +216,9 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
     ctx.playerCtx.position.z = respawn.z;
     ctx.player.position.x = respawn.x;
     ctx.player.position.z = respawn.z;
+    // Move Y to target level's base so snapFoot anchors to the right level
+    ctx.playerCtx.position.y = levelToWorldY(respawn.level) + WALK_SURFACE;
+    ctx.player.position.y = ctx.playerCtx.position.y;
     cfg.snapPlayerFootToActiveLevel();
     ctx.player.position.y = ctx.playerCtx.position.y;
 
