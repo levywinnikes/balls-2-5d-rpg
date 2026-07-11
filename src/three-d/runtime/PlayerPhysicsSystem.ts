@@ -183,18 +183,6 @@ export function tickPhysics(
     if (holeAction.type === "begin_fall") {
       beginHoleFall(ctx, holeAction.targetLevel, holeAction.floors);
       ctx.levelTransitionCooldown = holeAction.cooldown;
-    } else if (holeAction.type === "warp") {
-      ctx.levelTransitionCooldown = holeAction.cooldown;
-      events?.onHoleTransition?.(holeAction.fromLevel, holeAction.toLevel, {
-        tileX: holeAction.tileX,
-        tileZ: holeAction.tileZ,
-        landingLocalZ: holeAction.landingLocalZ,
-        guardMs: holeAction.guardMs,
-      });
-      ctx.position.x = clamp(holeAction.tileX + 0.5, mapMin, mapMaxX);
-      ctx.position.z = holeAction.tileZ + holeAction.landingLocalZ;
-      ctx.verticalVelocity = 0;
-      ctx.isGrounded = true;
     }
   }
 

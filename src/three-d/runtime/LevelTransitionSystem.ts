@@ -18,17 +18,7 @@ export interface LevelTransitionQueries {
 
 export type HoleTransitionAction =
   | { type: "none" }
-  | { type: "begin_fall"; targetLevel: string; floors: number; cooldown: number }
-  | {
-      type: "warp";
-      fromLevel: string;
-      toLevel: string;
-      tileX: number;
-      tileZ: number;
-      landingLocalZ: number;
-      cooldown: number;
-      guardMs: number;
-    };
+  | { type: "begin_fall"; targetLevel: string; floors: number; cooldown: number };
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -62,20 +52,9 @@ export function probeHoleTransition(
   );
   if (!probe) return { type: "none" };
 
-  if (!ctx.isFallSafetyEnabled) {
-    return { type: "begin_fall", targetLevel: probe.targetLevel, floors: 1, cooldown: 0.35 };
-  }
-
-  return {
-    type: "warp",
-    fromLevel: curLevel,
-    toLevel: probe.targetLevel,
-    tileX: probe.tileX,
-    tileZ: probe.tileZ,
-    landingLocalZ: probe.landingLocalZ,
-    cooldown: 0.65,
-    guardMs: 1200,
-  };
+  // True 3D: always natural fall. Player drops straight down.
+  // The physics system handles gravity, collision, and fall damage.
+  return { type: "begin_fall", targetLevel: probe.targetLevel, floors: 1, cooldown: 0.35 };
 }
 
 // ── Level-change orchestrator (side-effect heavy: streaming, rendering, physics) ──
