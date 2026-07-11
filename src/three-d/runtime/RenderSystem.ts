@@ -327,7 +327,6 @@ export class RenderSystem {
             getCurrentLevel(),
             playerCtx.position.y,
             impactSpeed,
-            playerCtx.holeFallFloorCount,
           );
         },
         onJump: () => {

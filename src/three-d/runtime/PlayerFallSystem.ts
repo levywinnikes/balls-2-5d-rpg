@@ -5,10 +5,9 @@ import { t_game } from "../../game/i18n/translations";
 import { WorldMapService } from "../../services/WorldMapService";
 import { computeFallDamageMultiplier } from "./AquaticVisualConfig";
 
-import { LEVEL_HEIGHT, WALK_SURFACE } from "../../constants/World";
+import { WALK_SURFACE } from "../../constants/World";
 import { levelToWorldY } from "./PlayerContext";
 
-const FALL_DAMAGE_MIN_IMPACT_SPEED = 9.5;
 const PLAYER_DEATH_SEQUENCE_MS = 2000;
 
 const parseLevelNumber = (level: string) => Number.parseInt(level, 10) || 0;
@@ -37,16 +36,26 @@ export interface PlayerFallSystemConfig {
   snapPlayerFootToActiveLevel: () => void;
 }
 
-export function calculateFallDamagePercent(
-  floors: number,
-  impactSpeed: number,
-): number {
-  const perFloor = Math.min(0.72, floors * 0.16);
-  const speedBonus = Math.min(
-    0.18,
-    Math.max(0, Math.abs(impactSpeed) - 9) * 0.012,
-  );
-  return Math.min(0.9, perFloor + speedBonus);
+/**
+ * Pure physics-based fall damage. No "floors" concept — uses impact velocity only.
+ *
+ * SAFE_SPEED (8.0): landing from normal jump (JUMP_IMPULSE ≈ 7.2) = 0% damage.
+ * FATAL_SPEED (26.0): ~4-5 levels of FALL_GRAVITY, always lethal.
+ *
+ * Between safe and fatal: linear interpolation.
+ *   impactSpeed 12 → 22% (small fall)
+ *   impactSpeed 16 → 44% (medium fall)
+ *   impactSpeed 20 → 67% (large fall)
+ *   impactSpeed 24 → 89% (very large fall)
+ *
+ * No cap — if you hit fatal speed, you die.
+ */
+export function calculateFallDamagePercent(impactSpeed: number): number {
+  const SAFE_SPEED = 8.0;
+  const FATAL_SPEED = 26.0;
+  if (impactSpeed <= SAFE_SPEED) return 0;
+  if (impactSpeed >= FATAL_SPEED) return 1.0;
+  return (impactSpeed - SAFE_SPEED) / (FATAL_SPEED - SAFE_SPEED);
 }
 
 export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
@@ -88,50 +97,33 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
 
   const applyFallImpactDamage = (
     impactSpeed: number,
-    floors: number,
     landingLevel: string,
   ) => {
-    if (floors <= 0 && impactSpeed < FALL_DAMAGE_MIN_IMPACT_SPEED) {
-      return;
-    }
+    if (impactSpeed < 9.5) return; // normal jump, no damage
 
     const maxHealth = Math.max(1, ctx.playerState.getMaxHealth());
-    let damagePercent = calculateFallDamagePercent(floors, impactSpeed);
+    let damagePercent = calculateFallDamagePercent(impactSpeed);
     const landingAquatic = cfg.getAquaticSampleAt(
       ctx.player.position.x,
       ctx.player.position.z,
       landingLevel,
     );
     damagePercent *= computeFallDamageMultiplier(landingAquatic);
-    const damage = Math.max(
-      landingAquatic.mode === "swimming" ? 0 : 1,
-      Math.floor(maxHealth * damagePercent),
-    );
+    const damage = Math.max(1, Math.floor(maxHealth * damagePercent));
 
     const playerDied = ctx.playerState.takeDamage(damage);
     cfg.emitPlayerDamagePopup(
-      `fall:${landingLevel}:${floors}`,
+      `fall:${landingLevel}`,
       damage,
       "\u26A0",
       "#ff5d5d",
     );
 
-    const percentText = Math.round(damagePercent * 100).toString();
-    ctx.playerState.log(
-      "msg_fall_impact",
-      {
-        floors,
-        damage,
-        percent: percentText,
-      },
-      "#ff5d5d",
-    );
+    const pct = Math.round(damagePercent * 100);
+    ctx.playerState.log("msg_fall_impact", { damage, percent: pct }, "#ff5d5d");
     ctx.playerState.emit("uiNotification", {
       type: "danger",
-      message: t_game("msg_fall_impact")
-        .replace("{floors}", floors.toString())
-        .replace("{damage}", damage.toString())
-        .replace("{percent}", percentText),
+      message: `Queda! ${damage} de dano (${pct}%)`,
     });
 
     if (playerDied) {
@@ -143,22 +135,12 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
     landingLevel: string,
     landingFootY: number,
     impactSpeed: number,
-    explicitFloors = 0,
-  ) => {
-    const dropDistance = Math.max(0, ctx.fallOriginFootY - landingFootY);
-    const floorsFromDrop = Math.floor(
-      dropDistance / LEVEL_HEIGHT + 0.12,
-    );
-    const floors = Math.max(explicitFloors, floorsFromDrop);
-    if (
-      floors <= 0 &&
-      impactSpeed < FALL_DAMAGE_MIN_IMPACT_SPEED &&
-      dropDistance < 0.55
-    ) {
+  ): void => {
+    if (impactSpeed < 8.0) {
       ctx.fallOriginFootY = landingFootY;
       return;
     }
-    applyFallImpactDamage(impactSpeed, floors, landingLevel);
+    applyFallImpactDamage(impactSpeed, landingLevel);
     ctx.fallOriginFootY = landingFootY;
   };
 

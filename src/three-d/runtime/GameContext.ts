@@ -123,7 +123,7 @@ export interface GameContext extends SliceSceneContext {
   applyActiveLevelChange: (level: string, transition?: any, opts?: { natural?: boolean }) => void;
   isTileBlockedForGameplay: (tileX: number, tileY: number) => boolean;
   updateEnemyAI: (dt: number) => void;
-  finishAirborneLanding: (level: string, y: number, impactSpeed: number, floorCount: number) => void;
+  finishAirborneLanding: (level: string, y: number, impactSpeed: number) => void;
   applyEnemyTargetVisual: (root: TransformNode, pulse: number, health?: { current: number; max: number }) => void;
   restoreEnemyTargetVisual: (root: TransformNode) => void;
   getAquaticSampleAt: (x: number, z: number, level: string) => AquaticSample;
