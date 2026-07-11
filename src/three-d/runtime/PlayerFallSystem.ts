@@ -36,6 +36,18 @@ export interface PlayerFallSystemConfig {
   snapPlayerFootToActiveLevel: () => void;
 }
 
+export function calculateFallDamagePercent(
+  floors: number,
+  impactSpeed: number,
+): number {
+  const perFloor = Math.min(0.72, floors * 0.16);
+  const speedBonus = Math.min(
+    0.18,
+    Math.max(0, Math.abs(impactSpeed) - 9) * 0.012,
+  );
+  return Math.min(0.9, perFloor + speedBonus);
+}
+
 export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
   const { ctx } = cfg;
 
@@ -71,18 +83,6 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
     }
 
     return null;
-  };
-
-export function calculateFallDamagePercent(
-    floors: number,
-    impactSpeed: number,
-  ): number {
-    const perFloor = Math.min(0.72, floors * 0.16);
-    const speedBonus = Math.min(
-      0.18,
-      Math.max(0, Math.abs(impactSpeed) - 9) * 0.012,
-    );
-    return Math.min(0.9, perFloor + speedBonus);
   };
 
   const applyFallImpactDamage = (

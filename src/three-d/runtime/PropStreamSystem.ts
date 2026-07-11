@@ -50,8 +50,9 @@ export type PropStreamSystemConfig = {
   onNavigationRebuild: (level: string) => void;
 };
 
+import { LEVEL_HEIGHT } from "../../constants/World";
+
 const PROP_STREAM_SYNC_INTERVAL = 0.35;
-const LEVEL_HEIGHT = 2.0;
 
 export class PropStreamSystem {
   propStreamRadiusUnits = 0;

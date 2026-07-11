@@ -112,7 +112,5 @@ export class UniversalCamera {}
 export class SceneInstrumentation {}
 export const PointerEventTypes = { POINTERDOWN: 1 };
 export type AbstractMesh = any;
-export type Scene = any;
-export type Engine = any;
 export type Camera = any;
 export type AbstractEngine = any;

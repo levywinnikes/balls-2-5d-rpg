@@ -84,9 +84,10 @@ export type EnemyStreamSystemConfig = {
   setSelectedEnemyUid: (uid: string | null) => void;
 };
 
+import { LEVEL_HEIGHT } from "../../constants/World";
+
 const ENEMY_RESPAWN_MS = 60_000;
 const ENEMY_STREAM_SYNC_INTERVAL = 0.35;
-const LEVEL_HEIGHT = 2.0;
 
 export class EnemyStreamSystem {
   enemyStreamRadiusUnits = 0;
