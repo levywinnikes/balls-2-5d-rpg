@@ -221,6 +221,12 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
     ctx.player.position.z = respawn.z;
     cfg.snapPlayerFootToActiveLevel();
     ctx.player.position.y = ctx.playerCtx.position.y;
+    // Reset fall origin so respawn doesn't trigger death-by-fall loop
+    ctx.fallOriginFootY = ctx.playerCtx.position.y;
+    ctx.verticalVelocity = 0;
+    ctx.isGrounded = true;
+    ctx.holeFallLandingLevel = null;
+    ctx.holeFallFloorCount = 0;
     ctx.lastSafePlayerX = ctx.player.position.x;
     ctx.lastSafePlayerZ = ctx.player.position.z;
     ctx.lastGroundedFootY = ctx.player.position.y;
