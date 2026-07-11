@@ -165,7 +165,7 @@ Escadas (`stu`/`std`) são **degraus 3D**. O herói sobe/desce **andando**; o an
 | N3 | Chão plano de água por tile no worker | Parece Minecraft / grid |
 | N4 | Assumir `.map[]` em níveis BMS | Crash binário |
 | N5 | Escada/rampa sem testar `activeLevel` | Jogador em andar errado para colisão/água |
-| N6 | Feature 3D grande só dentro de `createDebugSliceScene.ts` sem plano de extração | Arquivo já ~8k linhas; cada feature fica mais cara |
+| N6 | Feature 3D grande sem extrair para módulo dedicado | Bootstrap `createSliceScene.ts` (1420 linhas). Extraia para `src/three-d/runtime/`, siga o padrão dos 31 módulos existentes. |
 | N7 | Ignorar oclusão porque “é só otimização” | **É gameplay e legibilidade** — R1 + R1b são requisitos do usuário |
 | N8 | Escada com clique, teleporte ou animação de elevador | Usuário quer degraus caminháveis estilo Doom |
 | N9 | Restaurar paredes ocultas por R1b entre `syncVerticalLevelVisibility` e `hideWallsOnRay` | `hideWallsOnRay` roda **depois** de `syncVerticalLevelVisibility`; restaurar no meio quebra a oclusão cirúrgica |
@@ -221,18 +221,18 @@ Copie mentalmente antes de cada PR/tarefa 3D:
 
 ---
 
-## 7. Arquitetura alvo (organização — em progresso)
+## 7. Arquitetura alvo (concluído — jul/2026)
 
 ```
-createDebugSliceScene.ts   → orquestra loop (encolher com o tempo)
-TileSurfaceResolver.ts     → altura (feito)
-VerticalLevelVisibility3D.ts → quais andares mesclar (feito)
-syncVerticalLevelVisibility  → visibilidade final (feito)
-WaterEffectSystem.ts       → só superfície líquida
-geometry.worker.ts         → geometria por perfil (water-hole, ramp, stair…)
+createSliceScene.ts         → bootstrap & wiring (1420 linhas, -60% do original)
+GameContext.ts              → interface central — estado, sistemas, callbacks
+createGameContext.ts        → factory — 254 linhas, parametrizado
+31 módulos extraídos        → cada <300 linhas, focado, testável
 ```
 
-Novos subsistemas: **extrair** de `createDebugSliceScene.ts`, não empilhar.
+Ver `src/three-d/runtime/ARCHITECTURE.md` para o mapa completo.
+
+Novos subsistemas: **extrair** de `createSliceScene.ts` como módulo dedicado, seguindo o padrão existente.
 
 ---
 

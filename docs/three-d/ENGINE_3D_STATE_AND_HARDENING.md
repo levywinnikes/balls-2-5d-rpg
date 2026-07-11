@@ -1,7 +1,7 @@
 # Engine 3D — Análise de estado e plano de consolidação
 
 **Status:** CANÔNICO · **Prioridade:** ler **antes** de implementar features ou remendos  
-**Data:** 2026-07-03  
+**Data:** 2026-07-10 · **Atualizado:** refactor concluído — monólito 3526→1420 linhas, 31 módulos extraídos  
 **Motivo:** remendos recentes (visibilidade, escadas, mapa) quebraram uns aos outros — precisamos congelar regras e endurecer a base.
 
 **Audiência:** devs e IAs. Não é backlog de features; é **contrato técnico + ordem de trabalho**.
@@ -111,10 +111,10 @@ Se (2) e (3) divergem → herói “dentro do piso”. **Resolvido em 2026-07** 
 
 Se o mapa desalinha L0/L+1 (salas com origens diferentes), a geometria parece certa mas **a transição falha** ou há vazio acima.
 
-### T5 — Monólito `createDebugSliceScene.ts`
+### T5 — Bootstrap `createSliceScene.ts` (1420 linhas, -60% do original)
 
-~7700 linhas concentram: física, visibilidade, combate, portas, AI, save, debug hooks.  
-**Risco:** cada patch toca efeitos colaterais. Plano de extração em [DESIGN_RULES_3D.md §7](./DESIGN_RULES_3D.md) — **não empilhar** features no monólito sem extrair módulo.
+~1420 linhas concentram wiring e bootstrap. O monólito original (3526 linhas) foi modularizado em 31 arquivos (<300 linhas cada).  
+**Risco:** baixo — cada módulo é isolado e testável. Ver `src/three-d/runtime/ARCHITECTURE.md`.
 
 ---
 
