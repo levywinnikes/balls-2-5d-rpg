@@ -68,6 +68,12 @@ export async function bootstrapWorldSession(
         y: Math.round(deps.player.position.y * 100) / 100,
         z: Math.round(deps.player.position.z * 100) / 100,
       });
+      // Initialize respawn point to current player position
+      ctx.playerState.setSpawnPoint(
+        ctx.getCurrentLevel(),
+        deps.player.position.x,
+        deps.player.position.z,
+      );
       return;
     } catch (error) {
       console.error(`[3D Slice] World bootstrap failed (attempt ${attempt + 1})`, error);

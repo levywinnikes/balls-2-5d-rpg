@@ -117,6 +117,9 @@ export class PlayerState extends EventEmitter {
   private currentLevel: string = "0";
   private fallSafetyEnabled: boolean = true; // Default ON
 
+  /** Respawn spawn point. Null = use last safe position. Set once on world bootstrap, updatable via checkpoints. */
+  private _spawnPoint: { level: string; x: number; z: number } | null = null;
+
   public getZLevel(): string {
     return this.currentLevel;
   }
@@ -3711,6 +3714,16 @@ export class PlayerState extends EventEmitter {
     this.recalculateMaxHealth();
     this.health = this.maxHealth;
     this.emit("healthChanged", this.health);
+  }
+
+  /** Get the current spawn point. Falls back to null (caller should use last safe position). */
+  public getSpawnPoint(): { level: string; x: number; z: number } | null {
+    return this._spawnPoint;
+  }
+
+  /** Set a spawn point. Use for initial position and checkpoints (beds, shrines, etc.). */
+  public setSpawnPoint(level: string, x: number, z: number): void {
+    this._spawnPoint = { level, x, z };
   }
 
   public getWindowPosition(type: string) {

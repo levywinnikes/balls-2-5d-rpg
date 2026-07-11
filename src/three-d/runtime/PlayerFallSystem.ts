@@ -162,42 +162,44 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
   };
 
   /**
-   * Resolve respawn position. Uses last safe position and current physics level.
-   * Falls back to map playerPos → startLevel configuration.
+   * Resolve respawn position. Priority:
+   * 1. Spawn point set via playerState.setSpawnPoint (checkpoints)
+   * 2. Last safe position on current physics level
+   * 3. Map's startLevel/playerPos fallback
    */
   const resolveRespawnSpawn = (): { level: string; x: number; z: number } => {
-    const currentLevel = cfg.getCurrentLevel();
+    // 1. Use explicit spawn point if set (checkpoint, bed, shrine)
+    const spawnPoint = ctx.playerState.getSpawnPoint();
+    if (spawnPoint) {
+      return spawnPoint;
+    }
+
+    // 2. Use last safe position
     const safeX = ctx.lastSafePlayerX;
     const safeZ = ctx.lastSafePlayerZ;
-
-    // Prefer last safe position on current physics level
+    const currentLevel = cfg.getCurrentLevel();
     if (isFinite(safeX) && isFinite(safeZ)) {
       return { level: currentLevel, x: safeX, z: safeZ };
     }
 
+    // 3. Fallback to map config
     const mapData = ctx.mapDataCache;
-    if (!mapData?.levels) {
-      return { level: "0", x: 6.5, z: 6.5 };
-    }
-
-    const levels = mapData.levels;
-    const preferredLevel =
-      mapData.config?.startLevel && levels[mapData.config.startLevel]
+    if (mapData?.levels) {
+      const preferredLevel = mapData.config?.startLevel && mapData.levels[mapData.config.startLevel]
         ? mapData.config.startLevel
-        : levels["0"]
-          ? "0"
-          : Object.keys(levels).find((level) => levels[level]?.playerPos) ?? currentLevel;
+        : mapData.levels["0"] ? "0" : Object.keys(mapData.levels)[0] ?? currentLevel;
 
-    const playerPos = levels[preferredLevel]?.playerPos;
-    if (!playerPos) {
-      return { level: "0", x: 6.5, z: 6.5 };
+      const playerPos = mapData.levels[preferredLevel]?.playerPos;
+      if (playerPos) {
+        return {
+          level: preferredLevel,
+          x: worldToSliceCoord(playerPos.x),
+          z: worldToSliceCoord(playerPos.y),
+        };
+      }
     }
 
-    return {
-      level: preferredLevel,
-      x: worldToSliceCoord(playerPos.x),
-      z: worldToSliceCoord(playerPos.y),
-    };
+    return { level: "0", x: 6.5, z: 6.5 };
   };
 
   const completePlayerRespawn = async () => {
