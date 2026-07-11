@@ -161,11 +161,23 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
     ctx.fallOriginFootY = landingFootY;
   };
 
+  /**
+   * Resolve respawn position. Uses last safe position and current physics level.
+   * Falls back to map playerPos → startLevel configuration.
+   */
   const resolveRespawnSpawn = (): { level: string; x: number; z: number } => {
+    const currentLevel = cfg.getCurrentLevel();
+    const safeX = ctx.lastSafePlayerX;
+    const safeZ = ctx.lastSafePlayerZ;
+
+    // Prefer last safe position on current physics level
+    if (isFinite(safeX) && isFinite(safeZ)) {
+      return { level: currentLevel, x: safeX, z: safeZ };
+    }
+
     const mapData = ctx.mapDataCache;
-    const fallback = { level: "0", x: 6.5, z: 6.5 };
     if (!mapData?.levels) {
-      return fallback;
+      return { level: "0", x: 6.5, z: 6.5 };
     }
 
     const levels = mapData.levels;
@@ -174,12 +186,11 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
         ? mapData.config.startLevel
         : levels["0"]
           ? "0"
-          : Object.keys(levels).find((level) => levels[level]?.playerPos) ??
-            cfg.getCurrentLevel();
+          : Object.keys(levels).find((level) => levels[level]?.playerPos) ?? currentLevel;
 
     const playerPos = levels[preferredLevel]?.playerPos;
     if (!playerPos) {
-      return fallback;
+      return { level: "0", x: 6.5, z: 6.5 };
     }
 
     return {
@@ -196,50 +207,41 @@ export function createPlayerFallSystem(cfg: PlayerFallSystemConfig) {
     ctx.inputManager.clearPressedKeys();
     ctx.setSelectedEnemy(null);
     ctx.projectileSystem.disposeAll();
-    ctx.holeFallLandingLevel = null;
-    ctx.holeFallFloorCount = 0;
-    ctx.verticalVelocity = 0;
-    ctx.isGrounded = true;
-    ctx.levelTransitionCooldown = 0;
-    ctx.verticalTransitionGuard = null;
 
-    if (respawn.level !== cfg.getCurrentLevel()) {
-      cfg.applyActiveLevelChange(respawn.level, {
-        tileX: Math.floor(respawn.x),
-        tileZ: Math.floor(respawn.z),
-        landingLocalZ: respawn.z - Math.floor(respawn.z),
-        guardMs: 0,
-      });
-      await cfg.ensureMapLevelReady(respawn.level);
-    }
-
-    ctx.playerState.setCurrentLevel(respawn.level);
-    WorldMapService.ensureLevelBuffer(respawn.level);
+    // Set position on both physics context and Babylon mesh
     ctx.playerCtx.position.x = respawn.x;
     ctx.playerCtx.position.z = respawn.z;
     ctx.player.position.x = respawn.x;
     ctx.player.position.z = respawn.z;
     cfg.snapPlayerFootToActiveLevel();
     ctx.player.position.y = ctx.playerCtx.position.y;
-    // Reset fall origin so respawn doesn't trigger death-by-fall loop
-    ctx.fallOriginFootY = ctx.playerCtx.position.y;
+
+    // Reset all physics state for clean respawn
     ctx.verticalVelocity = 0;
     ctx.isGrounded = true;
     ctx.holeFallLandingLevel = null;
     ctx.holeFallFloorCount = 0;
-    ctx.lastSafePlayerX = ctx.player.position.x;
-    ctx.lastSafePlayerZ = ctx.player.position.z;
-    ctx.lastGroundedFootY = ctx.player.position.y;
+    ctx.fallOriginFootY = ctx.playerCtx.position.y;
+    ctx.levelTransitionCooldown = 0;
+    ctx.verticalTransitionGuard = null;
+
+    ctx.playerState.setCurrentLevel(respawn.level);
+    WorldMapService.ensureLevelBuffer(respawn.level);
+    ctx.lastSafePlayerX = respawn.x;
+    ctx.lastSafePlayerZ = respawn.z;
+    ctx.lastGroundedFootY = ctx.playerCtx.position.y;
+
     ctx.playerState.recordPlayerPosition(
       respawn.level,
-      ctx.player.position.x * 32,
-      ctx.player.position.z * 32,
+      respawn.x * 32,
+      respawn.z * 32,
     );
     ctx.enemySystem.resetLivingForPlayerRespawn();
     cfg.setHeroAnimState("idle");
     ctx.heroAnimLockedUntil = 0;
     ctx.isPlayerDeathSequenceActive = false;
     ctx.playerDeathTimeoutId = null;
+    ctx.playerState.emit("playerRespawned");
   };
 
   const triggerPlayerDeathSequence = () => {
