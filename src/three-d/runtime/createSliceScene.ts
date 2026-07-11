@@ -868,7 +868,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     waterEffectSystem,
   });
 
-  const resolvePoolFloorMaterial = (l: string, x: number, y: number) => resolvePoolFloor({ mapDataCache: mapDataCache as any, getMapTileAt, tileMaterialSystem }, l, x, y);
+  const resolvePoolFloorMaterial = (l: string, x: number, y: number) => resolvePoolFloor({ mapDataCache: mapDataCache, getMapTileAt, tileMaterialSystem }, l, x, y);
   const chunkSystem = new ChunkStreamSystem({
     scene,
     mapRoot,
@@ -1056,21 +1056,21 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   // S8-T2: rune slot dispatch moved to RuneCastSystem
 
-  const box = <T,>(get: () => T, set: (v: T) => void): MutableStateBox<T> => ({ get, set });
+  const box = (get: () => any, set: (v: any) => void) => ({ get, set }) as any as MutableStateBox<any>;
 
   ctx = createGameContext({
-    engine, scene, canvas, audioManager, audioSystem: box(() => audioSystem, (v) => { (audioSystem as any) = v; }), camera, firstPersonCamera,
+    engine, scene, canvas, audioManager, audioSystem, camera, firstPersonCamera,
     collisionWorld, enemies,
     chunkSystem, orchestrator, navigationSystem, cameraSystem,
     qualitySystem, doorSystem, propSystem, dropSystem, enemySystem,
     wallRevealSystem, waterEffectSystem, projectileSystem,
-    sliceCombatSystem: box(() => sliceCombatSystem, (v) => { (sliceCombatSystem as any) = v; }),
-    sliceEnemySystem: box(() => sliceEnemySystem, (v) => { (sliceEnemySystem as any) = v; }),
-    inputManager: box(() => inputManager, (v) => { (inputManager as any) = v; }),
+    sliceCombatSystem: box(() => sliceCombatSystem, (v) => { sliceCombatSystem = v; }),
+    sliceEnemySystem: box(() => sliceEnemySystem, (v) => { sliceEnemySystem = v; }),
+    inputManager: box(() => inputManager, (v) => { inputManager = v; }),
     visibilitySystem, tileMaterialSystem, pointerPickingSystem, telemetryLogger,
-    saveSystem: box(() => saveSystem, (v) => { (saveSystem as any) = v; }), sceneInstrumentation,
+    saveSystem: box(() => saveSystem, (v) => { saveSystem = v; }), sceneInstrumentation,
     player, playerCtx, playerState, heroSpriteMat, heroBillboard, heroShadow,
-    checkLevelDrift: box(() => checkLevelDrift, (v) => { (checkLevelDrift as any) = v; }),
+    checkLevelDrift,
     isFirstPerson: box(() => isFirstPerson, (v) => { isFirstPerson = v; }),
     gameplayPaused: box(() => gameplayPaused, (v) => { gameplayPaused = v; }),
     debugCollidersVisible: box(() => debugCollidersVisible, (v) => { debugCollidersVisible = v; }),
@@ -1097,12 +1097,12 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     verticalTransitionGuard: box(() => verticalTransitionGuard, (v) => { verticalTransitionGuard = v; }),
     getCurrentLevel, getRenderLevel, getMapTileAt,
     setHeroDirection, setHeroAnimState, resolveHeroBmsDirection,
-    isPlayerOverVoidAtLevel, getGroundSurfaceY, syncLevelSideEffects: box(() => syncLevelSideEffects, (v) => { (syncLevelSideEffects as any) = v; }),
-    applyActiveLevelChange: box(() => applyActiveLevelChange, (v) => { (applyActiveLevelChange as any) = v; }), isTileBlockedForGameplay,
+    isPlayerOverVoidAtLevel, getGroundSurfaceY, syncLevelSideEffects: box(() => syncLevelSideEffects, (v) => { syncLevelSideEffects = v; }),
+    applyActiveLevelChange: box(() => applyActiveLevelChange, (v) => { applyActiveLevelChange = v; }), isTileBlockedForGameplay,
     updateEnemyAI,
     applyEnemyTargetVisual, restoreEnemyTargetVisual,
     getAquaticSampleAt, findFirstBlockingTileOnWorldLine,
-    fallSystem: box(() => fallSystem, (v) => { (fallSystem as any) = v; }) as any,
+    fallSystem: box(() => fallSystem, (v) => { fallSystem = v; }),
   });
   lt = createLevelTransitionSystem({
     ctx,

@@ -32,7 +32,7 @@ export interface CreateGameContextDeps {
   scene: Scene;
   canvas: HTMLCanvasElement;
   audioManager: AudioManager;
-  audioSystem: MutableStateBox<any>;
+  audioSystem: any;
   collisionWorld: CollisionWorld;
   enemies: Map<string, any>;
 
@@ -67,7 +67,7 @@ export interface CreateGameContextDeps {
   heroBillboard: Mesh;
   heroShadow: Mesh;
 
-  checkLevelDrift: MutableStateBox<() => void>;
+  checkLevelDrift: () => void;
 
   isFirstPerson: MutableStateBox<boolean>;
   gameplayPaused: MutableStateBox<boolean>;
@@ -127,9 +127,9 @@ export function createGameContext(d: CreateGameContextDeps): GameContext {
     get audioManager() { return d.audioManager; },
     get collisionWorld() { return d.collisionWorld; },
     get enemies() { return d.enemies; },
-    get audioSystem() { return d.audioSystem.get(); },
+    get audioSystem() { return d.audioSystem; },
     get saveSystem() { return d.saveSystem.get(); },
-    get checkLevelDrift() { return d.checkLevelDrift.get(); },
+    get checkLevelDrift() { return d.checkLevelDrift; },
     get telemetryEnabledRef() { return d.telemetryLogger.telemetryEnabledRef; },
     get sceneInstrumentation() { return d.sceneInstrumentation; },
     get chunkSystem() { return d.chunkSystem; },
