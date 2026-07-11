@@ -14,6 +14,7 @@ import {
 } from "./ThreeDEnemyVisualRegistry";
 import { playRespawnGlowAt } from "./VfxBillboardFactory";
 import type { HeroBmsDirection } from "./TwoDParitySpriteFactory";
+import { LEVEL_HEIGHT } from "../../constants/World";
 
 export type EnemySpawnData = {
   enemyType: string;
@@ -83,8 +84,6 @@ export type EnemyStreamSystemConfig = {
   getSelectedEnemyUid: () => string | null;
   setSelectedEnemyUid: (uid: string | null) => void;
 };
-
-import { LEVEL_HEIGHT } from "../../constants/World";
 
 const ENEMY_RESPAWN_MS = 60_000;
 const ENEMY_STREAM_SYNC_INTERVAL = 0.35;

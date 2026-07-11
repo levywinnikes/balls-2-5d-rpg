@@ -116,7 +116,7 @@ export interface CreateGameContextDeps {
   getAquaticSampleAt: (x: number, z: number, level: string) => AquaticSample;
   findFirstBlockingTileOnWorldLine: (...args: any[]) => any;
 
-  fallSystem: MutableStateBox<{ finishAirborneLanding: (level: string, y: number, impactSpeed: number, floorCount: number) => void }>;
+  fallSystem: MutableStateBox<{ finishAirborneLanding: (level: string, y: number, impactSpeed: number) => void }>;
 }
 
 export function createGameContext(d: CreateGameContextDeps): GameContext {

@@ -9,6 +9,7 @@ import {
   isKnownPropId,
   type PropAnimRoot,
 } from "./PropBillboardFactory";
+import { LEVEL_HEIGHT } from "../../constants/World";
 
 export type PropSpawnData = {
   propId: string;
@@ -49,8 +50,6 @@ export type PropStreamSystemConfig = {
   loadMapDataAsync: () => Promise<{ levels?: Record<string, SliceLevelData>; entityTemplates?: Record<string, { type?: string; id?: string; isCollidable?: boolean }> } | null>;
   onNavigationRebuild: (level: string) => void;
 };
-
-import { LEVEL_HEIGHT } from "../../constants/World";
 
 const PROP_STREAM_SYNC_INTERVAL = 0.35;
 
