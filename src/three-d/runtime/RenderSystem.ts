@@ -286,8 +286,6 @@ export class RenderSystem {
         }
       }
 
-      playerCtx.isFallSafetyEnabled = playerState.isFallSafetyEnabled();
-
       const physicsInput = {
         moveX: worldDx,
         moveZ: worldDz,
@@ -295,6 +293,7 @@ export class RenderSystem {
         jumpPressed: inputManager.consumeJumpRequested(),
         sprintHeld: inputManager.isKeyPressed("shift"),
         speedMultiplier: aquaticSample.speedMultiplier,
+        isFallSafetyEnabled: playerState.isFallSafetyEnabled(),
       };
 
       tickPhysics(playerCtx, physicsInput, collisionWorld, {

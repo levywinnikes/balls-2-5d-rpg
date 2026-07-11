@@ -52,6 +52,7 @@ export function evaluateVoidSafety(
   z: number,
   footY: number,
   deps: FallSafetyDeps,
+  isFallSafetyEnabled: boolean,
 ): FallSafetyAction {
   const allLevels = deps.allLevels();
   const onVoid = isStandingOnVoidAtLevel(
@@ -76,7 +77,7 @@ export function evaluateVoidSafety(
   }
 
   // Fall-safety ON — teleport back to last known safe tile
-  if (ctx.isFallSafetyEnabled) {
+  if (isFallSafetyEnabled) {
     if (!ctx.wasOnVoidWithSafety) {
       ctx.wasOnVoidWithSafety = true;
     }

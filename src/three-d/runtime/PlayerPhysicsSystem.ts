@@ -110,8 +110,8 @@ export function tickPhysics(
       const nx = px + sx;
       const nz = pz + sz;
 
-      if (!blocked(nx, pz, footY, cw, lvlKeys, q, ctx)) px = nx;
-      if (!blocked(px, nz, footY, cw, lvlKeys, q, ctx)) pz = nz;
+      if (!blocked(nx, pz, footY, cw, lvlKeys, q, ctx, input.isFallSafetyEnabled)) px = nx;
+      if (!blocked(px, nz, footY, cw, lvlKeys, q, ctx, input.isFallSafetyEnabled)) pz = nz;
 
       // Ground snap during movement
       if (ctx.isGrounded && !ctx.holeFallLandingLevel && !overVoid(px, pz, footY, cw, allLevels)) {
@@ -154,7 +154,7 @@ export function tickPhysics(
       getTileDef: q.getTileDef,
       hasLevel: q.hasLevel,
       parseLevelNumber: q.parseLevelNumber,
-    });
+    }, input.isFallSafetyEnabled);
 
     if (voidAction.type === "teleport_to_safe") {
       events?.onFallSafetyActive?.(ctx);
@@ -242,10 +242,11 @@ function blocked(
   x: number, z: number, footY: number,
   cw: CollisionWorld, keys: string[], q: PhysicsWorldQueries,
   ctx: PlayerContext,
+  isFallSafetyEnabled: boolean,
 ): boolean {
   if (cw.isHorizontalBlocked(x, z, footY, footY + HERO_BODY_HEIGHT, PLAYER_RADIUS, keys)) return true;
 
-  if (ctx.isFallSafetyEnabled) {
+  if (isFallSafetyEnabled) {
     const tx = Math.floor(x);
     const tz = Math.floor(z);
     const lvlNum = Math.floor(footY / LEVEL_HEIGHT);

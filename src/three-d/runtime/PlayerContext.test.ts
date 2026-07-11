@@ -45,7 +45,6 @@ describe("PlayerContext", () => {
       expect(ctx.verticalVelocity).toBe(0);
       expect(ctx.isGrounded).toBe(true);
       expect(ctx.holeFallLandingLevel).toBeNull();
-      expect(ctx.isFallSafetyEnabled).toBe(true);
       expect(ctx.levelTransitionCooldown).toBe(0);
     });
   });

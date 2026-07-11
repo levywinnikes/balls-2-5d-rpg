@@ -32,7 +32,6 @@ export interface PlayerContext {
   fallOriginFootY: number;
 
   // Fall-safety
-  isFallSafetyEnabled: boolean;
   lastSafePositionX: number;
   lastSafePositionZ: number;
   wasOnVoidWithSafety: boolean;
@@ -51,7 +50,8 @@ export interface PhysicsInput {
   deltaSeconds: number;
   jumpPressed: boolean;
   sprintHeld: boolean;
-  speedMultiplier: number; // 1.0 = normal; <1 = slow (water), >1 = haste
+  speedMultiplier: number;
+  isFallSafetyEnabled: boolean;
 }
 
 export function createPlayerContext(x: number, y: number, z: number): PlayerContext {
@@ -62,7 +62,6 @@ export function createPlayerContext(x: number, y: number, z: number): PlayerCont
     holeFallLandingLevel: null,
     holeFallFloorCount: 0,
     fallOriginFootY: y,
-    isFallSafetyEnabled: true,
     lastSafePositionX: x,
     lastSafePositionZ: z,
     wasOnVoidWithSafety: false,
