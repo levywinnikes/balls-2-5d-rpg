@@ -36,7 +36,6 @@ const CHUNK_SIZE = 16;
 const CHUNK_UPDATE_INTERVAL = 0.2;
 const ENEMY_VISIBILITY_RADIUS_UNITS = 26;
 const ENEMY_AI_RADIUS_UNITS = 18;
-const LEVEL_HEIGHT = 4;
 const PERF_PUBLISH_INTERVAL = 0.25;
 const LOG_SAMPLE_INTERVAL = 2.5;
 const LOG_PERSIST_INTERVAL = 12;
@@ -47,7 +46,7 @@ const LOG_HEAP_WINDOW_SECONDS = 300;
 const LOG_UNLOAD_RECOVERY_GRACE_SECONDS = 25;
 const LOG_FILE_FLUSH_INTERVAL = 10;
 const AUTO_SAVE_INTERVAL = 60;
-const WALK_SURFACE = 0.01;
+const WALL_REVEAL_FLOOR_OFFSET = 0.01;
 
 export interface TelemetryData {
   previousHeapUsedMb: number | undefined;
@@ -731,7 +730,7 @@ export class RenderSystem {
           { skipStart: true },
         ) === null,
       deltaSeconds,
-      WALK_SURFACE + 0.025,
+      WALL_REVEAL_FLOOR_OFFSET + 0.025,
     );
 
     heroBillboard.setEnabled(true);

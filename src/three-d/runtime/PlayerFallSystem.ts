@@ -5,7 +5,8 @@ import { t_game } from "../../game/i18n/translations";
 import { WorldMapService } from "../../services/WorldMapService";
 import { computeFallDamageMultiplier } from "./AquaticVisualConfig";
 
-const LEVEL_HEIGHT = 4;
+import { LEVEL_HEIGHT } from "../../constants/World";
+
 const FALL_DAMAGE_MIN_IMPACT_SPEED = 9.5;
 const PLAYER_DEATH_SEQUENCE_MS = 2000;
 

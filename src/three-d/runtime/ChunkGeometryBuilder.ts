@@ -1,8 +1,7 @@
 import type { Scene } from "@babylonjs/core";
 import { Mesh, VertexData } from "@babylonjs/core";
 
-const LEVEL_HEIGHT = 4;
-const WALK_SURFACE = 0.01;
+import { LEVEL_HEIGHT, WALK_SURFACE } from "../../constants/World";
 
 export function buildRoofMesh(
   name: string,

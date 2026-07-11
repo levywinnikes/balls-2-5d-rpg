@@ -133,4 +133,4 @@ This is a **lazy initialization pattern** for circular dependencies (systems nee
 - **GameContext centralizes all shared state** (no scattered closure captures)
 - **RenderSystemDeps only has render-specific fields** (10 fields, everything else via ctx)
 - **All types are explicit** (zero `any` in public interfaces)
-- **Module size <300 lines** each (AI-comprehensible)
+- **Extracted modules are <300 lines** each (AI-comprehensible). Pre-existing systems (CollisionWorld, SliceCombatSystem, etc.) remain at their original sizes.

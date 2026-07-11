@@ -150,7 +150,6 @@ import {
 import { QualitySystem, type QualityPreset } from "./QualitySystem";
 import { VisibilitySystem } from "./VisibilitySystem";
 import { TileMaterialSystem, safeTileColor } from "./TileMaterialSystem";
-import { buildRoofMesh, buildStairMesh } from "./ChunkGeometryBuilder";
 import { PointerPickingSystem } from "./PointerPickingSystem";
 import { TelemetryLogger } from "./TelemetryLogger";
 import { disposeAllPooledSpriteTexturesForScene } from "./SpriteTexturePool";
