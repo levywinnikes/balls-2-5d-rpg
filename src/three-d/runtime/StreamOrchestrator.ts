@@ -64,8 +64,6 @@ export class StreamOrchestrator {
     if (playerStateLevel !== currentLevel) {
       const previousLevel = currentLevel;
       this.config.applyActiveLevelChange(playerStateLevel, undefined, { natural: true });
-      void this.config.ensureMapLevelReady(playerStateLevel);
-      this.config.ensureLevelDoorsSeeded(playerStateLevel);
       this.seedLevel(playerStateLevel);
       this.config.setSelectedEnemy(null);
       this.config.pushLogEvent("level.change", {
