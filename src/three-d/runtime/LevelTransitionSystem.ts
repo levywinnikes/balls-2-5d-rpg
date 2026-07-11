@@ -114,53 +114,27 @@ export function createLevelTransitionSystem(cfg: LevelTransitionConfig): LevelTr
     },
     options?: { natural?: boolean },
   ) => {
+    // NEVER transition levels during hole fall — physics handles the fall naturally
+    if (ctx.holeFallLandingLevel) return;
+
     if (newLevel === lastSideEffectLevel) {
       return;
     }
     const previousLevel = lastSideEffectLevel ?? newLevel;
     lastSideEffectLevel = newLevel;
-    const natural = options?.natural === true;
     ctx.playerState.setCurrentLevel(newLevel);
     WorldMapService.ensureLevelBuffer(newLevel);
 
-    if (transition) {
-      ctx.playerCtx.position.z = transition.tileZ + transition.landingLocalZ;
-      ctx.playerCtx.position.x = Math.min(
-        ctx.mapMaxX,
-        Math.max(ctx.mapMinX + 0.5, transition.tileX + 0.5),
-      );
-      ctx.verticalTransitionGuard = {
-        untilMs: performance.now() + (transition.guardMs ?? 2800),
-        tileX: transition.tileX,
-        tileZ: transition.tileZ,
-        fromLevel: previousLevel,
-        toLevel: newLevel,
-      };
-    }
-
-    if (natural) {
-      ctx.visibilitySystem.invalidateCache();
-      ctx.chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
-    } else {
-      ctx.chunkSystem.clearAll();
-      ctx.visibilitySystem.invalidateCache();
-      snapPlayerFootToActiveLevel();
-    }
+    ctx.visibilitySystem.invalidateCache();
+    ctx.chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
     const mapData = ctx.mapDataCache;
     if (mapData) {
       void loadLevelBinary(newLevel, mapData).then(() => {
-        if (!natural) {
-          snapPlayerFootToActiveLevel();
-        }
         ctx.orchestrator.reanchorLevel(newLevel);
         ctx.chunkSystem.tick(CHUNK_UPDATE_INTERVAL);
       });
     }
-    if (!natural) {
-      void ensureMapLevelReady(newLevel);
-    } else {
-      ctx.navigationSystem.rebuildWindow(newLevel);
-    }
+    ctx.navigationSystem.rebuildWindow(newLevel);
     void ctx.doorSystem.ensureLevelSeeded(newLevel);
     ctx.orchestrator.seedLevel(newLevel);
     ctx.orchestrator.seedAdjacentLevels(newLevel);
