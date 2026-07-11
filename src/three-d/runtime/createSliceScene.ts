@@ -445,7 +445,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     levelToWorldY: (level: string | number) => levelToWorldY(level),
     resolveWorldAnchorY: (worldX: number, worldZ: number, level: string, restOffset?: number) =>
       resolveWorldAnchorY(worldX, worldZ, level, restOffset),
-    loadMapDataAsync: () => loadMapData(),
+    loadMapDataAsync: () => mapLoader.loadData(),
     onNavigationRebuild: (level: string) => navigationSystem.rebuildWindow(level),
   });
   // Chunk streaming constants (visual profile depends on camera mode; gameplay state remains global)
@@ -471,7 +471,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     levelToWorldY: (level: string | number) => levelToWorldY(level),
     worldToSliceCoord: (value: number) => worldToSliceCoord(value),
     applyActorAquaticY: (worldPos: Vector3, level: string) => applyActorAquaticY(worldPos, level),
-    loadMapDataAsync: () => loadMapData(),
+    loadMapDataAsync: () => mapLoader.loadData(),
     onSelectedEnemyChanged: (uid: string | null) => {
       if (uid === null && selectedEnemyUid !== null) {
         const prev = enemies.get(selectedEnemyUid);
@@ -521,7 +521,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     worldToSliceCoord: (value: number) => worldToSliceCoord(value),
     resolveWorldAnchorY: (ix: number, iz: number, level: string, restOffset: number) => resolveWorldAnchorY(ix, iz, level, restOffset),
     getDeterministicRotation: (id: string) => getDeterministicRotation(id),
-    loadMapDataAsync: () => loadMapData(),
+    loadMapDataAsync: () => mapLoader.loadData(),
     getPersistentDroppedItems: (level: string) => playerState.getPersistentDroppedItems(level),
     addPersistentDroppedItem: (level: string, item: any) => playerState.addPersistentDroppedItem(level, item),
     removePersistentDroppedItem: (level: string, uid: string) => playerState.removePersistentDroppedItem(level, uid),
@@ -541,7 +541,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     parseLevelNumber: (level: string) => parseLevelNumber(level),
     getMapTileAt: (level: string, tx: number, tz: number) => getMapTileAt(level, tx, tz),
     isStaticTileBlocking: (symbol: string | null, tileDef?: any) => isStaticTileBlocking(symbol, tileDef),
-    loadMapDataAsync: () => loadMapData(),
+    loadMapDataAsync: () => mapLoader.loadData(),
     safeTileColor: (hex: string | undefined, fallback: string) => safeTileColor(hex, fallback),
     rebuildNavigationGrid: (level: string) => navigationSystem.rebuildGrid(level),
     resetLevelEnemyPaths: (level: string) => {
@@ -605,9 +605,11 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
 
   const mapLoaderCfg = { get ctx() { return ctx; }, levelBinaryCache, get collisionWorld() { return collisionWorld; }, get rebuildDebugMeshes() { return () => rebuildDebugColliderMeshes(); } };
-  const loadLevelBinary = (level: string, mapData: SliceMapData) => loadLevelBinaryImpl(mapLoaderCfg, level, mapData);
-  const loadMapData = () => loadMapDataImpl(mapLoaderCfg, sliceMapName);
-  const ensureWorldMapReady = (mapData: SliceMapData) => ensureWorldMapReadyImpl(mapLoaderCfg, mapData);
+  const mapLoader = {
+    loadBinary: (level: string, mapData: SliceMapData) => loadLevelBinaryImpl(mapLoaderCfg, level, mapData),
+    loadData: () => loadMapDataImpl(mapLoaderCfg, sliceMapName),
+    ensureWorldReady: (mapData: SliceMapData) => ensureWorldMapReadyImpl(mapLoaderCfg, mapData),
+  };
 
   const runtimeStartedAt = Date.now();
   const telemetryLogger = new TelemetryLogger({
@@ -848,7 +850,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
 
   const isStaticTileBlocking = (s: string | null, d?: SliceTileDefinition) => staticBlock(s, d);
   const isBlockingTile = (s: string | null, d?: SliceTileDefinition, o?: { level?: string; tileX?: number; tileY?: number }) => blockingTile({ doorSystem, propSystem }, s, d, o);
-  const renderMapLevel = (level: string) => renderMap({ ctx, loadLevelBinary }, level);
+  const renderMapLevel = (level: string) => renderMap({ ctx, loadLevelBinary: mapLoader.loadBinary }, level);
   let visibilitySystem: VisibilitySystem;
 
   visibilitySystem = new VisibilitySystem({
@@ -945,7 +947,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   const createWedgeMesh = (v: any, p: any) => debugVisuals.createWedgeMesh(v, p);
   const rebuildDebugColliderMeshes = () => debugVisuals.rebuildDebugColliderMeshes();
   const updatePlayerDebugMesh = () => debugVisuals.updatePlayerDebugMesh();
-  const ensureMapLevelReady = (requestedLevel: string) => ensureMapLevelReadyImpl({ loadMapData: () => loadMapData(), ensureWorldMapReady: (d: any) => ensureWorldMapReady(d), ensureDebugLoadout: (d: any) => ensureDebugSandboxStarterLoadout(d), get doorSystem() { return doorSystem; }, get ctx() { return ctx; }, renderMapLevel: (l: any) => renderMapLevel(l), get propSystem() { return propSystem; }, get player() { return player; }, getMapTileAt: (l: any, x: any, z: any) => getMapTileAt(l, x, z), isBlockingTile: (s: any, d: any, o: any) => isBlockingTile(s, d, o), isVoidSymbol: (s: any) => isVoidSymbol(s), worldToSliceCoord: (v: any) => worldToSliceCoord(v), get currentMapWidth() { return currentMapWidth; }, get currentMapHeight() { return currentMapHeight; }, snapPlayerFootToActiveLevel, get playerState() { return playerState; } }, requestedLevel);
+  const ensureMapLevelReady = (requestedLevel: string) => ensureMapLevelReadyImpl({ loadMapData: () => mapLoader.loadData(), ensureWorldMapReady: (d: any) => mapLoader.ensureWorldReady(d), ensureDebugLoadout: (d: any) => ensureDebugSandboxStarterLoadout(d), get doorSystem() { return doorSystem; }, get ctx() { return ctx; }, renderMapLevel: (l: any) => renderMapLevel(l), get propSystem() { return propSystem; }, get player() { return player; }, getMapTileAt: (l: any, x: any, z: any) => getMapTileAt(l, x, z), isBlockingTile: (s: any, d: any, o: any) => isBlockingTile(s, d, o), isVoidSymbol: (s: any) => isVoidSymbol(s), worldToSliceCoord: (v: any) => worldToSliceCoord(v), get currentMapWidth() { return currentMapWidth; }, get currentMapHeight() { return currentMapHeight; }, snapPlayerFootToActiveLevel, get playerState() { return playerState; } }, requestedLevel);
   let lt: ReturnType<typeof createLevelTransitionSystem>;
 
   const setSelectedEnemy = (enemyUid: string | null) => { setSelectedEnemyImpl(ctx, enemyUid); };
@@ -1106,7 +1108,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   lt = createLevelTransitionSystem({
     ctx,
     ensureMapLevelReady: (level) => ensureMapLevelReady(level),
-    loadLevelBinary: (level, mapData) => loadLevelBinary(level, mapData),
+    loadLevelBinary: (level, mapData) => mapLoader.loadBinary(level, mapData),
     hasLevelBinary: (level) => levelBinaryCache.has(level),
   });
   applyActiveLevelChange = lt.applyActiveLevelChange;
