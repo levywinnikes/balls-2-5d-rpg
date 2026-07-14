@@ -1,3 +1,13 @@
+/**
+ * Level transitions, hole probing, foot snapping.
+ *
+ * probeHoleTransition        — Detects hole tiles, returns begin_fall action
+ * applyActiveLevelChange     — Streaming/UI side effects only. NEVER modifies player position.
+ * snapPlayerFootToActiveLevel — Snaps foot Y to current level's walkable surface
+ *
+ * CONTRACT: applyActiveLevelChange does NOT change player.position.
+ * Player level is derived from physics foot Y, never imposed by this module.
+ */
 import { type PlayerContext, inferLevelFromFootY, levelToWorldY, HERO_BODY_HEIGHT } from "./PlayerContext";
 import { LEVEL_HEIGHT, WALK_SURFACE, FEET_CLEARANCE } from "../../constants/World";
 import { isGradedWalkTile } from "./CollisionWorld";

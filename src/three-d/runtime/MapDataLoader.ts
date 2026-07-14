@@ -1,3 +1,10 @@
+/**
+ * Map data loading: JSON metadata, level binaries, collision rebuild, minimap bootstrap.
+ *
+ * loadMapData        — Fetch map JSON, rebuild collision, load level binaries
+ * loadLevelBinary    — Fetch single level .bin file with caching
+ * ensureWorldMapReady — Load all binaries in parallel, bootstrap minimap
+ */
 import { WorldMapService } from "../../services/WorldMapService";
 import type { GameContext } from "./GameContext";
 import type { SliceMapData } from "./SliceTileTypes";

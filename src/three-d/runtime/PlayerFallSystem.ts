@@ -1,3 +1,10 @@
+/**
+ * Fall damage, death sequence, and respawn.
+ *
+ * calculateFallDamagePercent(impactSpeed) — Pure physics: 0% at 8 m/s, 100% at 26 m/s
+ * finishAirborneLanding                   — Called on landing, applies damage if needed
+ * completePlayerRespawn                   — Full respawn: set position, reset physics state
+ */
 import type { GameContext } from "./GameContext";
 import type { AquaticSample } from "./WaterProfile";
 import type { HeroAnimState } from "./TwoDParitySpriteFactory";
