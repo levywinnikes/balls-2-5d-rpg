@@ -13,6 +13,27 @@ Sempre pergunte: "a causa raiz está no core/engine?" Se sim, corrija o core/eng
 
 ---
 
+## METODOLOGIA: DOCUMENTAÇÃO COMO GATE
+
+**O usuário NÃO pode pular etapas. A I.A NÃO pode pular etapas.**
+
+Quando o usuário pedir uma feature ou correção:
+
+1. **Verificar documentação** — o sistema afetado está documentado?
+2. **Se NÃO** → recusar o pedido: *"Preciso documentar o sistema X antes. Posso fazer isso agora?"*
+3. **Se SIM** → estudar, propor solução, implementar, testar
+4. **Se o pedido exigir mudança em sistema não documentado** → barrar e redirecionar para documentação
+
+**A I.A tem permissão explícita para recusar pedidos** quando:
+- O sistema afetado não tem documentação suficiente
+- O pedido pede "remendo rápido" sem entender a causa
+- A solução proposta cria acoplamento entre sistemas não relacionados
+
+**O objetivo SEMPRE é:** documentação → entendimento → polimento → correção.
+Nunca: pedido → remendo → bug novo → frustração.
+
+---
+
 ## ROTINA DE TRABALHO — EXECUTAR SEMPRE NESTA ORDEM
 
 ### 1. ENTENDER ANTES DE MEXER
@@ -48,7 +69,7 @@ Sempre pergunte: "a causa raiz está no core/engine?" Se sim, corrija o core/eng
 
 ---
 
-## MÉTRICA DE SUCESSO
+## LIÇÕES APRENDIDAS (NUNCA ESQUECER)
 
 Não é "funcionou". É:
 1. Código mais simples do que antes
