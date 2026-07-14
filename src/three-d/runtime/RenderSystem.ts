@@ -309,6 +309,7 @@ export class RenderSystem {
         getMapWidth: () => this.deps.ctx.currentMapWidth,
         getMapHeight: () => this.deps.ctx.currentMapHeight,
         parseLevelNumber,
+        isTileBlockedForGameplay: (tx: number, ty: number) => isTileBlockedForGameplay(tx, ty),
       }, {
         onFallSafetyActive: () => {
           playerState.emit("uiNotification", {

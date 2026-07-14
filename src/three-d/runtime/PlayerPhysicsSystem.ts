@@ -28,6 +28,8 @@ export interface PhysicsWorldQueries {
   getMapWidth: () => number;
   getMapHeight: () => number;
   parseLevelNumber: (level: string) => number;
+  /** Check doors, props, and static tiles. Used for gameplay blocking beyond pure collision volumes. */
+  isTileBlockedForGameplay: (tileX: number, tileY: number) => boolean;
 }
 
 /** Events emitted so the orchestration layer can react (streaming, rendering, UI). */
@@ -246,9 +248,12 @@ function blocked(
 ): boolean {
   if (cw.isHorizontalBlocked(x, z, footY, footY + HERO_BODY_HEIGHT, PLAYER_RADIUS, keys)) return true;
 
+  // Check doors, props, and gameplay blocking (not covered by pure collision volumes)
+  const tx = Math.floor(x);
+  const tz = Math.floor(z);
+  if (q.isTileBlockedForGameplay(tx, tz)) return true;
+
   if (isFallSafetyEnabled) {
-    const tx = Math.floor(x);
-    const tz = Math.floor(z);
     const lvlNum = Math.floor(footY / LEVEL_HEIGHT);
     const sym = q.getMapTileAt(String(lvlNum), tx, tz);
     if (!sym || sym === "...") {
