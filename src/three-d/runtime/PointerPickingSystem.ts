@@ -70,18 +70,16 @@ export class PointerPickingSystem {
       return fromSingle;
     }
 
-    if (!this.cfg.getIsFirstPerson()) {
-      const ground = this.projectPointerToGroundXZ(pointerX, pointerY);
-      if (ground) {
-        const occluded = wallRevealSystem.findOccludedTargetNear(
-          ground.x,
-          ground.z,
-          0.95,
-        );
-        const uid = occluded?.pickMetadata.sliceEnemyUid;
-        if (uid && enemies.has(uid)) {
-          return uid;
-        }
+    const ground = this.projectPointerToGroundXZ(pointerX, pointerY);
+    if (ground) {
+      const occluded = wallRevealSystem.findOccludedTargetNear(
+        ground.x,
+        ground.z,
+        0.95,
+      );
+      const uid = occluded?.pickMetadata.sliceEnemyUid;
+      if (uid && enemies.has(uid)) {
+        return uid;
       }
     }
 
