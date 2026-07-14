@@ -42,6 +42,7 @@ export type ChunkStreamConfig = {
   resolvePoolFloorMaterial: (level: string, tileX: number, tileY: number) => StandardMaterial;
   isBlockingTile: (symbol: string | null, tileDef?: SliceTileDefinition, options?: { level?: string; tileX?: number; tileY?: number }) => boolean;
   isDownHoleTile: (symbol: string | null, tileDef?: SliceTileDefinition | null) => boolean;
+  isDoorTile?: (level: string, tx: number, ty: number) => boolean;
   getRenderableLevels: () => string[];
   registerMeshForLevel: (levelKey: string, mesh: Mesh) => void;
   parseLevelNumber: (level: string) => number;
@@ -114,6 +115,14 @@ export class ChunkStreamSystem {
       }
       this.loadedChunks.delete(key);
     }
+  }
+
+  /** Clear and rebuild the chunk containing (tileX, tileY). Used by DoorSystem when state changes. */
+  invalidateTile(_level: string, tileX: number, tileY: number): void {
+    const cx = Math.floor(tileX / this.cfg.CHUNK_SIZE);
+    const cy = Math.floor(tileY / this.cfg.CHUNK_SIZE);
+    const key = `${cx}_${cy}`;
+    this.clearChunk(key);
   }
 
   clearAll(): void {
@@ -291,6 +300,9 @@ export class ChunkStreamSystem {
         for (let tx = startX; tx < endX; tx++) {
           const symbol = cfg.getMapTileAt(level, tx, tz);
           if (!symbol || symbol === "...") continue;
+
+          // Skip door tiles — DoorSystem handles their visual
+          if (cfg.isDoorTile?.(level, tx, tz)) continue;
 
           const tileDef = cfg.getTileDef(symbol);
           const isBlocking = cfg.isBlockingTile(symbol, tileDef ?? undefined, { level, tileX: tx, tileY: tz });

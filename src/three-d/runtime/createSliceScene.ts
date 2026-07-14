@@ -558,6 +558,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     emitMessage: (msg: string) => playerState.emit("message", msg),
     emitUiNotification: (notification: { type: string; message: string }) => playerState.emit("uiNotification", notification),
     getPlayerPosition: () => ({ x: player.position.x, z: player.position.z }),
+    onDoorTileChanged: (level, tx, ty) => { chunkSystem.invalidateTile(level, tx, ty); },
   });
   const orchestrator = new StreamOrchestrator(
     propSystem,
@@ -893,6 +894,7 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
     resolvePoolFloorMaterial,
     isBlockingTile,
     isDownHoleTile: (symbol, tileDef) => isDownHoleTile(tileDef ?? null),
+    isDoorTile: (level, tx, ty) => doorSystem.getDoorAtTile(level, tx, ty) !== null,
     getRenderableLevels: () => visibilitySystem.getRenderableLevels(),
     registerMeshForLevel: (levelKey, mesh) =>
       visibilitySystem.registerMeshForLevel(levelKey, mesh),
