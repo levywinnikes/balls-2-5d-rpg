@@ -49,10 +49,9 @@ export class DoorSystem {
   readonly DOOR_PICK_INTERACT_RADIUS = 2.75;
 
   constructor(private config: DoorSystemConfig) {
-    this.DOOR_PANEL_HEIGHT = Math.max(
-      1.35,
-      config.levelToWorldY("1") - config.levelToWorldY("0") - 0.08,
-    );
+    const levelHeight = config.levelToWorldY("1") - config.levelToWorldY("0");
+    // Door fits between floor top (baseY + 0.35) and level ceiling (baseY + LEVEL_HEIGHT)
+    this.DOOR_PANEL_HEIGHT = Math.max(1.35, levelHeight - 0.35);
   }
 
   private getDoorTileKey(level: string, tileX: number, tileY: number): string {
