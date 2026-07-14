@@ -32,8 +32,6 @@ export type DoorSystemConfig = {
   safeTileColor: (hex: string | undefined, fallback: string) => Color3;
   rebuildNavigationGrid: (level: string) => void;
   resetLevelEnemyPaths: (level: string) => void;
-  /** Called when a door's visual/collision state changes — chunk geometry should rebuild the affected tile. */
-  onDoorTileChanged?: (level: string, tileX: number, tileY: number) => void;
   getDoorState: (uuid: string) => { open: boolean; locked?: boolean; keyId?: string | null } | null;
   setDoorOpen: (uuid: string, open: boolean) => void;
   seedDoorState: (uuid: string, state: { open: boolean; locked: boolean; keyId?: string | null }) => void;
@@ -248,7 +246,6 @@ export class DoorSystem {
     door.mesh.setEnabled(
       Math.abs(cfg.levelToWorldY(door.level) - cfg.levelToWorldY(cfg.getCurrentLevel())) <= this.DOOR_PANEL_HEIGHT + 1,
     );
-    this.config.onDoorTileChanged?.(door.level, door.tileX, door.tileY);
   }
 
   refreshDoorSystemsForLevel(level: string): void {
