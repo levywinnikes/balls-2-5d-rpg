@@ -942,45 +942,43 @@ export function createSliceScene(canvas: HTMLCanvasElement): SliceRuntime {
   let debugColliderParent: TransformNode | null = null;
   let playerDebugMesh: Mesh | null = null;
   const debugVisualsCfg = { scene, debugCollidersVisible: () => debugCollidersVisible, debugColliderParent: () => debugColliderParent, setDebugParent: (v: any) => { debugColliderParent = v; }, playerDebugMesh: () => playerDebugMesh, setPlayerDebugMesh: (v: any) => { playerDebugMesh = v; }, collisionWorld, player, HERO_BODY_HEIGHT };
-  const debugVisuals = createDebugColliderVisuals(debugVisualsCfg);
-
-  const createWedgeMesh = (v: any, p: any) => debugVisuals.createWedgeMesh(v, p);
-  const rebuildDebugColliderMeshes = () => debugVisuals.rebuildDebugColliderMeshes();
-  const updatePlayerDebugMesh = () => debugVisuals.updatePlayerDebugMesh();
+  const debug = createDebugColliderVisuals(debugVisualsCfg);
+  const createWedgeMesh = debug.createWedgeMesh;
+  const rebuildDebugColliderMeshes = debug.rebuildDebugColliderMeshes;
+  const updatePlayerDebugMesh = debug.updatePlayerDebugMesh;
   const ensureMapLevelReady = (requestedLevel: string) => ensureMapLevelReadyImpl({ loadMapData: () => mapLoader.loadData(), ensureWorldMapReady: (d: any) => mapLoader.ensureWorldReady(d), ensureDebugLoadout: (d: any) => ensureDebugSandboxStarterLoadout(d), get doorSystem() { return doorSystem; }, get ctx() { return ctx; }, renderMapLevel: (l: any) => renderMapLevel(l), get propSystem() { return propSystem; }, get player() { return player; }, getMapTileAt: (l: any, x: any, z: any) => getMapTileAt(l, x, z), isBlockingTile: (s: any, d: any, o: any) => isBlockingTile(s, d, o), isVoidSymbol: (s: any) => isVoidSymbol(s), worldToSliceCoord: (v: any) => worldToSliceCoord(v), get currentMapWidth() { return currentMapWidth; }, get currentMapHeight() { return currentMapHeight; }, snapPlayerFootToActiveLevel, get playerState() { return playerState; } }, requestedLevel);
   let lt: ReturnType<typeof createLevelTransitionSystem>;
 
-  const setSelectedEnemy = (enemyUid: string | null) => { setSelectedEnemyImpl(ctx, enemyUid); };
-  const grantEnemyLoot = (enemy: SliceEnemy) => { grantEnemyLootImpl(ctx, enemy); };
-  const destroyEnemy = (enemy: SliceEnemy, context?: { finishingDamage?: number; isFireKill?: boolean }) => { destroyEnemyImpl({ ctx, enemySpawnCatalog, pendingEnemyRespawns, ENEMY_RESPAWN_MS, emitBloodBurst, setEnemyAnimState, getGeneratedDeathDurationMs }, enemy, context); };
-  const setEnemyAnimState = (
-    enemy: SliceEnemy,
-    nextState: EnemyVisualAnimState,
-    lockMs = 0,
-  ) => {
-    const now = Date.now();
-    if (now < enemy.animLockedUntil && nextState !== "death") {
-      return;
-    }
-
-    const restart = nextState === "attack";
-    if (enemy.animState !== nextState || restart) {
-      enemy.animState = nextState;
-      setEnemyVisualAnimState(enemy.meshRoot, nextState, restart);
-    }
-
-    if (lockMs > 0) {
-      enemy.animLockedUntil = now + lockMs;
-    }
-  };
-
-  const LOG_SLOW_PATH_MS = 100;
   const enemyPathfindingCfg = { get ctx() { return ctx; }, pathfindingManager, applyActorAquaticY };
-  const requestEnemyPath = (enemy: SliceEnemy, targetPos: Vector3) => requestEnemyPathImpl(enemyPathfindingCfg, enemy, targetPos);
-  const advanceEnemyPath = (enemy: SliceEnemy, deltaSeconds: number) => advanceEnemyPathImpl(enemyPathfindingCfg, enemy, deltaSeconds);
-  const updateEnemyAI = (deltaSeconds: number) => {
-    sliceEnemySystem.update(deltaSeconds);
+  const enemy = {
+    select: (enemyUid: string | null) => { setSelectedEnemyImpl(ctx, enemyUid); },
+    grantLoot: (e: SliceEnemy) => { grantEnemyLootImpl(ctx, e); },
+    destroy: (e: SliceEnemy, context?: { finishingDamage?: number; isFireKill?: boolean }) => {
+      destroyEnemyImpl({ ctx, enemySpawnCatalog, pendingEnemyRespawns, ENEMY_RESPAWN_MS, emitBloodBurst, setEnemyAnimState, getGeneratedDeathDurationMs }, e, context);
+    },
+    setAnim: (
+      e: SliceEnemy, nextState: EnemyVisualAnimState, lockMs = 0,
+    ) => {
+      const now = Date.now();
+      if (now < e.animLockedUntil && nextState !== "death") return;
+      const restart = nextState === "attack";
+      if (e.animState !== nextState || restart) {
+        e.animState = nextState;
+        setEnemyVisualAnimState(e.meshRoot, nextState, restart);
+      }
+      if (lockMs > 0) e.animLockedUntil = now + lockMs;
+    },
+    requestPath: (e: SliceEnemy, targetPos: Vector3) => requestEnemyPathImpl(enemyPathfindingCfg, e, targetPos),
+    advancePath: (e: SliceEnemy, deltaSeconds: number) => advanceEnemyPathImpl(enemyPathfindingCfg, e, deltaSeconds),
+    updateAI: (deltaSeconds: number) => { sliceEnemySystem.update(deltaSeconds); },
   };
+  const setSelectedEnemy = enemy.select;
+  const grantEnemyLoot = enemy.grantLoot;
+  const destroyEnemy = enemy.destroy;
+  const setEnemyAnimState = enemy.setAnim;
+  const requestEnemyPath = enemy.requestPath;
+  const advanceEnemyPath = enemy.advancePath;
+  const updateEnemyAI = enemy.updateAI;
 
   const checkLevelDrift = () => {
     orchestrator.checkLevelDrift(playerState.getCurrentLevel());
