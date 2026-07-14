@@ -7,6 +7,7 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import type { SliceTileDefinition } from "./SliceTileTypes";
+import { FLOOR_THICKNESS } from "../../constants/World";
 
 export type SliceDoor = {
   uuid: string;
@@ -50,8 +51,8 @@ export class DoorSystem {
 
   constructor(private config: DoorSystemConfig) {
     const levelHeight = config.levelToWorldY("1") - config.levelToWorldY("0");
-    // Door fits between floor top (baseY + 0.35) and level ceiling (baseY + LEVEL_HEIGHT)
-    this.DOOR_PANEL_HEIGHT = Math.max(1.35, levelHeight - 0.35);
+    // Door fits between floor surface and level ceiling
+    this.DOOR_PANEL_HEIGHT = Math.max(1.35, levelHeight - FLOOR_THICKNESS);
   }
 
   private getDoorTileKey(level: string, tileX: number, tileY: number): string {
@@ -219,7 +220,7 @@ export class DoorSystem {
     const state = cfg.getDoorState(door.uuid);
     const isOpen = !!state?.open;
     const levelWorldY = cfg.levelToWorldY(door.level);
-    const floorTop = levelWorldY + 0.35;
+    const floorTop = levelWorldY + FLOOR_THICKNESS;
     const doorHeight = this.DOOR_PANEL_HEIGHT;
     const centerY = floorTop + doorHeight / 2;
     const tileCenterX = door.tileX + 0.5;
