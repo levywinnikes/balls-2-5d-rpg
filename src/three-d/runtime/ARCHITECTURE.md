@@ -4,6 +4,14 @@
 
 The 3D engine is a **modular, dependency-injected system** centered around a single `GameContext` object. All shared state, system references, and callbacks flow through `ctx`.
 
+**📚 Documentação detalhada em `docs/three-d/`:**
+- [COLLISION_SYSTEM.md](../../docs/three-d/COLLISION_SYSTEM.md) — Volumes, blocked(), isTileBlockedForGameplay
+- [RENDERING_SYSTEM.md](../../docs/three-d/RENDERING_SYSTEM.md) — Chunk geometry pipeline, entidades
+- [LEVEL_TRANSITION.md](../../docs/three-d/LEVEL_TRANSITION.md) — checkLevelDrift, applyActiveLevelChange, snap
+- [FALL_AND_RESPAWN.md](../../docs/three-d/FALL_AND_RESPAWN.md) — Dano de queda, morte, spawnPoint
+- [DOOR_SYSTEM.md](../../docs/three-d/DOOR_SYSTEM.md) — Ciclo de vida, colisão, interação
+- [BOOTSTRAP_FLOW.md](../../docs/three-d/BOOTSTRAP_FLOW.md) — Ordem de inicialização completa
+
 ```
 createSliceScene()  ← entry point, one-time setup
   ├── creates Babylon engine/scene
