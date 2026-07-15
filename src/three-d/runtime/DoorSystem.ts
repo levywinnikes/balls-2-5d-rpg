@@ -5,8 +5,10 @@ import {
   StandardMaterial,
   Color3,
   Vector3,
+  TransformNode,
 } from "@babylonjs/core";
 import type { SliceTileDefinition } from "./SliceTileTypes";
+import { FLOOR_THICKNESS } from "../../constants/World";
 
 export type SliceDoor = {
   uuid: string;
@@ -17,6 +19,8 @@ export type SliceDoor = {
   locked: boolean;
   keyId?: string | null;
   mesh: Mesh;
+  root: TransformNode;
+  floorSlab: Mesh;
   hingeOnX: boolean;
   hingeSide: number;
 };
@@ -49,10 +53,9 @@ export class DoorSystem {
   readonly DOOR_PICK_INTERACT_RADIUS = 2.75;
 
   constructor(private config: DoorSystemConfig) {
-    this.DOOR_PANEL_HEIGHT = Math.max(
-      1.35,
-      config.levelToWorldY("1") - config.levelToWorldY("0") - 0.08,
-    );
+    const levelHeight = config.levelToWorldY("1") - config.levelToWorldY("0");
+    // Door fits between floor surface and level ceiling
+    this.DOOR_PANEL_HEIGHT = Math.max(1.35, levelHeight - FLOOR_THICKNESS);
   }
 
   private getDoorTileKey(level: string, tileX: number, tileY: number): string {
@@ -194,6 +197,22 @@ export class DoorSystem {
       doorMesh.isPickable = true;
       doorMesh.metadata = { sliceDoorUuid: uuid };
 
+      // Floor slab — door entity is self-contained, no tile dependency
+      const floorSlab = MeshBuilder.CreateBox(
+        `slice-door-floor-${uuid}`,
+        { width: 1.0, height: FLOOR_THICKNESS, depth: 1.0 },
+        cfg.scene,
+      );
+      const floorMat = new StandardMaterial(`slice-door-floor-mat-${uuid}`, cfg.scene);
+      floorMat.diffuseColor = wallColor.scale(0.7);
+      floorMat.specularColor = Color3.Black();
+      floorSlab.material = floorMat;
+      floorSlab.isPickable = false;
+
+      const doorRoot = new TransformNode(`slice-door-root-${uuid}`, cfg.scene);
+      doorMesh.parent = doorRoot;
+      floorSlab.parent = doorRoot;
+
       const door: SliceDoor = {
         uuid,
         level,
@@ -203,6 +222,8 @@ export class DoorSystem {
         locked: entity.locked ?? entityDef.locked ?? false,
         keyId: entity.keyId ?? entityDef.keyId ?? null,
         mesh: doorMesh,
+        root: doorRoot,
+        floorSlab,
         hingeOnX: orientation.hingeOnX,
         hingeSide: orientation.hingeSide,
       };
@@ -220,31 +241,18 @@ export class DoorSystem {
     const state = cfg.getDoorState(door.uuid);
     const isOpen = !!state?.open;
     const levelWorldY = cfg.levelToWorldY(door.level);
-    const floorTop = levelWorldY + 0.35;
     const doorHeight = this.DOOR_PANEL_HEIGHT;
-    const centerY = floorTop + doorHeight / 2;
-    const tileCenterX = door.tileX + 0.5;
-    const tileCenterZ = door.tileY + 0.5;
-    const hingeOffset = 0.46 * (door.hingeSide ?? 1);
 
-    door.mesh.rotation.y = 0;
-    if (door.hingeOnX) {
-      door.mesh.position.set(tileCenterX, centerY, tileCenterZ);
-      if (isOpen) {
-        door.mesh.rotation.y = (Math.PI / 2) * (door.hingeSide ?? 1);
-        door.mesh.position.x = tileCenterX + hingeOffset;
-        door.mesh.position.z = tileCenterZ + 0.34 * (door.hingeSide ?? 1);
-      }
-    } else {
-      door.mesh.position.set(tileCenterX, centerY, tileCenterZ);
-      if (isOpen) {
-        door.mesh.rotation.y = (Math.PI / 2) * (door.hingeSide ?? 1);
-        door.mesh.position.z = tileCenterZ + hingeOffset;
-        door.mesh.position.x = tileCenterX + 0.34 * (door.hingeSide ?? 1);
-      }
-    }
-    door.mesh.setEnabled(
-      Math.abs(cfg.levelToWorldY(door.level) - cfg.levelToWorldY(cfg.getCurrentLevel())) <= this.DOOR_PANEL_HEIGHT + 1,
+    // Floor at base, door panel on top — both children of root
+    door.floorSlab.position.set(0, FLOOR_THICKNESS / 2, 0);
+    door.mesh.position.set(0, FLOOR_THICKNESS + doorHeight / 2, 0);
+    door.mesh.rotation.set(0, 0, 0);
+    if (isOpen) door.mesh.rotation.y = (Math.PI / 2) * (door.hingeSide ?? 1);
+
+    // Root at tile center, base Y
+    door.root.position.set(door.tileX + 0.5, levelWorldY, door.tileY + 0.5);
+    door.root.setEnabled(
+      Math.abs(levelWorldY - cfg.levelToWorldY(cfg.getCurrentLevel())) <= this.DOOR_PANEL_HEIGHT + 1,
     );
   }
 
@@ -325,11 +333,11 @@ export class DoorSystem {
 
   clear(): void {
     this.doors.forEach((door) => {
-      const material = door.mesh.material;
-      door.mesh.dispose();
-      if (material instanceof StandardMaterial) {
-        material.dispose();
-      }
+      const panelMat = door.mesh.material;
+      const floorMat = door.floorSlab.material;
+      door.root.dispose(); // disposes children (mesh + floorSlab)
+      if (panelMat instanceof StandardMaterial) panelMat.dispose();
+      if (floorMat instanceof StandardMaterial) floorMat.dispose();
     });
     this.doors.clear();
     this.doorByLevelTile.clear();
